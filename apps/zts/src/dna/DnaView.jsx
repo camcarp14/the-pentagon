@@ -181,7 +181,7 @@ const VIEW_CSS = `
 .dna-view input[type="range"] { cursor: pointer; }
 @keyframes dnaGlyph { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(180deg); } }
 @media (max-width: 680px) {
-  .dna-view { height: calc(100vh - 112px); height: calc(100dvh - 112px - env(safe-area-inset-bottom)); }
+  .dna-view { height: calc(100vh - 112px); height: calc(100dvh - 112px - var(--safe-bottom)); }
   .dna-sub { display: none; }
 }
 `;

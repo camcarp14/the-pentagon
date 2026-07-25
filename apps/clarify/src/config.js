@@ -32,5 +32,8 @@ export const SCHEDULING_LINK_CONFIGURED = !/your-booking-link/.test(SCHEDULING_L
 export const DEFAULT_MEETING_MINUTES = 30;
 
 // Public origin for tracked short links (/r/<id>) baked into outgoing emails.
-// Must be the PRODUCTION origin — localhost links would be dead in a real inbox.
-export const PUBLIC_SITE_URL = "https://clarify-outreach.netlify.app";
+// Must be the PRODUCTION origin — localhost links would be dead in a real inbox,
+// and so is a retired one: this pointed at the old clarify-outreach site after
+// the tools were consolidated, so every tracked link sent would 404 once that
+// site was deleted. The Pentagon serves /r/* → track-click (see netlify.toml).
+export const PUBLIC_SITE_URL = "https://the-pentagon.netlify.app";

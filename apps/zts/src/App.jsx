@@ -215,7 +215,7 @@ const TabIcon = ({ tab, color, size = 21 }) => (
 // Fixed bottom tab bar — replaces the top segmented control on mobile only.
 function BottomNav({ view, setView, tabs }) {
   return (
-    <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", background: "rgba(13,17,28,0.98)", borderTop: `1px solid ${T.line}`, boxShadow: "0 -2px 16px rgba(0,0,0,0.4)", paddingBottom: "min(env(safe-area-inset-bottom), 16px)" }}>
+    <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", background: "rgba(11,15,26,0.92)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: `1px solid ${T.line}`, boxShadow: "0 -2px 16px rgba(0,0,0,0.4)", paddingBottom: "var(--safe-bottom)" }}>
       {tabs.map(t => {
         const active = view === t;
         const color = active ? T.greenDeep : T.faint;
@@ -652,7 +652,7 @@ function ComposeModal({ onClose, onCreate, isMobile }) {
 
   return (
     <ModalShell onClose={onClose} isMobile={isMobile} width={560}>
-      <div style={{ padding: isMobile ? "14px 18px calc(18px + env(safe-area-inset-bottom))" : "26px 28px", overflowY: "auto" }}>
+      <div style={{ padding: isMobile ? "14px 18px calc(18px + var(--safe-bottom))" : "26px 28px", overflowY: "auto" }}>
         <div style={{ fontSize: "16px", fontWeight: 700, color: T.ink, fontFamily: syne, marginBottom: "4px" }}>New Short</div>
         <div style={{ fontSize: "12px", color: T.faint, marginBottom: "20px" }}>Pick a type and topic — Claude drafts the hook, script, thumbnails, title, description, and tags.</div>
 
@@ -1114,7 +1114,7 @@ function AddCreatorModal({ onClose, onAdd, isMobile }) {
   const input = { width: "100%", padding: "10px 12px", border: `1px solid ${T.line}`, borderRadius: "9px", fontSize: "13px", color: T.ink, marginBottom: "10px" };
   return (
     <ModalShell onClose={onClose} isMobile={isMobile} width={480}>
-      <div style={{ padding: isMobile ? "14px 18px calc(18px + env(safe-area-inset-bottom))" : "26px 28px", overflowY: "auto" }}>
+      <div style={{ padding: isMobile ? "14px 18px calc(18px + var(--safe-bottom))" : "26px 28px", overflowY: "auto" }}>
         <div style={{ fontSize: "16px", fontWeight: 700, color: T.ink, fontFamily: syne, marginBottom: "18px" }}>Add Creator</div>
         <input placeholder="Channel name" value={f.channel_name} onChange={e => set("channel_name", e.target.value)} style={input} />
         <input placeholder="Subscriber count (e.g. 45000)" value={f.subscriber_count} onChange={e => set("subscriber_count", e.target.value)} style={input} />
@@ -1396,7 +1396,7 @@ function ComposeArticleModal({ keywords, onClose, onCreate, isMobile }) {
   };
   return (
     <ModalShell onClose={onClose} isMobile={isMobile} width={520}>
-      <div style={{ padding: isMobile ? "14px 18px calc(18px + env(safe-area-inset-bottom))" : "26px 28px", overflowY: "auto" }}>
+      <div style={{ padding: isMobile ? "14px 18px calc(18px + var(--safe-bottom))" : "26px 28px", overflowY: "auto" }}>
         <div style={{ fontSize: "16px", fontWeight: 700, color: T.ink, fontFamily: syne, marginBottom: "4px" }}>New Article</div>
         <div style={{ fontSize: "12px", color: T.faint, marginBottom: "18px" }}>Claude drafts the full package — title tag, meta, outline, article, internal links — into your review queue.</div>
         <Label style={{ marginBottom: "8px" }}>Target keyword</Label>
@@ -1817,7 +1817,7 @@ export default function App({ embedded = false }) {
   if (!embedded && !session) return <LoginScreen />;
 
   return (
-    <div style={{ minHeight: "100vh", fontFamily: "'Inter', system-ui, sans-serif", paddingBottom: isMobile ? "calc(60px + env(safe-area-inset-bottom))" : 0 }}>
+    <div style={{ minHeight: "100vh", fontFamily: "'Inter', system-ui, sans-serif", paddingBottom: isMobile ? "calc(60px + var(--safe-bottom))" : 0 }}>
       <AgentEngine creators={creators} shorts={shorts} articles={articles} onArticleDraft={addArticle} />
       <DnaWorker creators={creators} shorts={shorts} articles={articles} onArticleDraft={addArticle} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} actions={paletteActions} />
