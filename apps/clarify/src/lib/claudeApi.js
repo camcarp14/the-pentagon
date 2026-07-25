@@ -1,19 +1,17 @@
 import { ANTHROPIC_API_KEY } from "../config.js";
 import { obs } from "./store.js";
 import { functionAuthHeaders } from "./supabase.js";
+// Pricing moved to @cc/ai. This file's copy fell back to Sonnet for an unknown
+// model while ZTS's three copies fell back to Haiku — the same call logged a 3x
+// different cost depending on which module happened to make it, and neither knew
+// Opus at all (15x). Re-exported so existing importers keep working.
+import { MODEL_PRICING, estimateCost } from "@cc/ai";
+
+export { MODEL_PRICING, estimateCost };
 
 // ─── Observability — every Claude call in this system logs here ──────────────
 // No backend yet, so this lives client-side. Once Langfuse or similar is wired
 // to a deployed agent backend, this same log shape carries over directly.
-export const MODEL_PRICING = {
-  "claude-haiku-4-5-20251001": { in: 1, out: 5 },   // $ per million tokens, approximate
-  "claude-sonnet-4-6": { in: 3, out: 15 },           // $ per million tokens, approximate
-};
-
-export function estimateCost(model, inputTokens = 0, outputTokens = 0) {
-  const p = MODEL_PRICING[model] || MODEL_PRICING["claude-sonnet-4-6"];
-  return (inputTokens / 1e6) * p.in + (outputTokens / 1e6) * p.out;
-}
 
 // ─── callClaude — the ONE seam every Claude request flows through ────────────
 // Deployed traffic always rides the Netlify proxy (server-side key); the raw
@@ -24,7 +22,7 @@ export async function callClaude({ model, max_tokens, system, messages, fn, prom
   const deployed = window.location.hostname !== "localhost";
   const url = deployed ? "/.netlify/functions/claude" : "https://api.anthropic.com/v1/messages";
   const headers = deployed
-    ? { "Content-Type": "application/json", ...functionAuthHeaders() }
+    ? { "Content-Type": "application/json", ...(await functionAuthHeaders()) }
     : {
         "Content-Type": "application/json",
         "x-api-key": ANTHROPIC_API_KEY,

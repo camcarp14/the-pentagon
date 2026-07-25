@@ -1,11 +1,36 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "../config.js";
+import { auth as shellAuth } from "@cc/supabase";
 
-// The 5 operator-only Netlify functions (send-email, check-replies,
-// read-emails, claude, prospect-proxy) require this — they check it server-
-// side via requireAuth.cjs. Public functions (audit-lead, track-*) don't need
-// it and shouldn't send it.
-export function functionAuthHeaders() {
-  const token = localStorage.getItem("clarify_token");
+// ─── The one token seam ──────────────────────────────────────────────────────
+// Every authed request in Clarify resolves its bearer HERE, at call time, from
+// supabase-js — never from a localStorage mirror read synchronously.
+//
+// WHY THIS MATTERS, precisely. Supabase refresh tokens are SINGLE-USE: exchanging
+// one revokes it. Clarify used to run its own 45-minute renewal timer against a
+// mirrored `clarify_refresh` while supabase-js (the shell's session of record)
+// ran its own. Whichever fired first revoked the other's token, and when
+// supabase-js was the loser its next auto-refresh failed, it emitted SIGNED_OUT,
+// and the shell dropped you out of EVERY Pentagon tool mid-session — not just
+// Clarify. That timer is gone; supabase-js is now the only refresher.
+//
+// getSession() also refreshes on its own when the token is near expiry, so
+// resolving here means a request can never carry a token that expired while the
+// tab sat open. The localStorage mirror stays only as a fallback for a Clarify
+// running without the shell.
+async function currentAccessToken() {
+  try {
+    const s = await shellAuth.getSession();
+    if (s?.access_token) return s.access_token;
+  } catch { /* not configured / standalone — fall through to the mirror */ }
+  try { return localStorage.getItem("clarify_token"); } catch { return null; }
+}
+
+// The operator-only Netlify functions (send-email, check-replies, claude,
+// prospect-proxy) require this — they check it server-side via requireAuth.cjs.
+// Public functions (audit-lead, track-*) don't need it and shouldn't send it.
+// ASYNC: resolving the token is the whole point (see above). Call sites await.
+export async function functionAuthHeaders() {
+  const token = await currentAccessToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
@@ -59,7 +84,7 @@ export async function sbFetch(path, options = {}) {
   // no-ops writes, which is how the deployed board silently broke. Same pattern
   // deleteInboundLead already uses. Falls back to the anon key pre-login for the
   // tables that allow it (inbound_leads count).
-  const sessionToken = localStorage.getItem("clarify_token");
+  const sessionToken = await currentAccessToken();
   // Destructure so a caller-supplied `headers` MERGES with the auth headers.
   // (The old `{ headers: {...}, ...options }` shape let options.headers replace
   // the whole object — silently dropping apikey/Authorization → gateway 401s.)
@@ -92,7 +117,7 @@ export const db = {
     // DELETE policy requires an authenticated role (unlike its SELECT/INSERT/UPDATE
     // policies, which the public form and status updates rely on via anon), the
     // anon key alone silently matches zero rows instead of failing outright.
-    const token = localStorage.getItem("clarify_token");
+    const token = await currentAccessToken();
     const res = await fetch(`${SUPABASE_URL}/rest/v1/inbound_leads?id=eq.${id}`, {
       method: "DELETE",
       headers: {
@@ -181,7 +206,7 @@ export const normEmail = (e) => String(e || "").toLowerCase().trim();
 // ─── Global Agent — portfolio counts fetch ────────────────────────────────────
 export async function fetchPortfolioCounts() {
   try {
-    const token = localStorage.getItem("clarify_token");
+    const token = await currentAccessToken();
     const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
     const [cr, fr, ar] = await Promise.all([
       fetch(`${SUPABASE_URL}/rest/v1/clients?select=id&status=eq.active`, { headers }),

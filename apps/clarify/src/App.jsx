@@ -400,18 +400,18 @@ export default function App({ embedded = false }) {
     });
   }, []);
 
-  useEffect(() => {
-    // Proactive renewal every 45 minutes — Supabase's default JWT lives 1 hour,
-    // so this keeps a long-open tab or the installed PWA from ever hitting the
-    // expired-token path (and therefore never shows the login screen again).
-    const iv = setInterval(async () => {
-      const refreshToken = localStorage.getItem("clarify_refresh");
-      if (!refreshToken) return;
-      const renewed = await sbAuth.refresh(refreshToken);
-      if (renewed) persistSession(renewed);
-    }, 45 * 60000);
-    return () => clearInterval(iv);
-  }, []);
+  // The 45-minute renewal timer that used to live here is GONE, deliberately.
+  //
+  // Supabase refresh tokens are single-use: exchanging one revokes it. This timer
+  // refreshed against the mirrored `clarify_refresh` while supabase-js — the
+  // shell's session of record, shared by all five tools — ran its own renewal on
+  // the same underlying session. Whichever fired first revoked the other's token.
+  // When supabase-js lost that race its next auto-refresh failed, it emitted
+  // SIGNED_OUT, and the shell dropped you out of EVERY Pentagon tool mid-session.
+  //
+  // supabase-js is now the only thing that refreshes, and lib/supabase.js resolves
+  // the bearer from it at call time (see currentAccessToken there), which also
+  // covers the expiry case this timer was written to prevent.
 
   const handleLogout = async () => {
     const token = localStorage.getItem("clarify_token");

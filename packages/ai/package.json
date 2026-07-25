@@ -1,0 +1,11 @@
+{
+  "name": "@cc/ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./pricing.js",
+  "exports": {
+    ".": "./pricing.js",
+    "./pricing.js": "./pricing.js"
+  }
+}

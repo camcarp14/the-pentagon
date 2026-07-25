@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { estimateCost } from "@cc/ai";
 import { MindCanvas } from "./MindCanvas.jsx";
 import { supabase } from "../supabaseClient";
 import {
@@ -35,15 +36,12 @@ import { useToast, M } from "../ui.jsx";
 // would. App.jsx exports nothing, so the call + its obs logging live here against
 // the same `zts_` localStorage the app + Ops tab read. Returns raw text or null,
 // never sends temperature/top_p, defaults to Haiku — the ZTS signature.
-const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY || "";
-const MODEL_PRICING = {
-  "claude-haiku-4-5-20251001": { in: 1, out: 5 },
-  "claude-sonnet-4-6": { in: 3, out: 15 },
-};
-const estimateCost = (model, inTok, outTok) => {
-  const p = MODEL_PRICING[model] || MODEL_PRICING["claude-haiku-4-5-20251001"];
-  return (inTok / 1e6) * p.in + (outTok / 1e6) * p.out;
-};
+// localhost ONLY. Read unconditionally, this baked the key into the public
+// bundle the moment VITE_ANTHROPIC_API_KEY was ever set in Netlify — deployed
+// traffic rides /.netlify/functions/claude and never needs it. Matches the
+// guard Clarify already had (apps/clarify/src/config.js).
+const IS_LOCAL = typeof window !== "undefined" && window.location.hostname === "localhost";
+const ANTHROPIC_API_KEY = IS_LOCAL ? (import.meta.env.VITE_ANTHROPIC_API_KEY || "") : "";
 const sm = {
   get: (k) => { try { return JSON.parse(localStorage.getItem(`zts_${k}`)); } catch { return null; } },
   set: (k, v) => { try { localStorage.setItem(`zts_${k}`, JSON.stringify(v)); } catch {} },

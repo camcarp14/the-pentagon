@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { estimateCost } from "@cc/ai";
 import { compileGenome, dnaBus, loadGenome, propagate, seedsForTask } from "./dna.js";
 import { supabase } from "../supabaseClient";
 
@@ -35,19 +36,16 @@ import { supabase } from "../supabaseClient";
 // engine state with the running app. Re-declared, not imported, because App.jsx
 // exports none of these — dna.js does the identical thing for the genome store.
 
-const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY || "";
+// localhost ONLY. Read unconditionally, this baked the key into the public
+// bundle the moment VITE_ANTHROPIC_API_KEY was ever set in Netlify — deployed
+// traffic rides /.netlify/functions/claude and never needs it. Matches the
+// guard Clarify already had (apps/clarify/src/config.js).
+const IS_LOCAL = typeof window !== "undefined" && window.location.hostname === "localhost";
+const ANTHROPIC_API_KEY = IS_LOCAL ? (import.meta.env.VITE_ANTHROPIC_API_KEY || "") : "";
 
 // Model pricing ($/1M tokens) — needed so the re-declared callClaude can attribute
 // costEstimate to obs exactly as App.jsx does. Sonnet id is the pinned "claude-
 // sonnet-4-6"; Haiku is "claude-haiku-4-5-20251001".
-const MODEL_PRICING = {
-  "claude-haiku-4-5-20251001": { in: 1, out: 5 },
-  "claude-sonnet-4-6": { in: 3, out: 15 },
-};
-function estimateCost(model, inTok, outTok) {
-  const p = MODEL_PRICING[model] || MODEL_PRICING["claude-haiku-4-5-20251001"];
-  return (inTok / 1e6) * p.in + (outTok / 1e6) * p.out;
-}
 
 // localStorage store, prefix `zts_` — copy of App.jsx lines 34-39.
 const sm = {

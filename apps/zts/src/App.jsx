@@ -6,6 +6,7 @@ import { T, syne, mono } from "./theme.js";
 import { FactoryPanel, sendBriefToFactory } from "./factory.jsx";
 import { DnaView } from "./dna/DnaView.jsx";
 import { DnaWorker } from "./dna/dnaWorker.js";
+import { estimateCost } from "@cc/ai";
 
 // ════════════════════════════════════════════════════════════════════════════
 // ZERO TO SECURE — Creator outreach + Shorts production command center.
@@ -18,16 +19,13 @@ import { DnaWorker } from "./dna/dnaWorker.js";
 // SUPABASE_URL/ANON_KEY used to be declared here but were never actually used
 // anywhere in this file — supabaseClient.js now owns that (same platform
 // pattern as Board Room and Clarify Outreach).
-const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY || "";
+// localhost ONLY. Read unconditionally, this baked the key into the public
+// bundle the moment VITE_ANTHROPIC_API_KEY was ever set in Netlify — deployed
+// traffic rides /.netlify/functions/claude and never needs it. Matches the
+// guard Clarify already had (apps/clarify/src/config.js).
+const IS_LOCAL = typeof window !== "undefined" && window.location.hostname === "localhost";
+const ANTHROPIC_API_KEY = IS_LOCAL ? (import.meta.env.VITE_ANTHROPIC_API_KEY || "") : "";
 
-const MODEL_PRICING = {
-  "claude-haiku-4-5-20251001": { in: 1, out: 5 },
-  "claude-sonnet-4-6": { in: 3, out: 15 },
-};
-function estimateCost(model, inTok, outTok) {
-  const p = MODEL_PRICING[model] || MODEL_PRICING["claude-haiku-4-5-20251001"];
-  return (inTok / 1e6) * p.in + (outTok / 1e6) * p.out;
-}
 
 // ─── Persistence helpers (localStorage-backed stores) ────────────────────────
 const sm = {
@@ -1204,76 +1202,6 @@ function AgentEngine({ creators, shorts, articles, onArticleDraft }) {
 }
 
 // ─── AGENTS VIEW (control panel + feed) ──────────────────────────────────────
-function AgentsView({ isMobile }) {
-  const [ctrl, setCtrl] = useState(() => eng.get());
-  const [feed, setFeed] = useState(() => kb.all());
-  const [passFlash, setPassFlash] = useState(false);
-  useEffect(() => { const iv = setInterval(() => { setCtrl(eng.get()); setFeed(kb.all()); }, 1500); return () => clearInterval(iv); }, []);
-  const update = (p) => { eng.set(p); setCtrl(eng.get()); };
-  const runOnce = () => { sm.set("engine_force_pass", true); eng.set({ running: true }); setCtrl(eng.get()); setPassFlash(true); setTimeout(() => setPassFlash(false), 2500); };
-  const ago = (ts) => { if (!ts) return "never"; const m = Math.floor((Date.now() - ts) / 60000); return m < 1 ? "just now" : m < 60 ? `${m}m ago` : `${Math.floor(m/60)}h ago`; };
-  const SEVC = { critical: T.red, warning: T.amber, info: T.blue, system: T.faint };
-
-  const Toggle = ({ on, onClick, label, sub }) => (
-    <div onClick={onClick} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 14px", background: T.card, border: `1px solid ${T.line}`, borderRadius: "10px", cursor: "pointer" }}>
-      <div><div style={{ fontSize: "12px", fontWeight: 600, color: T.ink }}>{label}</div>{sub && <div style={{ fontSize: "10px", color: T.faint, marginTop: "1px" }}>{sub}</div>}</div>
-      <div style={{ width: "38px", height: "22px", borderRadius: "12px", background: on ? T.green : "rgba(255,255,255,0.14)", position: "relative", flexShrink: 0, transition: "background 0.15s" }}><div style={{ position: "absolute", top: "2px", left: on ? "18px" : "2px", width: "18px", height: "18px", borderRadius: "50%", background: "#FFF", transition: "left 0.15s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} /></div>
-    </div>
-  );
-  const agentMeta = [["creatorScout","Creator Scout","Prime-fit creators un-contacted"],["production","Production Watcher","Shorts stuck or unscheduled"],["cadence","Cadence Monitor","Posting gaps"],["reply","Reply Sentinel","Creator replies waiting"],["pattern","Pattern Learner","Which Short types you produce"],["cost","Cost Sentinel","AI spend guardrail"]];
-
-  return (
-    <div style={{ minHeight: "calc(100vh - 52px)", padding: viewPad(isMobile) }}>
-      <div style={{ marginBottom: "20px" }}>
-        <div style={{ fontSize: "18px", fontWeight: 700, color: T.ink, fontFamily: syne }}>Agent Engine</div>
-        <div style={{ fontSize: "12px", color: T.faint, marginTop: "2px" }}>A living roster watching creators + studio on a free heartbeat, spending tokens only when it's worth it.</div>
-      </div>
-      <div style={{ background: ctrl.running ? T.navyGrad : T.card, border: ctrl.running ? "none" : `1px solid ${T.line}`, borderRadius: "16px", padding: isMobile ? "16px 18px" : "18px 22px", marginBottom: "16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap", boxShadow: T.cardShadow }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <button onClick={() => update({ running: !ctrl.running })} style={{ width: "52px", height: "52px", borderRadius: "50%", border: "none", background: ctrl.running ? T.green : T.navy, color: "#FFF", fontSize: "20px", cursor: "pointer", flexShrink: 0 }}>{ctrl.running ? "⏸" : "▶"}</button>
-          <div>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: ctrl.running ? "#FFF" : T.ink, fontFamily: syne }}>{ctrl.running ? "Running" : "Paused"}</div>
-            <div style={{ fontSize: "11px", color: ctrl.running ? "#94A8C9" : T.faint, marginTop: "2px" }}>{ctrl.observeOnly ? "Observe-only · $0 spend" : "Synthesis on"} · heartbeat {ctrl.cadenceSec}s</div>
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-          <div style={{ textAlign: "right" }}><div style={{ fontSize: "9px", fontWeight: 700, color: ctrl.running ? "#7C93C9" : T.faint, textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: syne }}>Passes</div><div style={{ fontSize: "13px", color: passFlash ? "#34D399" : ctrl.running ? "#E8EDF7" : T.sub, fontFamily: mono, fontWeight: passFlash ? 700 : 400 }}>{sm.get("engine_pass_count") || 0}{passFlash ? " ✓" : ""}</div></div>
-          <button onClick={runOnce} style={{ padding: "9px 14px", background: ctrl.running ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.05)", border: ctrl.running ? "1px solid rgba(255,255,255,0.2)" : `1px solid ${T.line}`, borderRadius: "9px", color: ctrl.running ? "#E8EDF7" : T.sub, fontSize: "11px", fontWeight: 700, cursor: "pointer", fontFamily: syne }}>⚡ Run pass now</button>
-        </div>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "300px 1fr", gap: "16px", alignItems: "start" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          <Label style={{ marginBottom: "2px" }}>Token Controls</Label>
-          <Toggle on={ctrl.observeOnly} onClick={() => update({ observeOnly: !ctrl.observeOnly })} label="Observe-only" sub="Heuristics only — never spend tokens" />
-          <Toggle on={ctrl.allowSonnet} onClick={() => update({ allowSonnet: !ctrl.allowSonnet })} label="Allow Sonnet" sub="Off = synthesis stays on Haiku" />
-          <Toggle on={ctrl.pauseWhenIdle} onClick={() => update({ pauseWhenIdle: !ctrl.pauseWhenIdle })} label="Pause when idle" sub={`Auto-stop after ${ctrl.idleMin}m away`} />
-          <div style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: "10px", padding: "12px 14px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}><span style={{ fontSize: "12px", fontWeight: 600, color: T.ink }}>Heartbeat</span><span style={{ fontSize: "12px", color: T.sub, fontFamily: mono }}>{ctrl.cadenceSec}s</span></div>
-            <input type="range" min="10" max="120" step="5" value={ctrl.cadenceSec} onChange={e => update({ cadenceSec: Number(e.target.value) })} style={{ width: "100%", accentColor: T.green }} />
-          </div>
-          <Label style={{ margin: "8px 0 2px" }}>Roster</Label>
-          {agentMeta.map(([k, name, sub]) => <Toggle key={k} on={ctrl.agents[k] !== false} onClick={() => { eng.setAgent(k, !(ctrl.agents[k] !== false)); setCtrl(eng.get()); }} label={name} sub={sub} />)}
-        </div>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}><Label>Knowledge & Ideas ({feed.length})</Label>{feed.length > 0 && <button onClick={() => { kb.clear(); setFeed([]); }} style={{ background: "none", border: "none", color: T.faint, fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>Clear</button>}</div>
-          {feed.length === 0 ? (
-            <EmptyState icon="radar" title="Nothing observed yet" sub="Press play — the roster starts watching your creators and Shorts at zero token cost." />
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {feed.map(e => { const col = SEVC[e.signal] || T.faint; const ins = e.type === "insight"; return (
-                <div key={e.id} style={{ background: ins ? "linear-gradient(135deg, rgba(245,184,77,0.16) 0%, rgba(245,184,77,0.05) 100%)" : T.card, borderRadius: "11px", border: ins ? `1px solid ${T.accentLine}` : `1px solid ${T.line}`, borderLeft: `3px solid ${ins ? T.amber : col}`, padding: "13px 15px", display: "flex", gap: "12px" }}>
-                  <span style={{ fontSize: "9px", fontWeight: 700, color: ins ? T.amberDeep : col, textTransform: "uppercase", letterSpacing: "0.05em", fontFamily: syne, flexShrink: 0, marginTop: "2px", minWidth: "56px" }}>{ins ? "✦ Insight" : e.type === "learning" ? "Learned" : e.type === "system" ? "System" : "Observed"}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: "12px", color: T.ink, lineHeight: 1.55, fontWeight: ins ? 600 : 400 }}>{e.text}</div><div style={{ fontSize: "9px", color: T.faint, marginTop: "4px", fontFamily: mono }}>{e.agent} · {ago(new Date(e.ts).getTime())}</div></div>
-                </div>
-              ); })}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-// ─── SEO VIEW — article pipeline with approval gate ──────────────────────────
 function SeoView({ articles, setArticles, onAddArticle, isMobile, loading, openSignal = 0, onSignalConsumed }) {
   const [composing, setComposing] = useState(false);
   const [openArticle, setOpenArticle] = useState(null);
@@ -1590,57 +1518,6 @@ function MissionView({ creators, shorts, onNavigate, isMobile, loading }) {
 }
 
 // ─── OPS — observability ─────────────────────────────────────────────────────
-function OpsView({ isMobile }) {
-  const [logs, setLogs] = useState(obs.getAll());
-  const testLog = () => { const models = ["claude-haiku-4-5-20251001","claude-sonnet-4-6"]; const m = models[Math.floor(Math.random()*2)]; const i = 800 + Math.floor(Math.random()*3000), o = 200 + Math.floor(Math.random()*1200); obs.log({ fn: ["generate_short","regen_asset","agent_synthesis"][Math.floor(Math.random()*3)], model: m, inputTokens: i, outputTokens: o, costEstimate: estimateCost(m,i,o), latencyMs: 600+Math.floor(Math.random()*5000), ok: Math.random()>0.08 }); setLogs(obs.getAll()); };
-  const total = logs.reduce((s,l) => s + (l.costEstimate||0), 0);
-  const ok = logs.filter(l => l.ok !== false).length;
-  return (
-    <div style={{ minHeight: "calc(100vh - 52px)", padding: viewPad(isMobile) }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px", flexWrap: "wrap", gap: "10px" }}>
-        <div><div style={{ fontSize: "18px", fontWeight: 700, color: T.ink, fontFamily: syne }}>Observability</div><div style={{ fontSize: "12px", color: T.faint, marginTop: "2px" }}>Every Claude call — tokens, cost, latency, success.</div></div>
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}><Btn primary onClick={testLog}>+ Test log</Btn><Btn onClick={() => setLogs(obs.getAll())}>↻ Refresh</Btn><Btn onClick={() => { obs.clear(); setLogs([]); }}>Clear</Btn><Btn onClick={() => supabase?.auth.signOut()}>Sign out</Btn></div>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: isMobile ? "10px" : "14px", marginBottom: "16px" }}>
-        {[
-          ["Total Calls", logs.length, (n) => String(Math.round(n))],
-          ["Est. Cost", total, (n) => `$${n.toFixed(3)}`],
-          ["Success", logs.length ? Math.round(ok/logs.length*100) : null, (n) => n == null ? "—" : `${Math.round(n)}%`],
-          ["Avg Latency", logs.length ? Math.round(logs.reduce((s,l)=>s+(l.latencyMs||0),0)/logs.length) : null, (n) => n == null ? "—" : `${Math.round(n)}ms`],
-        ].map(([l, v, f], i) => (
-          <Card key={i}><Label style={{ marginBottom: "10px" }}>{l}</Label><div style={{ fontSize: "24px", fontWeight: 500, color: T.ink, fontFamily: mono }}>{v == null ? "—" : <AnimatedNumber value={v} format={f} />}</div></Card>
-        ))}
-      </div>
-      <Card>
-        <Label style={{ marginBottom: "12px" }}>Run Log</Label>
-        {logs.length === 0 ? <EmptyState compact icon="chart" title="No calls logged yet" sub={'Hit "Test log" to verify tracking works — every Claude call shows up here.'} /> : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-            {logs.slice(0, 30).map((l, i) => isMobile ? (
-              <div key={i} style={{ padding: "9px 2px", borderBottom: i < 29 ? `1px solid ${T.line}` : "none" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: l.ok === false ? T.red : T.green, flexShrink: 0 }} />
-                  <span style={{ fontSize: "12px", color: T.ink, fontWeight: 600, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.fn}</span>
-                  <span style={{ fontSize: "11px", color: T.ink, fontFamily: mono, flexShrink: 0 }}>${(l.costEstimate||0).toFixed(4)}</span>
-                </div>
-                <div style={{ fontSize: "10px", color: T.faint, fontFamily: mono, marginTop: "3px", paddingLeft: "15px" }}>{l.model?.includes("sonnet") ? "Sonnet" : "Haiku"} · {l.latencyMs}ms</div>
-              </div>
-            ) : (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "9px 4px", borderBottom: i < 29 ? `1px solid ${T.line}` : "none" }}>
-                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: l.ok === false ? T.red : T.green, flexShrink: 0 }} />
-                <span style={{ fontSize: "12px", color: T.ink, fontWeight: 600, flex: 1 }}>{l.fn}</span>
-                <span style={{ fontSize: "10px", color: T.faint, fontFamily: mono }}>{l.model?.includes("sonnet") ? "Sonnet" : "Haiku"}</span>
-                <span style={{ fontSize: "11px", color: T.sub, fontFamily: mono }}>{l.latencyMs}ms</span>
-                <span style={{ fontSize: "11px", color: T.ink, fontFamily: mono, minWidth: "60px", textAlign: "right" }}>${(l.costEstimate||0).toFixed(4)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-    </div>
-  );
-}
-
-// ─── APP SHELL ───────────────────────────────────────────────────────────────
 function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

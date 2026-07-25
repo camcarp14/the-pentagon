@@ -6,7 +6,7 @@ import { db, sbFetch, functionAuthHeaders } from "./supabase.js";
 export async function prospectProxy(service, payload) {
   const res = await fetch("/.netlify/functions/prospect-proxy", {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...functionAuthHeaders() },
+    headers: { "Content-Type": "application/json", ...(await functionAuthHeaders()) },
     body: JSON.stringify({ service, ...payload }),
   });
   if (!res.ok) throw new Error(`${service} proxy error (${res.status}): ${await res.text()}`);
