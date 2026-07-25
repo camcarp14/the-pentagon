@@ -263,12 +263,12 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
   .shell { grid-template-columns: 1fr; }
   /* bottom nav: a real app bar — comfortable clearance above the home
      indicator (max() guarantees breathing room even where env() is 0) */
-  .rail { position: fixed; bottom: 0; top: auto; height: auto; width: 100%; flex-direction: row; align-items: center; border-top: 1px solid var(--border); border-right: none; background: rgba(11,15,26,0.92); backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%); box-shadow: 0 -2px 16px rgba(0,0,0,0.4); z-index: 50; padding: 4px max(6px, env(safe-area-inset-right)) max(12px, calc(4px + var(--safe-bottom))) max(6px, env(safe-area-inset-left)); }
+  .rail { position: fixed; bottom: 0; top: auto; height: auto; width: 100%; flex-direction: row; align-items: center; border-top: 1px solid var(--border); border-right: none; background: rgba(11,15,26,0.92); backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%); box-shadow: 0 -2px 16px rgba(0,0,0,0.4); z-index: 50; padding: 4px max(6px, env(safe-area-inset-right)) max(10px, calc(6px + var(--safe-bottom, 0px))) max(6px, env(safe-area-inset-left)); }
   .rail-foot { display: none; } .brand { display: none; }
   /* the pill group opens up to fill the bar so its tabs spread edge-to-edge */
   .navgroup { flex-direction: row; flex: 1; gap: 0; padding: 0; background: none; border: none; }
   /* icon-over-label bottom-bar cells, matching ZTS/Clarify/Macro exactly */
-  .nav-item { flex: 1; flex-direction: column; justify-content: center; gap: 3px; min-height: 44px; padding: 8px 2px 7px; color: var(--faint); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+  .nav-item { flex: 1; flex-direction: column; justify-content: center; gap: 3px; min-height: 46px; padding: 8px 2px 7px; color: var(--faint); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
   .nav-item .tab-ico { display: block; }
   .nav-item:hover { background: none; color: var(--faint); }
   .nav-item.active { background: none; color: var(--accent); }
