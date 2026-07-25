@@ -15,8 +15,8 @@ import { AnimatedNumber, EmptyState, useIsMobile } from "@cc/ui";
 import { auth } from "@cc/supabase";
 
 // Which localStorage prefix each tool writes under (they run on one domain now).
-const LS = { zts: "zts_", clarify: "sm_" };
-const USAGE_APPS = ["zts", "clarify"]; // Runway logs AI server-side; not yet unified
+const LS = { zts: "zts_", clarify: "sm_", looper: "lp_" };
+const USAGE_APPS = ["zts", "clarify", "looper"]; // Runway logs AI server-side; not yet unified
 const REGION_LABELS = { identity: "Identity", principle: "Principles", knowledge: "Knowledge", signal: "Signals", skill: "Skills", goal: "Goals" };
 
 // ─── neutral "platform" palette (its own identity, not any one tool's) ───────
@@ -56,9 +56,11 @@ const Stat = ({ label, children, sub }) => (
 
 // ─── OVERVIEW (cross-tool digest) ────────────────────────────────────────────
 // The top line: total AI spend, tokens, and calls across every tool, plus a
-// per-tool breakdown. ZTS + Clarify log every call to localStorage; Runway runs
-// its AI server-side and Macro is keyless market data, so those two read
-// honestly as "not logged here" rather than a fake $0.
+// per-tool breakdown. ZTS, Clarify and Looper log every call to localStorage;
+// Runway runs its AI server-side and Macro is keyless market data, so those two
+// read honestly as "not logged here" rather than a fake $0. Looper matters most
+// here — it is the only tool that spends unattended, so its running total needs
+// to sit next to the others rather than only inside Looper's own log.
 function Overview({ isMobile }) {
   const per = APPS.map((app) => {
     if (!USAGE_APPS.includes(app)) return { app, tracked: false };
@@ -108,7 +110,7 @@ function Overview({ isMobile }) {
       </Card>
       {totals.calls === 0 && (
         <div style={{ fontSize: 11.5, color: P.faint, marginTop: 12, lineHeight: 1.5 }}>
-          No AI calls logged yet in ZTS or Clarify — generate a Short, draft outreach, or tailor a résumé and spend shows up here. See <strong style={{ color: P.muted }}>Usage</strong> for the call-by-call log.
+          No AI calls logged yet in ZTS, Clarify or Looper — generate a Short, draft outreach, or start a Looper run and spend shows up here. See <strong style={{ color: P.muted }}>Usage</strong> for the call-by-call log.
         </div>
       )}
     </div>

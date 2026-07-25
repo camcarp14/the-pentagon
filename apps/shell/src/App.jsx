@@ -23,6 +23,7 @@ const TOOLS = {
   clarify: lazy(() => import("@app/clarify")),
   runway: lazy(() => import("@app/runway")),
   macro: lazy(() => import("@app/macro")),
+  looper: lazy(() => import("@app/looper")),
 };
 
 // The shell-owned cross-tool management surface (Usage / Minds / Agents).
@@ -185,19 +186,29 @@ function AppToggle({ active, onPick, compact }) {
               // buys the label instead, and the accent moves onto the text —
               // every tool stays identifiable without relying on colour alone.
               gap: compact ? 0 : 7,
-              padding: compact ? "0 6px" : "6px 14px",
+              // 3px inset, 9.5px, no tracking: five segments need every pixel.
+              // Measured at 430/393/375/360/320 with a fallback font WIDER than
+              // Syne — no label clips at 375px (the narrowest current iPhone) and
+              // up. 360px is 2-3px short in the fallback, which real Syne
+              // absorbs; 320px genuinely does not fit five words, so it
+              // ellipsises rather than overlapping (see the label span below).
+              padding: compact ? "0 3px" : "6px 14px",
               minHeight: compact ? 44 : 32,
-              ...(compact ? { flex: "1 1 0", minWidth: 0 } : {}),
+              ...(compact ? { flex: "1 1 0", minWidth: 0, overflow: "hidden" } : {}),
               border: "none", borderRadius: compact ? 9 : 8, cursor: "pointer", background: "transparent",
               color: on ? (compact ? m.accent : "var(--ink)") : "var(--faint)",
-              fontFamily: "'Syne',system-ui", fontSize: compact ? 10 : 11.5, fontWeight: 700,
-              letterSpacing: compact ? "0.01em" : "0.06em", textTransform: "uppercase", whiteSpace: "nowrap",
+              fontFamily: "'Syne',system-ui", fontSize: compact ? 9.5 : 11.5, fontWeight: 700,
+              letterSpacing: compact ? "0em" : "0.06em", textTransform: "uppercase", whiteSpace: "nowrap",
               transition: `color ${M.durBase} ${M.easeStd}`,
             }}>
             {!compact && (
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: m.accent, boxShadow: on ? `0 0 8px ${m.accent}` : "none", flexShrink: 0 }} />
             )}
-            {m.label}
+            {/* The label needs its own block to truncate: `text-overflow` does
+                nothing on a flex container, so with the text as a direct child
+                of the button an over-wide label overflowed its segment and ran
+                into its neighbour instead of clipping. */}
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, display: "block" }}>{m.label}</span>
           </button>
         );
       })}
@@ -318,7 +329,7 @@ export default function Shell() {
     return () => { cancelAnimationFrame(raf); vv?.removeEventListener("resize", on); window.removeEventListener("orientationchange", on); };
   }, []);
 
-  // ⌥1 / ⌥2 / ⌥3 / ⌥4 jump between tools. Deliberately NOT ⌘K — each tool owns its
+  // ⌥1..⌥5 jump between tools. Deliberately NOT ⌘K — each tool owns its
   // own (richer) ⌘K palette, and Option+number never collides with the browser.
   useEffect(() => {
     const onKey = (e) => {
@@ -326,7 +337,7 @@ export default function Shell() {
       // Match e.code, not e.key: on macOS, Option composes the digit into a glyph
       // (⌥1 → "¡"), so e.key is never "1"/"2"/"3" and the shortcut would silently
       // do nothing. e.code stays "Digit1".."Digit3" regardless of the modifier.
-      const i = ["Digit1", "Digit2", "Digit3", "Digit4"].indexOf(e.code);
+      const i = ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5"].indexOf(e.code);
       if (i === -1 || !APPS[i]) return;
       e.preventDefault();
       pick(APPS[i]);
@@ -352,12 +363,11 @@ export default function Shell() {
       }}>
       {/* One row, still 52px: the switcher gets 44px-tall targets without
           spending a second row of vertical chrome. On mobile the wordmark drops
-          and the labels run at 10px — the size iOS uses for its own tab bars —
-          which keeps all four labels un-truncated with the System button still
-          visible from 430px all the way down to 320px (measured in a browser at
-          430/393/390/375/360/320 with a fallback font WIDER than Syne, so real
-          rendering has more slack). Segments land at 70x44 on a 390px phone,
-          against the 28x26 the old dots-only compact mode gave. */}
+          and the labels run small and untracked, which keeps all FIVE tool
+          labels un-truncated with the System button still visible from 430px
+          down to 375px, the narrowest phone still shipping. Segments land at
+          56x44 on a 393px phone, against the 28x26 the old dots-only compact
+          mode gave. Below 375px the labels ellipsise; see AppToggle. */}
       {/* 51 + the outer 1px borderBottom = the 52px the bar has always been. Ten
           call sites across the four tools hardcode `calc(100vh - 52px)` or
           `top: 52px`, so growing this to 53 would put a permanent 1px overflow
