@@ -472,36 +472,64 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
   .ticket .v { font-size: 18px; }
 }
 
-/* ---- entry readiness: how close is a leveraged long, and what blocks it ---- */
-.readiness .ttl { margin-bottom: 12px; }
-.rd-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
-.rd-frac { font-family: var(--mono); font-size: 30px; font-weight: 500; line-height: 1; letter-spacing: -1px; flex: none; }
-.rd-frac .rd-of { font-size: 15px; color: var(--ink-3); }
-.rd-frac.armed, .rd-frac.ready { color: var(--good); }
-.rd-frac.close { color: var(--warn); }
-.rd-frac.far { color: var(--ink-2); }
-.rd-bar-wrap { flex: 1; min-width: 0; }
-.rd-bar { height: 6px; border-radius: 99px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
-.rd-bar > div { height: 100%; border-radius: 99px; background: var(--ink-3); transition: width var(--dur-3) var(--ease-out); }
-.rd-bar.armed > div, .rd-bar.ready > div { background: var(--good); }
-.rd-bar.close > div { background: var(--warn); }
-.rd-next { margin-top: 7px; line-height: 1.45; }
+/* ---- entry readiness: how close is a leveraged long, and what blocks it ----
+   Composition notes, because the first pass was ugly for reasons worth recording:
+   a 30px numeral beside a wrapping paragraph made an L-shaped block that fought
+   the directive above it, and six identical hairline rows of prose read as dead
+   weight. Now: pips carry the count, one sentence carries the "what next", price
+   gates get an aligned numeric table, and binary shape gates collapse to tags. */
+.readiness .ttl { margin-bottom: 11px; }
+.rd-chip.close { color: var(--warn); border-color: rgba(212, 147, 11, 0.4); }
+.rd-chip.close .dot { background: var(--warn); }
 
-.rd-gates { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 1px; background: var(--border); border-radius: var(--r-md); overflow: hidden; }
-.rd-gates li { display: flex; align-items: center; gap: 8px; background: var(--card-2); padding: 9px 11px; font-size: 12.5px; min-width: 0; }
-.rd-gates .mark { flex: none; width: 14px; text-align: center; font-weight: 800; }
-.rd-gates li.pass { color: var(--ink-2); } .rd-gates li.pass .mark { color: var(--good); }
-.rd-gates li.fail { color: var(--ink); } .rd-gates li.fail .mark { color: var(--ink-3); }
-.rd-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rd-dist { margin-left: auto; flex: none; font-family: var(--mono); font-size: 12px; color: var(--warn); }
+/* count as pips: six gates, six marks — legible at a glance, no big numeral */
+.rd-pips { display: flex; gap: 4px; margin-bottom: 10px; }
+.rd-pips > span {
+  flex: 1; height: 5px; border-radius: 99px; background: rgba(255, 255, 255, 0.09);
+  transition: background var(--dur-2) var(--ease-out);
+}
+.rd-pips > span.on { background: var(--ink-2); }
+.rd-pips.close > span.on { background: var(--warn); }
+.rd-pips.ready > span.on, .rd-pips.armed > span.on { background: var(--good); }
 
-.rd-paths { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.rd-path { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.rd-path .k { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--ink-3); font-weight: 700; }
-.rd-path .v { font-size: 12.5px; font-weight: 600; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: capitalize; }
-.rd-path .v.num { font-family: var(--mono); font-weight: 500; text-transform: none; }
-.rd-path .v.on { color: var(--good); }
-.rd-path .v.grade-efficient { color: var(--good); }
-.rd-path .v.grade-fair { color: var(--ink-2); }
-.rd-path .v.grade-rich { color: var(--serious); }
-.rd-path .v.grade-unknown { color: var(--ink-3); }
+.rd-next {
+  margin: 0 0 13px; font-size: 12.5px; line-height: 1.45; color: var(--ink-2);
+  text-wrap: pretty;
+}
+.rd-next strong { color: var(--ink); font-weight: 600; }
+.rd-next.ready, .rd-next.armed { color: var(--good); }
+
+/* price gates: an aligned table, so the eye runs down the numbers */
+.rd-table { display: grid; gap: 1px; background: var(--border); border-radius: var(--r-md); overflow: hidden; margin-bottom: 11px; }
+.rd-row {
+  display: grid; grid-template-columns: 15px 1fr auto auto; align-items: center; gap: 9px;
+  background: var(--card-2); padding: 9px 11px; font-size: 12.5px; min-width: 0;
+}
+.rd-mark { color: var(--good); font-weight: 800; text-align: center; font-size: 11px; }
+.rd-key { color: var(--ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-row.pass .rd-key { color: var(--ink-2); }
+.rd-lvl { font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+.rd-dist { font-family: var(--mono); font-size: 12px; color: var(--warn); min-width: 46px; text-align: right; }
+.rd-row.pass .rd-dist { color: var(--good); }
+
+/* shape gates: binary, so they are tags rather than rows */
+.rd-shape { margin-bottom: 13px; }
+.rd-shape-k { display: block; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--ink-3); font-weight: 700; margin-bottom: 6px; }
+.rd-tags { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.rd-tag {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 0;
+  padding: 6px 4px; border-radius: 99px; font-size: 11px; font-weight: 600; white-space: nowrap;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); color: var(--ink-3);
+}
+.rd-tag.on { color: var(--good); border-color: rgba(18, 165, 148, 0.4); background: rgba(18, 165, 148, 0.08); }
+
+/* the paths strip reuses .ticket, plus a caption line under each value */
+.rd-ticket { margin-top: 0; }
+.rd-ticket .v { font-size: 15px; }
+.rd-ticket .v.cap { font-family: var(--font); text-transform: capitalize; font-weight: 700; }
+.rd-ticket .v.good { color: var(--good); }
+.rd-ticket .v.grade-efficient { color: var(--good); }
+.rd-ticket .v.grade-fair { color: var(--ink-2); }
+.rd-ticket .v.grade-rich { color: var(--serious); }
+.rd-ticket .v.grade-unknown { color: var(--ink-3); }
+.tk-sub { font-size: 10.5px; color: var(--ink-3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -36,6 +36,20 @@ const ACTION_COPY = {
 const ENTRY_ACTIONS = new Set(['ENTER', 'ADD'])
 const FRESH_RANK = { live: 0, stale: 1, dead: 2 }
 
+// The arm checklist's own labels are full sentences ("close above EMA20 (99.09)")
+// because the run plan renders them as prose. In a scannable table the sentence
+// IS the noise: the level already has its own column, so each gate needs a short,
+// fixed-width key instead.
+const GATE_LABELS = {
+  close_ema20: 'EMA20',
+  close_ema50: 'EMA50',
+  ema_stack: 'EMA stack',
+  ema50_rising: 'EMA50 slope',
+  higher_lows: 'Higher lows',
+  btc_confirm: 'BTC 50d',
+}
+const shortLabel = (id) => GATE_LABELS[id] || id
+
 export default function Cockpit({ derived, settings, position, sources, onReload }) {
   const loading = sources.quote.loading && !sources.quote.data && !sources.quote.error
   if (loading && !derived.price) return <SkPage cards={4} />
@@ -234,6 +248,13 @@ function EntryReadiness({ derived }) {
   const bo = radar.paths?.breakout
   const pb = radar.paths?.pullback
   const tone = radar.armed ? 'armed' : radar.ready ? 'ready' : passed >= gates.length - 2 ? 'close' : 'far'
+  // Two kinds of gate, and they deserve different shapes on screen. A PRICE gate
+  // has a level and a distance, so it belongs in an aligned numeric table you can
+  // scan down. A SHAPE gate (the stack, the slope, higher lows) is binary and has
+  // no distance — as a full row it was three lines of identical dead weight, so
+  // it reads better as a chip.
+  const priceGates = gates.filter((g) => g.level != null)
+  const shapeGates = gates.filter((g) => g.level == null)
 
   return (
     <section className="card span2 readiness" data-testid="entry-readiness">
@@ -242,55 +263,82 @@ function EntryReadiness({ derived }) {
         {radar.armed
           ? <span className="chip live"><span className="dot" />armed</span>
           : radar.ready
-            ? <span className="chip live"><span className="dot" />ready · waiting on a trigger</span>
-            : <span className="chip"><span className="dot" />{blocking.length} gate{blocking.length === 1 ? '' : 's'} to go</span>}
+            ? <span className="chip live"><span className="dot" />waiting on a trigger</span>
+            : <span className={`chip rd-chip ${tone}`}><span className="dot" />{passed} of {gates.length} gates</span>}
       </div>
 
-      <div className="rd-head">
-        <div className={`rd-frac num ${tone}`}>{passed}<span className="rd-of">/{gates.length}</span></div>
-        <div className="rd-bar-wrap">
-          <div className={`rd-bar ${tone}`} role="img" aria-label={`${passed} of ${gates.length} entry gates met`}>
-            <div style={{ width: `${pct}%` }} />
-          </div>
-          <div className="tiny rd-next">
-            {radar.armed
-              ? 'All gates met and a trigger is live — see the directive above.'
-              : radar.ready
-                ? `Regime and BTC both confirm. Waiting on a trigger: ${pb?.stage === 'setup' ? 'pullback setup forming — a close above the prior bar\'s high arms it' : bo?.level != null ? `breakout above ${fmtPx(bo.level)}` : 'a pullback reclaim or a breakout'}.`
-                : nearest
-                  ? `Closest gate: ${nearest.label} — ${nearest.distancePct > 0 ? '+' : ''}${nearest.distancePct}% away.`
-                  : 'The remaining gates are trend shape, not price — they need time above the averages, not a single move.'}
+      {/* Segment pips, not a big numeral beside a wrapping paragraph: six gates
+          read as six marks, so the count is legible without a 30px number
+          competing with the directive above it. */}
+      <div className={`rd-pips ${tone}`} role="img" aria-label={`${passed} of ${gates.length} entry gates met`}>
+        {/* Filled by COUNT, left to right — a progress meter. Lighting the pip
+            that matches each gate's position instead made "1 of 6" illuminate a
+            lone pip in the middle of the row, which reads as arbitrary. */}
+        {gates.map((g, i) => <span key={g.id} className={i < passed ? 'on' : ''} />)}
+      </div>
+
+      <p className={`rd-next ${tone}`}>
+        {radar.armed
+          ? 'Every gate is met and a trigger is live — the call above is live.'
+          : radar.ready
+            ? pb?.stage === 'setup'
+              ? 'Regime and BTC confirm. Pullback setup forming — a close above the prior bar\'s high arms it.'
+              : bo?.level != null
+                ? `Regime and BTC confirm. Waiting on a break above ${fmtPx(bo.level)}.`
+                : 'Regime and BTC confirm. Waiting on a pullback reclaim or a breakout.'
+            : nearest
+              ? <>Nearest gate is <strong>{shortLabel(nearest.id)}</strong>, {nearest.distancePct > 0 ? '+' : ''}{nearest.distancePct}% away.</>
+              : 'What is left is trend shape, not price — it needs time above the averages, not one move.'}
+      </p>
+
+      {priceGates.length > 0 && (
+        <div className="rd-table">
+          {priceGates.map((g) => (
+            <div key={g.id} className={`rd-row ${g.pass ? 'pass' : 'fail'}`}>
+              <span className="rd-mark" aria-hidden>{g.pass ? '✓' : ''}</span>
+              <span className="rd-key">{shortLabel(g.id)}</span>
+              <span className="rd-lvl num">{fmtPx(g.level)}</span>
+              <span className="rd-dist num">{g.pass ? 'held' : g.distancePct == null ? '—' : `${g.distancePct > 0 ? '+' : ''}${g.distancePct}%`}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {shapeGates.length > 0 && (
+        <div className="rd-shape">
+          <span className="rd-shape-k">Trend shape</span>
+          {/* Own row, equal columns: inline with the label these three wrapped
+              2-then-1 and read ragged. */}
+          <div className="rd-tags">
+            {shapeGates.map((g) => (
+              <span key={g.id} className={`rd-tag ${g.pass ? 'on' : ''}`}>
+                <span aria-hidden>{g.pass ? '✓' : '○'}</span>{shortLabel(g.id)}
+              </span>
+            ))}
           </div>
         </div>
-      </div>
+      )}
 
-      <ul className="rd-gates">
-        {gates.map((g) => (
-          <li key={g.id} className={g.pass ? 'pass' : 'fail'}>
-            <span className="mark" aria-hidden>{g.pass ? '✓' : '○'}</span>
-            <span className="rd-label">{g.label}</span>
-            {!g.pass && g.distancePct != null && (
-              <span className="rd-dist num">{g.distancePct > 0 ? '+' : ''}{g.distancePct}%</span>
-            )}
-          </li>
-        ))}
-      </ul>
-
-      <div className="rd-paths">
-        <span className="rd-path">
-          <span className="k">Breakout</span>
-          {bo?.active ? <span className="v on">live</span>
-            : bo?.level != null ? <span className="v num">{fmtPx(bo.level)}{bo.distancePct != null ? ` · ${bo.distancePct > 0 ? '+' : ''}${bo.distancePct}%` : ''}</span>
-              : <span className="v">—</span>}
-        </span>
-        <span className="rd-path">
-          <span className="k">Pullback</span>
-          <span className={`v ${pb?.stage === 'trigger' ? 'on' : ''}`}>{pb?.stage === 'none' || !pb?.stage ? 'no setup' : pb.stage}</span>
-        </span>
-        <span className="rd-path">
-          <span className="k">Leverage</span>
-          <span className={`v grade-${derived.torqueRead.grade}`}>{derived.torqueRead.grade}</span>
-        </span>
+      {/* Same hairline-cell treatment as the hero's order ticket, so the two
+          numeric strips on this page read as one instrument family. */}
+      <div className="ticket rd-ticket">
+        <div className="tk">
+          <div className="k">Breakout</div>
+          <div className={`v num ${bo?.active ? 'good' : ''}`}>
+            {bo?.active ? 'live' : bo?.level != null ? fmtPx(bo.level) : '—'}
+          </div>
+          {!bo?.active && bo?.distancePct != null && <div className="tk-sub num">{bo.distancePct > 0 ? '+' : ''}{bo.distancePct}%</div>}
+        </div>
+        <div className="tk">
+          <div className="k">Pullback</div>
+          <div className={`v cap ${pb?.stage === 'trigger' ? 'good' : ''}`}>{!pb?.stage || pb.stage === 'none' ? 'none' : pb.stage}</div>
+          <div className="tk-sub">{pb?.stage === 'setup' ? 'arming' : pb?.stage === 'trigger' ? 'fires now' : 'no dip yet'}</div>
+        </div>
+        <div className="tk">
+          <div className="k">Leverage</div>
+          <div className={`v cap grade-${derived.torqueRead.grade}`}>{derived.torqueRead.grade}</div>
+          <div className="tk-sub num">{derived.beta == null ? '—' : `${round2(derived.beta)}× beta`}</div>
+        </div>
       </div>
 
       {/* Why the leverage read matters even while standing aside: it says whether
