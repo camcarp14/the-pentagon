@@ -97,13 +97,16 @@ function SubNav({ tab, currentView, onNavigate }) {
 // Mobile bottom tab bar — icon-only, hidden on desktop via CSS.
 function BottomBar({ activeTab, onTab, inboundNew }) {
   return (
-    <div className="co-bottombar" style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 400, display: "none", background: "rgba(11,15,26,0.92)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: `1px solid ${T.line}`, boxShadow: "0 -2px 16px rgba(0,0,0,0.4)", paddingBottom: "var(--safe-bottom)" }}>
+    // Canonical bottom-bar geometry — must stay identical to ZTS, Runway and
+    // Macro (see the note on ZTS's BottomNav) or the bar changes height when you
+    // switch tools.
+    <div className="co-bottombar" style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 400, display: "none", background: "rgba(11,15,26,0.92)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: `1px solid ${T.line}`, boxShadow: "0 -2px 16px rgba(0,0,0,0.4)", padding: "4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))" }}>
       <div style={{ display: "flex" }}>
         {NAV_TABS.map(t => {
           const on = activeTab === t.key;
           return (
-            <button key={t.key} onClick={() => onTab(t)} title={t.label} aria-label={t.label} style={{ flex: 1, padding: "8px 2px 7px", background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px", position: "relative" }}>
-              <span style={{ fontSize: "19px", lineHeight: 1, color: on ? T.gold : T.faint }}>{t.icon}</span>
+            <button key={t.key} onClick={() => onTab(t)} title={t.label} aria-label={t.label} style={{ flex: 1, minHeight: 46, padding: "8px 2px 7px", background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px", position: "relative" }}>
+              <span style={{ fontSize: "21px", lineHeight: 1, color: on ? T.gold : T.faint }}>{t.icon}</span>
               <span style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", fontFamily: T.fontDisplay, color: on ? T.gold : T.faint }}>{t.label}</span>
               {t.key === "inbound" && inboundNew > 0 && <span style={{ position: "absolute", top: "4px", right: "50%", marginRight: "-18px", fontSize: "8px", fontWeight: 800, color: "#1A0A12", background: T.pink, borderRadius: T.rPill, padding: "1px 5px" }}>{inboundNew}</span>}
             </button>

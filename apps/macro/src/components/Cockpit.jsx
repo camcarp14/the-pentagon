@@ -14,9 +14,10 @@
 //     means "your stop is hit".
 // Everything heavy — the reasoning, the regime facts, the full run plan — stays
 // one tap away behind a disclosure.
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { SkPage, Expand, FreshChip } from './primitives.jsx'
 import { sizePosition, initialStop } from '../lib/risk.js'
+import { armChecklist } from '../lib/runplan.js'
 import { fmtPx, round2 } from '../lib/format.js'
 import RunPlan from './RunPlan.jsx'
 
@@ -60,6 +61,7 @@ export default function Cockpit({ derived, settings, position, sources, onReload
     <div className="grid stagger" data-testid="cockpit">
       <HealthStrip derived={derived} settings={settings} failing={failing} sessionExpired={sessionExpired} onReload={onReload} />
       <DirectiveHero derived={derived} plan={plan} />
+      <EntryReadiness derived={derived} />
       {position && <PositionCard derived={derived} position={position} />}
       <MarketReads derived={derived} settings={settings} />
       <EntryPlanner derived={derived} settings={settings} hasPosition={!!position} />
@@ -187,6 +189,132 @@ function DirectiveHero({ derived, plan }) {
           </Expand>
         </>
       )}
+    </section>
+  )
+}
+
+/** ENTRY READINESS — "even in a downturn, when do I get ready to jump in?"
+ *
+ *  "Stand aside" answers what to do today but not what to watch for, which makes
+ *  a downtrend a dead end: the screen goes quiet exactly when preparation matters
+ *  most. The arm checklist that answers it already existed (lib/runplan.js) with
+ *  pass/fail per gate, the price level that flips each one, an honest % distance,
+ *  and a note on what is actually blocking — but it was buried behind the run-plan
+ *  disclosure, two taps from view. This lifts it onto the cockpit so the tab
+ *  always shows how close a leveraged long is, and what has to happen first.
+ *
+ *  Distances are deliberately not sugar-coated: "+7.3% away" means the
+ *  confirmation costs 7.3%, and that is the price of not buying a falling knife.
+ */
+function EntryReadiness({ derived }) {
+  const [open, setOpen] = useState(false)
+  const radar = useMemo(
+    () => armChecklist(derived.mstrCandles, derived.btcCandles),
+    [derived.mstrCandles, derived.btcCandles],
+  )
+  if (radar.insufficient) return null
+
+  const gates = [
+    ...radar.mstr,
+    {
+      id: 'btc_confirm',
+      label: `BTC confirms${radar.btc.score != null ? ` (${String(radar.btc.state).replace(/_/g, ' ')} ${radar.btc.score})` : ''}`,
+      pass: radar.btc.pass,
+      level: radar.btc.level,
+      distancePct: radar.btc.pass ? null : radar.btc.distancePct,
+      note: radar.btc.note,
+    },
+  ]
+  const passed = gates.filter((g) => g.pass).length
+  const pct = Math.round((passed / gates.length) * 100)
+  const blocking = gates.filter((g) => !g.pass)
+  // The single most useful line: of the gates still blocking, the one closest in
+  // price. Gates with no price level (trend shape) can't be ranked this way.
+  const nearest = blocking.filter((g) => g.distancePct != null).sort((a, b) => a.distancePct - b.distancePct)[0]
+  const bo = radar.paths?.breakout
+  const pb = radar.paths?.pullback
+  const tone = radar.armed ? 'armed' : radar.ready ? 'ready' : passed >= gates.length - 2 ? 'close' : 'far'
+
+  return (
+    <section className="card span2 readiness" data-testid="entry-readiness">
+      <div className="ttl">Entry readiness
+        <span className="spacer" />
+        {radar.armed
+          ? <span className="chip live"><span className="dot" />armed</span>
+          : radar.ready
+            ? <span className="chip live"><span className="dot" />ready · waiting on a trigger</span>
+            : <span className="chip"><span className="dot" />{blocking.length} gate{blocking.length === 1 ? '' : 's'} to go</span>}
+      </div>
+
+      <div className="rd-head">
+        <div className={`rd-frac num ${tone}`}>{passed}<span className="rd-of">/{gates.length}</span></div>
+        <div className="rd-bar-wrap">
+          <div className={`rd-bar ${tone}`} role="img" aria-label={`${passed} of ${gates.length} entry gates met`}>
+            <div style={{ width: `${pct}%` }} />
+          </div>
+          <div className="tiny rd-next">
+            {radar.armed
+              ? 'All gates met and a trigger is live — see the directive above.'
+              : radar.ready
+                ? `Regime and BTC both confirm. Waiting on a trigger: ${pb?.stage === 'setup' ? 'pullback setup forming — a close above the prior bar\'s high arms it' : bo?.level != null ? `breakout above ${fmtPx(bo.level)}` : 'a pullback reclaim or a breakout'}.`
+                : nearest
+                  ? `Closest gate: ${nearest.label} — ${nearest.distancePct > 0 ? '+' : ''}${nearest.distancePct}% away.`
+                  : 'The remaining gates are trend shape, not price — they need time above the averages, not a single move.'}
+          </div>
+        </div>
+      </div>
+
+      <ul className="rd-gates">
+        {gates.map((g) => (
+          <li key={g.id} className={g.pass ? 'pass' : 'fail'}>
+            <span className="mark" aria-hidden>{g.pass ? '✓' : '○'}</span>
+            <span className="rd-label">{g.label}</span>
+            {!g.pass && g.distancePct != null && (
+              <span className="rd-dist num">{g.distancePct > 0 ? '+' : ''}{g.distancePct}%</span>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      <div className="rd-paths">
+        <span className="rd-path">
+          <span className="k">Breakout</span>
+          {bo?.active ? <span className="v on">live</span>
+            : bo?.level != null ? <span className="v num">{fmtPx(bo.level)}{bo.distancePct != null ? ` · ${bo.distancePct > 0 ? '+' : ''}${bo.distancePct}%` : ''}</span>
+              : <span className="v">—</span>}
+        </span>
+        <span className="rd-path">
+          <span className="k">Pullback</span>
+          <span className={`v ${pb?.stage === 'trigger' ? 'on' : ''}`}>{pb?.stage === 'none' || !pb?.stage ? 'no setup' : pb.stage}</span>
+        </span>
+        <span className="rd-path">
+          <span className="k">Leverage</span>
+          <span className={`v grade-${derived.torqueRead.grade}`}>{derived.torqueRead.grade}</span>
+        </span>
+      </div>
+
+      {/* Why the leverage read matters even while standing aside: it says whether
+          MSTR is a cheap or expensive way to own BTC when the setup does arrive. */}
+      <button className="btn ghost sm disclose" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        {open ? 'hide what blocks it' : 'what has to change'}
+      </button>
+      <Expand open={open}>
+        <ul className="factlist">
+          {blocking.length === 0 && <li className="sub">Nothing — every gate is met.</li>}
+          {blocking.map((g) => (
+            <li key={g.id} className="sub">
+              <strong>{g.label}</strong>
+              {g.level != null && <> · level {fmtPx(g.level)}</>}
+              {g.distancePct != null && <> · {g.distancePct > 0 ? '+' : ''}{g.distancePct}% away</>}
+              {g.note && <> — {g.note}</>}
+            </li>
+          ))}
+          <li className="sub">
+            When it does arm, leverage is <strong>{derived.torqueRead.grade}</strong> — beta {derived.beta == null ? '—' : `${round2(derived.beta)}×`} vs BTC, mNAV {derived.nav?.mNav == null ? '—' : `${derived.nav.mNav}×`}
+            {derived.nav?.premiumPct != null && ` (${derived.nav.premiumPct >= 0 ? '+' : ''}${round2(derived.nav.premiumPct)}% to NAV)`}.
+          </li>
+        </ul>
+      </Expand>
     </section>
   )
 }

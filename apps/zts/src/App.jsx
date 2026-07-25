@@ -215,12 +215,18 @@ const TabIcon = ({ tab, color, size = 21 }) => (
 // Fixed bottom tab bar — replaces the top segmented control on mobile only.
 function BottomNav({ view, setView, tabs }) {
   return (
-    <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", background: "rgba(11,15,26,0.92)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: `1px solid ${T.line}`, boxShadow: "0 -2px 16px rgba(0,0,0,0.4)", paddingBottom: "var(--safe-bottom)" }}>
+    // CANONICAL BOTTOM-BAR GEOMETRY — all four tools must match exactly, or the
+    // bar visibly changes height as you switch tools (measured on an iPhone
+    // before this was unified: ZTS 84, Clarify 82, Runway 92, Macro 94px, from
+    // three different bottom-padding formulas and two icon sizes).
+    //   bar:  padding 4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))
+    //   item: min-height 46, padding 8px 2px 7px, gap 3, icon 21, label 9px
+    <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", background: "rgba(11,15,26,0.92)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: `1px solid ${T.line}`, boxShadow: "0 -2px 16px rgba(0,0,0,0.4)", padding: "4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))" }}>
       {tabs.map(t => {
         const active = view === t;
         const color = active ? T.greenDeep : T.faint;
         return (
-          <button key={t} onClick={() => setView(t)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px", padding: "8px 2px 7px", background: "none", border: "none", cursor: "pointer" }}>
+          <button key={t} onClick={() => setView(t)} style={{ flex: 1, minHeight: 46, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px", padding: "8px 2px 7px", background: "none", border: "none", cursor: "pointer" }}>
             <TabIcon tab={t} color={color} />
             <span style={{ fontSize: "9px", fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.04em", fontFamily: syne }}>{t}</span>
           </button>
