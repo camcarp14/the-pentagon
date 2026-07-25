@@ -47,6 +47,10 @@ export default function Cockpit({ derived, settings, position, sources, onReload
     sources.settingsSrc.error && 'settings',
     sources.positionSrc.error && 'position',
   ].filter(Boolean)
+  // An expired session fails EVERY source at once, and listing six dead feeds
+  // buries the one thing that actually fixes it. Report the cause, not the
+  // symptom count.
+  const sessionExpired = Object.values(sources).some((s) => /session expired/i.test(s?.error || ''))
 
   // Computed ONCE and shared by the hero ticket and the planner, so the two can
   // never disagree about the stop or the size (they each used to derive it).
@@ -54,7 +58,7 @@ export default function Cockpit({ derived, settings, position, sources, onReload
 
   return (
     <div className="grid stagger" data-testid="cockpit">
-      <HealthStrip derived={derived} settings={settings} failing={failing} onReload={onReload} />
+      <HealthStrip derived={derived} settings={settings} failing={failing} sessionExpired={sessionExpired} onReload={onReload} />
       <DirectiveHero derived={derived} plan={plan} />
       {position && <PositionCard derived={derived} position={position} />}
       <MarketReads derived={derived} settings={settings} />
@@ -83,7 +87,7 @@ function buildPlan(derived, settings, mode) {
  *  freshness, whether mNAV rests on estimates, any source trouble, and — the
  *  only place it existed before was inside an error row that requires an error —
  *  a Refresh you can always reach. On a phone this was previously impossible. */
-function HealthStrip({ derived, settings, failing, onReload }) {
+function HealthStrip({ derived, settings, failing, sessionExpired, onReload }) {
   const feeds = [
     { label: 'MSTR', fresh: derived.freshQuote },
     { label: 'BTC', fresh: derived.freshBtc },
@@ -111,9 +115,13 @@ function HealthStrip({ derived, settings, failing, onReload }) {
             <span className="dot" />mNAV est
           </span>
         )}
+        {/* Named in VISIBLE text, not a title tooltip: title does not exist on
+            touch, so on the platform this dashboard is mostly read on, "which
+            source is down" would have been unreachable — and unannounced to a
+            screen reader. role=alert so it is spoken when it appears. */}
         {failing.length > 0 && (
-          <span className="chip dead" title={`Source trouble: ${failing.join(' · ')} — showing what's still trustworthy.`}>
-            <span className="dot" />{failing.length} source{failing.length > 1 ? 's' : ''} down
+          <span className="chip dead hstrip-fail" role="alert">
+            <span className="dot" />{sessionExpired ? 'session expired — sign in again' : `${failing.join(' · ')} down`}
           </span>
         )}
       </div>
@@ -130,10 +138,24 @@ function DirectiveHero({ derived, plan }) {
   const [why, setWhy] = useState(false)
   // Freshness sentences are already the health strip's job; repeating them as
   // amber blocks here is what made the hero a wall of warnings.
-  const guardrails = (d.guardrails || []).filter((g) => !/\bdata is (live|stale|dead)\b/i.test(g))
+  // Only suppress the freshness sentences when the quote actually IS live —
+  // otherwise the one warning that the order ticket makes dangerous ("MSTR data
+  // is stale — treat every number below with suspicion") would be the single
+  // guardrail we hid, directly beneath executable numbers derived from that
+  // stale price.
+  const quoteLive = derived.freshQuote?.state === 'live'
+  const guardrails = (d.guardrails || []).filter((g) => !(quoteLive && /\bdata is (live|stale|dead)\b/i.test(g)))
   const shown = guardrails.slice(0, 2)
   const hidden = guardrails.slice(2)
-  const ticket = ENTRY_ACTIONS.has(d.action) && plan?.size?.ok ? plan : null
+  // ADD is sized at riskPct * addRiskFraction (App.jsx builds derived.addSizing
+  // that way, off the SAME stop), so reusing the full-risk plan here would print
+  // roughly double the shares and double the dollar risk that the headline
+  // immediately above recommends — on the one row this file calls "what you type
+  // into a broker". Always take the sizing the directive itself was built from.
+  const sizing = d.action === 'ADD' ? derived.addSizing : plan?.size
+  const ticket = ENTRY_ACTIONS.has(d.action) && quoteLive && sizing?.ok && plan?.stopPlan?.stop != null
+    ? { stop: plan.stopPlan.stop, size: sizing }
+    : null
 
   return (
     <section className={`card directive span2 ${d.severity}`} data-testid="directive">
@@ -142,9 +164,9 @@ function DirectiveHero({ derived, plan }) {
 
       {ticket && (
         <div className="ticket" data-testid="order-ticket">
-          <div className="tk"><div className="k">Buy</div><div className="v num">{ticket.size.shares}<span className="u">sh</span></div></div>
-          <div className="tk"><div className="k">Stop</div><div className="v num">{fmtPx(ticket.stopPlan.stop)}</div></div>
-          <div className="tk"><div className="k">Risk</div><div className="v num">${Math.round(ticket.size.riskUsd).toLocaleString('en-US')}</div></div>
+          <div className="tk"><div className="k">{d.action === 'ADD' ? 'Add' : 'Buy'}</div><div className="v num">{ticket.size.shares}<span className="u">sh</span></div></div>
+          <div className="tk"><div className="k">Stop</div><div className="v num">{fmtPx(ticket.stop)}</div></div>
+          <div className="tk"><div className="k">Risk</div><div className="v num">${Math.round(ticket.size.riskUsd).toLocaleString('en-US')}{ticket.size.capped ? <span className="u">capped</span> : null}</div></div>
         </div>
       )}
 
@@ -328,9 +350,10 @@ function EntryPlanner({ derived, settings, hasPosition }) {
 
   return (
     <section className="card span2" data-testid="entry-planner">
+      {/* No .spacer here: .dr-state already carries margin-left:auto, and two
+          auto margins split the free space instead of pushing to the edge. */}
       <button className="ttl ttl-btn" onClick={() => { userToggled.current = true; setOpen((o) => !o) }} aria-expanded={open}>
         If you enter now
-        <span className="spacer" />
         <span className="dr-state">{sz?.ok ? `${sz.shares} sh · ${fmtPx(plan.stop)}` : 'no plan'}</span>
         <span className={`dr-chev ${open ? 'open' : ''}`} aria-hidden>▾</span>
       </button>

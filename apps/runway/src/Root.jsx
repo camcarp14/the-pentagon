@@ -15,15 +15,21 @@ import polishCss from "./styles/polish.css?inline";
 import App from "./App.jsx";
 
 // Standardize Runway's nav with the other tools: a TOP bar on desktop (matching
-// ZTS/Clarify + the shell toggle), a BOTTOM bar on mobile. Runway's own
-// <=820px media query already turns its rail into a bottom bar, so we scope the
-// desktop conversion to >=821px and never touch the mobile rules (the previous
-// unconditional `.rail{top:52px}` was clobbering the mobile bottom nav).
-// The desktop breakpoint is 768px to match the shell's own chrome flip
-// (packages/ui useIsMobile). At the old 821px there was a 768-820px dead band
-// where the shell showed its DESKTOP tool toggle above Runway's MOBILE bottom
-// bar. Runway's own mobile rules in app.css flip at the same 768px now, so the
-// two layers always change together.
+// ZTS/Clarify + the shell toggle), a BOTTOM bar on mobile. The desktop
+// conversion is scoped to a media query so it never touches Runway's own mobile
+// rules (an earlier unconditional `.rail{top:52px}` clobbered the mobile bottom
+// nav).
+//
+// ONE breakpoint, 768px, in FOUR places that must move together:
+//   • this EMBED_OVERRIDES query        (min-width: 768px)
+//   • styles/app.css mobile block       (max-width: 767.98px)
+//   • styles/polish.css mobile block    (max-width: 767.98px)
+//   • ui/primitives.jsx useIsMobile()   (max-width: 767.98px)  <- the JS half
+// 768px is also the shell's own flip (packages/ui useIsMobile), so tool chrome
+// and shell chrome change on the same pixel. Two ways this has already broken:
+// at 821px here there was a 768-820px band showing the DESKTOP shell toggle over
+// Runway's MOBILE bottom bar; and leaving the JS hook at 820px put the MOBILE
+// board (one stacked stage) under the DESKTOP top bar on iPad portrait.
 const EMBED_OVERRIDES = `
 @media (min-width: 768px) {
   .shell { display: flex; flex-direction: column; min-height: calc(100vh - 52px); }

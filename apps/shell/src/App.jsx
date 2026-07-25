@@ -30,10 +30,16 @@ const System = lazy(() => import("./System.jsx"));
 
 // Neutral "platform" theme for the top bar while System is open, so the chrome
 // matches System's own dark surface instead of the active tool's accent.
+// Must cover every var the shell's own chrome consumes — while System is open no
+// tool stylesheet is mounted, so anything missing here resolves to nothing and
+// (because an unresolved var() invalidates the whole declaration) silently drops
+// the property. --surface-2 and --accent-line are load-bearing for the toggle's
+// active pill and the error-boundary button.
 const PLATFORM_VARS = {
-  "--bg": "#0A0E15", "--surface": "#131A24", "--ink": "#E9EDF5", "--muted": "#93A1B5",
+  "--bg": "#0A0E15", "--surface": "#131A24", "--surface-2": "#1B2438", "--ink": "#E9EDF5", "--muted": "#93A1B5",
   "--faint": "#66748A", "--border": "rgba(255,255,255,0.08)", "--accent": "#AAB6C6",
-  "--accent-soft": "rgba(170,182,198,0.14)", "--shadow-tab": "0 1px 2px rgba(0,0,0,0.5)",
+  "--accent-soft": "rgba(170,182,198,0.14)", "--accent-line": "rgba(170,182,198,0.32)",
+  "--shadow-tab": "0 1px 2px rgba(0,0,0,0.5)",
   "--font-display": "'Syne',system-ui", "--font-body": "'Inter',system-ui,sans-serif", "--font-mono": "'DM Mono',monospace",
 };
 
@@ -136,10 +142,17 @@ function AppToggle({ active, onPick, compact }) {
   }, [active, compact]);
   return (
     <div
-      role="tablist"
+      // Deliberately NOT role="tablist": a real tablist owes arrow-key
+      // navigation and aria-controls pointing at a tabpanel, and claiming the
+      // role without them tells a screen-reader user to expect a keyboard model
+      // that does not exist. A labelled group of buttons is honest and complete.
+      role="group"
       aria-label="Switch tool"
       style={{
-        position: "relative", gap: 2, padding: 3, borderRadius: compact ? 12 : 11,
+        // 2px inset on mobile, not 3: a 44px segment + 3px padding + 2 borders
+        // would be 52px inside a 51px row. At 2px the group is 50px and the
+        // segments keep their full 44px height.
+        position: "relative", gap: 2, padding: compact ? 2 : 3, borderRadius: compact ? 12 : 11,
         background: "color-mix(in srgb, var(--ink) 6%, transparent)",
         // lineSoft, matching the pill groups inside ZTS/Clarify rather than the
         // harder --border edge the shell used to draw.
@@ -153,14 +166,18 @@ function AppToggle({ active, onPick, compact }) {
       }}
     >
       {ind.ready && (
-        <div style={{ position: "absolute", top: 3, bottom: 3, left: ind.left, width: ind.width, background: "var(--surface-2)", borderRadius: compact ? 9 : 8, boxShadow: "var(--shadow-tab)", transition: `left ${M.durBase} ${M.easeSpring}, width ${M.durBase} ${M.easeSpring}` }} />
+        <div style={{ position: "absolute", top: compact ? 2 : 3, bottom: compact ? 2 : 3, left: ind.left, width: ind.width, background: "var(--surface-2, var(--surface))", borderRadius: compact ? 9 : 8, boxShadow: "var(--shadow-tab)", transition: `left ${M.durBase} ${M.easeSpring}, width ${M.durBase} ${M.easeSpring}` }} />
       )}
       {APPS.map((a) => {
         const m = appMeta(a);
         const on = a === active;
         return (
           <button key={a} ref={(el) => { refs.current[a] = el; }} onClick={() => onPick(a)} type="button"
-            title={m.brand} aria-label={m.brand} role="tab" aria-selected={on}
+            // No aria-label: it would override the visible label, so voice
+            // control ("tap ZTS") would fail against an accessible name of
+            // "Zero To Secure" (WCAG 2.5.3). The visible text IS the name; the
+            // brand stays as the hover title only.
+            title={m.brand} aria-current={on ? "true" : undefined}
             style={{
               position: "relative", zIndex: 1,
               display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -341,8 +358,12 @@ export default function Shell() {
           430/393/390/375/360/320 with a fallback font WIDER than Syne, so real
           rendering has more slack). Segments land at 70x44 on a 390px phone,
           against the 28x26 the old dots-only compact mode gave. */}
+      {/* 51 + the outer 1px borderBottom = the 52px the bar has always been. Ten
+          call sites across the four tools hardcode `calc(100vh - 52px)` or
+          `top: 52px`, so growing this to 53 would put a permanent 1px overflow
+          on every one of them. */}
       <div style={{
-        height: 52, paddingLeft: isMobile ? 10 : 20, paddingRight: isMobile ? 10 : 20,
+        height: 51, paddingLeft: isMobile ? 10 : 20, paddingRight: isMobile ? 10 : 20,
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, minWidth: 0, flex: isMobile ? 1 : "0 1 auto" }}>
