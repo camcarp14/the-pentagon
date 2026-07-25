@@ -64,7 +64,10 @@ export function useFactory(active) {
 // Bridge offline → the same brief goes to the clipboard, ready to paste.
 export function briefFromShort(short) {
   return {
-    source: "zts-command-center",
+    // Provenance stamp only — nothing on the factory side reads or validates it,
+    // so it tracks the current app name. Briefs written before the rename keep
+    // their historical "zts-command-center" stamp, which is what provenance means.
+    source: "the-pentagon",
     short_id: short.id,
     type: short.type || "angle",
     topic: short.topic || "",

@@ -97,9 +97,12 @@ and cosmetic:
   in the Supabase dashboard (Project Settings → General → Project name). Cosmetic
   only; the project ref / connection URLs are unchanged, so nothing in the app
   breaks.
-- **GitHub repo** — optionally rename `zts-command-center` → `the-pentagon`
+- **GitHub repo** — ✅ renamed `zts-command-center` → `the-pentagon`
   (Settings → Repository name). Lossless; GitHub auto-redirects the old URL and
-  existing clones keep working until they re-point their remote.
+  existing clones keep working until they re-point their remote. Note that a
+  session/tool scoped to the old name has to be re-pointed at the new one before
+  it can push, and Netlify's repo link should be confirmed to still trigger
+  builds after any rename.
 
 ## Known follow-ups (non-blocking)
 - Lock down the claude proxy (auth'd path above) if shipping the interim open one.
