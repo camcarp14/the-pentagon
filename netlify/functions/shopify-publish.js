@@ -5,10 +5,18 @@
 //   SHOPIFY_BLOG_ID     — the numeric blog id (Shopify admin → Online Store → Blog posts → check URL, or GET /admin/api/2024-01/blogs.json)
 
 const { json, error, methodGuard } = require("./_shared/response.cjs");
+const { requireAuth } = require("./_shared/requireAuth.cjs");
 
 exports.handler = async (event) => {
   const guard = methodGuard(event, "POST");
   if (guard) return guard;
+
+  // This endpoint publishes a LIVE, publicly-visible blog article using the
+  // store's admin token. Every other operator function gates on the session;
+  // this one did not, so an unauthenticated caller who knew the URL could post
+  // arbitrary HTML to the storefront. Gate before touching Shopify.
+  const auth = await requireAuth(event);
+  if (!auth.ok) return error(auth.status, auth.error);
 
   const { SHOPIFY_STORE, SHOPIFY_ADMIN_TOKEN, SHOPIFY_BLOG_ID } = process.env;
   if (!SHOPIFY_STORE || !SHOPIFY_ADMIN_TOKEN || !SHOPIFY_BLOG_ID) {

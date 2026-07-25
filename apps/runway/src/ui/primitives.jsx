@@ -32,8 +32,15 @@ export function Num({ v, f = (x) => x.toLocaleString('en-US'), dur }) {
   return shown == null ? <>—</> : <>{f(shown)}</>;
 }
 
-// ---- responsive branch point: matches the CSS mobile breakpoint (820px) ----
-export function useIsMobile(query = '(max-width: 820px)') {
+// ---- responsive branch point ----
+// MUST stay in lockstep with the CSS mobile breakpoint, which lives in three
+// places: app.css and polish.css (max-width: 767.98px) and Root.jsx's
+// EMBED_OVERRIDES (min-width: 768px). 768px is also the shell's own flip
+// (@cc/ui useIsMobile), so tool chrome and shell chrome change together.
+// When this disagreed with the CSS (it was 820px while the CSS moved to 768px),
+// 768-820px viewports — iPad 10.2" and iPad Air in portrait — rendered the
+// MOBILE board (single stacked stage) underneath the DESKTOP top bar.
+export function useIsMobile(query = '(max-width: 767.98px)') {
   const [matches, setMatches] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches);
   useEffect(() => {
     const mq = window.matchMedia(query);
