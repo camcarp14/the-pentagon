@@ -184,6 +184,47 @@ export default function Shell() {
     try { localStorage.setItem("cc_active_app", a); } catch {}
   }, []);
 
+  // ─── iOS standalone letterbox guard → publishes --safe-bottom ──────────────
+  // iOS reads apple-mobile-web-app-status-bar-style ONLY at Add-to-Home-Screen
+  // time, so an icon installed while we shipped "black-translucent" still gets
+  // that half-applied window: sized below the status bar yet top-anchored,
+  // leaving a dead ~59pt strip at the BOTTOM where nothing paints. There the
+  // reported safe-area-inset-bottom IS that dead space and must not be padded
+  // for (padding it floats the tab bar off the screen edge — the bug we chased);
+  // in a healthy "black" window the same inset is real and clears the home
+  // indicator. One static value cannot serve both installs, so detect which
+  // window we're in and publish the usable inset as --safe-bottom for every
+  // tool's bottom bar. (Field-proven in the Board Room app — see its .lbx path.)
+  useEffect(() => {
+    const root = document.documentElement;
+    // env() is only readable by measuring an element that uses it.
+    const probeEnvTop = () => {
+      const el = document.createElement("div");
+      el.style.cssText = "position:fixed;left:-9999px;top:0;width:1px;height:env(safe-area-inset-top);";
+      document.body.appendChild(el);
+      const h = el.getBoundingClientRect().height;
+      el.remove();
+      return Math.round(h);
+    };
+    const apply = () => {
+      const standalone = window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
+      const vvh = window.visualViewport ? Math.round(window.visualViewport.height) : null;
+      const screenH = window.screen?.height || null;
+      // Renderable height falls short of the screen WHILE sitting under the
+      // status bar (envTop > 0) — the discriminator between a dead bottom
+      // strip and a healthy home-indicator inset.
+      const letterboxed = !!(standalone && vvh && screenH && screenH - vvh >= 20 && probeEnvTop() > 0);
+      root.style.setProperty("--safe-bottom", letterboxed ? "0px" : "env(safe-area-inset-bottom, 0px)");
+    };
+    apply();
+    let raf = 0;
+    const on = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(apply); };
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", on);
+    window.addEventListener("orientationchange", on);
+    return () => { cancelAnimationFrame(raf); vv?.removeEventListener("resize", on); window.removeEventListener("orientationchange", on); };
+  }, []);
+
   // ⌥1 / ⌥2 / ⌥3 / ⌥4 jump between tools. Deliberately NOT ⌘K — each tool owns its
   // own (richer) ⌘K palette, and Option+number never collides with the browser.
   useEffect(() => {

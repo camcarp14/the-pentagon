@@ -43,7 +43,7 @@ async function fetchSite(url) {
     const res = await fetch(url, {
       signal: controller.signal,
       redirect: "follow",
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; ClarifyAuditBot/1.0; +https://clarify-outreach.netlify.app/audit)" },
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; ClarifyAuditBot/1.0; +https://the-pentagon.netlify.app/audit)" },
     });
     const html = (await res.text()).slice(0, 400_000);
     return { ok: res.ok, status: res.status, finalUrl: res.url, html, ttfbMs: Date.now() - started, bytes: html.length };

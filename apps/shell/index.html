@@ -25,6 +25,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <style>
       * { box-sizing: border-box; }
+      /* Usable bottom inset for every tool's tab bar. The real value is the
+         native inset; the shell overrides this to 0px when it detects the
+         letterboxed iOS standalone window, where the reported inset is dead
+         space that would float the bar off the screen edge. Declared here so
+         the first paint (and desktop, and plain-browser mobile) is already
+         correct before the shell's effect runs. */
+      :root { --safe-bottom: env(safe-area-inset-bottom, 0px); }
       html, body, #root { margin: 0; height: 100%; }
       body { background: #0b0d12; font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
     </style>

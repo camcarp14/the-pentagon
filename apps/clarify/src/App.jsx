@@ -97,7 +97,7 @@ function SubNav({ tab, currentView, onNavigate }) {
 // Mobile bottom tab bar — icon-only, hidden on desktop via CSS.
 function BottomBar({ activeTab, onTab, inboundNew }) {
   return (
-    <div className="co-bottombar" style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 400, display: "none", background: "rgba(13,17,28,0.98)", borderTop: `1px solid ${T.line}`, boxShadow: "0 -2px 16px rgba(0,0,0,0.4)", paddingBottom: "min(env(safe-area-inset-bottom), 16px)" }}>
+    <div className="co-bottombar" style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 400, display: "none", background: "rgba(11,15,26,0.92)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: `1px solid ${T.line}`, boxShadow: "0 -2px 16px rgba(0,0,0,0.4)", paddingBottom: "var(--safe-bottom)" }}>
       <div style={{ display: "flex" }}>
         {NAV_TABS.map(t => {
           const on = activeTab === t.key;
@@ -325,15 +325,15 @@ export default function App({ embedded = false }) {
         .co-scroll-x { flex-wrap: nowrap !important; overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -16px 16px; padding: 0 16px; }
 
         /* Floating layers clear the bottom bar */
-        .co-agent-root { bottom: calc(68px + env(safe-area-inset-bottom)) !important; right: 12px !important; }
+        .co-agent-root { bottom: calc(68px + var(--safe-bottom)) !important; right: 12px !important; }
         .co-agent-panel { width: calc(100vw - 24px) !important; height: min(520px, 72vh) !important; }
-        .co-bulkbar { bottom: calc(76px + env(safe-area-inset-bottom)) !important; max-width: calc(100vw - 20px); flex-wrap: wrap; justify-content: center; }
-        .co-undo { bottom: calc(76px + env(safe-area-inset-bottom)) !important; left: 12px !important; }
+        .co-bulkbar { bottom: calc(76px + var(--safe-bottom)) !important; max-width: calc(100vw - 20px); flex-wrap: wrap; justify-content: center; }
+        .co-undo { bottom: calc(76px + var(--safe-bottom)) !important; left: 12px !important; }
 
         /* Modals become bottom sheets — slide up from the edge instead of
            floating as a letterboxed card with wasted margin on every side. */
         .co-modal-overlay { align-items: flex-end !important; padding: 0 !important; }
-        .co-modal-sheet { width: 100% !important; max-width: 100% !important; max-height: 88vh !important; margin: 0 !important; border-radius: 20px 20px 0 0 !important; padding-bottom: max(16px, env(safe-area-inset-bottom)) !important; animation: sheetup 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+        .co-modal-sheet { width: 100% !important; max-width: 100% !important; max-height: 88vh !important; margin: 0 !important; border-radius: 20px 20px 0 0 !important; padding-bottom: max(16px, var(--safe-bottom)) !important; animation: sheetup 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
         @keyframes sheetup { from { transform: translateY(28px); opacity: 0.5; } to { transform: translateY(0); opacity: 1; } }
 
         /* Every input gets a real 16px+ so iOS Safari doesn't zoom the page on focus */

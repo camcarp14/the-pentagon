@@ -71,7 +71,7 @@ kbd { font-family: ui-monospace, monospace; font-size: 10.5px; border: 1px solid
   .btn, .tabs button { min-height: 42px; }
   input, select, textarea { font-size: 16px; } /* iOS zooms focused inputs under 16px */
   /* toasts rise above the fixed bottom nav (~76px + safe area tall) */
-  .toasts { bottom: calc(88px + max(22px, env(safe-area-inset-bottom))); }
+  .toasts { bottom: calc(88px + max(22px, var(--safe-bottom))); }
 }
 
 /* the mandate: everything above is optional to the user's nervous system */
