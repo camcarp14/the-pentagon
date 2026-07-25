@@ -1,39 +1,28 @@
-// The cockpit: a dashboard, not a document. Reading order answers three
-// questions in the order a trader actually asks them — can I trust this screen
-// (health strip), what do I do and at what numbers (the call), and am I about to
-// get stopped out (position) — before it explains itself (market reads) or offers
-// planning surface (planner, run plan).
+// The cockpit: ONE answer, then the evidence for it.
 //
-// Two hierarchy rules earn their keep here:
-//   • The EXECUTABLE NUMBERS ride on the hero's face. The verb alone ("Enter
-//     long") is not actionable; the shares/stop/risk are what you type into a
-//     broker, so they are not allowed to hide behind a disclosure.
-//   • Amber is spent only on things that change a decision. Data-provenance
-//     footnotes and freshness live in the health strip as compact marks, because
-//     an always-on amber paragraph trains you to ignore the colour that also
-//     means "your stop is hit".
-// Everything heavy — the reasoning, the regime facts, the full run plan — stays
-// one tap away behind a disclosure.
+// Earlier versions were a stack of five honest cards, none of which answered the
+// question by itself: readiness gates in one, sizing in another, the stop in a
+// third, what would invalidate the thesis two taps down in a fourth. You had to
+// assemble the trade yourself from parts. The tab now opens with a single card
+// that states the window as a 0-10 score and answers what to do, long or short,
+// how much, what leverage, where to get in, where to get out, and what abandons
+// the idea — each as one row with the number you would act on.
+//
+// Everything below that card is the SAME material as before, collapsed. It is
+// evidence now, not headline. The rule for what stays visible: a row earns the
+// default glance only if it changes what you would type into a broker.
+//
+// Amber is still spent only on things that change a decision. Data provenance and
+// freshness live in the health strip as compact marks, because an always-on amber
+// paragraph trains you to ignore the colour that also means "your stop is hit".
 import React, { useMemo, useState } from 'react'
 import { SkPage, Expand, FreshChip } from './primitives.jsx'
 import { sizePosition, initialStop } from '../lib/risk.js'
 import { armChecklist } from '../lib/runplan.js'
 import { fmtPx, round2 } from '../lib/format.js'
+import TradeCard from './TradeCard.jsx'
 import RunPlan from './RunPlan.jsx'
 
-const ACTION_COPY = {
-  ENTER: 'Enter long',
-  ADD: 'Add to position',
-  HOLD: 'Hold',
-  TRIM: 'Trim',
-  EXIT: 'Exit',
-  STOP_OUT: 'STOP OUT',
-  STAND_ASIDE: 'Stand aside',
-  NO_DATA: 'No data',
-}
-
-// The two directives whose numbers you would actually execute right now.
-const ENTRY_ACTIONS = new Set(['ENTER', 'ADD'])
 const FRESH_RANK = { live: 0, stale: 1, dead: 2 }
 
 // The arm checklist's own labels are full sentences ("close above EMA20 (99.09)")
@@ -74,9 +63,13 @@ export default function Cockpit({ derived, settings, position, sources, onReload
   return (
     <div className="grid stagger" data-testid="cockpit">
       <HealthStrip derived={derived} settings={settings} failing={failing} sessionExpired={sessionExpired} onReload={onReload} />
-      <DirectiveHero derived={derived} plan={plan} />
-      <EntryReadiness derived={derived} />
+      <TradeCard derived={derived} settings={settings} position={position} plan={plan} />
+      {/* An open position is the one thing that outranks the answer card, because
+          it is the only state where doing nothing has a cost. */}
       {position && <PositionCard derived={derived} position={position} />}
+      {/* Evidence, in the order you would ask for it: what is still blocking the
+          window, then the raw market reads, then the two planning surfaces. */}
+      <EntryReadiness derived={derived} />
       <MarketReads derived={derived} settings={settings} />
       <EntryPlanner derived={derived} settings={settings} hasPosition={!!position} />
       <RunPlanDisclosure derived={derived} settings={settings} position={position} />
@@ -146,82 +139,19 @@ function HealthStrip({ derived, settings, failing, sessionExpired, onReload }) {
   )
 }
 
-/** The hero: the call AND its executable numbers. The verb used to be 30px while
- *  the quantity you would actually place sat at 14.5px — the hierarchy was
- *  inverted, so the ticket row now carries shares/stop/risk at full size. */
-function DirectiveHero({ derived, plan }) {
-  const d = derived.directive
-  const [why, setWhy] = useState(false)
-  // Freshness sentences are already the health strip's job; repeating them as
-  // amber blocks here is what made the hero a wall of warnings.
-  // Only suppress the freshness sentences when the quote actually IS live —
-  // otherwise the one warning that the order ticket makes dangerous ("MSTR data
-  // is stale — treat every number below with suspicion") would be the single
-  // guardrail we hid, directly beneath executable numbers derived from that
-  // stale price.
-  const quoteLive = derived.freshQuote?.state === 'live'
-  const guardrails = (d.guardrails || []).filter((g) => !(quoteLive && /\bdata is (live|stale|dead)\b/i.test(g)))
-  const shown = guardrails.slice(0, 2)
-  const hidden = guardrails.slice(2)
-  // ADD is sized at riskPct * addRiskFraction (App.jsx builds derived.addSizing
-  // that way, off the SAME stop), so reusing the full-risk plan here would print
-  // roughly double the shares and double the dollar risk that the headline
-  // immediately above recommends — on the one row this file calls "what you type
-  // into a broker". Always take the sizing the directive itself was built from.
-  const sizing = d.action === 'ADD' ? derived.addSizing : plan?.size
-  const ticket = ENTRY_ACTIONS.has(d.action) && quoteLive && sizing?.ok && plan?.stopPlan?.stop != null
-    ? { stop: plan.stopPlan.stop, size: sizing }
-    : null
-
-  return (
-    <section className={`card directive span2 ${d.severity}`} data-testid="directive">
-      <div className="action" data-testid="directive-action">{ACTION_COPY[d.action] ?? d.action}</div>
-      <p className="headline">{d.headline}</p>
-
-      {ticket && (
-        <div className="ticket" data-testid="order-ticket">
-          <div className="tk"><div className="k">{d.action === 'ADD' ? 'Add' : 'Buy'}</div><div className="v num">{ticket.size.shares}<span className="u">sh</span></div></div>
-          <div className="tk"><div className="k">Stop</div><div className="v num">{fmtPx(ticket.stop)}</div></div>
-          <div className="tk"><div className="k">Risk</div><div className="v num">${Math.round(ticket.size.riskUsd).toLocaleString('en-US')}{ticket.size.capped ? <span className="u">capped</span> : null}</div></div>
-        </div>
-      )}
-
-      {shown.map((g, i) => (
-        <div className="guardrail" key={i}><span aria-hidden>⚠︎</span><span>{g}</span></div>
-      ))}
-
-      {(d.reasons?.length > 0 || hidden.length > 0) && (
-        <>
-          <button className="btn ghost sm disclose" onClick={() => setWhy((w) => !w)} aria-expanded={why}>
-            {why ? 'hide the reasoning' : hidden.length > 0 ? `why this call · +${hidden.length} more` : 'why this call'}
-          </button>
-          <Expand open={why}>
-            {hidden.map((g, i) => (
-              <div className="guardrail" key={`g${i}`}><span aria-hidden>⚠︎</span><span>{g}</span></div>
-            ))}
-            {d.reasons?.length > 0 && <ul>{d.reasons.map((r, i) => <li key={i}>{r}</li>)}</ul>}
-          </Expand>
-        </>
-      )}
-    </section>
-  )
-}
-
-/** ENTRY READINESS — "even in a downturn, when do I get ready to jump in?"
+/** ENTRY READINESS — the gate-by-gate working behind the window score.
  *
- *  "Stand aside" answers what to do today but not what to watch for, which makes
- *  a downtrend a dead end: the screen goes quiet exactly when preparation matters
- *  most. The arm checklist that answers it already existed (lib/runplan.js) with
- *  pass/fail per gate, the price level that flips each one, an honest % distance,
- *  and a note on what is actually blocking — but it was buried behind the run-plan
- *  disclosure, two taps from view. This lifts it onto the cockpit so the tab
- *  always shows how close a leveraged long is, and what has to happen first.
+ *  The answer card states the score; this says which of the six gates are met and
+ *  what price flips each one that is not. It is COLLAPSED by default now: with the
+ *  score and the nearest-gate line already on the card above, an always-open table
+ *  of six gates was the biggest single block of the tab and repeated its headline.
  *
  *  Distances are deliberately not sugar-coated: "+7.3% away" means the
  *  confirmation costs 7.3%, and that is the price of not buying a falling knife.
  */
 function EntryReadiness({ derived }) {
   const [open, setOpen] = useState(false)
+  const [blocks, setBlocks] = useState(false)
   const radar = useMemo(
     () => armChecklist(derived.mstrCandles, derived.btcCandles),
     [derived.mstrCandles, derived.btcCandles],
@@ -240,7 +170,6 @@ function EntryReadiness({ derived }) {
     },
   ]
   const passed = gates.filter((g) => g.pass).length
-  const pct = Math.round((passed / gates.length) * 100)
   const blocking = gates.filter((g) => !g.pass)
   // The single most useful line: of the gates still blocking, the one closest in
   // price. Gates with no price level (trend shape) can't be ranked this way.
@@ -258,22 +187,22 @@ function EntryReadiness({ derived }) {
 
   return (
     <section className="card span2 readiness" data-testid="entry-readiness">
-      <div className="ttl">Entry readiness
-        <span className="spacer" />
-        {radar.armed
-          ? <span className="chip live"><span className="dot" />armed</span>
-          : radar.ready
-            ? <span className="chip live"><span className="dot" />waiting on a trigger</span>
-            : <span className={`chip rd-chip ${tone}`}><span className="dot" />{passed} of {gates.length} gates</span>}
-      </div>
+      {/* The whole title row is the control — a 12.5px "expand" word was a ~70px
+          invisible target on a phone. */}
+      <button className="ttl ttl-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        What has to change
+        <span className="dr-state">
+          {radar.armed ? 'armed' : radar.ready ? 'waiting on a trigger' : `${passed} of ${gates.length} gates`}
+        </span>
+        <span className={`dr-chev ${open ? 'open' : ''}`} aria-hidden>▾</span>
+      </button>
+      <Expand open={open}>
 
       {/* Segment pips, not a big numeral beside a wrapping paragraph: six gates
-          read as six marks, so the count is legible without a 30px number
-          competing with the directive above it. */}
+          read as six marks. Filled by COUNT, left to right — lighting the pip
+          that matches each gate's position instead made "1 of 6" illuminate a
+          lone pip mid-row, which reads as arbitrary. */}
       <div className={`rd-pips ${tone}`} role="img" aria-label={`${passed} of ${gates.length} entry gates met`}>
-        {/* Filled by COUNT, left to right — a progress meter. Lighting the pip
-            that matches each gate's position instead made "1 of 6" illuminate a
-            lone pip in the middle of the row, which reads as arbitrary. */}
         {gates.map((g, i) => <span key={g.id} className={i < passed ? 'on' : ''} />)}
       </div>
 
@@ -341,12 +270,12 @@ function EntryReadiness({ derived }) {
         </div>
       </div>
 
-      {/* Why the leverage read matters even while standing aside: it says whether
-          MSTR is a cheap or expensive way to own BTC when the setup does arrive. */}
-      <button className="btn ghost sm disclose" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        {open ? 'hide what blocks it' : 'what has to change'}
+      {/* Nested one level deeper: the per-gate prose is the long-form "why", and
+          the table plus the strip above already answer it for most visits. */}
+      <button className="btn ghost sm disclose" onClick={() => setBlocks((b) => !b)} aria-expanded={blocks}>
+        {blocks ? 'hide the detail' : 'gate by gate'}
       </button>
-      <Expand open={open}>
+      <Expand open={blocks}>
         <ul className="factlist">
           {blocking.length === 0 && <li className="sub">Nothing — every gate is met.</li>}
           {blocking.map((g) => (
@@ -357,28 +286,33 @@ function EntryReadiness({ derived }) {
               {g.note && <> — {g.note}</>}
             </li>
           ))}
-          <li className="sub">
-            When it does arm, leverage is <strong>{derived.torqueRead.grade}</strong> — beta {derived.beta == null ? '—' : `${round2(derived.beta)}×`} vs BTC, mNAV {derived.nav?.mNav == null ? '—' : `${derived.nav.mNav}×`}
-            {derived.nav?.premiumPct != null && ` (${derived.nav.premiumPct >= 0 ? '+' : ''}${round2(derived.nav.premiumPct)}% to NAV)`}.
-          </li>
         </ul>
+      </Expand>
+
       </Expand>
     </section>
   )
 }
 
-/** The market at a glance. The two regime SCORES are the tool's core judgement,
- *  so they render as meters you can compare at a glance instead of wrapping text
- *  badges; the supporting facts stay behind "show the work". */
+/** The market at a glance — the inputs, not the answer. Collapsed by default:
+ *  every number here feeds the window score above, so on a normal visit it is
+ *  reference material. The collapsed row carries the two regime scores, which is
+ *  the one thing worth seeing without opening it. */
 function MarketReads({ derived, settings }) {
   const [open, setOpen] = useState(false)
+  const [work, setWork] = useState(false)
   const { regime, btcAlign, torqueRead, beta, nav, rs, pullback, breakout } = derived
   const facts = [...regime.facts, ...(pullback?.facts ?? []), ...(breakout?.facts ?? []), ...btcAlign.facts]
   const seeded = settings?.btcHoldingsSeeded || settings?.sharesSeeded
 
   return (
     <section className="card span2" data-testid="market-reads">
-      <div className="ttl">Market reads</div>
+      <button className="ttl ttl-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        Market reads
+        <span className="dr-state num">MSTR {regime.score ?? '—'} · BTC {btcAlign.score ?? '—'}</span>
+        <span className={`dr-chev ${open ? 'open' : ''}`} aria-hidden>▾</span>
+      </button>
+      <Expand open={open}>
 
       <div className="smeters">
         <ScoreMeter name="MSTR" state={regime.state} score={regime.score} />
@@ -409,10 +343,10 @@ function MarketReads({ derived, settings }) {
 
       {facts.length > 0 && (
         <>
-          <button className="btn ghost sm disclose" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-            {open ? 'hide the work' : 'show the work'}
+          <button className="btn ghost sm disclose" onClick={() => setWork((w) => !w)} aria-expanded={work}>
+            {work ? 'hide the work' : 'show the work'}
           </button>
-          <Expand open={open}>
+          <Expand open={work}>
             <ul className="factlist">
               {facts.map((f, i) => <li key={i} className="sub">{f}</li>)}
             </ul>
@@ -420,6 +354,8 @@ function MarketReads({ derived, settings }) {
           </Expand>
         </>
       )}
+
+      </Expand>
     </section>
   )
 }
@@ -450,10 +386,13 @@ function RunPlanDisclosure({ derived, settings, position }) {
     derived.pullback?.stage && derived.pullback.stage !== 'none' ? `pullback ${derived.pullback.stage}` : null,
     derived.breakout?.active ? 'breakout armed' : null,
   ].filter(Boolean)
+  // Same card + title-button shape as the three disclosures above it. As a bare
+  // `.disclose-row` it was the one odd control in a stack of four and read like
+  // it belonged to a different screen.
   return (
-    <div className="span2" data-testid="run-plan-disclosure">
-      <button className="btn ghost disclose-row" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <span className="dr-label">Run plan &amp; tickets</span>
+    <section className="card span2" data-testid="run-plan-disclosure">
+      <button className="ttl ttl-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        Run plan &amp; tickets
         <span className="dr-state">{armed.length > 0 ? armed.join(' · ') : 'nothing armed'}</span>
         <span className={`dr-chev ${open ? 'open' : ''}`} aria-hidden>▾</span>
       </button>
@@ -462,7 +401,7 @@ function RunPlanDisclosure({ derived, settings, position }) {
           <RunPlan derived={derived} settings={settings} position={position} />
         </div>
       </Expand>
-    </div>
+    </section>
   )
 }
 
@@ -523,14 +462,21 @@ function EntryPlanner({ derived, settings, hasPosition }) {
   const built = buildPlan(derived, settings, effMode)
   const plan = built?.stopPlan
   const sz = built?.size
+  const liveEntry = derived.directive?.action === 'ENTER' || derived.directive?.action === 'ADD'
 
   return (
     <section className="card span2" data-testid="entry-planner">
       {/* No .spacer here: .dr-state already carries margin-left:auto, and two
           auto margins split the free space instead of pushing to the edge. */}
+      {/* "hypothetical:" when the answer card says to stay flat. Without it the
+          collapsed row printed a share count directly under a card whose "How
+          much" row read "nothing" — two numbers that look like a contradiction,
+          on the screen where a misread costs money. */}
       <button className="ttl ttl-btn" onClick={() => { userToggled.current = true; setOpen((o) => !o) }} aria-expanded={open}>
         If you enter now
-        <span className="dr-state">{sz?.ok ? `${sz.shares} sh · ${fmtPx(plan.stop)}` : 'no plan'}</span>
+        <span className="dr-state">
+          {sz?.ok ? `${liveEntry ? '' : 'hypothetical: '}${sz.shares} sh · ${fmtPx(plan.stop)}` : 'no plan'}
+        </span>
         <span className={`dr-chev ${open ? 'open' : ''}`} aria-hidden>▾</span>
       </button>
       <Expand open={open}>

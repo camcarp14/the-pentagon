@@ -186,17 +186,7 @@ a { color: var(--accent); text-decoration: none; }
 .sub { color: var(--ink-2); font-size: 12.5px; }
 .tiny { color: var(--ink-3); font-size: 11.5px; }
 
-/* ---------------- directive card ---------------- */
-.directive { border-width: 1px; border-left-width: 5px; }
-.directive .action { font-size: 30px; font-weight: 900; letter-spacing: -0.5px; line-height: 1.15; }
-.directive.info { border-left-color: var(--ink-3); }
-.directive.act { border-left-color: var(--accent); }
-.directive.act .action { color: var(--accent); }
-.directive.urgent { border-left-color: var(--crit); }
-.directive.urgent .action { color: var(--crit); }
-.directive ul { margin: 8px 0 0; padding-left: 18px; }
-.directive li { margin: 3px 0; color: var(--ink-2); font-size: 13px; }
-.directive li strong { color: var(--ink); }
+/* ---------------- guardrails (used by the answer card and the planner) ------- */
 .guardrail { display: flex; gap: 7px; align-items: flex-start; font-size: 12px; color: var(--warn); margin-top: 10px; }
 
 /* ---------------- chips & badges ---------------- */
@@ -380,14 +370,69 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .hstrip-marks { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .hstrip-btn { margin-left: auto; flex: none; }
 
-/* ---- the hero ---- */
-/* clamp(): at 390px the old fixed 30px verb crowded the headline; this scales
-   with the viewport and stops growing once there is room. */
-.directive .action { font-size: clamp(26px, 7.6vw, 30px); }
-.directive .headline {
-  margin: 5px 0 0; font-size: 15px; line-height: 1.45; color: var(--ink);
-  font-weight: 500; text-wrap: pretty;
+/* ---- THE ANSWER CARD ----
+   One score and seven rows. The score is the biggest thing on the tab because it
+   is the only number you can act on without reading anything else; the rows are a
+   two-column definition list so the keys form a scan column down the left and the
+   values align against it.
+
+   Deliberately NOT a real <table>: at 390px a four-column trading table either
+   scrolls sideways or shrinks the numbers below legibility. One field per row with
+   its reason underneath fits the phone and reads identically on a desktop. */
+.tcard { border-width: 1px; border-left-width: 5px; border-left-color: var(--ink-3); }
+.tcard.act { border-left-color: var(--accent); }
+.tcard.urgent { border-left-color: var(--crit); }
+
+.tc-head { display: flex; align-items: center; gap: 14px; }
+.tc-score { display: flex; align-items: baseline; gap: 3px; flex: none; }
+/* clamp(): fills the width it has on a phone without overflowing a narrow card. */
+.tc-num { font-family: var(--mono); font-size: clamp(38px, 12vw, 52px); font-weight: 500; letter-spacing: -2px; line-height: 0.9; color: var(--ink-3); }
+.tc-den { font-family: var(--mono); font-size: 15px; color: var(--ink-3); font-weight: 500; }
+.tc-headtext { min-width: 0; }
+.tc-label { font-size: clamp(17px, 5.2vw, 21px); font-weight: 800; letter-spacing: -0.3px; line-height: 1.15; color: var(--ink); }
+.tc-plain { font-size: 12.5px; color: var(--ink-2); line-height: 1.4; margin-top: 3px; text-wrap: pretty; }
+
+.tc-head.band-go .tc-num, .tc-head.band-go .tc-label { color: var(--good); }
+.tc-head.band-armed .tc-num, .tc-head.band-armed .tc-label { color: var(--warn); }
+.tc-head.band-building .tc-num { color: var(--ink-2); }
+
+.tc-pips { display: flex; gap: 3px; margin: 12px 0 2px; }
+.tc-pips > span { flex: 1; height: 5px; border-radius: 99px; background: rgba(255, 255, 255, 0.08); }
+.tc-pips > span.on { background: var(--ink-2); }
+.tc-pips.band-building > span.on { background: var(--ink-2); }
+.tc-pips.band-armed > span.on { background: var(--warn); }
+.tc-pips.band-go > span.on { background: var(--good); }
+
+/* The rows. dt/dd rather than divs so a screen reader reads "Get out, 372.10"
+   as a term and its definition instead of two unrelated strings. */
+.tc-rows { margin: 14px 0 0; display: grid; gap: 1px; background: var(--border); border-radius: var(--r-md); overflow: hidden; }
+.tc-row { background: var(--card-2); display: grid; grid-template-columns: 92px 1fr; gap: 10px; padding: 10px 12px; align-items: baseline; }
+.tc-k { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ink-3); }
+.tc-v { margin: 0; min-width: 0; }
+.tc-val { display: block; font-size: 15.5px; font-weight: 700; line-height: 1.25; color: var(--ink); overflow-wrap: break-word; }
+.tc-note { display: block; font-size: 11.5px; color: var(--ink-3); line-height: 1.45; margin-top: 2px; text-wrap: pretty; }
+.tc-val.tone-go { color: var(--good); }
+.tc-val.tone-warn { color: var(--warn); }
+.tc-val.tone-bad { color: var(--crit); }
+.tc-val.tone-flat { color: var(--ink-2); }
+
+/* the score arithmetic, shown rather than asserted */
+.tc-math { display: grid; gap: 1px; background: var(--border); border-radius: var(--r-sm); overflow: hidden; margin: 4px 0 10px; }
+.tc-mrow { background: var(--card-2); display: flex; align-items: baseline; gap: 10px; padding: 7px 11px; }
+.tc-mrow.total { background: var(--card); }
+.tc-mk { font-size: 11.5px; color: var(--ink-2); }
+.tc-mp { margin-left: auto; font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); }
+.tc-mp.pos { color: var(--good); }
+.tc-mp.neg { color: var(--crit); }
+.tc-mrow.total .tc-mk { color: var(--ink); font-weight: 700; }
+.tc-mrow.total .tc-mp { color: var(--ink); }
+.tc-foot { margin-top: 10px; line-height: 1.55; }
+
+/* Wider than a phone, the key column can afford to be a real column. */
+@media (min-width: 560px) {
+  .tc-row { grid-template-columns: 118px 1fr; padding: 11px 14px; }
 }
+
 /* The order ticket: hairline-separated cells so three numbers read as one
    instrument rather than three floating stats. */
 .ticket {
@@ -452,11 +497,17 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
   letter-spacing: 1px; text-transform: uppercase; color: var(--ink-3);
   display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer;
 }
-.btn.disclose-row {
-  width: 100%; display: flex; align-items: center; gap: 10px;
-  border: 1px solid var(--border); min-height: 48px; border-radius: var(--r-md);
-}
-.dr-label { font-weight: 700; color: var(--ink); }
+/* Closed, the 10px gap under the title has nothing to separate it from, so a
+   collapsed card carried a strip of dead space. Now that four of these stack
+   under the answer card, that strip was the difference between a tidy list and
+   four half-empty boxes. */
+.card .ttl-btn[aria-expanded="false"] { padding-bottom: 0; }
+/* And the card's own 16px of vertical padding around a single 44px row made each
+   closed disclosure 76px tall — four of them was 300px of scroll to say four
+   short things. The button keeps its own 44px, so the touch target is unchanged;
+   :has() is a progressive enhancement here, and without it the spacing simply
+   stays as it was. */
+.card:has(> .ttl-btn[aria-expanded="false"]) { padding-top: 9px; padding-bottom: 9px; }
 .dr-state { margin-left: auto; font-size: 11px; color: var(--ink-3); font-weight: 500; text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dr-chev { flex: none; color: var(--ink-3); transition: transform var(--dur-2) var(--ease-out); }
 .dr-chev.open { transform: rotate(180deg); }
@@ -478,9 +529,6 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
    the directive above it, and six identical hairline rows of prose read as dead
    weight. Now: pips carry the count, one sentence carries the "what next", price
    gates get an aligned numeric table, and binary shape gates collapse to tags. */
-.readiness .ttl { margin-bottom: 11px; }
-.rd-chip.close { color: var(--warn); border-color: rgba(212, 147, 11, 0.4); }
-.rd-chip.close .dot { background: var(--warn); }
 
 /* count as pips: six gates, six marks — legible at a glance, no big numeral */
 .rd-pips { display: flex; gap: 4px; margin-bottom: 10px; }

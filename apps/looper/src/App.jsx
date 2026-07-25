@@ -335,7 +335,11 @@ const TABS = [
 
 export default function LooperApp() {
   const L = useLooper();
-  const [tab, setTab] = useState(L.mission ? "run" : "mission");
+  // Always Run, even with no mission set: its empty state explains what Looper
+  // is and links to setup, which orients a first-time visitor better than
+  // dropping them straight into a form. Every later visit is a check-in, and a
+  // check-in belongs on Run.
+  const [tab, setTab] = useState("run");
   const unread = L.chat.filter((m) => m.role === "looper").length && L.run.awaiting ? 1 : 0;
 
   return (
