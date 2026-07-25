@@ -115,7 +115,6 @@ function LoginScreen() {
 // ─── the app toggle ───────────────────────────────────────────────────────────
 function AppToggle({ active, onPick, compact }) {
   const refs = useRef({});
-  const wrapRef = useRef(null);
   const [ind, setInd] = useState({ left: 0, width: 0, ready: false });
   // Measure the active button so the pill glides between tools instead of
   // teleporting. Beyond tool switch + the mobile/desktop flip, this must also
@@ -137,7 +136,6 @@ function AppToggle({ active, onPick, compact }) {
   }, [active, compact]);
   return (
     <div
-      ref={wrapRef}
       role="tablist"
       aria-label="Switch tool"
       style={{
@@ -170,13 +168,13 @@ function AppToggle({ active, onPick, compact }) {
               // buys the label instead, and the accent moves onto the text —
               // every tool stays identifiable without relying on colour alone.
               gap: compact ? 0 : 7,
-              padding: compact ? "0 8px" : "6px 14px",
+              padding: compact ? "0 6px" : "6px 14px",
               minHeight: compact ? 44 : 32,
               ...(compact ? { flex: "1 1 0", minWidth: 0 } : {}),
               border: "none", borderRadius: compact ? 9 : 8, cursor: "pointer", background: "transparent",
               color: on ? (compact ? m.accent : "var(--ink)") : "var(--faint)",
-              fontFamily: "'Syne',system-ui", fontSize: compact ? 10.5 : 11.5, fontWeight: 700,
-              letterSpacing: compact ? "0.03em" : "0.06em", textTransform: "uppercase", whiteSpace: "nowrap",
+              fontFamily: "'Syne',system-ui", fontSize: compact ? 10 : 11.5, fontWeight: 700,
+              letterSpacing: compact ? "0.01em" : "0.06em", textTransform: "uppercase", whiteSpace: "nowrap",
               transition: `color ${M.durBase} ${M.easeStd}`,
             }}>
             {!compact && (
@@ -331,12 +329,23 @@ export default function Shell() {
       {/* Shell top bar — the ONE global chrome, themed to the active tool */}
       <div style={{
         position: "sticky", top: 0, zIndex: 100,
-        height: "calc(52px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)",
-        paddingLeft: isMobile ? 12 : 20, paddingRight: isMobile ? 12 : 20,
-        display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border)",
+        paddingTop: "env(safe-area-inset-top)",
+        borderBottom: "1px solid var(--border)",
         background: "color-mix(in srgb, var(--bg) 82%, transparent)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 14, minWidth: 0, flex: isMobile ? 1 : "0 1 auto" }}>
+      {/* One row, still 52px: the switcher gets 44px-tall targets without
+          spending a second row of vertical chrome. On mobile the wordmark drops
+          and the labels run at 10px — the size iOS uses for its own tab bars —
+          which keeps all four labels un-truncated with the System button still
+          visible from 430px all the way down to 320px (measured in a browser at
+          430/393/390/375/360/320 with a fallback font WIDER than Syne, so real
+          rendering has more slack). Segments land at 70x44 on a 390px phone,
+          against the 28x26 the old dots-only compact mode gave. */}
+      <div style={{
+        height: 52, paddingLeft: isMobile ? 10 : 20, paddingRight: isMobile ? 10 : 20,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, minWidth: 0, flex: isMobile ? 1 : "0 1 auto" }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             <PentagonLogo size={isMobile ? 21 : 23} />
             {!isMobile && (
@@ -367,6 +376,7 @@ export default function Shell() {
             <button onClick={() => auth.signOut()} style={{ background: "none", border: "1px solid var(--border)", borderRadius: 7, color: "var(--muted)", fontSize: 10, padding: "5px 10px", cursor: "pointer", fontWeight: 600, fontFamily: "'Syne',system-ui" }}>Sign out</button>
           )}
         </div>
+      </div>
       </div>
 
       {/* System hub (cross-tool) or the active tool, both lazy-loaded */}
