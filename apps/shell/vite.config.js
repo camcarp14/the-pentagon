@@ -19,6 +19,8 @@ export default defineConfig({
       "@app/zts": r("../zts/src/Root.jsx"),
       "@app/clarify": r("../clarify/src/Root.jsx"),
       "@app/runway": r("../runway/src/Root.jsx"),
+      "@app/macro": r("../macro/src/Root.jsx"),
+      "@app/looper": r("../looper/src/Root.jsx"),
     },
   },
   server: { fs: { allow: [r("../../")] } },

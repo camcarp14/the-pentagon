@@ -1,13 +1,15 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // @cc/design — the ONE token source for The Pentagon.
 //
-// Three tools live under one shell (ZTS · Clarify · Runway). They now share ONE
-// dark canvas ("brass on midnight", inherited from Clarify) so they read as a
-// single product; the only axis that differs per tool is the ACCENT:
+// Five tools live under one shell. They all share ONE dark canvas ("brass on
+// midnight", inherited from Clarify) so they read as a single product; the only
+// axis that differs per tool is the ACCENT:
 //
 //   • ZTS      → emerald   #3ECF8E
 //   • Clarify  → brass     #C9A557
 //   • Runway   → violet    #8B7CFF
+//   • Macro    → amber     #FFB224
+//   • Looper   → cyan      #38D9F0
 //
 // Everything is emitted TWO ways so every tool can consume one source:
 //   • theme(app)   → a JS token object (for the inline-style apps: ZTS/Clarify)
@@ -28,7 +30,7 @@ export const fonts = {
 
 export const radii = { rSm: "8px", rMd: "10px", rLg: "14px", rPill: "999px" };
 
-// Motion vocabulary — identical curves across all three so they feel like one
+// Motion vocabulary — identical curves across every tool so they feel like one
 // product. Exposed both as JS (M) and CSS vars (--ease-*, --dur-*).
 export const M = {
   easeOut: "cubic-bezier(0.16, 1, 0.3, 1)",
@@ -41,8 +43,8 @@ export const M = {
 
 // ─── Per-tool palettes ───────────────────────────────────────────────────────
 // Each entry is a full palette: base mode + neutrals + an accent ramp + the
-// semantic signals + that tool's legacy alias keys. Values transcribed from the
-// three live apps so migrating an app in is faithful, not approximate.
+// semantic signals + that tool's legacy alias keys. Values were transcribed from
+// the live apps as each moved in, so migration is faithful, not approximate.
 // Emerald — ZTS. Tuned bright so it reads on the dark canvas; the deep stop is
 // the old ZTS green, kept for gradients/hover.
 const EMERALD = {
@@ -59,20 +61,31 @@ const BRASS = {
   accentInk: "#151005", focusRing: "0 0 0 3px rgba(201,165,87,0.34)",
 };
 // Violet — Runway. A cool jewel tone, deliberately far from emerald and brass
-// so the three tools never read as the same accent (amber used to clash).
+// so no two tools read as the same accent.
 const VIOLET = {
   accent: "#8B7CFF", accentHi: "#A99BFF", accentDeep: "#6C5CE7",
   accentGrad: "linear-gradient(135deg, #A99BFF 0%, #6C5CE7 100%)",
   accentSoft: "rgba(139,124,255,0.14)", accentLine: "rgba(139,124,255,0.32)",
   accentInk: "#120A2E", focusRing: "0 0 0 3px rgba(139,124,255,0.34)",
 };
-// Amber — Macro (the trading cockpit). Distinct from the other three; reads as
-// "markets" and no longer clashes now that Runway moved to violet.
+// Amber — Macro (the trading cockpit). Reads as "markets", and no longer
+// clashes now that Runway moved to violet.
 const AMBER = {
   accent: "#FFB224", accentHi: "#FFC155", accentDeep: "#E09000",
   accentGrad: "linear-gradient(135deg, #FFC155 0%, #E09000 100%)",
   accentSoft: "rgba(255,178,36,0.14)", accentLine: "rgba(255,178,36,0.32)",
   accentInk: "#1A1204", focusRing: "0 0 0 3px rgba(255,178,36,0.34)",
+};
+
+// Cyan — the only hue left that is unmistakable against emerald/brass/violet/amber
+// at an 8px dot and a 10px label. Deliberately cool and "machine-like": Looper is
+// the tool that runs on its own, so it should not read as one of the four
+// hand-driven surfaces.
+const CYAN = {
+  accent: "#38D9F0", accentHi: "#6FE6F7", accentDeep: "#0FA9C4",
+  accentGrad: "linear-gradient(135deg, #6FE6F7 0%, #0FA9C4 100%)",
+  accentSoft: "rgba(56,217,240,0.14)", accentLine: "rgba(56,217,240,0.32)",
+  accentInk: "#04222A", focusRing: "0 0 0 3px rgba(56,217,240,0.34)",
 };
 
 // Historical alias keys per app, so existing call sites keep resolving after
@@ -83,7 +96,7 @@ const aliasFor = (a, ramp) => {
   return {};
 };
 
-// MIDNIGHT — the one shared canvas for all three tools (Clarify's original
+// MIDNIGHT — the one shared canvas for every tool (Clarify's original
 // "brass on midnight" navy). Only the accent ramp differs per tool now.
 const MIDNIGHT = {
   mode: "dark",
@@ -103,9 +116,10 @@ const APP_DEF = {
   clarify: { base: MIDNIGHT, ramp: BRASS, label: "Clarify", brand: "Clarify Outreach" },
   runway: { base: MIDNIGHT, ramp: VIOLET, label: "Runway", brand: "Runway" },
   macro: { base: MIDNIGHT, ramp: AMBER, label: "Macro", brand: "Macro Command Center" },
+  looper: { base: MIDNIGHT, ramp: CYAN, label: "Looper", brand: "Looper" },
 };
 
-export const APPS = ["zts", "clarify", "runway", "macro"];
+export const APPS = ["zts", "clarify", "runway", "macro", "looper"];
 export const appMeta = (app) => {
   const d = APP_DEF[app] || APP_DEF.zts;
   return { app, label: d.label, brand: d.brand, mode: d.base.mode, accent: d.ramp.accent };
