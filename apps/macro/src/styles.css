@@ -43,7 +43,7 @@
 
   /* type */
   --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
+  --mono: 'DM Mono', ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
 
   /* radii, shadow */
   --r-sm: 8px; --r-md: 12px; --r-lg: 16px;
@@ -90,8 +90,8 @@ a { color: var(--accent); text-decoration: none; }
 *::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 99px; }
 
 /* ---------------- shell ---------------- */
-.shell { max-width: var(--maxw); margin: 0 auto; padding: 14px 16px calc(var(--nav-h) + 24px + var(--safe-bottom)); }
-@media (min-width: 900px) { .shell { padding-bottom: 32px; } }
+.shell { max-width: var(--maxw); margin: 0 auto; padding: 14px 16px calc(var(--nav-h) + 24px + var(--safe-bottom, 0px)); }
+@media (min-width: 768px) { .shell { padding-bottom: 32px; } }
 
 .hdr {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
@@ -112,7 +112,7 @@ a { color: var(--accent); text-decoration: none; }
   display: flex; justify-content: space-around;
   background: rgba(11, 15, 26, 0.92); backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%);
   border-top: 1px solid var(--border); box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.4);
-  padding: 4px 6px calc(6px + var(--safe-bottom));
+  padding: 4px 6px calc(6px + var(--safe-bottom, 0px));
 }
 .nav button {
   flex: 1; min-height: 46px; padding: 8px 2px 7px;
@@ -125,18 +125,43 @@ a { color: var(--accent); text-decoration: none; }
 .nav button.on { color: var(--accent); }
 .nav button.on svg { color: var(--accent); }
 .nav button:active { transform: scale(0.94); }
-@media (min-width: 900px) {
-  /* Desktop: the same grouped pill-bar the other Pentagon tools use — a rounded
-     container of tab pills, active pill raised with a soft shadow. */
-  .nav {
-    position: static; margin: 2px 0 14px; justify-content: flex-start;
-    display: inline-flex; gap: 2px; padding: 3px; backdrop-filter: none;
-    background: rgba(255, 255, 255, 0.045); border: 1px solid var(--border); border-radius: 10px;
+/* Mobile: the wrapper is inert so .nav keeps its fixed bottom-bar geometry. */
+.navbar { display: contents; }
+
+/* Desktop breakpoint is 768px to match the shell's own chrome flip. At the old
+   900px there was a 768-899px dead band where the shell showed its DESKTOP tool
+   toggle above Macro's MOBILE bottom bar. */
+@media (min-width: 768px) {
+  /* Desktop: a real sticky top bar, matching the ZTS and Clarify bars
+     value-for-value (52px, rgba(11,15,26,0.78) + blur, lineSoft hairline, the
+     same two-part shadow, z-index 50) rather than a widget inside the content
+     column. */
+  .navbar {
+    position: sticky; top: 52px; z-index: 50;
+    height: 52px; display: flex; align-items: center; padding: 0 24px;
+    background: rgba(11, 15, 26, 0.78);
+    backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 4px 16px rgba(0, 0, 0, 0.35);
   }
-  .nav button { flex: none; flex-direction: row; gap: 8px; font-size: 12.5px; font-weight: 700; letter-spacing: 0.03em; padding: 6px 14px; min-height: 36px; border: none; border-radius: 7px; color: var(--ink-3); }
-  .nav button svg { width: 17px; height: 17px; }
-  .nav button.on { background: var(--card-2); color: var(--ink); box-shadow: var(--shadow-1); }
-  .nav button.on svg { color: var(--accent); }
+  .nav {
+    position: static; margin: 0; justify-content: flex-start;
+    display: inline-flex; gap: 2px; padding: 3px; backdrop-filter: none; -webkit-backdrop-filter: none;
+    background: rgba(255, 255, 255, 0.045); border: 1px solid rgba(255, 255, 255, 0.055);
+    border-radius: 10px; box-shadow: none; border-top: 1px solid rgba(255, 255, 255, 0.055);
+  }
+  /* Syne, not the inherited Inter — the single most visible mismatch with the
+     other three tools' pills. Label-only on desktop like every other tool. */
+  .nav button {
+    flex: none; flex-direction: row; gap: 0; padding: 5px 14px; min-height: 32px;
+    border: none; border-radius: 7px; color: #525E74;
+    font-family: 'Syne', system-ui, sans-serif; font-size: 11.5px; font-weight: 700;
+    letter-spacing: 0.05em; text-transform: none;
+    transition: color var(--dur-2) cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .nav button svg { display: none; }
+  .nav button.on { background: var(--card-2); color: #F7F9FC; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+  .nav button:active { transform: none; }
 }
 
 /* ---------------- cards & grid ---------------- */
@@ -273,8 +298,8 @@ tr:last-child td { border-bottom: none; }
 .expand > div { overflow: hidden; min-height: 0; }
 
 /* ---------------- toasts ---------------- */
-.toasts { position: fixed; bottom: calc(var(--nav-h) + 14px + var(--safe-bottom)); left: 50%; transform: translateX(-50%); z-index: 90; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; padding: 0 14px; width: 100%; max-width: 480px; }
-@media (min-width: 900px) { .toasts { bottom: 18px; } }
+.toasts { position: fixed; bottom: calc(var(--nav-h) + 14px + var(--safe-bottom, 0px)); left: 50%; transform: translateX(-50%); z-index: 90; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; padding: 0 14px; width: 100%; max-width: 480px; }
+@media (min-width: 768px) { .toasts { bottom: 18px; } }
 .toast { pointer-events: auto; background: var(--card-2); border: 1px solid var(--border-strong); color: var(--ink); border-radius: 12px; padding: 11px 16px; font-size: 14px; box-shadow: var(--shadow-2); animation: toastin var(--dur-3) var(--ease-spring) both; display: flex; gap: 10px; align-items: center; }
 .toast.out { animation: toastout var(--dur-2) var(--ease-out) both; }
 .toast .tdot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex: none; }
@@ -337,4 +362,111 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
   .pagefade, .stagger > *, .toast, .cmdk, .cmdk-wrap { animation: none !important; }
   .expand, .btn, .card, .nav button, .seg button, .meter > div { transition: none !important; }
   .sk::after { animation: none; }
+}
+
+/* ============================================================
+   COCKPIT — the dashboard layer.
+   Two rules drive the sizes below: the executable numbers are never
+   smaller than the verb that describes them, and every control clears
+   44px on a phone (Apple HIG) instead of the 32px the .sm/.seg
+   defaults gave it.
+   ============================================================ */
+
+/* ---- health strip: trust marks + an always-reachable refresh ---- */
+.hstrip {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 2px 0 2px;
+}
+.hstrip-marks { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.hstrip-btn { margin-left: auto; flex: none; }
+
+/* ---- the hero ---- */
+/* clamp(): at 390px the old fixed 30px verb crowded the headline; this scales
+   with the viewport and stops growing once there is room. */
+.directive .action { font-size: clamp(26px, 7.6vw, 30px); }
+.directive .headline {
+  margin: 5px 0 0; font-size: 15px; line-height: 1.45; color: var(--ink);
+  font-weight: 500; text-wrap: pretty;
+}
+/* The order ticket: hairline-separated cells so three numbers read as one
+   instrument rather than three floating stats. */
+.ticket {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+  margin-top: 14px; background: var(--border); border-radius: var(--r-md); overflow: hidden;
+}
+.ticket .tk { background: var(--card-2); padding: 10px 12px; min-width: 0; }
+.ticket .k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ink-3); font-weight: 700; }
+.ticket .v { font-family: var(--mono); font-size: 19px; font-weight: 500; margin-top: 3px; letter-spacing: -0.2px; white-space: nowrap; }
+.ticket .v .u { font-size: 11px; color: var(--ink-3); margin-left: 3px; font-weight: 600; }
+
+/* ---- regime score meters ---- */
+.seg-wide { margin-bottom: 12px; }
+.smeters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.smeter { background: var(--card-2); border-radius: var(--r-md); padding: 10px 12px; min-width: 0; }
+.smeter-top { display: flex; align-items: baseline; gap: 6px; margin-bottom: 8px; }
+.smeter-name { font-size: 11px; font-weight: 800; letter-spacing: 0.6px; color: var(--ink); }
+.smeter-state { font-size: 10.5px; color: var(--ink-3); text-transform: capitalize; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.smeter-score { margin-left: auto; font-family: var(--mono); font-size: 14px; font-weight: 500; }
+.smeter-track { height: 5px; border-radius: 99px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.smeter-track > div { height: 100%; border-radius: 99px; background: var(--ink-3); transition: width var(--dur-3) var(--ease-out); }
+.smeter.uptrend .smeter-track > div { background: var(--up); }
+.smeter.uptrend .smeter-score { color: var(--up); }
+.smeter.downtrend .smeter-track > div { background: var(--down); }
+.smeter.downtrend .smeter-score { color: var(--down); }
+.signals { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+
+/* ---- stat tiles ---- */
+/* Hard 2-up instead of auto-fit: at a 326px card inner width auto-fit
+   (minmax(96px,1fr)) fitted exactly THREE columns, so every 4-tile group wrapped
+   3+1 and left a ragged orphan on its own row. */
+.stats-2up { grid-template-columns: repeat(2, 1fr); }
+@media (min-width: 640px) { .stats-2up { grid-template-columns: repeat(4, 1fr); } }
+.stat .v { font-family: var(--mono); font-weight: 500; letter-spacing: -0.2px; }
+.stat .v.pos { color: var(--up); } .stat .v.neg { color: var(--down); }
+.stat .est {
+  display: inline-block; margin-left: 5px; padding: 0 4px; border-radius: 4px;
+  background: rgba(212, 147, 11, 0.16); color: var(--warn);
+  font-size: 8.5px; font-weight: 800; letter-spacing: 0.4px; vertical-align: 1px;
+}
+.stat .v.grade-efficient { color: var(--good); text-transform: capitalize; font-family: var(--font); }
+.stat .v.grade-fair { color: var(--ink-2); text-transform: capitalize; font-family: var(--font); }
+.stat .v.grade-rich { color: var(--serious); text-transform: capitalize; font-family: var(--font); }
+
+/* ---- position ---- */
+.pos-id { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--ink-2); letter-spacing: 0; text-transform: none; }
+.stopbar { margin-top: 12px; }
+.stopbar-scale { display: flex; justify-content: space-between; margin-top: 5px; }
+
+/* ---- disclosures ---- */
+/* 44px on touch. .btn.sm is 32px, which made every "why this call" / "show the
+   work" toggle a sub-minimum target. */
+.disclose { margin-top: 10px; }
+.factlist { margin: 8px 0 0; padding-left: 18px; }
+.factlist li { margin: 3px 0; }
+.torque-note { margin: 10px 0 0; }
+.planner-note { margin-top: 10px; }
+.ttl-btn {
+  width: 100%; background: none; border: none; padding: 0 0 10px; margin: 0;
+  text-align: left; font: inherit; font-size: 11px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase; color: var(--ink-3);
+  display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer;
+}
+.disclose-row {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  border: 1px solid var(--border); min-height: 48px; border-radius: var(--r-md);
+}
+.dr-label { font-weight: 700; color: var(--ink); }
+.dr-state { margin-left: auto; font-size: 11px; color: var(--ink-3); font-weight: 500; text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dr-chev { flex: none; color: var(--ink-3); transition: transform var(--dur-2) var(--ease-out); }
+.dr-chev.open { transform: rotate(180deg); }
+
+/* ---- touch ergonomics ---- */
+@media (max-width: 767.98px) {
+  .btn.sm { min-height: 44px; padding: 8px 14px; }
+  .seg button { min-height: 44px; }
+  /* The stop-mode picker spans the card so all three modes are equally
+     reachable instead of clustering at the left edge. */
+  .seg-wide { display: flex; width: 100%; }
+  .seg-wide button { flex: 1; }
+  .ticket .v { font-size: 18px; }
 }

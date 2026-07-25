@@ -411,9 +411,13 @@ Respond ONLY with valid JSON, no preamble or markdown fences:
 async function publishToShopify(article) {
   const isDeployed = window.location.hostname !== "localhost";
   if (isDeployed) {
+    // The function now requires a session (it publishes a live, public article
+    // with the store's admin token), so send the same bearer callClaude uses.
+    let bearer = null;
+    try { bearer = (await supabase?.auth.getSession())?.data?.session?.access_token || null; } catch {}
     const res = await fetch("/.netlify/functions/shopify-publish", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}) },
       body: JSON.stringify({ title: article.title_tag, body_html: article.article_html, summary: article.meta_description, tags: article.target_keyword, handle: article.slug }),
     });
     const data = await res.json();

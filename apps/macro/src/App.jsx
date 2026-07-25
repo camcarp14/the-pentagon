@@ -35,7 +35,16 @@ function useSource(path, intervalMs, onAuthFail) {
       const data = await api(path)
       setState({ data, error: null, fetchedAt: data?.meta?.fetchedAt ?? Date.now(), loading: false })
     } catch (e) {
-      if (e.code === 401) { onAuthFail(); return }
+      // A 401 must still clear `loading` and record an error. Returning early
+      // left loading:true / error:null forever, and the cockpit's
+      // `loading && !data && !error` skeleton gate then never resolved — an
+      // expired session showed a permanent skeleton with no message and no
+      // retry, while the poll kept re-entering this same branch.
+      if (e.code === 401) {
+        setState((s) => ({ ...s, error: 'session expired — sign in again', loading: false }))
+        onAuthFail()
+        return
+      }
       setState((s) => ({ ...s, error: e.message, loading: false }))
     }
   }, [path, onAuthFail])
@@ -196,6 +205,21 @@ export default function App({ embedded = false }) {
 
   return (
     <ToastProvider>
+      {/* The nav sits OUTSIDE .shell so that on desktop its wrapper can be a
+          full-bleed sticky bar — the same chrome ZTS and Clarify use — instead of
+          a pill group parked inside the 1180px content column that scrolls away.
+          On mobile .navbar is `display: contents`, so .nav keeps its original
+          fixed bottom-bar behaviour untouched. */}
+      <div className="navbar">
+        <nav className="nav" aria-label="Main">
+          {TABS.map((t) => (
+            <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)} aria-label={t.label} aria-current={tab === t.id ? 'page' : undefined}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={t.icon} /></svg>
+              <span className="nav-label">{t.label}</span>
+            </button>
+          ))}
+        </nav>
+      </div>
       <div className="shell">
         <header className="hdr">
           {!embedded && <div className="brand"><span className="bolt">⚡</span>TORQUE <span className="tiny" style={{ fontWeight: 500 }}>MSTR cockpit</span></div>}
@@ -206,14 +230,6 @@ export default function App({ embedded = false }) {
               fresh={derived.freshBtc} sourceDetail={btc.data?.sourceDetail} />
           </div>
         </header>
-        <nav className="nav" aria-label="Main">
-          {TABS.map((t) => (
-            <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)} aria-label={t.label}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={t.icon} /></svg>
-              {t.label}
-            </button>
-          ))}
-        </nav>
         <main>
           <TabPanel active={tab === 'cockpit'}><Cockpit derived={derived} settings={settings} position={position} sources={sources} onReload={reloadAll} /></TabPanel>
           <TabPanel active={tab === 'chart'}><ChartPanel derived={derived} settings={settings} position={position} /></TabPanel>

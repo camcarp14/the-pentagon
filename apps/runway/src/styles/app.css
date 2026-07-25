@@ -258,7 +258,7 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
 }
 
 /* ============ mobile: streamlined, one-hand, glanceable ============ */
-@media (max-width: 820px) {
+@media (max-width: 767.98px) {
   input, select, textarea { font-size: 16px; } /* iOS zooms focused inputs under 16px */
   .shell { grid-template-columns: 1fr; }
   /* bottom nav: a real app bar — comfortable clearance above the home
@@ -295,7 +295,7 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
 
   /* touch targets: polish.css bumps .btn/.tabs to 42px; cover the rest of
      the tappable set (the stepper is THE move control on mobile) */
-  .step, .chip.pick, .seg button { min-height: 40px; }
+  .step, .chip.pick, .seg button { min-height: 44px; }
 
   /* forms & fit bars */
   .frow.c2, .frow.c3 { grid-template-columns: 1fr; }

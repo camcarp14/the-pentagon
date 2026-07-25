@@ -19,26 +19,36 @@ import App from "./App.jsx";
 // <=820px media query already turns its rail into a bottom bar, so we scope the
 // desktop conversion to >=821px and never touch the mobile rules (the previous
 // unconditional `.rail{top:52px}` was clobbering the mobile bottom nav).
+// The desktop breakpoint is 768px to match the shell's own chrome flip
+// (packages/ui useIsMobile). At the old 821px there was a 768-820px dead band
+// where the shell showed its DESKTOP tool toggle above Runway's MOBILE bottom
+// bar. Runway's own mobile rules in app.css flip at the same 768px now, so the
+// two layers always change together.
 const EMBED_OVERRIDES = `
-@media (min-width: 821px) {
+@media (min-width: 768px) {
   .shell { display: flex; flex-direction: column; min-height: calc(100vh - 52px); }
   .rail {
-    position: sticky; top: 52px; height: auto; width: 100%;
+    position: sticky; top: 52px; height: 52px; width: 100%;
     flex-direction: row; align-items: center; gap: 6px;
-    border-right: none; border-bottom: 1px solid var(--border);
-    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    border-right: none; border-bottom: 1px solid rgba(255,255,255,0.055);
+    background: rgba(11,15,26,0.78);
     backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%);
-    padding: 8px 20px; z-index: 40;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.03), 0 4px 16px rgba(0,0,0,0.35);
+    padding: 0 24px; z-index: 50;
   }
   .rail .brand { display: none; }
-  /* Clarify/ZTS-style pill group: a rounded container of tab pills, the active
-     pill filled with the surface + a soft shadow (not the old accent tint) so
-     Runway's menu reads identically to the other tools. */
-  .navgroup { flex-direction: row; gap: 2px; padding: 3px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 10px; }
-  .rail .nav-item { flex: 0 0 auto; gap: 7px; padding: 6px 15px; border-radius: 7px; color: var(--faint); font-weight: 700; font-size: 11.5px; letter-spacing: 0.05em; font-family: 'Syne', system-ui; }
-  .rail .nav-item:hover { background: transparent; color: var(--text); }
-  .rail .nav-item.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-tab); }
-  .rail .nav-item .navcount { margin-left: 2px; min-width: 17px; height: 17px; font-size: 11px; }
+  /* The ZTS/Clarify pill group, value-for-value: a 4.5%-white container on a
+     lineSoft hairline, the active pill raised on --surface-2 with the tight
+     two-stop shadow + inset highlight. Runway previously used --surface (a
+     DARKER fill than the container), so its active tab read recessed while the
+     other tools' read raised — the main reason its menu felt like a different
+     product. Bar chrome (height/padding/background/shadow/z-index) now matches
+     the ZTS and Clarify bars exactly too. */
+  .navgroup { flex-direction: row; gap: 2px; padding: 3px; background: rgba(255,255,255,0.045); border: 1px solid rgba(255,255,255,0.055); border-radius: 10px; }
+  .rail .nav-item { flex: 0 0 auto; gap: 7px; padding: 5px 14px; min-height: 32px; border-radius: 7px; color: #525E74; font-weight: 700; font-size: 11.5px; letter-spacing: 0.05em; font-family: 'Syne', system-ui; transition: color 0.2s cubic-bezier(0.4,0,0.2,1); }
+  .rail .nav-item:hover { background: transparent; color: #E9EDF5; }
+  .rail .nav-item.active { background: var(--surface-2, #1B2438); color: #F7F9FC; box-shadow: 0 1px 2px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06); }
+  .rail .nav-item .navcount { margin-left: 6px; min-width: auto; height: auto; padding: 1px 6px; border-radius: 999px; font-size: 9px; font-weight: 800; }
   .rail-foot { margin-top: 0; margin-left: auto; flex-direction: row; align-items: center; gap: 14px; padding: 0; font-size: 12px; }
   .rail-foot .btn { display: none; }   /* the shell owns sign-out */
   /* Let the inner .pagefade own the width (reading pages cap at 1220, the
