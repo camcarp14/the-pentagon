@@ -6,10 +6,9 @@ switches between the three tools, one shared design system with a per-tool
 accent, and one login. Built as a fresh **monorepo** (npm workspaces) so all
 three are updated, themed, and shipped together.
 
-> Status: this repo (`zts-command-center`) becomes the monorepo root on branch
-> `claude/unified-zts-clarify-runway-jwssi3`. Renaming the GitHub repo to
-> `command-center` at the end is a settings-only step that preserves history and
-> auto-redirects — no new repo, no lost commits.
+> Status: done. This repo is the monorepo root, and has since been renamed
+> `zts-command-center` → `the-pentagon` (a settings-only step that preserved
+> history and auto-redirects the old URL — no new repo, no lost commits).
 
 ## The three apps, as they are today
 
@@ -41,7 +40,7 @@ apps/
                              #   - lazy-mounts each tool (code-split)
                              #   - cross-app command palette (⌘K)
                              #   - sets the per-tool accent on switch
-  zts/                       # from zts-command-center/src  (export <ZtsApp/>)
+  zts/                       # from the zts registry repo    (export <ZtsApp/>)
   clarify/                   # from clarify-outreach/src     (export <ClarifyApp/>)
   runway/                    # from runway/src               (export <RunwayApp/>)
 packages/
