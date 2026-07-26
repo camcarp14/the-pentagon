@@ -241,8 +241,13 @@ export const handler = async () => {
       throw new Error(`CONTENT_DRAFT_WRITE_FAILED: ${insErr.message}`);
     }
 
+    // costUsd is deliberately NOT repeated on the run here. The same figure is
+    // already stored on the draft row above, and any surface summing both —
+    // which a spend tile naturally would — reported exactly 2x. The run's cost
+    // column stays 0 for passes whose cost is attributable to a persisted
+    // artifact; the artifact is the single source.
     await finishRun(sb, runId, {
-      ok: true, actions: 1, costUsd: generated.costUsd,
+      ok: true, actions: 1,
       note: `drafted "${title}" ($${generated.costUsd.toFixed(4)})`,
     }, Date.now());
 

@@ -3,6 +3,7 @@ import { supabase } from "./supabaseClient";
 import DOMPurify from "dompurify";
 import { AnimatedNumber, EmptyState, SkeletonLine, SkeletonRows, SkeletonBoard, CommandPalette, useToast, M } from "./ui.jsx";
 import { T, syne, mono } from "./theme.js";
+import EnginePanel from "./EnginePanel.jsx";
 import { FactoryPanel, sendBriefToFactory } from "./factory.jsx";
 import { DnaView } from "./dna/DnaView.jsx";
 import { DnaWorker } from "./dna/dnaWorker.js";
@@ -1469,8 +1470,12 @@ function MissionView({ creators, shorts, onNavigate, isMobile, loading }) {
           <div style={{ fontSize: isMobile ? "20px" : "24px", fontWeight: 700, color: T.ink, fontFamily: syne }}>Mission</div>
           <div style={{ fontSize: "12px", color: T.faint, marginTop: "2px" }}>Zero To Secure</div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: T.green, fontWeight: 600 }}><span style={{ width: "7px", height: "7px", borderRadius: "50%", background: T.green }} />Live</div>
       </div>
+
+      {/* The engine states its own condition. The hardcoded green "Live" dot
+          that used to sit here was a constant in a file — it rendered the same
+          whether the system was armed, disarmed, or had never run once. */}
+      <EnginePanel isMobile={isMobile} />
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: isMobile ? "10px" : "14px", marginBottom: "16px" }}>
         <Card style={spanMobile}>

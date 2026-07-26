@@ -8,7 +8,8 @@
   },
   "dependencies": {
     "@cc/supabase": "*",
-    "@cc/ai": "*"
+    "@cc/ai": "*",
+    "@cc/ops": "*"
   },
   "peerDependencies": {
     "react": "^18.2.0"

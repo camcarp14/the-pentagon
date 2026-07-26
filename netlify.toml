@@ -75,6 +75,19 @@
 [functions."outbound-engine"]
   schedule = "30 */2 * * *"
 
+# Clarify replies: the return signal. Until this existed, reply detection ran
+# ONLY when the operator clicked a button in the toolbar — check-replies.js is
+# auth-gated and therefore unschedulable — so the warmest event this business
+# produces was invisible unless someone went looking. One email had been sent,
+# 27 days earlier, and nobody had looked.
+#
+# Every 15 minutes: it reads Gmail, records replies against outreach, and stops
+# any live sequence for that prospect so a follow-up cannot land after someone
+# has already answered. It never composes or sends a reply — that stays tier 2,
+# behind the operator.
+[functions."replies-cron"]
+  schedule = "*/15 * * * *"
+
 # Specific rewrites must resolve BEFORE the SPA catch-all.
 # Clarify tracked links / open pixel:
 [[redirects]]

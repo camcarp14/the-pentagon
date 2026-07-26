@@ -10,6 +10,9 @@
     "./store.js": "./store.js",
     "./direction.js": "./direction.js",
     "./queue.js": "./queue.js",
-    "./draft.js": "./draft.js"
+    "./draft.js": "./draft.js",
+    "./plays.js": "./plays.js",
+    "./arm.js": "./arm.js",
+    "./cadence.js": "./cadence.js"
   }
 }
