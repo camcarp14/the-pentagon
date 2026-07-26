@@ -39,6 +39,22 @@ export const STALE_AFTER_DAYS = Object.freeze({
 
 const KIND_RANK = Object.freeze({ [KIND.OUTBOUND]: 0, [KIND.CONTENT]: 1 });
 
+/**
+ * The outreach statuses that mean "written, not yet sent".
+ *
+ * There are two of them, and that is not a mistake to clean up. Clarify's own
+ * board has always written `draft` and treats `["draft","draft_ready"]` as the
+ * same thing in every filter it has. Reading only `draft_ready` — which the
+ * Desk originally did — hid real drafts that were sitting in the pipeline
+ * already written and unsent, while showing an empty queue that looked like
+ * "nothing to do".
+ *
+ * Exported so the Desk, the engine's backlog count, and the execute path all
+ * ask the same question. Three hand-written copies of this list is exactly how
+ * the bug happened the first time.
+ */
+export const OUTREACH_DRAFT_STATUSES = Object.freeze(["draft", "draft_ready"]);
+
 const str = (v) => (typeof v === "string" ? v.trim() : "");
 
 /** Trim to a preview without cutting a word in half or leaving a dangling
