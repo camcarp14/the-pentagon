@@ -5,6 +5,7 @@ import { AGENT_META } from "../system/AgentsView.jsx";
 import { eng, goalProgress, kb } from "../../lib/engine.js";
 import { obs, sm, store } from "../../lib/store.js";
 import { fetchPortfolioCounts } from "../../lib/supabase.js";
+import EnginePanel from "./EnginePanel.jsx";
 
 // ─── Month calendar — booked meetings at a glance (Mission footer) ────────────
 // Meetings live on the outreach rows (meeting_at — the DB, survives any
@@ -207,6 +208,8 @@ export function MissionControl({ cards, onNavigate, inboundNew = 0 }) {
           <span style={{ fontSize: "12px", fontWeight: 700, color: T.pink, whiteSpace: "nowrap" }}>Open Inbound →</span>
         </div>
       )}
+      <EnginePanel onNavigate={onNavigate} />
+
       {/* Header */}
       <div style={{ marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "10px" }}>
         <div>
