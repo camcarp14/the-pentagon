@@ -3,7 +3,8 @@ import { T, selectBase } from "./theme";
 import { EmptyState, SkeletonLine, SkeletonRows, CommandPalette, useToast } from "./ui.jsx";
 import { SAFE_SEND_ADDRESS } from "./config.js";
 import { sm } from "./lib/store.js";
-import { sbAuth, db } from "./lib/supabase.js";
+import { sbAuth, db, currentAccessToken } from "./lib/supabase.js";
+import { auth as shellAuth } from "@cc/supabase";
 import { sendMode, checkForReplies, generateReplyDraft } from "./lib/email.js";
 import { estimateValue, getProspectPriority, groupCardsByEmail, buildDuplicateMap } from "./lib/leads.js";
 import { runProspecting, enrichProspect, generateDraft } from "./lib/prospecting.js";
@@ -132,6 +133,8 @@ export default function App({ embedded = false }) {
     if (parseHash().view !== currentView) window.location.hash = `/${currentView}`;
   }, [currentView]);
 
+  // Synchronous on purpose: a useState initializer cannot await, and this only
+  // seeds first paint. The mount effect below replaces it with the live session.
   const [authToken, setAuthToken] = useState(() => localStorage.getItem("clarify_token") || null);
   const [authChecked, setAuthChecked] = useState(false);
   const [cards, setCards] = useState([]);
@@ -371,10 +374,10 @@ export default function App({ embedded = false }) {
     document.head.appendChild(style);
   }, []);
 
-  // Stay signed in: verify the token on mount, and if it's expired, use the
-  // stored refresh token to renew silently before ever falling back to the
-  // login screen. A recurring timer renews proactively so a session left open
-  // in a browser tab or the installed PWA doesn't get logged out mid-hour.
+  // Stay signed in. Clarify does NOT renew the session — supabase-js does, and
+  // it is the only thing that may, because Supabase refresh tokens are
+  // single-use and a second exchanger revokes the first one's token (which is
+  // how a Clarify renewal used to sign you out of every Pentagon tool at once).
   const persistSession = (session) => {
     localStorage.setItem("clarify_token", session.access_token);
     if (session.refresh_token) localStorage.setItem("clarify_refresh", session.refresh_token);
@@ -382,22 +385,27 @@ export default function App({ embedded = false }) {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem("clarify_token");
-    if (!token) { setAuthChecked(true); return; }
-    sbAuth.getUser(token).then(async user => {
-      if (!user || user.error) {
-        const refreshToken = localStorage.getItem("clarify_refresh");
-        const renewed = await sbAuth.refresh(refreshToken);
-        if (renewed) {
-          persistSession(renewed);
-        } else {
-          localStorage.removeItem("clarify_token");
-          localStorage.removeItem("clarify_refresh");
-          setAuthToken(null);
-        }
+    // Ask supabase-js for the session. getSession() transparently refreshes a
+    // near-expired token using ITS copy of the refresh token, so the expired
+    // case is handled without Clarify ever exchanging one itself. This replaced
+    // a getUser()-then-sbAuth.refresh() ladder that was the second exchanger.
+    let cancelled = false;
+    (async () => {
+      let session = null;
+      try { session = await shellAuth.getSession(); } catch { /* standalone */ }
+      if (cancelled) return;
+      if (session?.access_token) {
+        persistSession(session);
+      } else {
+        // No live session: clear the mirror rather than leaving a stale bearer
+        // that would 401 on the next request.
+        localStorage.removeItem("clarify_token");
+        localStorage.removeItem("clarify_refresh");
+        setAuthToken(null);
       }
       setAuthChecked(true);
-    });
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // The 45-minute renewal timer that used to live here is GONE, deliberately.
@@ -414,7 +422,7 @@ export default function App({ embedded = false }) {
   // covers the expiry case this timer was written to prevent.
 
   const handleLogout = async () => {
-    const token = localStorage.getItem("clarify_token");
+    const token = await currentAccessToken();
     if (token) await sbAuth.signOut(token).catch(() => {});
     localStorage.removeItem("clarify_token");
     localStorage.removeItem("clarify_refresh");

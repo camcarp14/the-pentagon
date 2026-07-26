@@ -44,13 +44,14 @@ const WORST_CASE = Object.values(MODEL_PRICING).reduce(
 
 /** Exact price for a known model, or null. Use when you need to KNOW rather
  *  than estimate — e.g. to warn that a model is unrecognised. */
-export function priceFor(model) {
-  return MODEL_PRICING[model] ?? null;
-}
-
 export function isKnownModel(model) {
   return Object.prototype.hasOwnProperty.call(MODEL_PRICING, model);
 }
+
+export function priceFor(model) {
+  return isKnownModel(model) ? MODEL_PRICING[model] : null;
+}
+
 
 /**
  * Estimated USD for one call. Unknown models price at WORST_CASE (see the
@@ -59,7 +60,11 @@ export function isKnownModel(model) {
  * compared against NaN is always false, which silently disables the cap.
  */
 export function estimateCost(model, inputTokens = 0, outputTokens = 0) {
-  const p = MODEL_PRICING[model] ?? WORST_CASE;
+  // hasOwnProperty, not `??`: MODEL_PRICING["constructor"] returns Object, which
+  // is not nullish, so `??` never fired and p.in was undefined -> NaN. And NaN
+  // silently disables every cap it is compared against, which is the exact
+  // failure this file was written to prevent.
+  const p = isKnownModel(model) ? MODEL_PRICING[model] : WORST_CASE;
   const i = Number.isFinite(inputTokens) && inputTokens > 0 ? inputTokens : 0;
   const o = Number.isFinite(outputTokens) && outputTokens > 0 ? outputTokens : 0;
   return (i / 1e6) * p.in + (o / 1e6) * p.out;
@@ -67,5 +72,5 @@ export function estimateCost(model, inputTokens = 0, outputTokens = 0) {
 
 /** Human label for a model id, for UI that shouldn't print raw ids. */
 export function modelLabel(model) {
-  return MODEL_PRICING[model]?.label ?? model ?? "unknown";
+  return (isKnownModel(model) ? MODEL_PRICING[model].label : null) ?? model ?? "unknown";
 }

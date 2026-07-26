@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { T, SEV as SEV_TOKENS } from "../../theme";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "../../config.js";
 import { sm } from "../../lib/store.js";
-import { sbAuth } from "../../lib/supabase.js";
+import { sbAuth, currentAccessToken } from "../../lib/supabase.js";
 import { EmptyState } from "../../ui.jsx";
 
 // ─── Clients View ─────────────────────────────────────────────────────────────
@@ -375,8 +375,11 @@ export function ClientsView({ deepClientId = null, onNavigate }) {
   const [addError, setAddError] = useState("");
   const [loadError, setLoadError] = useState("");
 
-  const hdr = () => {
-    const token = localStorage.getItem("clarify_token");
+  // Resolved from supabase-js at call time, like every other request path.
+  // Reading the localStorage mirror synchronously left these three fetches as
+  // the only consumers still depending on that mirror being fresh.
+  const hdr = async () => {
+    const token = await currentAccessToken();
     return { "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
   };
 
@@ -384,10 +387,11 @@ export function ClientsView({ deepClientId = null, onNavigate }) {
     setLoading(true);
     setLoadError("");
     try {
+      const h = await hdr();
       const [cr, fr, ar] = await Promise.all([
-        fetch(`${SUPABASE_URL}/rest/v1/clients?status=eq.active&order=created_at.asc`, { headers: hdr() }),
-        fetch(`${SUPABASE_URL}/rest/v1/findings?status=eq.active&order=created_at.desc&limit=60`, { headers: hdr() }),
-        fetch(`${SUPABASE_URL}/rest/v1/action_queue?status=eq.pending&order=created_at.desc&limit=30`, { headers: hdr() }),
+        fetch(`${SUPABASE_URL}/rest/v1/clients?status=eq.active&order=created_at.asc`, { headers: h }),
+        fetch(`${SUPABASE_URL}/rest/v1/findings?status=eq.active&order=created_at.desc&limit=60`, { headers: h }),
+        fetch(`${SUPABASE_URL}/rest/v1/action_queue?status=eq.pending&order=created_at.desc&limit=30`, { headers: h }),
       ]);
       if (!cr.ok) {
         const detail = await cr.text().catch(() => "");
@@ -406,8 +410,14 @@ export function ClientsView({ deepClientId = null, onNavigate }) {
     load();
     // Fetch the authenticated user id once — every client row needs this for
     // the RLS policy (auth.uid() = user_id) defined in schema.sql to pass.
-    const token = localStorage.getItem("clarify_token");
-    if (token) sbAuth.getUser(token).then(u => { if (u?.id) setUserId(u.id); }).catch(() => {});
+    (async () => {
+      const token = await currentAccessToken();
+      if (!token) return;
+      try {
+        const u = await sbAuth.getUser(token);
+        if (u?.id) setUserId(u.id);
+      } catch { /* non-fatal: the row-level insert will surface it instead */ }
+    })();
   }, []);
 
   // Deep link → selection (and browser Back → list). #/clients/<id> selects

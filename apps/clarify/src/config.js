@@ -7,15 +7,24 @@ export const SUPABASE_ANON_KEY = "sb_publishable_zDV3HpSChf0bZJ5nY09s3w_rNI3sZ1m
 // Netlify function with server-side env vars, so nothing sensitive is compiled
 // into the public bundle. Keep VITE_* keys in your local .env only — never set
 // them in Netlify's environment (VITE_* vars get baked into the shipped JS).
+// BUILD-TIME gate, not a runtime one. `import.meta.env.DEV` is statically
+// replaced by Vite with the literal `false` in a production build, so the
+// whole ternary folds to "" and the key is NEVER EMITTED into dist.
+//
+// A `window.location.hostname === "localhost"` check does NOT do this: the
+// minifier cannot evaluate it, so it keeps both branches and the key survives
+// as a string literal in the shipped JS — readable by anyone who opens
+// devtools, even though the code would never USE it off localhost. Verified
+// by building with a canary value and grepping dist.
 export const IS_LOCAL = typeof window !== "undefined" && window.location.hostname === "localhost";
 
-export const ANTHROPIC_API_KEY = IS_LOCAL ? (import.meta.env.VITE_ANTHROPIC_API_KEY || "") : "";
+export const ANTHROPIC_API_KEY = import.meta.env.DEV ? (import.meta.env.VITE_ANTHROPIC_API_KEY || "") : "";
 
-export const GOOGLE_PLACES_KEY = IS_LOCAL ? import.meta.env.VITE_GOOGLE_PLACES_KEY : "";
+export const GOOGLE_PLACES_KEY = import.meta.env.DEV ? import.meta.env.VITE_GOOGLE_PLACES_KEY : "";
 
-export const HUNTER_API_KEY = IS_LOCAL ? import.meta.env.VITE_HUNTER_API_KEY : "";
+export const HUNTER_API_KEY = import.meta.env.DEV ? import.meta.env.VITE_HUNTER_API_KEY : "";
 
-export const FIRECRAWL_API_KEY = IS_LOCAL ? import.meta.env.VITE_FIRECRAWL_API_KEY : "";
+export const FIRECRAWL_API_KEY = import.meta.env.DEV ? import.meta.env.VITE_FIRECRAWL_API_KEY : "";
 
 
 // ─── Email send mode ─────────────────────────────────────────────────────────

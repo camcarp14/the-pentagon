@@ -40,8 +40,17 @@ import { supabase } from "../supabaseClient";
 // bundle the moment VITE_ANTHROPIC_API_KEY was ever set in Netlify — deployed
 // traffic rides /.netlify/functions/claude and never needs it. Matches the
 // guard Clarify already had (apps/clarify/src/config.js).
+// BUILD-TIME gate, not a runtime one. `import.meta.env.DEV` is statically
+// replaced by Vite with the literal `false` in a production build, so the
+// whole ternary folds to "" and the key is NEVER EMITTED into dist.
+//
+// A `window.location.hostname === "localhost"` check does NOT do this: the
+// minifier cannot evaluate it, so it keeps both branches and the key survives
+// as a string literal in the shipped JS — readable by anyone who opens
+// devtools, even though the code would never USE it off localhost. Verified
+// by building with a canary value and grepping dist.
 const IS_LOCAL = typeof window !== "undefined" && window.location.hostname === "localhost";
-const ANTHROPIC_API_KEY = IS_LOCAL ? (import.meta.env.VITE_ANTHROPIC_API_KEY || "") : "";
+const ANTHROPIC_API_KEY = import.meta.env.DEV ? (import.meta.env.VITE_ANTHROPIC_API_KEY || "") : "";
 
 // Model pricing ($/1M tokens) — needed so the re-declared callClaude can attribute
 // costEstimate to obs exactly as App.jsx does. Sonnet id is the pinned "claude-

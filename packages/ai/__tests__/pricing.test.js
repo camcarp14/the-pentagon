@@ -45,8 +45,32 @@ describe("estimateCost", () => {
 
   it("never under-reports for any unknown id — the property that protects the cap", () => {
     const priciest = estimateCost("claude-opus-5", 5e5, 5e5);
-    for (const bogus of ["", "gpt-4", "claude-haiku-9", "CLAUDE-OPUS-5", null, undefined]) {
-      expect(estimateCost(bogus, 5e5, 5e5)).toBeGreaterThanOrEqual(priciest);
+    // Prototype keys are in this list because the first version of it was NOT,
+    // and the test passed vacuously while `MODEL_PRICING["constructor"]` returned
+    // Object — not nullish, so the `??` fallback never fired, p.in was undefined,
+    // and the result was NaN. A hand-picked list only proves the ids you thought
+    // of; these are the ones you don't.
+    const bogus = [
+      "", "gpt-4", "claude-haiku-9", "CLAUDE-OPUS-5", null, undefined, 0, 42, {},
+      "constructor", "toString", "valueOf", "hasOwnProperty", "isPrototypeOf",
+      "__proto__", "propertyIsEnumerable", "toLocaleString", "__defineGetter__",
+    ];
+    for (const b of bogus) {
+      const v = estimateCost(b, 5e5, 5e5);
+      expect(Number.isFinite(v), `estimateCost(${String(b)}) = ${v}`).toBe(true);
+      expect(v, `estimateCost(${String(b)}) under-reported`).toBeGreaterThanOrEqual(priciest);
+    }
+  });
+
+  it("every inherited Object.prototype key is treated as unknown", () => {
+    // Enumerated from the prototype itself rather than hand-listed, so a future
+    // runtime adding a prototype member is covered without editing this test.
+    const inherited = Object.getOwnPropertyNames(Object.prototype);
+    expect(inherited.length).toBeGreaterThan(5);
+    for (const k of inherited) {
+      expect(isKnownModel(k), `${k} must not be a known model`).toBe(false);
+      expect(priceFor(k), `priceFor(${k}) must be null`).toBeNull();
+      expect(Number.isFinite(estimateCost(k, 1e6, 1e6))).toBe(true);
     }
   });
 

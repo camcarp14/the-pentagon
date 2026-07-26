@@ -17,7 +17,7 @@ import { auth as shellAuth } from "@cc/supabase";
 // resolving here means a request can never carry a token that expired while the
 // tab sat open. The localStorage mirror stays only as a fallback for a Clarify
 // running without the shell.
-async function currentAccessToken() {
+export async function currentAccessToken() {
   try {
     const s = await shellAuth.getSession();
     if (s?.access_token) return s.access_token;
