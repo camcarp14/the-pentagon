@@ -59,10 +59,12 @@ export async function loadGuardState(sb, subsystem, now = Date.now()) {
     .limit(1000);
   if (aErr) throw new Error(`OPS_AUDIT_READ_FAILED: ${aErr.message}`);
 
-  // Only actions that actually happened count against the caps. A blocked
-  // attempt costs nothing and must not consume the budget that would let a
-  // later legitimate action through.
-  const spent = (recent || []).filter((r) => r.status === 'executed' || r.status === 'dry_run');
+  // Everything that SPENT counts against the caps. `prepared` is included and
+  // must be: tier 2 is the drafting tier, so it is the most expensive path in
+  // the system, and excluding it gave the single biggest spender no ceiling at
+  // all. Only `blocked` is excluded — a refusal costs nothing and must not eat
+  // the budget that would let a later legitimate action through.
+  const spent = (recent || []).filter((r) => r.status !== 'blocked');
   const usage = usageInWindow(spent.map((r) => ({ at: r.at, costUsd: r.cost_usd })), now, WINDOW_MS);
 
   const { data: runs, error: rErr } = await sb
@@ -111,11 +113,20 @@ export async function attempt(sb, {
     : verdict.mode === MODE.PREPARE ? 'prepared'
     : 'blocked';
 
+  // The tier column is CHECK-constrained to 0..3 and NOT NULL. Writing an
+  // unrecognised tier verbatim raised a constraint violation, so the one input
+  // class the guard is best at refusing was the one whose refusal left NO trace
+  // and killed the pass. Unknown tiers are recorded as 3 — which is how the
+  // guard already treats them — with the raw value preserved in the rationale.
+  const safeTier = [0, 1, 2, 3].includes(tier) ? tier : 3;
+  const tierNote = safeTier === tier ? null : `unrecognised tier ${JSON.stringify(tier)} treated as 3`;
+
   const { error } = await sb.from('ops_audit_log').insert({
     at: new Date(now).toISOString(),
-    subsystem, action, tier, status,
+    subsystem, action, tier: safeTier, status,
     blocked_by: verdict.blockedBy,
-    trigger, rationale,
+    trigger,
+    rationale: [rationale, tierNote].filter(Boolean).join(' — ') || null,
     target_table: targetTable, target_id: targetId,
     before_data: before, after_data: after, undo,
     // A blocked action spent nothing; recording its would-be cost would let
@@ -127,11 +138,25 @@ export async function attempt(sb, {
 
   // Optimistically advance the in-memory counters so a single pass taking many
   // actions is capped correctly without re-reading the table each time.
-  if (status === 'executed' || status === 'dry_run') {
+  if (status !== 'blocked') {
     state.actionsThisHour += 1;
-    state.spendUsdThisHour += Number(costUsd) || 0;
+    // Negative or non-numeric costs cannot credit the budget back.
+    const c = Number(costUsd);
+    state.spendUsdThisHour += Number.isFinite(c) && c > 0 ? c : 0;
   }
   return verdict;
+}
+
+/**
+ * Ensure a subsystem has a control row, using the TABLE's defaults (disabled,
+ * dry-run). Insert-only: an existing row is never overwritten, so this can never
+ * re-disable something an operator deliberately enabled, and never widen a cap
+ * they deliberately tightened.
+ */
+export async function registerSubsystem(sb, subsystem) {
+  const { error } = await sb.from('ops_control')
+    .upsert({ key: subsystem }, { onConflict: 'key', ignoreDuplicates: true });
+  if (error) throw new Error(`OPS_REGISTER_FAILED: ${error.message}`);
 }
 
 export async function startRun(sb, subsystem, trigger = 'schedule', now = Date.now()) {

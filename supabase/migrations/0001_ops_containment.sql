@@ -121,7 +121,12 @@ drop policy if exists ops_audit_log_read on public.ops_audit_log;
 create policy ops_audit_log_read on public.ops_audit_log
   for select to authenticated using (true);
 
--- Undo is the one field an operator may set, so the UI can mark a reversal.
+-- NOTE: this policy alone does NOT make the log append-only, contrary to what
+-- this comment originally claimed. RLS is row-level and cannot restrict
+-- columns, so `using(true) with check(true)` permits rewriting EVERY column.
+-- Migration 0002 fixes it with a column-level GRANT. Left here rather than
+-- edited away, because a migration already applied to a live database must not
+-- be rewritten — the correction belongs in the next file, not this one.
 drop policy if exists ops_audit_log_mark_undone on public.ops_audit_log;
 create policy ops_audit_log_mark_undone on public.ops_audit_log
   for update to authenticated using (true) with check (true);

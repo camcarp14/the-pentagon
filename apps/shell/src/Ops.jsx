@@ -60,15 +60,19 @@ export default function Ops({ isMobile }) {
         supabase.from("ops_audit_log").select("*").order("at", { ascending: false }).limit(50),
         supabase.from("ops_runs").select("*").order("started_at", { ascending: false }).limit(10),
       ]);
-      // Named and visible. A containment console that fails to load must SAY so
-      // — showing an empty log would read as "nothing happened", which is the
-      // most dangerous possible misreport here.
-      if (c.error) throw new Error(`control: ${c.error.message}`);
-      if (l.error) throw new Error(`audit log: ${l.error.message}`);
-      if (r.error) throw new Error(`runs: ${r.error.message}`);
-      setControl(c.data || []);
-      setLog(l.data || []);
-      setRuns(r.data || []);
+      // Each read is applied INDEPENDENTLY. Throwing on the first error before
+      // any setState meant a failed audit-log read also discarded a perfectly
+      // good control read — leaving `control` null, which rendered the confident
+      // and unverified claim "Autonomy is OFF" while autonomy might be armed and
+      // running, AND disabled the stop button in exactly that state.
+      //
+      // Now: whatever loaded, shows. Whatever failed, says so. `control` staying
+      // null means "unknown", which the card renders as unknown.
+      const errs = [];
+      if (c.error) errs.push(`control: ${c.error.message}`); else setControl(c.data || []);
+      if (l.error) errs.push(`audit log: ${l.error.message}`); else setLog(l.data || []);
+      if (r.error) errs.push(`runs: ${r.error.message}`); else setRuns(r.data || []);
+      if (errs.length) setErr(errs.join(" · "));
     } catch (e) {
       setErr(String(e.message || e));
     } finally {
@@ -80,7 +84,11 @@ export default function Ops({ isMobile }) {
 
   const global = (control || []).find((c) => c.key === "global");
   const subsystems = (control || []).filter((c) => c.key !== "global");
-  const armed = !!global?.enabled;
+  // Three states, not two. `unknown` exists because "we could not read the
+  // control table" must never render as "autonomy is off" — that is a confident
+  // claim in the dangerous direction, and it is the claim you would act on.
+  const state = !loaded ? "loading" : !global ? "unknown" : global.enabled ? "armed" : "off";
+  const armed = state === "armed";
 
   const setGlobal = async (enabled) => {
     setBusy(true);
@@ -110,36 +118,41 @@ export default function Ops({ isMobile }) {
 
       {/* ── the stop control ─────────────────────────────────────────────── */}
       <div style={{
-        background: armed ? "rgba(212,147,11,0.10)" : P.surface,
-        border: `1px solid ${armed ? "rgba(212,147,11,0.45)" : P.line}`,
+        background: armed ? "rgba(212,147,11,0.10)" : state === "unknown" ? "rgba(225,29,72,0.08)" : P.surface,
+        border: `1px solid ${armed ? "rgba(212,147,11,0.45)" : state === "unknown" ? `${P.crit}55` : P.line}`,
         borderRadius: 16, padding: 18, marginBottom: 14,
         display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
       }}>
         <div style={{ minWidth: 0, flex: "1 1 260px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 5 }}>
-            <span style={{ width: 9, height: 9, borderRadius: "50%", background: armed ? P.warn : P.faint, boxShadow: armed ? `0 0 9px ${P.warn}` : "none" }} />
+            <span style={{ width: 9, height: 9, borderRadius: "50%", background: armed ? P.warn : state === "unknown" ? P.crit : P.faint, boxShadow: armed ? `0 0 9px ${P.warn}` : "none" }} />
             <span style={{ fontSize: 15.5, fontWeight: 800, color: P.ink, fontFamily: P.display }}>
-              {loaded ? (armed ? "Autonomy is ARMED" : "Autonomy is OFF") : "Reading state…"}
+              {{ loading: "Reading state…", unknown: "Autonomy state UNKNOWN", armed: "Autonomy is ARMED", off: "Autonomy is OFF" }[state]}
             </span>
           </div>
           <div style={{ fontSize: 12, color: P.muted, lineHeight: 1.5 }}>
-            {armed
-              ? "Subsystems may act, each still inside its own dry-run flag, caps and breaker."
-              : "The global switch is off. Nothing autonomous can execute, at any tier, regardless of per-subsystem settings."}
+            {state === "unknown"
+              ? "The control table could not be read, so this screen cannot tell you whether autonomy is running. Assume it may be. Stopping is still safe to attempt."
+              : armed
+                ? "Subsystems may act — each still gated by its own enable flag, dry-run flag, caps and breaker, and by the stricter of the global and per-subsystem caps."
+                : "The global switch is off. Nothing autonomous can execute, at any tier, regardless of per-subsystem settings."}
           </div>
         </div>
+        {/* Deliberately NOT disabled when the state is unknown. Stopping is the
+            safe direction, and the state where you least know what is running is
+            exactly the state where you most want the option. */}
         <button
           onClick={() => setGlobal(!armed)}
-          disabled={busy || !loaded || !global}
+          disabled={busy || !loaded}
           style={{
             flex: "none", minHeight: 44, padding: "0 20px", borderRadius: 11, cursor: busy ? "default" : "pointer",
             border: `1px solid ${armed ? P.crit : P.line}`,
             background: armed ? "rgba(225,29,72,0.16)" : "transparent",
             color: armed ? "#FF8DA6" : P.ink,
             fontSize: 13, fontWeight: 800, fontFamily: P.display, letterSpacing: "0.04em",
-            opacity: busy || !global ? 0.55 : 1,
+            opacity: busy ? 0.55 : 1,
           }}>
-          {busy ? "…" : armed ? "STOP EVERYTHING" : "Arm autonomy"}
+          {busy ? "…" : armed ? "STOP EVERYTHING" : state === "unknown" ? "Force STOP" : "Arm autonomy"}
         </button>
       </div>
 
@@ -148,8 +161,9 @@ export default function Ops({ isMobile }) {
         <Label>Subsystems</Label>
         {subsystems.length === 0 ? (
           <Empty>
-            No subsystem has registered yet. The heartbeat registers itself on its first
-            scheduled pass; anything else appears here as it is built.
+            No subsystem has registered yet. Each one inserts its own row on its first
+            scheduled pass, disabled and in dry-run, so you opt it in deliberately.
+            Until a subsystem has a row here it cannot act at all.
           </Empty>
         ) : (
           <div style={{ display: "grid", gap: 1, background: P.line, borderRadius: 12, overflow: "hidden" }}>

@@ -10,17 +10,27 @@
 //
 // Every real subsystem gets built against this exact shape.
 //
-// WHY `-background`. Netlify caps ordinary functions at ~10s, a limit this repo
-// already works around in three places by handing the remainder back to a
-// client loop — which is precisely what reintroduces the tab dependency we are
-// removing. The `-background` suffix raises the ceiling to 15 minutes, which is
-// what makes a genuinely headless pass possible.
+// BUDGET: 30 SECONDS. An earlier version of this file was named
+// `-background` on the belief that the suffix bought a 15-minute ceiling. It
+// does not. Per Netlify's own current guidance, SCHEDULED functions have a
+// 30-second execution limit and do not return response bodies — the 15-minute
+// ceiling belongs to HTTP-invoked background functions, which is a different
+// thing. The suffix was removed rather than left as a misleading label.
+//
+// That 30s is a real architectural constraint on everything built against this
+// shape: a subsystem pass must fit in it, or be split across passes with its
+// progress persisted between them. It cannot be solved by handing the remainder
+// to a client loop, because that is exactly the tab dependency being removed.
+//
+// Because scheduled functions discard the response, the return values below are
+// for manual invocation and local testing only. `console.error` is the real
+// failure channel, and ops_runs.ok is the durable record.
 //
 // It stays a LOUD NO-OP until SUPABASE_SERVICE_ROLE_KEY is set, and even then
 // the seeded control row has enabled=false, so this cannot start acting because
 // a deploy happened.
 // ═══════════════════════════════════════════════════════════════════════════
-import { adminClient, loadGuardState, attempt, startRun, finishRun, MODE, TIER } from './lib/ops-runtime.mjs';
+import { adminClient, loadGuardState, attempt, startRun, finishRun, registerSubsystem, MODE, TIER } from './lib/ops-runtime.mjs';
 
 const SUBSYSTEM = 'ops.heartbeat';
 
@@ -42,6 +52,14 @@ export const handler = async () => {
   }
 
   try {
+    // Register this subsystem's control row if it has none. The console said
+    // subsystems "register on their first scheduled pass" and nothing ever did,
+    // so ops_control held exactly one row — and a subsystem with no row was
+    // precisely the input that defeated the guard's fail-closed defaults.
+    // Registering with the table's own restrictive defaults (disabled, dry-run)
+    // means an operator has a row to see and to opt in deliberately.
+    await registerSubsystem(sb, SUBSYSTEM);
+
     runId = await startRun(sb, SUBSYSTEM, 'schedule', now);
     const state = await loadGuardState(sb, SUBSYSTEM, now);
 

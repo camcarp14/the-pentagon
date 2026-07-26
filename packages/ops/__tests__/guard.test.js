@@ -5,7 +5,11 @@ import { decide, usageInWindow, consecutiveFailures, TIER, MODE, BLOCK } from ".
 // prove that one is what stopped the action. Starting from defaults instead
 // would let a test pass for the wrong reason.
 const OPEN = { enabled: true, dryRun: false, maxActionsPerHour: 60, maxSpendUsdPerHour: 10, consecutiveFailureLimit: 3 };
-const ON = { enabled: true };
+// The global row must be OPEN too, not just enabled: caps are now the stricter
+// of global and subsystem, so a global row carrying only `enabled` would
+// silently impose the DEFAULT $1/60 ceiling and every subsystem-cap test would
+// be measuring the global default instead of what it claims to measure.
+const ON = { enabled: true, maxActionsPerHour: 10_000, maxSpendUsdPerHour: 10_000 };
 const ok = (over = {}) => decide({ tier: TIER.READ, global: ON, subsystem: OPEN, now: 1_000_000, ...over });
 
 describe("fail-closed defaults", () => {
@@ -20,6 +24,43 @@ describe("fail-closed defaults", () => {
   it("a subsystem that was never configured is disabled, not enabled", () => {
     const v = decide({ tier: TIER.READ, global: ON, subsystem: {}, now: 1 });
     expect(v.blockedBy).toBe(BLOCK.SUBSYSTEM_OFF);
+  });
+
+  // ── The exact shape the I/O layer produces for a MISSING row ──────────────
+  // This is not `{}`. netlify/functions/lib/ops-runtime.mjs `camel()` maps every
+  // column unconditionally, so an absent row becomes an object whose keys all
+  // exist and are `undefined`. Object spread COPIES those, destroying the
+  // defaults — so `{...DEFAULT, ...camel({})}` had enabled:undefined (which is
+  // not === false, so the block never fired) and dryRun:undefined (falsy, so
+  // dry-run never fired). A subsystem with no row executed live.
+  //
+  // The live database contains exactly one control row. Every other subsystem
+  // was this case.
+  const AS_MISSING_ROW = {
+    enabled: undefined, dryRun: undefined, maxActionsPerHour: undefined,
+    maxSpendUsdPerHour: undefined, consecutiveFailureLimit: undefined, pausedReason: undefined,
+  };
+
+  it("a MISSING subsystem row is refused, not executed", () => {
+    const v = decide({ tier: TIER.READ, global: ON, subsystem: AS_MISSING_ROW, now: 1 });
+    expect(v.mode).not.toBe(MODE.EXECUTE);
+    expect(v.blockedBy).toBe(BLOCK.SUBSYSTEM_OFF);
+  });
+
+  it("a missing row cannot execute at ANY tier, with or without an undo", () => {
+    for (const tier of [TIER.READ, TIER.REVERSIBLE, TIER.APPROVAL]) {
+      const v = decide({ tier, global: ON, subsystem: AS_MISSING_ROW, hasUndo: true, now: 1 });
+      expect(v.mode, `tier ${tier} executed on a missing row`).not.toBe(MODE.EXECUTE);
+    }
+  });
+
+  it("an explicitly-undefined field never overwrites a safe default", () => {
+    // dryRun undefined must stay dry-run, not become "not dry run".
+    const v = decide({
+      tier: TIER.READ, global: ON, now: 1,
+      subsystem: { enabled: true, dryRun: undefined },
+    });
+    expect(v.mode).toBe(MODE.DRY_RUN);
   });
 
   it("a configured subsystem still defaults to dry run", () => {
@@ -78,6 +119,24 @@ describe("kill switch", () => {
     expect(v.blockedBy).toBe(BLOCK.KILL_SWITCH);
   });
 
+  // The check was `=== false`, so ONLY a literal false halted. Every other
+  // falsy-or-drifted value armed autonomy.
+  it("only an explicit `true` arms it — anything else halts", () => {
+    for (const enabled of [undefined, null, 0, "", "false", "true", 1, NaN, {}]) {
+      const v = decide({ tier: TIER.READ, global: { enabled }, subsystem: OPEN, now: 1 });
+      expect(v.mode, `global.enabled=${JSON.stringify(enabled)} must not execute`).not.toBe(MODE.EXECUTE);
+      expect(v.blockedBy).toBe(BLOCK.KILL_SWITCH);
+    }
+    expect(decide({ tier: TIER.READ, global: { enabled: true }, subsystem: OPEN, now: 1 }).mode).toBe(MODE.EXECUTE);
+  });
+
+  it("the same rule protects the subsystem enable", () => {
+    for (const enabled of [undefined, null, 0, "", "false", 1]) {
+      const v = decide({ tier: TIER.READ, global: ON, subsystem: { ...OPEN, enabled }, now: 1 });
+      expect(v.mode, `subsystem.enabled=${JSON.stringify(enabled)} must not execute`).not.toBe(MODE.EXECUTE);
+    }
+  });
+
   it("does NOT outrank tier 3 — a refusal must name the deepest reason", () => {
     // With the switch off AND a tier-3 action, the honest answer is "never
     // automated", not "the switch is off" — otherwise flipping the switch on
@@ -118,6 +177,54 @@ describe("caps", () => {
       expect(v.allow, `cap ${String(bad)} must not permit a $10 spend`).toBe(false);
       expect(v.blockedBy).toBe(BLOCK.SPEND_CAP);
     }
+  });
+
+  // Only the CAP was coerced, never the counter. `NaN >= 60` is false, so a NaN
+  // action count walked straight past the rate limit.
+  it("a NaN or malformed COUNTER cannot slip past the cap either", () => {
+    // `undefined` is deliberately NOT in this list: it triggers the parameter
+    // default of 0, which is the correct reading of "no actions counted yet"
+    // for a fresh window. Everything else is malformed data and must fail closed.
+    for (const bad of [NaN, null, "lots", {}, Infinity]) {
+      const v = ok({ actionsThisHour: bad });
+      expect(v.mode, `actionsThisHour=${String(bad)} must not execute`).not.toBe(MODE.EXECUTE);
+      expect(v.blockedBy).toBe(BLOCK.RATE_CAP);
+    }
+    for (const bad of [NaN, null, "lots", {}]) {
+      const v = ok({ spendUsdThisHour: bad, costUsd: 0 });
+      expect(v.mode, `spendUsdThisHour=${String(bad)} must not execute`).not.toBe(MODE.EXECUTE);
+      expect(v.blockedBy).toBe(BLOCK.SPEND_CAP);
+    }
+  });
+
+  it("a negative cost cannot pull an over-cap total back under the ceiling", () => {
+    // The scenario that matters: the window is ALREADY over budget ($10.50
+    // against a $10 cap, which happens when one expensive action lands), and the
+    // next action claims a negative cost. Unclamped, 10.5 + (-5) = 5.5 reads as
+    // affordable and the run keeps spending past its own ceiling.
+    const v = ok({ spendUsdThisHour: 10.5, costUsd: -5 });
+    expect(v.mode).not.toBe(MODE.EXECUTE);
+    expect(v.blockedBy).toBe(BLOCK.SPEND_CAP);
+    // Sanity: with the cost clamped to 0 the total is still over, so this is
+    // the clamp doing the work rather than the raw sum happening to be over.
+    expect(ok({ spendUsdThisHour: 10.5, costUsd: 0 }).blockedBy).toBe(BLOCK.SPEND_CAP);
+  });
+
+  it("a NaN cost is treated as unaffordable, not as free", () => {
+    expect(ok({ costUsd: NaN }).blockedBy).toBe(BLOCK.SPEND_CAP);
+  });
+
+  // The global row carried caps that nothing ever read.
+  it("the GLOBAL cap is a real ceiling above the subsystem's", () => {
+    const tightGlobal = { enabled: true, maxSpendUsdPerHour: 1, maxActionsPerHour: 5 };
+    // Subsystem would happily allow this; global must not.
+    expect(decide({ tier: TIER.READ, global: tightGlobal, subsystem: OPEN, spendUsdThisHour: 0.9, costUsd: 0.5, now: 1 }).blockedBy)
+      .toBe(BLOCK.SPEND_CAP);
+    expect(decide({ tier: TIER.READ, global: tightGlobal, subsystem: OPEN, actionsThisHour: 5, now: 1 }).blockedBy)
+      .toBe(BLOCK.RATE_CAP);
+    // And the stricter of the two wins in the other direction too.
+    expect(decide({ tier: TIER.READ, global: { enabled: true, maxSpendUsdPerHour: 100 }, subsystem: { ...OPEN, maxSpendUsdPerHour: 1 }, spendUsdThisHour: 0.9, costUsd: 0.5, now: 1 }).blockedBy)
+      .toBe(BLOCK.SPEND_CAP);
   });
 
   it("accepts numeric strings, because Postgres numerics arrive as strings", () => {

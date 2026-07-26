@@ -72,6 +72,32 @@ const DEFAULT_CONTROL = Object.freeze({
 });
 
 /**
+ * Merge an override onto the defaults, IGNORING undefined and null.
+ *
+ * This exists because `{ ...DEFAULT_CONTROL, ...override }` does not do what it
+ * looks like it does: object spread copies own properties that are explicitly
+ * `undefined`, so `{...{enabled:false}, ...{enabled:undefined}}` is
+ * `{enabled: undefined}` — the default is destroyed, not preserved. The I/O
+ * layer maps every column unconditionally, so a subsystem with NO control row
+ * produced exactly that shape and defeated both fail-closed defaults at once:
+ * `enabled` stopped being `false` and `dryRun` stopped being `true`. A missing
+ * row meant full autonomy.
+ *
+ * Iterating the DEFAULT keys (rather than the override's) also means an
+ * unexpected key in the override — including an own `__proto__` — cannot enter
+ * the merged object at all.
+ */
+function merge(base, override) {
+  const out = { ...base };
+  if (!override || typeof override !== "object") return out;
+  for (const k of Object.keys(base)) {
+    const v = override[k];
+    if (v !== undefined && v !== null) out[k] = v;
+  }
+  return out;
+}
+
+/**
  * The one decision. Returns a verdict; never throws, never mutates its inputs.
  *
  * @param {object}  a
@@ -97,8 +123,14 @@ export function decide({
   hasUndo = false,
   now = 0,
 } = {}) {
-  const ctl = { ...DEFAULT_CONTROL, ...s };
-  const glo = { ...DEFAULT_CONTROL, ...g };
+  const ctl = merge(DEFAULT_CONTROL, s);
+  const glo = merge(DEFAULT_CONTROL, g);
+
+  // Caps are the STRICTER of global and subsystem. The global row used to hold
+  // caps that nothing read, so lowering the global ceiling changed nothing and
+  // any subsystem could set its own arbitrarily high with nothing above it.
+  const capActions = Math.min(num(glo.maxActionsPerHour, 60), num(ctl.maxActionsPerHour, 60));
+  const capSpend = Math.min(num(glo.maxSpendUsdPerHour, 1), num(ctl.maxSpendUsdPerHour, 1));
 
   // ── Order matters. The checks that can never be overridden come first, so a
   // blocked verdict always names the MOST fundamental reason rather than
@@ -112,10 +144,15 @@ export function decide({
   }
 
   // 2. Global kill switch. One toggle halts everything, immediately, no deploy.
-  if (glo.enabled === false) return block(BLOCK.KILL_SWITCH);
+  //    `!== true`, NOT `=== false`. Only an explicit true arms it; undefined,
+  //    null, 0, "" and even the string "false" all halt. The previous
+  //    `=== false` armed autonomy for every one of those, which turned any
+  //    row-shape drift — a renamed column, a narrowed select — into a silently
+  //    disabled kill switch.
+  if (glo.enabled !== true) return block(BLOCK.KILL_SWITCH);
 
-  // 3. Subsystem enable + explicit pause.
-  if (ctl.enabled === false) return block(BLOCK.SUBSYSTEM_OFF);
+  // 3. Subsystem enable + explicit pause. Same rule, same reason.
+  if (ctl.enabled !== true) return block(BLOCK.SUBSYSTEM_OFF);
   if (ctl.pausedReason) return block(`${BLOCK.PAUSED}: ${ctl.pausedReason}`);
 
   // 4. Circuit breaker. A subsystem failing repeatedly stops itself rather than
@@ -128,9 +165,16 @@ export function decide({
   //    cross the ceiling is refused, never half-taken. Tier 0 is subject to the
   //    spend cap too — drafting is autonomous but it is not free, and "be
   //    aggressive at tier 0" must not mean "spend without a ceiling".
-  if (actionsThisHour >= num(ctl.maxActionsPerHour, 60)) return block(BLOCK.RATE_CAP);
-  const projected = num(spendUsdThisHour, 0) + num(costUsd, 0);
-  if (projected > num(ctl.maxSpendUsdPerHour, 1)) return block(BLOCK.SPEND_CAP);
+  //
+  //    BOTH operands are coerced, not just the cap. Coercing only the cap left
+  //    the counter free to arrive as NaN, and `NaN >= 60` is false, so a NaN
+  //    action count sailed past the rate limit. A negative cost is clamped to 0
+  //    for the same reason in reverse: it could otherwise pull the projection
+  //    back under the ceiling and carry an action through.
+  if (num(actionsThisHour, Infinity) >= capActions) return block(BLOCK.RATE_CAP);
+  const cost = Math.max(0, num(costUsd, Infinity));
+  const projected = Math.max(0, num(spendUsdThisHour, Infinity)) + cost;
+  if (projected > capSpend) return block(BLOCK.SPEND_CAP);
 
   // 6. Tier 2 never executes here regardless of settings — it prepares an
   //    artifact and stops. Approval is a human action taken elsewhere, so there
@@ -149,7 +193,9 @@ export function decide({
 
   // 8. Dry run: allowed to run, forbidden to act. Every tier 1+ automation
   //    lives here for a period before it is trusted with the real thing.
-  if (ctl.dryRun) {
+  //    `!== false`, so only an explicit false leaves dry-run — anything missing
+  //    or malformed keeps the safe behaviour rather than losing it.
+  if (ctl.dryRun !== false) {
     return {
       mode: MODE.DRY_RUN, allow: true, blockedBy: null, notify: false,
       reason: "dry run — would have acted, changed nothing",
