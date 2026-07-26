@@ -13,6 +13,7 @@ import { useMemo, useState } from "react";
 import { appMeta, APPS } from "@cc/design";
 import { AnimatedNumber, EmptyState, useIsMobile } from "@cc/ui";
 import { auth } from "@cc/supabase";
+import Ops from "./Ops.jsx";
 
 // Which localStorage prefix each tool writes under (they run on one domain now).
 const LS = { zts: "zts_", clarify: "sm_", looper: "lp_" };
@@ -395,7 +396,9 @@ function Segment({ value, onChange, options }) {
   );
 }
 
-const TABS = [["overview", "Overview"], ["usage", "Usage"], ["minds", "Minds"], ["agents", "Agents"]];
+// Ops sits first after Overview: it is the containment console, and the one
+// tab whose contents you might need in a hurry.
+const TABS = [["overview", "Overview"], ["ops", "Ops"], ["usage", "Usage"], ["minds", "Minds"], ["agents", "Agents"]];
 
 export default function System({ onExit, onOpenTool }) {
   const [tab, setTab] = useState("overview");
@@ -416,6 +419,7 @@ export default function System({ onExit, onOpenTool }) {
           </div>
         </div>
         {tab === "overview" && <Overview isMobile={isMobile} />}
+        {tab === "ops" && <Ops isMobile={isMobile} />}
         {tab === "usage" && <Usage isMobile={isMobile} />}
         {tab === "minds" && <Minds onOpenTool={onOpenTool} isMobile={isMobile} />}
         {tab === "agents" && <Agents isMobile={isMobile} />}
