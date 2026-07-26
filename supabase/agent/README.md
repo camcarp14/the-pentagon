@@ -13,6 +13,40 @@ Two files live here:
 
 ---
 
+## This deployment
+
+The project exists and the schema is installed. Sections 1 and 3 below are the
+general instructions; this is what was actually done.
+
+| | |
+|---|---|
+| agent project | `business-agent` — ref `qufvlvtoffrgifdkpypg`, us-east-2, Postgres 17 |
+| API URL | `https://qufvlvtoffrgifdkpypg.supabase.co` |
+| Pentagon project (for contrast) | ref `nrzpinvyxxorxufadvyc` — **different project, which is the point** |
+| schema | applied as migration `agent_business_schema`; 9 tables, 11 policies, RLS on all 9 |
+| Netlify vars | `VITE_AGENT_SUPABASE_URL` + `VITE_AGENT_SUPABASE_ANON_KEY` set on the-pentagon, all contexts |
+
+Verified in the database itself immediately after applying, rather than assumed
+— `anon` has no USAGE on the schema at all, `authenticated` can update exactly
+`halted` / `goal` / `decision` and is refused on `autonomy_tier`,
+`heartbeat_at`, `veto_until` and every ledger, and `service_role` can still
+write (without which the agent would go quiet behind a healthy-looking empty
+feed). The config row ships `halted = true`.
+
+**The one step left is yours:** section 2 — create the single user and turn
+signups off. There are zero users in the project right now, so the tab will
+show its sign-in form and nothing else until you do. That is the correct
+behaviour, not a fault.
+
+The anon key is deliberately not reproduced here. It is public by design (RLS
+and column grants are what protect the data, not key secrecy) but this repo is
+public, and a key pasted into a README is a key nobody remembers to rotate.
+Read it from **Project Settings → API Keys**, or from
+`/.netlify/functions/env-check`, which reports its *classification* without
+ever emitting the key itself.
+
+---
+
 ## 0. Why the agent gets its OWN Supabase project
 
 The agent's database holds spend and strategy. The Pentagon's holds Clarify's
