@@ -74,6 +74,29 @@ export function disarmWrites({ reason = 'stopped from the console', at = null } 
 }
 
 /**
+ * Turn ONE subsystem on or off, leaving everything else alone.
+ *
+ * This was missing, and its absence was a design failure: the engine panels
+ * shipped with an Arm button and no off switch, so the only way to stop the
+ * writer was the global STOP — which also stops outbound, reply-watching, and
+ * manual sends. A one-way control is not a control.
+ *
+ * Turning one on does NOT touch the global row. If the master switch is off,
+ * enabling a subsystem correctly still runs nothing, and the panel says so —
+ * that is the guard working, not a bug to paper over here.
+ */
+export function subsystemWrites(key, on, { at = null } = {}) {
+  const stamp = at || new Date().toISOString();
+  if (!key || key === GLOBAL_KEY) throw new Error('subsystemWrites: pass a subsystem key, not the global row');
+  return [on
+    ? { key, enabled: true, dry_run: false, paused_reason: null, paused_at: null, updated_at: stamp }
+    // Off is enabled:false, NOT a pause. A pause is a deliberate emergency
+    // stop that also blocks manual sends; switching one engine off should not
+    // do that.
+    : { key, enabled: false, updated_at: stamp }];
+}
+
+/**
  * The system's honest state, in four values rather than two.
  *
  * `rehearsing` is the one that matters: it looks armed, it costs money, and it
