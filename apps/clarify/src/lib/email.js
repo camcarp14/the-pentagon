@@ -73,6 +73,22 @@ export function cleanReplyBody(text) {
 
 
 export async function sendEmail({ to, subject, body, replyToMessageId, threadId }) {
+  // ── Last line of defence, at the choke point ──────────────────────────────
+  // Some drafts hold the model's entire JSON response instead of an email
+  // body — two of the three on this account do, and ONE OF THEM WAS SENT that
+  // way to a real prospect. Every call site is supposed to pass cleaned text,
+  // but QueueView imported cleanSubject and NOT cleanBody, which is how the
+  // workaround silently half-applied itself.
+  //
+  // Cleaning here means no future call site can forget. Both helpers are
+  // idempotent — text that is already clean does not start with '{' and passes
+  // through untouched — so double-cleaning is free.
+  subject = cleanSubject(subject);
+  body = cleanBody(body);
+  if (!String(body || "").trim()) {
+    throw new Error("Refusing to send an empty body — the draft has no readable text.");
+  }
+
   // Safe mode (the default) reroutes every send to your own inbox.
   const live = sendMode.isLive();
   const actualTo = live ? to : SAFE_SEND_ADDRESS;
