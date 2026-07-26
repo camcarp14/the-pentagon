@@ -1,0 +1,8 @@
+{
+  "name": "@cc/ops",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./guard.js",
+  "exports": { ".": "./guard.js", "./guard.js": "./guard.js" }
+}

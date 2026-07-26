@@ -31,6 +31,24 @@
 [functions."watch-snapshot"]
   schedule = "*/30 * * * *"
 
+# Ops: the containment heartbeat — the first thing here that can work with no
+# browser tab open. Every 15 minutes it registers its subsystem, opens a run,
+# asks the guard, records the verdict, and closes the run. It takes no real
+# action; every autonomous subsystem gets built against this shape.
+#
+# Inert twice over: a loud 500 until SUPABASE_SERVICE_ROLE_KEY is set, and
+# ops_control ships every row disabled + dry-run, so deploying cannot switch
+# anything on.
+#
+# BUDGET IS 30 SECONDS, not 15 minutes. Netlify scheduled functions have a
+# 30-second limit and discard the response body; the 15-minute ceiling belongs
+# to HTTP-invoked background functions, which is a different mechanism. An
+# earlier version carried a -background suffix on that mistaken belief — the
+# suffix is gone rather than left as a misleading label. Real subsystems must
+# fit a pass inside 30s or persist progress and continue on the next one.
+[functions."ops-heartbeat"]
+  schedule = "*/15 * * * *"
+
 # Specific rewrites must resolve BEFORE the SPA catch-all.
 # Clarify tracked links / open pixel:
 [[redirects]]
