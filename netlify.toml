@@ -49,6 +49,18 @@
 [functions."ops-heartbeat"]
   schedule = "*/15 * * * *"
 
+# ZTS: the store-truth snapshot — the first subsystem that reads the outside
+# world. Every 6 hours is deliberate rather than frequent: the two things it
+# watches (can the storefront take an order, is a real order sitting unshipped)
+# move on the scale of hours, and a store doing this volume gains nothing from
+# a tighter loop while paying the API quota for it.
+#
+# Inert three times over: needs SUPABASE_SERVICE_ROLE_KEY, needs read_orders +
+# read_products scopes the current token does NOT have, and its ops_control row
+# ships disabled + dry-run.
+[functions."zts-ingest"]
+  schedule = "0 */6 * * *"
+
 # Specific rewrites must resolve BEFORE the SPA catch-all.
 # Clarify tracked links / open pixel:
 [[redirects]]
