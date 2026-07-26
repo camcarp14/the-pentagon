@@ -25,6 +25,7 @@ import { armWrites, armState } from "@cc/ops/arm.js";
 import { cadenceFor } from "@cc/ops/cadence.js";
 import { resolveDirection, ENGINE, DIRECTION_KEY, HARD_MAX } from "@cc/ops/direction.js";
 import { buildQueue, KIND, OUTREACH_DRAFT_STATUSES } from "@cc/ops/queue.js";
+import { inferOutbound, applyInference } from "@cc/ops/infer.js";
 
 const SUBSYSTEM = "clarify.outbound";
 const REPLIES = "clarify.replies";
@@ -62,6 +63,8 @@ export default function EnginePanel({ onNavigate }) {
   const [rows, setRows] = useState([]);
   const [replies, setReplies] = useState([]);
   const [undrafted, setUndrafted] = useState(0);
+  const [prospects, setProspects] = useState([]);
+  const [sentCopy, setSentCopy] = useState([]);
   const [err, setErr] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState("");
@@ -73,7 +76,7 @@ export default function EnginePanel({ onNavigate }) {
   const load = useCallback(async () => {
     if (!supabase) { setErr("Supabase isn't configured."); setLoaded(true); return; }
     try {
-      const [s, c, r, d, rep, und] = await Promise.all([
+      const [s, c, r, d, rep, und, pr, db] = await Promise.all([
         supabase.from("app_settings").select("value").eq("key", DIRECTION_KEY[ENGINE.OUTBOUND]).maybeSingle(),
         supabase.from("ops_control").select("*"),
         supabase.from("ops_runs").select("*").in("subsystem", [SUBSYSTEM, REPLIES]).order("started_at", { ascending: false }).limit(16),
@@ -82,6 +85,10 @@ export default function EnginePanel({ onNavigate }) {
         supabase.from("outreach").select("id, reply_from, reply_subject, reply_snippet, replied_at, prospects(business_name)")
           .eq("status", "replied").order("replied_at", { ascending: false }).limit(10),
         supabase.from("outreach").select("id", { count: "exact", head: true }).eq("status", "prospected").is("draft_subject", null),
+        // What inference reads. Categories and cities give the ICP; the copy
+        // already sent gives the offer. Neither needs a model or an API key.
+        supabase.from("prospects").select("id, category, city"),
+        supabase.from("outreach").select("draft_body").not("draft_body", "is", null).limit(10),
       ]);
       const e = [];
       if (s.error) e.push(`direction: ${s.error.message}`); else setDir(resolveDirection(ENGINE.OUTBOUND, s.data?.value).direction);
@@ -90,6 +97,8 @@ export default function EnginePanel({ onNavigate }) {
       if (d.error) e.push(`drafts: ${d.error.message}`); else setRows(d.data || []);
       if (rep.error) e.push(`replies: ${rep.error.message}`); else setReplies(rep.data || []);
       if (!und.error) setUndrafted(und.count || 0);
+      if (!pr.error) setProspects(pr.data || []);
+      if (!db.error) setSentCopy(db.data || []);
       setErr(e.join(" · "));
     } catch (ex) { setErr(String(ex.message || ex)); }
     finally { setLoaded(true); }
@@ -104,7 +113,19 @@ export default function EnginePanel({ onNavigate }) {
   const outboundRuns = useMemo(() => runs.filter((r) => r.subsystem === SUBSYSTEM), [runs]);
   const replyRuns = useMemo(() => runs.filter((r) => r.subsystem === REPLIES), [runs]);
 
-  const { ready, missing } = dir ? resolveDirection(ENGINE.OUTBOUND, dir) : { ready: false, missing: [] };
+  // Read the pipeline instead of asking about it. The operator's saved values
+  // always win; inference only fills blanks.
+  const proposal = useMemo(
+    () => inferOutbound({ prospects, drafts: sentCopy }),
+    [prospects, sentCopy],
+  );
+  const effective = useMemo(
+    () => resolveDirection(ENGINE.OUTBOUND, applyInference(dir, proposal.direction)).direction,
+    [dir, proposal],
+  );
+  const { ready, missing } = resolveDirection(ENGINE.OUTBOUND, effective);
+  // True when the engine is running on something it worked out itself.
+  const derived = ready && !resolveDirection(ENGINE.OUTBOUND, dir).ready;
 
   const flat = useMemo(() => rows.map((r) => ({
     ...r,
@@ -139,9 +160,19 @@ export default function EnginePanel({ onNavigate }) {
   };
 
   const arm = act("arm", async () => {
+    // If the engine is running on inference, persist it in the same action.
+    // Otherwise "Start" would arm against a direction that exists only in this
+    // browser tab, and the server-side engine would read an empty row.
+    if (derived) {
+      const { error: dErr } = await supabase.from("app_settings").upsert(
+        { key: DIRECTION_KEY[ENGINE.OUTBOUND], value: effective, updated_at: new Date().toISOString() },
+        { onConflict: "key" },
+      );
+      if (dErr) throw new Error(dErr.message);
+    }
     const { error } = await supabase.from("ops_control").upsert(armWrites(), { onConflict: "key" });
     if (error) throw new Error(error.message);
-    setNote("Armed. Drafting and reply-watching both start on their next pass.");
+    setNote("Running. Drafting and reply-watching both start on the next pass.");
   });
 
   const decide = (item, action) => act(item.id, async () => {
@@ -172,7 +203,7 @@ export default function EnginePanel({ onNavigate }) {
   });
 
   const openEditor = () => {
-    setForm({ ...(dir || {}), avoid: Array.isArray(dir?.avoid) ? dir.avoid.join("\n") : "" });
+    setForm({ ...(effective || {}), avoid: Array.isArray(effective?.avoid) ? effective.avoid.join("\n") : "" });
     setEditing(true);
   };
 
@@ -231,6 +262,31 @@ export default function EnginePanel({ onNavigate }) {
         <div style={{ fontSize: 19, fontWeight: 800, color: T.ink, lineHeight: 1.25 }}>{loaded ? phase.headline : "Reading state…"}</div>
         <div style={{ fontSize: 12.5, color: T.muted, marginTop: 4, lineHeight: 1.5 }}>{loaded ? phase.detail : ""}</div>
       </div>
+
+      {/* What it worked out on its own, with the evidence for each line. The
+          operator confirms a reading of their own data instead of filling in a
+          form the system could already answer. */}
+      {loaded && derived && (
+        <div style={{ border: `1px solid ${T.blue}55`, background: `${T.blue}0E`, borderRadius: 12, padding: "13px 15px", marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: T.blue, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 9 }}>
+            Read from your pipeline
+          </div>
+          {[["Contacting", effective.icp], ["Offering", effective.offer]].filter(([, v]) => v).map(([k, v]) => {
+            const why = proposal.evidence.find((e) => e.field === (k === "Contacting" ? "icp" : "offer"));
+            return (
+              <div key={k} style={{ marginBottom: 9 }}>
+                <div style={{ fontSize: 12.5, color: T.ink, lineHeight: 1.5 }}>
+                  <strong style={{ color: T.muted, fontWeight: 700 }}>{k}:</strong> {v}
+                </div>
+                {why && <div style={{ fontSize: 11, color: T.faint, marginTop: 2, lineHeight: 1.45 }}>{why.because}</div>}
+              </div>
+            );
+          })}
+          <div style={{ fontSize: 11, color: T.faint, lineHeight: 1.45 }}>
+            Nothing is saved until you start. Edit any line first if it's wrong.
+          </div>
+        </div>
+      )}
 
       {plays.map((p, i) => (
         <button key={p.id} onClick={() => onPlay(p.action)} disabled={!!busy || p.action === "none"}

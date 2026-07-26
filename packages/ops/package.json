@@ -13,6 +13,7 @@
     "./draft.js": "./draft.js",
     "./plays.js": "./plays.js",
     "./arm.js": "./arm.js",
-    "./cadence.js": "./cadence.js"
+    "./cadence.js": "./cadence.js",
+    "./infer.js": "./infer.js"
   }
 }
