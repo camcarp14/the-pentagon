@@ -188,19 +188,23 @@ function AppToggle({ active, onPick, compact }) {
               // buys the label instead, and the accent moves onto the text —
               // every tool stays identifiable without relying on colour alone.
               gap: compact ? 0 : 7,
-              // 3px inset, 9.5px, no tracking: five segments need every pixel.
-              // Measured at 430/393/375/360/320 with a fallback font WIDER than
-              // Syne — no label clips at 375px (the narrowest current iPhone) and
-              // up. 360px is 2-3px short in the fallback, which real Syne
-              // absorbs; 320px genuinely does not fit five words, so it
-              // ellipsises rather than overlapping (see the label span below).
-              padding: compact ? "0 3px" : "6px 14px",
+              // 1px inset, 9px, slightly negative tracking: SIX segments need
+              // every pixel, and the sixth cost the other five their headroom.
+              // Re-measured in Chromium at 430/393/390/375/360 after Business
+              // landed: at 3px/9.5px the labels needed 43-46px against 38-41px
+              // of segment and Clarify/Runway/Looper all ellipsised from 393px
+              // down. This recovers ~8px per segment. 360px and below still
+              // clips the longest labels — six words do not fit that width at a
+              // legible size, so they ellipsise rather than overlap (see the
+              // label span below), and Business carries a `short` form for
+              // exactly this reason.
+              padding: compact ? "0 1px" : "6px 14px",
               minHeight: compact ? 44 : 32,
               ...(compact ? { flex: "1 1 0", minWidth: 0, overflow: "hidden" } : {}),
               border: "none", borderRadius: compact ? 9 : 8, cursor: "pointer", background: "transparent",
               color: on ? (compact ? m.accent : "var(--ink)") : "var(--faint)",
-              fontFamily: "'Syne',system-ui", fontSize: compact ? 9.5 : 11.5, fontWeight: 700,
-              letterSpacing: compact ? "0em" : "0.06em", textTransform: "uppercase", whiteSpace: "nowrap",
+              fontFamily: "'Syne',system-ui", fontSize: compact ? 9 : 11.5, fontWeight: 700,
+              letterSpacing: compact ? "-0.01em" : "0.06em", textTransform: "uppercase", whiteSpace: "nowrap",
               transition: `color ${M.durBase} ${M.easeStd}`,
             }}>
             {!compact && (
