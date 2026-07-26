@@ -14,6 +14,7 @@ import { appMeta, APPS } from "@cc/design";
 import { AnimatedNumber, EmptyState, useIsMobile } from "@cc/ui";
 import { auth } from "@cc/supabase";
 import Ops from "./Ops.jsx";
+import Desk from "./Desk.jsx";
 
 // Which localStorage prefix each tool writes under (they run on one domain now).
 const LS = { zts: "zts_", clarify: "sm_", looper: "lp_" };
@@ -398,10 +399,13 @@ function Segment({ value, onChange, options }) {
 
 // Ops sits first after Overview: it is the containment console, and the one
 // tab whose contents you might need in a hurry.
-const TABS = [["overview", "Overview"], ["ops", "Ops"], ["usage", "Usage"], ["minds", "Minds"], ["agents", "Agents"]];
+const TABS = [["desk", "Desk"], ["overview", "Overview"], ["ops", "Ops"], ["usage", "Usage"], ["minds", "Minds"], ["agents", "Agents"]];
 
 export default function System({ onExit, onOpenTool }) {
-  const [tab, setTab] = useState("overview");
+  // Desk, not Overview. Overview describes the system; the Desk is the only
+  // tab that ever has something waiting on a human, and a queue you have to
+  // navigate to is a queue that gets missed.
+  const [tab, setTab] = useState("desk");
   const isMobile = useIsMobile();
   const btn = { background: "none", border: `1px solid ${P.line}`, color: P.muted, borderRadius: 8, padding: "6px 12px", fontSize: 11.5, cursor: "pointer", fontFamily: P.display, fontWeight: 600, whiteSpace: "nowrap" };
   return (
@@ -419,6 +423,7 @@ export default function System({ onExit, onOpenTool }) {
           </div>
         </div>
         {tab === "overview" && <Overview isMobile={isMobile} />}
+        {tab === "desk" && <Desk isMobile={isMobile} />}
         {tab === "ops" && <Ops isMobile={isMobile} />}
         {tab === "usage" && <Usage isMobile={isMobile} />}
         {tab === "minds" && <Minds onOpenTool={onOpenTool} isMobile={isMobile} />}

@@ -61,6 +61,20 @@
 [functions."zts-ingest"]
   schedule = "0 */6 * * *"
 
+# ZTS content engine: drafts ONE article per pass, into the Desk queue for
+# approval. Every 4 hours rather than once a day because volume comes from
+# frequency — a single pass has 30 seconds, which is one generation call, and
+# Direction's per-day cap decides how many of those passes actually do work.
+# Publishing is never automatic; it is tier 2 and needs a human tap.
+[functions."content-engine"]
+  schedule = "0 */4 * * *"
+
+# Clarify outbound engine: drafts ONE personalised message per pass. Offset to
+# :30 so it never contends with the content engine for the same 30-second
+# window. It cannot send — it has no Gmail credentials in scope.
+[functions."outbound-engine"]
+  schedule = "30 */2 * * *"
+
 # Specific rewrites must resolve BEFORE the SPA catch-all.
 # Clarify tracked links / open pixel:
 [[redirects]]

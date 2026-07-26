@@ -93,8 +93,19 @@ export default function Ops({ isMobile }) {
   const setGlobal = async (enabled) => {
     setBusy(true);
     try {
+      // STOP records an explicit pause, not just enabled=false. Those are two
+      // different states that looked identical before: a system that has never
+      // been armed, and one a human deliberately stopped. The Desk's approve
+      // path refuses while `paused_reason` is set — so STOP genuinely stops
+      // everything including a manual send — while leaving day-one manual
+      // approval working before autonomy is ever switched on.
       const { error } = await supabase.from("ops_control")
-        .update({ enabled, updated_at: new Date().toISOString() }).eq("key", "global");
+        .update({
+          enabled,
+          paused_reason: enabled ? null : "stopped from the Ops console",
+          paused_at: enabled ? null : new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }).eq("key", "global");
       if (error) throw new Error(error.message);
       await load();
     } catch (e) { setErr(`couldn't change the kill switch: ${e.message}`); }
