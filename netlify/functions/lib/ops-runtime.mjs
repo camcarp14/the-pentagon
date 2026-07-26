@@ -148,6 +148,37 @@ export async function attempt(sb, {
 }
 
 /**
+ * Record that a PERMITTED action then failed while doing its work.
+ *
+ * `attempt()` has to write its row before the work happens — it is the thing
+ * granting permission — so a read that is allowed and then 403s leaves a row
+ * saying 'executed'. That is a lie in the one table whose entire value is being
+ * trustworthy. This writes the correcting row.
+ *
+ * Deliberately NOT guarded: refusing to record a failure because a cap was hit
+ * would lose exactly the information the cap makes most likely. It costs
+ * nothing and cannot act on anything.
+ */
+export async function recordFailure(sb, {
+  subsystem, action, tier, error, runId = null, trigger = null, now = Date.now(),
+}) {
+  const safeTier = [0, 1, 2, 3].includes(tier) ? tier : 3;
+  const { error: insErr } = await sb.from('ops_audit_log').insert({
+    at: new Date(now).toISOString(),
+    subsystem, action, tier: safeTier,
+    status: 'failed',
+    trigger,
+    error: String(error && error.message ? error.message : error).slice(0, 2000),
+    cost_usd: 0,
+    run_id: runId,
+  });
+  // A failure while recording a failure is the end of the line — surface it on
+  // the console rather than throwing over the top of the original error, which
+  // would replace a real diagnosis with a bookkeeping one.
+  if (insErr) console.error('[ops] could not record failure:', insErr.message);
+}
+
+/**
  * Ensure a subsystem has a control row, using the TABLE's defaults (disabled,
  * dry-run). Insert-only: an existing row is never overwritten, so this can never
  * re-disable something an operator deliberately enabled, and never widen a cap
