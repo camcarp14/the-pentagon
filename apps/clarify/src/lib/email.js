@@ -85,7 +85,7 @@ export async function sendEmail({ to, subject, body, replyToMessageId, threadId 
   if (isDeployed) {
     const res = await fetch("/.netlify/functions/send-email", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...functionAuthHeaders() },
+      headers: { "Content-Type": "application/json", ...(await functionAuthHeaders()) },
       body: JSON.stringify({ to: actualTo, subject, body: safePrefix + body, replyToMessageId, ...(live && threadId ? { threadId } : {}) }),
     });
     const data = await res.json();
@@ -114,7 +114,7 @@ export async function checkForReplies(sentCards) {
   try {
     const res = await fetch("/.netlify/functions/check-replies", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...functionAuthHeaders() },
+      headers: { "Content-Type": "application/json", ...(await functionAuthHeaders()) },
       body: JSON.stringify({ sentThreadIds: threadIds }),
     });
     const data = await res.json();

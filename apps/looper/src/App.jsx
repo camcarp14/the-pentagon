@@ -22,6 +22,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 import { useCallback, useEffect, useRef, useState } from "react";
 import { auth } from "@cc/supabase";
+import { estimateCost } from "@cc/ai";
 
 /* ─── what it can be pointed at ─────────────────────────────────────────── */
 const TARGETS = [
@@ -33,13 +34,15 @@ const TARGETS = [
 ];
 
 /* ─── difficulty: the model/depth/pace dial ──────────────────────────────────
-   The ONE place model ids live. Prices are $ per 1M tokens and are estimates
-   used only to enforce the cap — they are labelled as estimates in the UI. */
+   Prices are NOT repeated here. They used to be (inP/outP per tier), which made
+   Looper the only module that knew claude-opus-5's real rate — every other cost
+   table in the app would have priced a Max run at Haiku's, off by 15x. The tier
+   picks a model; @cc/ai prices it. */
 const DIFFICULTY = {
-  draft: { label: "Draft", note: "fast + cheap", model: "claude-haiku-4-5-20251001", maxTokens: 1200, cadence: 45, inP: 1, outP: 5 },
-  standard: { label: "Standard", note: "balanced", model: "claude-haiku-4-5-20251001", maxTokens: 2500, cadence: 60, inP: 1, outP: 5 },
-  deep: { label: "Deep", note: "slower, better", model: "claude-sonnet-4-6", maxTokens: 4000, cadence: 90, inP: 3, outP: 15 },
-  max: { label: "Max", note: "most capable", model: "claude-opus-5", maxTokens: 6000, cadence: 120, inP: 15, outP: 75 },
+  draft: { label: "Draft", note: "fast + cheap", model: "claude-haiku-4-5-20251001", maxTokens: 1200, cadence: 45 },
+  standard: { label: "Standard", note: "balanced", model: "claude-haiku-4-5-20251001", maxTokens: 2500, cadence: 60 },
+  deep: { label: "Deep", note: "slower, better", model: "claude-sonnet-4-6", maxTokens: 4000, cadence: 90 },
+  max: { label: "Max", note: "most capable", model: "claude-opus-5", maxTokens: 6000, cadence: 120 },
 };
 
 /* ─── interrupt policy: when it is allowed to stop and wait for you ──────────
@@ -189,7 +192,7 @@ function useLooper() {
       if (!turn) throw new Error("could not parse the model's JSON");
 
       const inTok = usage?.input_tokens ?? 0, outTok = usage?.output_tokens ?? 0;
-      const cost = (inTok / 1e6) * cfg.inP + (outTok / 1e6) * cfg.outP;
+      const cost = estimateCost(cfg.model, inTok, outTok);
 
       // Mirror into the shared usage log the System hub reads. Key names are
       // that reader's contract (inputTokens/outputTokens/costEstimate/latencyMs),

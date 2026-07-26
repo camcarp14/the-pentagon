@@ -3,6 +3,10 @@ dist
 dist.zip
 .env
 .env.*
+# ...but the template is the point of having one. Without this negation the
+# `.env.*` line above silently swallowed .env.example — `git add -A` reported
+# success and the file was never committed.
+!.env.example
 
 # factory — footage/renders are huge and per-machine; the tool itself is tracked
 factory/projects/*

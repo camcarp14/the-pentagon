@@ -5,7 +5,7 @@ import { LeadJourney } from "../../components/LeadJourney.jsx";
 import { cleanBody, cleanReplyBody, cleanSubject, sendEmail, timeAgo } from "../../lib/email.js";
 import { budgetMidpoint, createCardFromInbound, draftInboundReply, inboundBiz, inboundBudget, inboundMessage, inboundPerson, inboundService } from "../../lib/leads.js";
 import { sm } from "../../lib/store.js";
-import { db, normEmail, sbAuth, sbFetch } from "../../lib/supabase.js";
+import { db, normEmail, sbAuth, sbFetch, currentAccessToken } from "../../lib/supabase.js";
 
 // ─── Inbound — native view. One lens over inbound_leads + their pipeline cards. ─
 // The old separate InboundLeads.jsx is replaced: same table, same statuses, but the
@@ -135,7 +135,7 @@ export function InboundView({ cards, onNavigate, onCardsChange, toneMemory }) {
   const convertToClient = async (l) => {
     setBusy("client"); setNote("");
     try {
-      const token = localStorage.getItem("clarify_token");
+      const token = await currentAccessToken();
       const user = token ? await sbAuth.getUser(token) : null;
       if (!user?.id) throw new Error("Couldn't confirm your account — refresh and retry.");
       const [row] = await sbFetch(`/clients`, {

@@ -7,7 +7,8 @@
     ".": "./src/Root.jsx"
   },
   "dependencies": {
-    "@cc/supabase": "*"
+    "@cc/supabase": "*",
+    "@cc/ai": "*"
   },
   "peerDependencies": {
     "react": "^18.2.0"
