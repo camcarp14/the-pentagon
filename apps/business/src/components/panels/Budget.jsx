@@ -77,7 +77,12 @@ export default function Budget({ now }) {
       emptyDetail={
         capsEmpty
           ? "The budget table is reachable and holds no rows. With no cap there is nothing for spend to be measured against — every dollar this period is unbounded, and no overspend can ever be detected here."
-          : `The spend ledger is reachable and genuinely holds nothing${spend.state.fetchAgeMs !== null ? ` — checked ${shortAge(spend.state.fetchAgeMs)} ago` : ""}. Caps are set and intact; no charge has been recorded against them.`
+          // Was "genuinely holds nothing", which is more than the wire can
+          // support: PostgREST answers an RLS denial with `200 []`, exactly as
+          // it answers a quiet month. "Returned no rows" is the whole of what
+          // is known, and the second sentence names the other reading rather
+          // than letting the reassuring one stand alone.
+          : `The spend ledger returned no rows${spend.state.fetchAgeMs !== null ? ` — read ${shortAge(spend.state.fetchAgeMs)} ago` : ""}. Caps are set and intact. Either nothing has been charged this period, or this read is being refused and answering empty; the two are indistinguishable from here, so treat a persistent $0 against a working agent as the second.`
       }
       // Panel renders `right` in every state, including the error chrome — so
       // this figure is gated on the calm one. A verdict badge surviving into an

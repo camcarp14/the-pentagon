@@ -22,6 +22,7 @@ import { AgentDataProvider, useNow, useSource, LoaderFault } from "./lib/AgentDa
 import { useConfirmedConfig, StatusAndHalt } from "./components/HaltControl.jsx";
 import GoalEditor from "./components/GoalEditor.jsx";
 import { Boundary, Btn, Row, TONE } from "./components/primitives.jsx";
+import { PANEL } from "./lib/freshness.js";
 import { partitionApprovals, readLastVisit, writeLastVisit } from "./lib/approvals.js";
 import { budgetSummary } from "./lib/budget.js";
 import { countdown, usd } from "./lib/format.js";
@@ -47,25 +48,10 @@ export default function App() {
   // visit" comparison on this render depends on the old value surviving the
   // whole session.
   const [lastVisitAt] = useState(() => readLastVisit());
-  const marked = useRef(false);
-
-  useEffect(() => {
-    // Stamping the visit on mount would mean a glance at a notification, with
-    // the phone locking two seconds later, counts as having reviewed what the
-    // agent did — and the auto-proceeded callout would never be seen again.
-    // Eight seconds of visible dwell is a low bar that a real look clears and
-    // an accidental open does not.
-    const t = setTimeout(() => {
-      if (!marked.current && document.visibilityState === "visible") {
-        marked.current = true;
-        writeLastVisit(Date.now());
-      }
-    }, DWELL_BEFORE_VISIT_COUNTS_MS);
-    return () => clearTimeout(t);
-  }, []);
 
   return (
     <AgentDataProvider>
+      <VisitStamp />
       <div style={{
         maxWidth: 760, margin: "0 auto",
         padding: "12px 12px calc(28px + var(--safe-bottom, 0px))",
@@ -107,6 +93,43 @@ export default function App() {
   );
 }
 
+/**
+ * Records "you have now seen what the agent did", which is what every
+ * auto-proceeded callout is measured against.
+ *
+ * Time alone is not the condition, and treating it as the condition was a bug
+ * with a clean reproduction: open the tab while the database is down, stare at
+ * the error screen for eight seconds, close it. The approvals panel never drew
+ * a single row — Panel withholds children in the ERROR state when there are no
+ * rows to show — yet the visit was stamped anyway. On the next visit, with the
+ * database healthy, `veto_until >= lastVisit` filtered the lapsed approval out
+ * of the callout and into a grey collapsed "Show 1 earlier auto-proceeded".
+ * The agent acted without you and the tab quietly agreed you had reviewed it.
+ *
+ * So the stamp now requires evidence that the queue was actually READABLE:
+ * a successful read (not loading, not error) plus the dwell. If the approvals
+ * source never came back, the visit does not count, and the callout is still
+ * waiting next time — which is the direction this has to fail in.
+ */
+function VisitStamp() {
+  const approvals = useSource("approvals");
+  const marked = useRef(false);
+  const readable = approvals.state.state !== PANEL.LOADING && approvals.state.state !== PANEL.ERROR;
+
+  useEffect(() => {
+    if (marked.current || !readable) return;
+    const t = setTimeout(() => {
+      if (!marked.current && document.visibilityState === "visible") {
+        marked.current = true;
+        writeLastVisit(Date.now());
+      }
+    }, DWELL_BEFORE_VISIT_COUNTS_MS);
+    return () => clearTimeout(t);
+  }, [readable]);
+
+  return null;
+}
+
 // ─── the two tiles that complete B6 ──────────────────────────────────────────
 function FoldTiles({ now, lastVisitAt }) {
   const approvals = useSource("approvals", now);
@@ -119,9 +142,25 @@ function FoldTiles({ now, lastVisitAt }) {
   // Both tiles must be able to say "I don't know" — a tile that renders 0
   // pending during an outage is the exact failure this tab exists to prevent,
   // and it is most dangerous here, above the fold, where it is most trusted.
-  const approvalsBroken = approvals.state.state === "error" || approvals.state.state === "loading";
-  const budgetBroken = caps.state.state === "error" || spend.state.state === "error"
-    || caps.state.state === "loading" || spend.state.state === "loading";
+  //
+  // STALE counts as not-knowing, not just ERROR. Sources poll at different
+  // cadences (config 20s, spend 60s, budget 120s), so during an outage the
+  // fast ones report it while the slow ones are still holding a successful
+  // read from a minute ago. That is honest for a minute — but once a source
+  // crosses into "not refreshing" it has stopped being evidence, and a green
+  // "on pace" underwritten by a frozen ledger is precisely the confident wrong
+  // answer B3 is about.
+  const cannotVouch = (st) => st === PANEL.ERROR || st === PANEL.LOADING || st === PANEL.STALE;
+  // The note has to name WHICH kind of not-knowing this is — "can't reach the
+  // database" over a frozen-but-reachable poller sends the operator after the
+  // wrong fault.
+  const vouchNote = (...states) => {
+    if (states.some((st) => st === PANEL.LOADING)) return "loading…";
+    if (states.some((st) => st === PANEL.ERROR)) return "can't reach the database";
+    return "not refreshing — this is not current";
+  };
+  const approvalsBroken = cannotVouch(approvals.state.state);
+  const budgetBroken = cannotVouch(caps.state.state) || cannotVouch(spend.state.state);
 
   const next = p.urgent[0];
   const c = next ? countdown(next.msRemaining) : null;
@@ -131,8 +170,19 @@ function FoldTiles({ now, lastVisitAt }) {
     : p.counts.urgent > 0 ? "stale"
     : p.counts.pending > 0 ? "accent" : "empty";
 
+  // A ledger that returned NO ROWS cannot support a pace verdict, and the
+  // green "on pace" it used to produce was the calm zero this whole tab exists
+  // to prevent — sitting above the fold, where it is trusted most. PostgREST
+  // answers an RLS denial with `200 []`, identical to a genuinely quiet month,
+  // and no client can tell them apart. halt.js refuses to read `200 []` as
+  // success on the write path; the read path has to be just as sceptical.
+  //
+  // It is NOT an error either — the 1st of a month legitimately has no spend.
+  // So it reports the truth it has: zero recorded, and no verdict.
+  const spendEmpty = spend.state.state === PANEL.EMPTY;
   const budgetTone = budgetBroken ? "error"
     : !b.ok ? "error"
+    : spendEmpty ? "empty"
     : b.total.breached ? "error"
     : b.total.onPace === false ? "stale"
     : "fresh";
@@ -143,7 +193,7 @@ function FoldTiles({ now, lastVisitAt }) {
         label="Approvals"
         tone={approvalsTone}
         broken={approvalsBroken}
-        brokenNote={approvals.state.state === "loading" ? "loading…" : "can't reach the database"}
+        brokenNote={vouchNote(approvals.state.state)}
         value={p.counts.pending}
         caption={
           // Both facts, when both are true. B2 requires that a lapsed approval
@@ -175,10 +225,11 @@ function FoldTiles({ now, lastVisitAt }) {
         label="Budget"
         tone={budgetTone}
         broken={budgetBroken}
-        brokenNote={caps.state.state === "loading" || spend.state.state === "loading" ? "loading…" : "can't reach the database"}
+        brokenNote={vouchNote(caps.state.state, spend.state.state)}
         value={b.ok ? usd(b.total.spentUsd) : "—"}
         caption={
           !b.ok ? "no caps configured"
+            : spendEmpty ? `no spend recorded · no pace to judge · ${b.daysRemaining}d left`
             : !b.projectable ? `too early to project · ${b.daysRemaining}d left`
             : b.total.onPace ? `on pace · ${usd(b.total.projectedUsd)} of ${usd(b.total.capUsd)}`
             : `over by ${usd(b.total.overBy)} · ${b.daysRemaining}d left`

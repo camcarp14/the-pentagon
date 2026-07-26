@@ -5,9 +5,12 @@
 --   repo"; there was no such file, and no table in this list appeared anywhere
 --   in the tree. This is a faithful reconstruction from what the AI Business
 --   tab has to render, not a copy of the live agent project. If the real
---   project differs, DO NOT chase the difference through the components —
---   every column name the UI reads lives in exactly one file,
---   `apps/business/src/lib/tables.js`. Change it there.
+--   project differs: table names, orderings, limits and freshness windows all
+--   live in `apps/business/src/lib/tables.js` and can be changed there. COLUMN
+--   names cannot — there are ~51 hard-coded references spread across 14 files
+--   in `apps/business/src`, so a rename means a grep. This comment used to
+--   promise the single-file version; it was wrong, and acting on it would have
+--   shipped a half-finished rename.
 --
 -- This runs against the AGENT's Supabase project, which is deliberately NOT
 -- the Pentagon's. The isolation is the point: a compromise of the agent

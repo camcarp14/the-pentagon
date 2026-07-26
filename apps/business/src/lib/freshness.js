@@ -37,6 +37,24 @@ export const PANEL = {
 export const MAX_AGE_MIN = 45;
 
 /**
+ * How long a panel may go without COMPLETING a round trip before it is called
+ * out — and deliberately NOT the same number as the data window.
+ *
+ * These were one number, and sharing them was a hole. A source may reasonably
+ * declare a wide data window (budget caps are written once a month, so judging
+ * them at 45 minutes would paint a correctly-configured budget stale every
+ * day), but a wide data window must never buy a wide SILENCE window: tying the
+ * two together meant the approvals panel would sit calm through 23 hours of a
+ * poller that had stopped completing requests, and the budget panel through 45
+ * days of it. That is what let a hung database hide behind green chrome.
+ *
+ * Poll intervals in this tab run 20s-120s, so five minutes is many missed ticks
+ * — long enough not to flap on one slow request, short enough that "this panel
+ * is not updating" is said while it still matters.
+ */
+export const MAX_FETCH_AGE_MIN = 5;
+
+/**
  * Resolve one panel's state.
  *
  * @param {object}   o
@@ -58,11 +76,14 @@ export function panelState({
   newestAtMs = null,
   fetchedAtMs = null,
   error = null,
+  errorKind = null,
   maxAgeMin = MAX_AGE_MIN,
+  maxFetchAgeMin = MAX_FETCH_AGE_MIN,
   expectsRows = true,
   now = Date.now(),
 } = {}) {
   const maxAgeMs = Math.max(0, maxAgeMin) * 60_000;
+  const maxFetchAgeMs = Math.max(0, maxFetchAgeMin) * 60_000;
   const dataAgeMs = Number.isFinite(newestAtMs) ? Math.max(0, now - newestAtMs) : null;
   const fetchAgeMs = Number.isFinite(fetchedAtMs) ? Math.max(0, now - fetchedAtMs) : null;
 
@@ -79,11 +100,21 @@ export function panelState({
   // data during an outage is exactly the situation that produces a confident
   // wrong answer, so the panel alarms and labels what it is showing as stale.
   if (status === "error") {
+    // The headline has to name the RIGHT failure. "Can't reach the agent
+    // database" over a rejected session sends someone to check a database that
+    // is answering perfectly, and over a permission error it hides the fact
+    // that the grant is wrong.
+    const headline = {
+      auth: "Your session was rejected",
+      timeout: "The agent database is not answering",
+      denied: "The database refused this read",
+    }[errorKind] || "Can't reach the agent database";
     return {
       ...base,
       state: PANEL.ERROR,
       alarm: true,
-      headline: "Can't reach the agent database",
+      errorKind,
+      headline,
       detail: fetchAgeMs === null
         ? "No successful connection this session."
         : `Last successful read ${fmtAge(fetchAgeMs)} ago. Anything below is from then, not now.`,
@@ -93,13 +124,13 @@ export function panelState({
   // A poller that stopped ticking (a throw in the loader, a backgrounded tab
   // that never resumed) leaves data that LOOKS live. If we haven't managed a
   // round trip inside the staleness window, say so — regardless of row age.
-  if (fetchAgeMs !== null && fetchAgeMs > maxAgeMs) {
+  if (fetchAgeMs !== null && fetchAgeMs > maxFetchAgeMs) {
     return {
       ...base,
       state: PANEL.STALE,
       alarm: true,
       headline: "Not refreshing",
-      detail: `Last successful read ${fmtAge(fetchAgeMs)} ago — longer than the ${maxAgeMin}-minute window. This panel is not updating.`,
+      detail: `Last successful read ${fmtAge(fetchAgeMs)} ago, against a poll cadence measured in seconds. This panel is not updating — what it shows is from then, not now.`,
     };
   }
 

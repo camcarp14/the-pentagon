@@ -12,10 +12,14 @@
 //   1. env    — if the key in the anon slot is a SECRET key, refuse to build a
 //               client at all. A degraded client here works perfectly, which is
 //               the failure that looks like success.
-//   2. auth   — no session, no tree. The data provider lives inside <App/> and
-//               therefore cannot even be constructed, let alone issue a query,
-//               before a session exists. That is what makes "zero business data
-//               in the network tab" a structural property and not a promise.
+//   2. auth   — no SERVER-VALIDATED session, no tree. The data provider lives
+//               inside <App/>, so it cannot be constructed — let alone issue a
+//               query — until `session` holds a token the agent project itself
+//               has just vouched for. Note the word validated: an earlier
+//               version of this file gated on a session and got the property
+//               wrong anyway, because supabase-js hands you the stored session
+//               synchronously and that was enough to mount the tree. Structure
+//               is only a guarantee where the structure is actually load-bearing.
 //
 // The agent has its OWN Supabase project, so this is a SECOND sign-in — the
 // Pentagon's shared login cannot vouch for a different project's users. That
@@ -49,21 +53,40 @@ export default function BusinessRoot() {
     if (!agentSb) { setSession(null); return; }
     let alive = true;
 
-    (async () => {
-      const s = await agentAuth.getSession();
+    // EVERY path to a mounted <App/> goes through here, and none of them may
+    // take localStorage's word for it.
+    //
+    // The bug this replaces: the validating read lived in its own async IIFE
+    // while onAuthStateChange was subscribed separately — and supabase-js
+    // fires INITIAL_SESSION with the STORED session the moment you subscribe.
+    // So a revoked token mounted the whole tab, fired ten authenticated
+    // queries at the agent project, and painted the halt button, both tiles
+    // and every panel title, and only then did getUser() come back 401 and
+    // close the gate. Measured: 10 REST requests and a full structural paint
+    // before the session was known to be bad.
+    //
+    // getSession() answers from localStorage. A token the server has since
+    // rejected — revoked, or signed by a project that rotated its secret —
+    // still reads as perfectly valid there. getUser() is the round trip that
+    // makes the failure closed rather than cosmetic, so it now gates the
+    // subscription too, not just the first read.
+    let validating = null;
+    const adopt = async (s) => {
       if (!alive) return;
-      if (!s) { setSession(null); return; }
-      // getSession() answers from localStorage. A token that the server has
-      // since rejected — revoked, or signed by a project that has rotated its
-      // secret — still reads as a valid-looking session here. getUser() is the
-      // round trip that makes the failure closed rather than cosmetic.
+      if (!s?.access_token) { primeHaltToken(null); setSession(null); return; }
+      // A refresh re-delivers the same token; revalidating it on every tick
+      // would be a round trip per refresh for no new information.
+      if (validating === s.access_token) return;
+      validating = s.access_token;
       const { data, error } = await agentSb.auth.getUser();
-      if (!alive) return;
+      if (!alive || validating !== s.access_token) return;
+      validating = null;
       if (error || !data?.user) { primeHaltToken(null); setSession(null); return; }
       setSession(s);
-    })();
+    };
 
-    const off = agentAuth.onChange((s) => { if (alive) setSession(s); });
+    agentAuth.getSession().then(adopt);
+    const off = agentAuth.onChange(adopt);
     return () => { alive = false; off(); };
   }, []);
 

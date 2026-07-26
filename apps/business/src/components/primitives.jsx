@@ -347,10 +347,3 @@ export function ScrollList({ maxHeight = 340, children }) {
   const ref = useRef(null);
   return <div ref={ref} className="biz-scroll" style={{ maxHeight, overflowY: "auto", margin: "0 -4px", padding: "0 4px" }}>{children}</div>;
 }
-
-/** Reveal a list with a small stagger, once, on first paint. */
-export function useStagger(count) {
-  const [shown, setShown] = useState(false);
-  useEffect(() => { const t = setTimeout(() => setShown(true), 10); return () => clearTimeout(t); }, [count]);
-  return shown;
-}

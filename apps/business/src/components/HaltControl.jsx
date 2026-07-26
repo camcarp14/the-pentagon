@@ -36,7 +36,9 @@ export function useConfirmedConfig() {
     if (r.ok) setState({ status: "ok", row: r.row, error: null, atMs: r.at });
     // Keep the last confirmed row so the UI can say "this is what it was, and
     // we can't see it now" instead of blanking to an ambiguous nothing.
-    else setState((s) => ({ status: "error", row: s.row, error: r.message, atMs: s.atMs }));
+    // `code` is carried, not flattened into the message, because whether the
+    // halt path is still usable depends entirely on WHICH failure this was.
+    else setState((s) => ({ status: "error", row: s.row, error: r.message, code: r.code || null, atMs: s.atMs }));
   }, []);
 
   useEffect(() => {
@@ -60,12 +62,24 @@ export function useConfirmedConfig() {
   return { ...state, reload: load, apply };
 }
 
-/** running · halted · running-but-silent · unknown. */
+/** loading · running · halted · running-but-silent · unknown. */
 export function deriveStatus(cfg, now = Date.now()) {
+  // LOADING FIRST, and it has to be its own branch. Without it the function
+  // fell through to "UNKNOWN — No config row." during the very first read, so
+  // for as long as the request took, the most important widget on the page
+  // stated a finding it had not made. Over a slow link that is several seconds
+  // of the status bar claiming the agent has no control row at all. A skeleton
+  // and a verdict are exactly the two things B3 says must never be confused.
+  if (cfg.status === "loading" && !cfg.row) {
+    return { key: "loading", label: "CHECKING…", tone: "loading", detail: null };
+  }
   if (cfg.status === "error" && !cfg.row) {
     return { key: "unknown", label: "UNKNOWN", tone: "error", detail: cfg.error || "Can't reach the agent database." };
   }
   const row = cfg.row;
+  // Reached only on a SUCCESSFUL read that returned no row — readConfirmedConfig
+  // reports that as its own `no_row` failure, so this really does mean the
+  // table answered and the singleton is missing.
   if (!row) return { key: "unknown", label: "UNKNOWN", tone: "error", detail: "No config row." };
 
   const beat = row.heartbeat_at ? Date.parse(row.heartbeat_at) : NaN;
@@ -186,8 +200,19 @@ export function StatusAndHalt({ cfg, now }) {
       {cfg.status === "error" && (
         <AlarmBlock
           tone="error"
-          headline="Can't confirm the agent's state"
-          detail={`${cfg.error} — the status above is the last confirmed reading${cfg.atMs ? `, from ${shortAge(now - cfg.atMs)} ago` : ""}, not a live one. The HALT button still works over its own connection; try it and read the result.`}
+          headline={cfg.code === "no_session" || cfg.code === "denied" ? "Your session was rejected" : "Can't confirm the agent's state"}
+          detail={`${cfg.error} — the status above is the last confirmed reading${cfg.atMs ? `, from ${shortAge(now - cfg.atMs)} ago` : ""}, not a live one. ${
+            // This used to promise unconditionally that "the HALT button still
+            // works over its own connection". Under an auth failure that is a
+            // lie of the worst possible kind: the halt path carries the SAME
+            // bearer token and 401s identically, so the one instruction the
+            // operator is given in an emergency would waste the emergency.
+            // Halt's independence is from the shared LOADER, never from the
+            // session.
+            cfg.code === "no_session" || cfg.code === "denied"
+              ? "HALT cannot work either — it carries the same token. Sign in again first."
+              : "HALT reaches the database over its own connection and may still work; try it and read the result."
+          }`}
           action={<Btn size="sm" tone="danger" onClick={cfg.reload}>Retry</Btn>}
         />
       )}

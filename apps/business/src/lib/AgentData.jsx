@@ -20,7 +20,38 @@ import { newestAt } from "./format.js";
 
 const Ctx = createContext(null);
 
-const blank = () => ({ status: "idle", rows: [], error: null, fetchedAtMs: null, newestAtMs: null });
+/** Matches halt.js. A read that has not answered in 8s has failed, not "is slow". */
+export const READ_TIMEOUT_MS = 8000;
+
+const blank = () => ({ status: "idle", rows: [], error: null, errorKind: null, fetchedAtMs: null, newestAtMs: null });
+
+/**
+ * Why a read failed decides what the operator should DO, so the three cases
+ * cannot share a sentence. Reporting a rejected session as "can't reach the
+ * agent database" sends someone to check a database that is answering fine —
+ * and the tab used to compound it by adding "the HALT button still works over
+ * its own connection", which is false when the token is the problem: the halt
+ * path carries the same token and 401s identically.
+ */
+export function classifyError(err) {
+  const status = err?.status ?? err?.originalError?.status;
+  const code = err?.code || "";
+  const msg = String(err?.message || err || "");
+  if (err?.name === "AbortError" || /abort/i.test(msg)) return "timeout";
+  if (status === 401 || status === 403 || code === "PGRST301" || /jwt|token|not authenticated|invalid claim/i.test(msg)) return "auth";
+  if (code === "42501" || /permission denied/i.test(msg)) return "denied";
+  if (/failed to fetch|networkerror|load failed/i.test(msg)) return "network";
+  return "db";
+}
+
+export function describeError(err) {
+  const kind = classifyError(err);
+  const msg = err?.message || String(err);
+  if (kind === "timeout") return `The agent database did not answer within ${READ_TIMEOUT_MS / 1000}s.`;
+  if (kind === "auth") return `The agent project rejected this session (${msg}). Sign in again.`;
+  if (kind === "denied") return `The database refused this read (${msg}).`;
+  return msg;
+}
 
 const initialState = () => {
   const s = {};
@@ -72,6 +103,23 @@ export function AgentDataProvider({ children }) {
 
     setSources((s) => ({ ...s, [key]: { ...s[key], status: s[key].fetchedAtMs ? s[key].status : "loading" } }));
 
+    // A read with no deadline is the worst outage this tab can have, and it is
+    // the one it used to ship with. A database that accepts the connection and
+    // never answers — the ordinary hung backend, not a refused connection —
+    // leaves the promise pending forever. `inflight` then latches true for that
+    // source for the life of the page, so every later poll tick returns at the
+    // guard and no request is ever attempted again. Measured before this fix:
+    // 5 requests total across 45 seconds, 6 of 9 sources never firing once, and
+    // every panel sitting behind a calm green freshness chip over its last-good
+    // rows. On a cold load the same hang left all ten panels in the LOADING
+    // skeleton indefinitely — B3 says an outage must be unmistakable from a
+    // skeleton, and it WAS the skeleton.
+    //
+    // halt.js has had an 8s AbortController since it was written. This is the
+    // same discipline, arriving late, on the path that needed it just as much.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), READ_TIMEOUT_MS);
+
     try {
       if (!agentSb) throw new Error("The agent project is not configured.");
       // ?fault=db — B3's check, from the browser, with no rebuild.
@@ -81,7 +129,7 @@ export function AgentDataProvider({ children }) {
       if (spec.order) q = q.order(spec.order.column, { ascending: !!spec.order.ascending, nullsFirst: false });
       if (spec.limit) q = q.limit(spec.limit);
 
-      const { data, error } = await q;
+      const { data, error } = await q.abortSignal(ctrl.signal);
       if (error) throw error;
       if (!mounted.current) return;
 
@@ -116,10 +164,14 @@ export function AgentDataProvider({ children }) {
           status: "error",
           // Rows are deliberately KEPT. See the header: an outage that empties
           // the screen looks like an agent with nothing to do.
-          error: err?.message || String(err),
+          error: describeError(err),
+          errorKind: classifyError(err),
         },
       }));
     } finally {
+      clearTimeout(timer);
+      // Must run on EVERY exit, including the aborted one — this is the latch
+      // that stopped all further polling when a request never settled.
       inflight.current[key] = false;
     }
   }, [fault]);
@@ -200,7 +252,9 @@ export function useSource(key, now = Date.now()) {
     newestAtMs: src.newestAtMs,
     fetchedAtMs: src.fetchedAtMs,
     error: src.error,
+    errorKind: src.errorKind,
     maxAgeMin: spec?.maxAgeMin,
+    maxFetchAgeMin: spec?.maxFetchAgeMin,
     expectsRows: spec?.expectsRows !== false,
     now,
   });

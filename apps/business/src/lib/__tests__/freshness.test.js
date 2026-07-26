@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { panelState, worstState, PANEL, MAX_AGE_MIN } from "../freshness.js";
+import { panelState, worstState, PANEL, MAX_AGE_MIN, MAX_FETCH_AGE_MIN } from "../freshness.js";
 
 const NOW = Date.parse("2026-07-26T12:00:00Z");
 const MIN = 60_000;
@@ -176,8 +176,71 @@ describe("fetch age — a stopped POLLER", () => {
   });
 
   it("fires strictly past the window, so a healthy poll cadence is not flagged", () => {
-    expect(p({ fetchedAtMs: NOW - MAX_AGE_MIN * MIN }).state).toBe(PANEL.FRESH);
-    expect(p({ fetchedAtMs: NOW - MAX_AGE_MIN * MIN - 1 }).state).toBe(PANEL.STALE);
+    expect(p({ fetchedAtMs: NOW - MAX_FETCH_AGE_MIN * MIN }).state).toBe(PANEL.FRESH);
+    expect(p({ fetchedAtMs: NOW - MAX_FETCH_AGE_MIN * MIN - 1 }).state).toBe(PANEL.STALE);
+  });
+
+  // The silence window is judged SEPARATELY from the data window, and this is
+  // the test that pins them apart. They used to be one number, and a source
+  // that legitimately declares a wide data window — budget caps are written
+  // once a month — bought itself an equally wide licence to stop talking to
+  // the database. A hung backend then left the approvals panel calm for 23
+  // hours and the budget panel for 45 days, which is how a total outage hid
+  // behind green chrome.
+  it("a wide DATA window does not buy a wide SILENCE window", () => {
+    const v = p({
+      maxAgeMin: 45 * 24 * 60,          // budget: caps may be 45 days old and fine
+      maxFetchAgeMin: MAX_FETCH_AGE_MIN, // …but it must still be TALKING to the database
+      fetchedAtMs: NOW - 90 * MIN,       // 90 minutes since a round trip completed
+      newestAtMs: NOW - 20 * 60 * MIN,   // rows are old, and legitimately so
+      rowCount: 4,
+    });
+    expect(v.state).toBe(PANEL.STALE);
+    expect(v.alarm).toBe(true);
+    expect(v.headline).toBe("Not refreshing");
+  });
+
+  it("still tolerates old ROWS when the poller is healthy", () => {
+    // The other half of the same split: a wide data window has to keep working,
+    // or every correctly-configured budget alarms every day and the alarm stops
+    // meaning anything.
+    const v = p({
+      maxAgeMin: 45 * 24 * 60,
+      fetchedAtMs: NOW - 30_000,
+      newestAtMs: NOW - 20 * 60 * MIN,
+      rowCount: 4,
+    });
+    expect(v.state).toBe(PANEL.FRESH);
+    expect(v.alarm).toBe(false);
+  });
+});
+
+describe("why a read failed decides what the operator does about it", () => {
+  // "Can't reach the agent database" over a rejected session sends someone to
+  // check a database that is answering perfectly.
+  const err = (errorKind) => panelState({ ...HEALTHY, status: "error", errorKind, now: NOW });
+
+  it("names an auth failure as an auth failure, not an outage", () => {
+    expect(err("auth").headline).toBe("Your session was rejected");
+  });
+
+  it("names a hung database separately from an unreachable one", () => {
+    expect(err("timeout").headline).toBe("The agent database is not answering");
+  });
+
+  it("names a permission failure, which would otherwise read as an outage", () => {
+    expect(err("denied").headline).toBe("The database refused this read");
+  });
+
+  it("falls back to the unreachable wording when the cause is unknown", () => {
+    expect(err(null).headline).toBe("Can't reach the agent database");
+  });
+
+  it("alarms on every one of them regardless of wording", () => {
+    for (const k of ["auth", "timeout", "denied", null]) {
+      expect(err(k).alarm).toBe(true);
+      expect(err(k).state).toBe(PANEL.ERROR);
+    }
   });
 });
 

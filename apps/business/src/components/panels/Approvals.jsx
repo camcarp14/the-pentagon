@@ -264,9 +264,3 @@ function ExpiredRow({ row, now, muted }) {
     </div>
   );
 }
-
-/** The above-the-fold count. Exported so the command block shares one source of truth. */
-export function approvalsSummary(rows, now, lastVisitAt) {
-  return partitionApprovals(rows, { now, lastVisitAt }).counts;
-}
-
