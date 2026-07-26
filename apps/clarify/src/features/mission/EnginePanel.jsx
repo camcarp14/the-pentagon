@@ -21,7 +21,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@cc/supabase";
 import { T } from "../../theme";
 import { enginePhase, enginePlays, humanGap, PHASE } from "@cc/ops/plays.js";
-import { armWrites, armState } from "@cc/ops/arm.js";
+import { armWrites, subsystemWrites, armState } from "@cc/ops/arm.js";
 import { cadenceFor } from "@cc/ops/cadence.js";
 import { resolveDirection, ENGINE, DIRECTION_KEY, HARD_MAX } from "@cc/ops/direction.js";
 import { buildQueue, KIND, OUTREACH_DRAFT_STATUSES } from "@cc/ops/queue.js";
@@ -175,6 +175,18 @@ export default function EnginePanel({ onNavigate }) {
     setNote("Running. Drafting and reply-watching both start on the next pass.");
   });
 
+  // Turn THIS engine off without touching anything else. The panel shipped
+  // with an Arm button and no off switch, so the only way to stop the writer
+  // was the global STOP — which also stops outbound, reply-watching and manual
+  // sends. A one-way control is not a control.
+  const toggleMine = act("toggle", async () => {
+    const next = !(mine && mine.enabled === true);
+    const { error } = await supabase.from("ops_control")
+      .upsert(subsystemWrites(SUBSYSTEM, next), { onConflict: "key" });
+    if (error) throw new Error(error.message);
+    setNote(next ? "Back on. Resumes on the next pass." : "Off. It will not run again until you switch it back on.");
+  });
+
   const decide = (item, action) => act(item.id, async () => {
     let reason = null;
     if (action === "reject") {
@@ -224,6 +236,19 @@ export default function EnginePanel({ onNavigate }) {
         </span>
         {phase.sinceLastRunMs != null && (
           <span style={{ fontSize: 11, color: T.faint, marginLeft: "auto" }}>last pass {humanGap(phase.sinceLastRunMs)} ago</span>
+        )}
+        {/* The off switch. Always visible once a control row exists, so the
+            engine can never be in a state you cannot reverse from this screen. */}
+        {loaded && mine && (
+          <button onClick={toggleMine} disabled={!!busy}
+            style={{
+              marginLeft: phase.sinceLastRunMs != null ? 10 : "auto", flex: "none",
+              minHeight: 30, padding: "0 11px", borderRadius: 8, cursor: busy ? "default" : "pointer",
+              border: `1px solid ${T.line}`, background: "transparent", color: T.muted,
+              fontSize: 11, fontWeight: 700, opacity: busy ? 0.55 : 1,
+            }}>
+            {busy === "toggle" ? "…" : mine.enabled === true ? "Turn off" : "Turn on"}
+          </button>
         )}
       </div>
 

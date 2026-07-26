@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { enginePhase, enginePlays, doneState, phaseRank, humanGap, PHASE } from "../plays.js";
-import { armWrites, disarmWrites, armState, SUBSYSTEMS } from "../arm.js";
+import { armWrites, disarmWrites, subsystemWrites, armState, SUBSYSTEMS } from "../arm.js";
 import { cadenceFor, CADENCE_MS } from "../cadence.js";
 
 const NOW = Date.parse("2026-07-26T12:00:00Z");
@@ -196,6 +196,33 @@ describe("disarmWrites()", () => {
     // Re-arming must not silently switch on something deliberately disabled.
     const rows = disarmWrites({ at: "x" });
     expect(Object.keys(rows[0])).not.toContain("dry_run");
+  });
+});
+
+describe("subsystemWrites()", () => {
+  it("turns one engine off without touching the global row or its siblings", () => {
+    const rows = subsystemWrites("zts.content", false, { at: "t" });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toEqual({ key: "zts.content", enabled: false, updated_at: "t" });
+  });
+
+  it("off is enabled:false, NOT a pause", () => {
+    // A pause is an emergency stop that also blocks manual sends. Switching one
+    // engine off must not do that.
+    const row = subsystemWrites("clarify.outbound", false, { at: "t" })[0];
+    expect(row.paused_reason).toBeUndefined();
+    expect(row.paused_at).toBeUndefined();
+  });
+
+  it("turning on also clears dry_run and any pause", () => {
+    const row = subsystemWrites("clarify.outbound", true, { at: "t" })[0];
+    expect(row).toMatchObject({ enabled: true, dry_run: false, paused_reason: null, paused_at: null });
+  });
+
+  it("refuses to be pointed at the global row", () => {
+    // Otherwise "turn off the writer" would silently become "stop everything".
+    expect(() => subsystemWrites("global", false)).toThrow();
+    expect(() => subsystemWrites("", false)).toThrow();
   });
 });
 
