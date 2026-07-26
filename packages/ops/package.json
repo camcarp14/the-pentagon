@@ -9,6 +9,7 @@
     "./guard.js": "./guard.js",
     "./store.js": "./store.js",
     "./direction.js": "./direction.js",
-    "./queue.js": "./queue.js"
+    "./queue.js": "./queue.js",
+    "./draft.js": "./draft.js"
   }
 }

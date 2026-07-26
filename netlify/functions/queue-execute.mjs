@@ -29,6 +29,7 @@ import { requireAuth } from './_shared/requireAuth.cjs';
 import { sendEmail } from './_shared/gmail.cjs';
 import { adminClient, TIER } from './lib/ops-runtime.mjs';
 import { STALE_AFTER_DAYS, KIND, OUTREACH_DRAFT_STATUSES } from '@cc/ops/queue.js';
+import { normalizeDraft } from '@cc/ops/draft.js';
 
 const DAY_MS = 86_400_000;
 const json = (statusCode, body) => ({
@@ -213,9 +214,19 @@ export const handler = async (event) => {
     const to = draft.contacts?.email;
     if (!to) return json(400, { error: 'No contact email on this prospect' });
 
+    // NORMALISE BEFORE SENDING. Some rows store the model's whole JSON response
+    // in draft_body instead of an email. Clarify's UI has always hidden that at
+    // render time, so it was never fixed — and one such row was already SENT to
+    // a real prospect as a raw JSON blob. Sending draft_body verbatim would do
+    // it again, silently, on the operator's first tap.
+    const clean = normalizeDraft({ subject: draft.draft_subject, body: draft.draft_body });
+    if (!clean.body.trim()) {
+      return json(422, { error: 'This draft has no readable body. Reject it and let the engine rewrite it.' });
+    }
+
     let sent;
     try {
-      sent = await sendEmail({ to, subject: draft.draft_subject, body: draft.draft_body });
+      sent = await sendEmail({ to, subject: clean.subject, body: clean.body });
     } catch (ex) {
       await audit(sb, {
         subsystem: 'clarify.outbound', action: 'outbound.send', tier: TIER.APPROVAL, status: 'failed',
@@ -238,7 +249,7 @@ export const handler = async (event) => {
       trigger: `operator:${actor}`,
       rationale: `approved and sent to ${draft.prospects?.business_name || to}`,
       target_table: 'outreach', target_id: id,
-      after_data: { to, subject: draft.draft_subject, messageId: sent.messageId },
+      after_data: { to, subject: clean.subject, messageId: sent.messageId, repairedBeforeSend: clean.repaired },
       // No undo. Stated explicitly rather than left absent, so the log does not
       // read as though someone forgot to fill it in.
       undo: null,

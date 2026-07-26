@@ -144,9 +144,12 @@ export default function Desk({ isMobile }) {
     if (loaded && !anyDirection) setShowDirection(true);
   }, [loaded, anyDirection]);
 
+  // Outbound bodies come off the queue item, which normalised them — the same
+  // text queue-execute will transmit. Reading draft_body raw here would show a
+  // JSON blob for the rows that have one.
   const bodyOf = (item) => {
     if (item.kind === KIND.CONTENT) return contentDrafts.find((d) => d.id === item.id)?.body_html || "";
-    return flatOutreach.find((d) => d.id === item.id)?.draft_body || "";
+    return item.body || "";
   };
 
   const saveDirection = async (engine, value) => {
@@ -229,7 +232,14 @@ export default function Desk({ isMobile }) {
       <Card style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ padding: "15px 18px", borderBottom: `1px solid ${P.line}`, display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
           <span style={{ fontSize: 15.5, fontWeight: 800, color: P.ink, fontFamily: P.display }}>
-            {summary.waiting === 0 ? "Nothing waiting" : `${summary.waiting} waiting on you`}
+            {summary.waiting > 0
+              ? `${summary.waiting} waiting on you`
+              : summary.stale > 0
+                // "Nothing waiting" rendered directly above two visible drafts,
+                // because `waiting` counts only live items. Stale work is still
+                // work — it needs rejecting so a fresh one gets written.
+                ? `${summary.stale} stale — needs clearing`
+                : "Nothing waiting"}
           </span>
           {summary.waiting > 0 && (
             <span style={{ fontSize: 11.5, color: P.muted }}>

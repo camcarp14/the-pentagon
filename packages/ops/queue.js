@@ -28,6 +28,8 @@ export const KIND = Object.freeze({
   OUTBOUND: "outbound",
 });
 
+import { normalizeDraft } from "./draft.js";
+
 const DAY_MS = 86_400_000;
 
 /** How long a prepared draft stays valid. Outbound is short because it cites
@@ -93,15 +95,23 @@ export function fromContentDraft(row, now) {
   };
 }
 
-/** An outreach row (joined to prospect/contact) → queue item. */
+/** An outreach row (joined to prospect/contact) → queue item.
+ *
+ *  The draft is normalised here rather than at render time, so the queue shows
+ *  the same text the send path will actually transmit. Showing the operator a
+ *  cleaned preview while sending them a raw JSON blob is precisely the failure
+ *  that already put one malformed email in front of a real prospect. */
 export function fromOutreachDraft(row, now) {
   const age = ageDays(row.created_at, now);
   const who = str(row.business_name) || str(row.contact_name) || str(row.contact_email) || "Unknown prospect";
+  const clean = normalizeDraft({ subject: row.draft_subject, body: row.draft_body });
   return {
     id: row.id,
     kind: KIND.OUTBOUND,
-    title: str(row.draft_subject) || `Message to ${who}`,
-    preview: excerpt(row.draft_body),
+    title: clean.subject || `Message to ${who}`,
+    body: clean.body,
+    repaired: clean.repaired,
+    preview: excerpt(clean.body),
     why: str(row.brief_callouts) || str(row.prospect_brief),
     target: who,
     to: str(row.contact_email),
