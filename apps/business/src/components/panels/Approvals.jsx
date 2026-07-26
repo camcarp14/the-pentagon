@@ -223,9 +223,17 @@ function PendingRow({ row, now, urgent, busy, error, onDecide }) {
         <Btn size="sm" tone="good" busy={busy} disabled={!decidable} onClick={() => onDecide(row, "approved")} style={{ flex: 1 }}>Approve</Btn>
       </Row>
 
+      {/* Two different reasons the buttons are dead, and they must not share a
+          sentence. A lapsed deadline is a fact — the agent went ahead. An
+          unreadable deadline is an absence of fact, and saying "it already
+          proceeded" there would invent the very certainty this tab exists to
+          refuse. The row is still pinned to the top either way, because a
+          deadline we cannot read is one we cannot prove is safe. */}
       {!decidable && !error && (
-        <div style={{ fontSize: 10.5, color: TONE.error.fg, marginTop: 7, fontWeight: 600 }}>
-          The window has closed — the agent has already proceeded.
+        <div style={{ fontSize: 10.5, color: TONE.error.fg, marginTop: 7, fontWeight: 600, lineHeight: 1.5 }}>
+          {row.deadlineUnknown
+            ? "This approval has no readable veto_until, so there is no way to tell whether the agent has acted on it. It cannot be decided from here."
+            : "The window has closed — the agent has already proceeded."}
         </div>
       )}
       {error && (

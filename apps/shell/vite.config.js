@@ -24,6 +24,16 @@ export default defineConfig({
       "@app/business": r("../business/src/Root.jsx"),
     },
   },
+  // .env lives at the REPO ROOT (that is where .env.example sits and what it
+  // tells you to copy), but this config's root is apps/shell — npm workspaces
+  // run the script with the workspace as cwd, and Vite's envDir defaults to
+  // the project root. So the documented local-dev setup was silently loading
+  // nothing: every VITE_ var came back undefined, Supabase logged its "not
+  // configured" warning, and the only reason this was never noticed is that
+  // deploys get their values from Netlify's real environment instead.
+  // Caught by building with a filled-in root .env and grepping dist for the
+  // values — zero occurrences.
+  envDir: r("../../"),
   server: { fs: { allow: [r("../../")] } },
   build: { outDir: "dist", emptyOutDir: true },
 });
