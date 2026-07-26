@@ -28,7 +28,7 @@
 import { requireAuth } from './_shared/requireAuth.cjs';
 import { sendEmail } from './_shared/gmail.cjs';
 import { adminClient, TIER } from './lib/ops-runtime.mjs';
-import { STALE_AFTER_DAYS, KIND } from '@cc/ops/queue.js';
+import { STALE_AFTER_DAYS, KIND, OUTREACH_DRAFT_STATUSES } from '@cc/ops/queue.js';
 
 const DAY_MS = 86_400_000;
 const json = (statusCode, body) => ({
@@ -172,7 +172,7 @@ export const handler = async (event) => {
       .eq('id', id).maybeSingle();
     if (error) return json(500, { error: error.message });
     if (!draft) return json(404, { error: 'Draft not found' });
-    if (draft.status !== 'draft_ready') {
+    if (!OUTREACH_DRAFT_STATUSES.includes(draft.status)) {
       return json(409, { error: `Already ${draft.status} — nothing to do` });
     }
 

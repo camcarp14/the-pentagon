@@ -22,7 +22,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@cc/supabase";
-import { buildQueue, queueSummary, KIND } from "@cc/ops/queue.js";
+import { buildQueue, queueSummary, KIND, OUTREACH_DRAFT_STATUSES } from "@cc/ops/queue.js";
 import { resolveDirection, ENGINE, DIRECTION_KEY, HARD_MAX } from "@cc/ops/direction.js";
 
 const P = {
@@ -94,7 +94,7 @@ export default function Desk({ isMobile }) {
         supabase.from("content_drafts").select("*").eq("status", "draft_ready").order("created_at"),
         supabase.from("outreach")
           .select("*, contacts(email, name), prospects(business_name, prospect_brief, brief_callouts)")
-          .eq("status", "draft_ready").order("created_at"),
+          .in("status", OUTREACH_DRAFT_STATUSES).order("created_at"),
       ]);
 
       // Applied independently, same reasoning as the Ops console: one failed

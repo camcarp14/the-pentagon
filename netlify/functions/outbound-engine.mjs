@@ -29,7 +29,7 @@ import {
 import { completeJSON, DEFAULT_MODEL } from './lib/anthropic.mjs';
 import { estimateCost } from '@cc/ai';
 import { resolveDirection, ENGINE, DIRECTION_KEY } from '@cc/ops/direction.js';
-import { preparationBudget } from '@cc/ops/queue.js';
+import { preparationBudget, OUTREACH_DRAFT_STATUSES } from '@cc/ops/queue.js';
 
 const SUBSYSTEM = 'clarify.outbound';
 const TRIGGER = 'netlify schedule 30 */2';
@@ -114,8 +114,8 @@ export const handler = async () => {
     const dayStart = new Date(now); dayStart.setUTCHours(0, 0, 0, 0);
     const [{ count: preparedToday }, { count: pendingTotal }] = await Promise.all([
       sb.from('outreach').select('id', { count: 'exact', head: true })
-        .eq('status', 'draft_ready').gte('created_at', dayStart.toISOString()),
-      sb.from('outreach').select('id', { count: 'exact', head: true }).eq('status', 'draft_ready'),
+        .in('status', OUTREACH_DRAFT_STATUSES).gte('created_at', dayStart.toISOString()),
+      sb.from('outreach').select('id', { count: 'exact', head: true }).in('status', OUTREACH_DRAFT_STATUSES),
     ]);
 
     const budget = preparationBudget({
@@ -132,35 +132,43 @@ export const handler = async () => {
     }
 
     // ── Find someone to write to ────────────────────────────────────────────
-    // A prospect with a contact email and no outreach row yet. The engine will
-    // not write a second message to someone already in the pipeline — that is
-    // how a cold-email system turns into a complaint.
-    const { data: existing, error: exErr } = await sb.from('outreach').select('prospect_id');
-    if (exErr) throw new Error(`OUTBOUND_EXISTING_READ_FAILED: ${exErr.message}`);
-    const alreadyContacted = new Set((existing || []).map((r) => r.prospect_id).filter(Boolean));
-
-    const { data: candidates, error: pErr } = await sb
-      .from('prospects')
-      .select('id, business_name, website_context, prospect_brief, brief_callouts, marketing_signals, ads_detected, category, city, contacts(id, email, name, email_verified)')
+    // Clarify creates the outreach row at PROSPECTING time, with status
+    // 'prospected' and no draft. Writing a draft fills that row in; it does not
+    // create a new one.
+    //
+    // An earlier version of this engine inserted instead, and skipped anyone
+    // who already had an outreach row. Against the real pipeline — where all 41
+    // prospects already had one — that meant it would have drafted precisely
+    // nothing, forever, while reporting "no eligible prospects" as though the
+    // list were empty. Selecting the row to FILL is the whole job.
+    const { data: waiting, error: wErr } = await sb
+      .from('outreach')
+      .select('id, prospect_id, contact_id, created_at, prospects(business_name, website_context, prospect_brief, brief_callouts, marketing_signals, ads_detected, category, city), contacts(id, email, name)')
+      .eq('status', 'prospected')
+      .is('draft_subject', null)
       .order('created_at', { ascending: true })
       .limit(200);
-    if (pErr) throw new Error(`OUTBOUND_PROSPECT_READ_FAILED: ${pErr.message}`);
+    if (wErr) throw new Error(`OUTBOUND_PIPELINE_READ_FAILED: ${wErr.message}`);
 
-    const target = (candidates || []).find((p) => {
-      if (alreadyContacted.has(p.id)) return false;
-      const c = (p.contacts || []).find((x) => x && x.email);
-      return Boolean(c);
-    });
+    // A prospect with no contact email cannot be written to. Skipped rather
+    // than drafted-and-stuck, so the queue never fills with messages that have
+    // nowhere to go.
+    const row = (waiting || []).find((r) => r.contacts?.email);
 
-    if (!target) {
+    if (!row) {
+      const noEmail = (waiting || []).length;
       await finishRun(sb, runId, {
         ok: true,
-        note: `no prospects to write to (${(candidates || []).length} known, ${alreadyContacted.size} already in pipeline)`,
+        note: noEmail
+          ? `${noEmail} prospect(s) waiting but none has a contact email`
+          : 'no prospects waiting for a first draft',
       }, Date.now());
-      console.log('[clarify.outbound] no eligible prospects — needs a list');
-      return { statusCode: 200, body: JSON.stringify({ skipped: 'no_prospects' }) };
+      console.log('[clarify.outbound] nothing to draft');
+      return { statusCode: 200, body: JSON.stringify({ skipped: 'no_prospects', waitingWithoutEmail: noEmail }) };
     }
-    const contact = (target.contacts || []).find((x) => x && x.email);
+
+    const contact = row.contacts;
+    const target = { ...(row.prospects || {}), id: row.prospect_id };
 
     // ── Permission ──────────────────────────────────────────────────────────
     const state = await loadGuardState(sb, SUBSYSTEM, now);
@@ -226,22 +234,37 @@ export const handler = async () => {
       return { statusCode: 200, body: JSON.stringify({ mode: verdict.mode, subject, persisted: false }) };
     }
 
-    const { data: inserted, error: insErr } = await sb.from('outreach').insert({
-      prospect_id: target.id,
-      contact_id: contact.id,
-      status: 'draft_ready',
-      draft_subject: subject,
-      draft_body: body,
-      tone_feedback: thin ? 'engine flagged: research too thin to personalise confidently' : null,
-    }).select('id').single();
+    // UPDATE, not insert — and re-checking `status`/`draft_subject` in the
+    // WHERE clause, so two overlapping passes cannot both fill the same row and
+    // produce two drafts for one prospect.
+    const { data: updated, error: upErr } = await sb.from('outreach')
+      .update({
+        status: 'draft_ready',
+        draft_subject: subject,
+        draft_body: body,
+        contact_id: row.contact_id || contact.id,
+        tone_feedback: thin ? 'engine flagged: research too thin to personalise confidently' : null,
+        updated_at: new Date(now).toISOString(),
+      })
+      .eq('id', row.id)
+      .eq('status', 'prospected')
+      .is('draft_subject', null)
+      .select('id');
 
-    if (insErr) {
+    if (upErr) {
       await recordFailure(sb, {
         subsystem: SUBSYSTEM, action: 'outbound.draft', tier: TIER.READ,
-        error: insErr, runId, trigger: TRIGGER, now: Date.now(),
+        error: upErr, runId, trigger: TRIGGER, now: Date.now(),
       });
-      throw new Error(`OUTBOUND_DRAFT_WRITE_FAILED: ${insErr.message}`);
+      throw new Error(`OUTBOUND_DRAFT_WRITE_FAILED: ${upErr.message}`);
     }
+    if (!updated || updated.length === 0) {
+      // Another pass claimed it between the read and the write. Not an error —
+      // the work simply belongs to that pass.
+      await finishRun(sb, runId, { ok: true, actions: 0, note: 'row claimed by a concurrent pass' }, Date.now());
+      return { statusCode: 200, body: JSON.stringify({ skipped: 'raced' }) };
+    }
+    const inserted = updated[0];
 
     await finishRun(sb, runId, {
       ok: true, actions: 1, costUsd: generated.costUsd,
