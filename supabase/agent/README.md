@@ -79,16 +79,18 @@ second client there is nothing keeping the two sessions apart.
 4. Confirm the grants landed the way the file intends:
 
    ```sql
-   select grantee, privilege_type, column_name
+   select table_name, column_name
    from information_schema.column_privileges
-   where table_schema = 'public' and grantee = 'authenticated'
+   where table_schema = 'public'
+     and grantee = 'authenticated'
+     and privilege_type = 'UPDATE'      -- without this filter you get all 90 SELECT grants too
    order by table_name, column_name;
-   -- expect UPDATE on exactly six columns:
+   -- expect UPDATE on exactly nine columns — 9 rows, no more, no fewer:
    --   agent_config: halted, halt_reason, halted_at, halted_by, goal, updated_at
    --   approvals:    decision, decided_at, decided_by
-   -- (that is 6 + 3 rows; the halt path writes updated_at itself, which is why
-   --  it is in the grant. autonomy_tier, heartbeat_at and veto_until must NOT
-   --  appear anywhere in this result.)
+   -- (six on the config row and three on approvals. The halt path writes
+   --  updated_at itself, which is why it is in the grant. autonomy_tier,
+   --  heartbeat_at and veto_until must NOT appear anywhere in this result.)
    ```
 
    If `autonomy_tier` or `veto_until` shows up here, stop — section 4 will fail
@@ -304,10 +306,11 @@ await probe("PATCH autonomy_tier", "agent_config?id=eq.singleton", {
 await probe("READ tier (after)", "agent_config?id=eq.singleton&select=autonomy_tier");
 ```
 
-**PASS:** the PATCH returns `42501`. Postgres words column-level denial as either
-`permission denied for table agent_config` or `permission denied for column
-"autonomy_tier" of relation "agent_config"` depending on version — both are a
-pass. And the *after* read shows the **same tier as the before read**.
+**PASS:** the PATCH returns `42501`. On Postgres 16 (what Supabase runs) the
+message is `permission denied for table agent_config` — it names the **table**
+even though it is the missing *column* grant doing the work, which is confusing
+the first time you see it and is the expected wording. And the *after* read shows
+the **same tier as the before read**.
 
 **Read both, not just the status.** A `200 []` — a valid request that changed zero
 rows — is *not* a pass on this probe. It would mean the column grant is fine but
@@ -324,7 +327,7 @@ Extending your own deadline from the client turns a deadline into a suggestion.
 Pick any pending approval's id (from `fixtures.sql`, or the tab's own list):
 
 ```js
-const APPROVAL_ID = "f1c70001-0000-4000-8000-000000000001";  // a pending row
+const APPROVAL_ID = "f1c70001-0000-4000-8000-000000000004";  // fixtures: pending, 6h out
 
 await probe("READ veto_until (before)", `approvals?id=eq.${APPROVAL_ID}&select=veto_until,decision`);
 await probe("PATCH veto_until", `approvals?id=eq.${APPROVAL_ID}`, {
@@ -338,6 +341,13 @@ await probe("READ veto_until (after)", `approvals?id=eq.${APPROVAL_ID}&select=ve
 
 **FAIL:** a `200` echoing tomorrow's timestamp. That is the browser granting
 itself another day to think about something the agent is about to do.
+
+Unlike probe 2, this one cannot give you a false pass: column privileges are
+checked when the statement starts executing, *before* any row is looked at, so a
+`veto_until` write is refused with 42501 even when the `where` clause matches
+nothing at all. Any id you use here gives a real answer. (Row id
+`…0001` also works, but it is the 90-second approval and will have lapsed by the
+time you get to it — use `…0004`, which stays pending for six hours.)
 
 While you are here, the counterpart worth understanding — because it is a `200`
 that is *correct*:
@@ -422,7 +432,9 @@ not all alarm — and that is the point, not a miss:
 | Invariants | 45 min | **STALE**, and checks flip to *not reporting* (amber) rather than *failing* (red) |
 | Metrics | 6h | calm. 3h is inside its window. **Correct.** |
 | Approvals / Spend | 24h | calm. **Correct.** |
-| Learnings | 7d · Budget | 45d | calm. **Correct.** |
+| Learnings | 7d | calm. **Correct.** |
+| Budget | 45d | calm. **Correct.** |
+| Hypotheses | 24h | calm. **Correct.** |
 
 Also correct: the top status block still says `RUNNING`, because the heartbeat is
 read over `halt.js` and never passes through the fault. `?fault=stale` is a
