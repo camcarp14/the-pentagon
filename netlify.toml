@@ -31,6 +31,19 @@
 [functions."watch-snapshot"]
   schedule = "*/30 * * * *"
 
+# Ops: the containment heartbeat — the first thing here that can work with no
+# browser tab open. Every 15 minutes it opens a run, asks the guard, records the
+# verdict, and closes the run; it takes no real action. Every autonomous
+# subsystem gets built against this shape.
+#
+# Inert twice over: it is a loud 500 until SUPABASE_SERVICE_ROLE_KEY is set, and
+# ops_control.global ships enabled=false, so deploying it cannot switch anything
+# on. The -background suffix buys a 15-minute ceiling instead of the ~10s one
+# that forced three other functions in this repo to hand work back to a client
+# loop — which is exactly the tab dependency being removed.
+[functions."ops-heartbeat-background"]
+  schedule = "*/15 * * * *"
+
 # Specific rewrites must resolve BEFORE the SPA catch-all.
 # Clarify tracked links / open pixel:
 [[redirects]]
