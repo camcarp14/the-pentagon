@@ -1,0 +1,86 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   AI Business — the tab's own sheet.
+
+   Injected scoped-to-mounted by Root.jsx rather than imported statically: the
+   shell renders one tool at a time, and these rules would otherwise stay in
+   the document and bleed onto ZTS/Clarify/Runway/Macro/Looper once the chunk
+   had loaded. Every selector is prefixed `biz-` for the same reason.
+
+   Deliberately small. The tab is built from inline styles driven by
+   @cc/design's CSS variables; only the things inline styles cannot express —
+   keyframes, pseudo-elements, media queries — live here.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes bizPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.42; }
+}
+@keyframes bizSpin { to { transform: rotate(360deg); } }
+@keyframes bizRise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* The alarm heartbeat. Slow on purpose — a fast blink reads as a decorative
+   loading state, and this has to read as "something is wrong" from across a
+   room, at a glance, on a phone held at arm's length. */
+.biz-pulse { animation: bizPulse 1.9s var(--ease-out, ease-in-out) infinite; }
+
+.biz-spin { animation: bizSpin 0.7s linear infinite; }
+
+/* Press physics on every control. Cheap, and it is most of the difference
+   between "web page" and "app" on a touch screen. */
+.biz-press { -webkit-tap-highlight-color: transparent; }
+.biz-press:active:not(:disabled) { transform: scale(0.97); }
+.biz-press:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* Scroll regions: a visible-but-quiet thumb. An invisible scrollbar on a list
+   that scrolls is a list that looks complete when it is not. */
+.biz-scroll { scrollbar-width: thin; scrollbar-color: var(--border-strong, rgba(255,255,255,0.16)) transparent; overscroll-behavior: contain; }
+.biz-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.biz-scroll::-webkit-scrollbar-track { background: transparent; }
+.biz-scroll::-webkit-scrollbar-thumb { background: var(--border-strong, rgba(255,255,255,0.16)); border-radius: 999px; }
+
+.biz-rise { animation: bizRise var(--dur-3, 0.32s) var(--ease-out) both; }
+
+/* The panel stack fades in as a group rather than each panel arriving
+   separately, which would read as nine independent loading events. */
+.biz-stack > * { animation: bizRise var(--dur-3, 0.32s) var(--ease-out) both; }
+.biz-stack > *:nth-child(1) { animation-delay: 0.00s; }
+.biz-stack > *:nth-child(2) { animation-delay: 0.03s; }
+.biz-stack > *:nth-child(3) { animation-delay: 0.06s; }
+.biz-stack > *:nth-child(4) { animation-delay: 0.09s; }
+.biz-stack > *:nth-child(5) { animation-delay: 0.12s; }
+.biz-stack > *:nth-child(6) { animation-delay: 0.15s; }
+.biz-stack > *:nth-child(n+7) { animation-delay: 0.18s; }
+
+.biz-root ::selection { background: var(--accent-soft); color: var(--ink); }
+
+/* Every number in this tab is a number that changes. Tabular figures stop the
+   layout twitching once a second under the countdowns. */
+.biz-root { font-variant-numeric: tabular-nums; }
+
+.biz-root input, .biz-root textarea {
+  font-family: var(--font-body);
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  /* 16px is not a style choice: iOS Safari zooms the viewport on focus for any
+     input under 16px, and a zoomed viewport on a one-thumb panel is a trap the
+     user has to pinch their way out of. */
+  font-size: 16px;
+  padding: 10px 12px;
+  width: 100%;
+  outline: none;
+}
+.biz-root input:focus, .biz-root textarea:focus { border-color: var(--accent-line); box-shadow: var(--focus-ring); }
+
+@media (prefers-reduced-motion: reduce) {
+  .biz-pulse, .biz-spin, .biz-rise, .biz-stack > * { animation: none !important; }
+  .biz-press:active:not(:disabled) { transform: none; }
+  /* The alarm must survive reduced motion — the pulse is a reinforcement, never
+     the only signal, so removing it costs nothing. Colour, border, glyph and
+     copy all still carry it. */
+  .biz-pulse { opacity: 1; }
+}

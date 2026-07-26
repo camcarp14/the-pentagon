@@ -1,15 +1,16 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // @cc/design — the ONE token source for The Pentagon.
 //
-// Five tools live under one shell. They all share ONE dark canvas ("brass on
+// Six tools live under one shell. They all share ONE dark canvas ("brass on
 // midnight", inherited from Clarify) so they read as a single product; the only
 // axis that differs per tool is the ACCENT:
 //
-//   • ZTS      → emerald   #3ECF8E
-//   • Clarify  → brass     #C9A557
-//   • Runway   → violet    #8B7CFF
-//   • Macro    → amber     #FFB224
-//   • Looper   → cyan      #38D9F0
+//   • ZTS       → emerald   #3ECF8E
+//   • Clarify   → brass     #C9A557
+//   • Runway    → violet    #8B7CFF
+//   • Macro     → amber     #FFB224
+//   • Looper    → cyan      #38D9F0
+//   • Business  → magenta   #F45CA7
 //
 // Everything is emitted TWO ways so every tool can consume one source:
 //   • theme(app)   → a JS token object (for the inline-style apps: ZTS/Clarify)
@@ -88,6 +89,19 @@ const CYAN = {
   accentInk: "#04222A", focusRing: "0 0 0 3px rgba(56,217,240,0.34)",
 };
 
+// Magenta — Business (the autonomous agent's command panel). Chosen by
+// elimination, and the elimination is the point: that surface renders alarm
+// states constantly, so its accent must not be confusable with `bad` (#F87171,
+// a salmon red) or `warn` (#F5B84D) at a glance, or a healthy panel reads as a
+// failing one. Green/gold/violet/amber/cyan are spoken for; ~325° is the only
+// wide gap left on the wheel that clears all five accents AND all four signals.
+const MAGENTA = {
+  accent: "#F45CA7", accentHi: "#FF85C2", accentDeep: "#C42B7C",
+  accentGrad: "linear-gradient(135deg, #FF85C2 0%, #C42B7C 100%)",
+  accentSoft: "rgba(244,92,167,0.14)", accentLine: "rgba(244,92,167,0.32)",
+  accentInk: "#2A0518", focusRing: "0 0 0 3px rgba(244,92,167,0.34)",
+};
+
 // Historical alias keys per app, so existing call sites keep resolving after
 // the import swaps to @cc/design. Mapped onto the app's accent ramp.
 const aliasFor = (a, ramp) => {
@@ -117,12 +131,17 @@ const APP_DEF = {
   runway: { base: MIDNIGHT, ramp: VIOLET, label: "Runway", brand: "Runway" },
   macro: { base: MIDNIGHT, ramp: AMBER, label: "Macro", brand: "Macro Command Center" },
   looper: { base: MIDNIGHT, ramp: CYAN, label: "Looper", brand: "Looper" },
+  // `short` is the compact-mode label. Six segments do not fit six full words
+  // on a 375px phone — "Business" measures ~48px in the toggle's 9.5px Syne
+  // against ~45px of available segment, so it would ellipsise to "Busines…".
+  // A deliberate three-letter form beats a truncated eight-letter one.
+  business: { base: MIDNIGHT, ramp: MAGENTA, label: "Business", short: "Biz", brand: "AI Business" },
 };
 
-export const APPS = ["zts", "clarify", "runway", "macro", "looper"];
+export const APPS = ["zts", "clarify", "runway", "macro", "looper", "business"];
 export const appMeta = (app) => {
   const d = APP_DEF[app] || APP_DEF.zts;
-  return { app, label: d.label, brand: d.brand, mode: d.base.mode, accent: d.ramp.accent };
+  return { app, label: d.label, short: d.short || d.label, brand: d.brand, mode: d.base.mode, accent: d.ramp.accent };
 };
 
 // ─── theme(app) — the JS token object for inline-style apps ──────────────────

@@ -1,11 +1,11 @@
 # The Pentagon
 
 One site, one login, one toggle — **The Pentagon** is the operations hub that
-houses three tools under a single shell. A top-of-screen toggle (a bottom bar on
+houses six tools under a single shell. A top-of-screen toggle (a bottom bar on
 mobile) switches between them; each is lazy-loaded and re-skins the whole page to
 its own accent while sharing one dark design language.
 
-All three share one dark "midnight" canvas (drawn from Clarify's design) and
+All six share one dark "midnight" canvas (drawn from Clarify's design) and
 differ only by accent, so they read as one product:
 
 | Module | What it is | Accent |
@@ -13,16 +13,24 @@ differ only by accent, so they read as one product:
 | **ZTS** | Zero To Secure's creator registry + content studio | emerald |
 | **Clarify** | Outreach & pipeline CRM | brass |
 | **Runway** | Job-search command board | violet |
+| **Macro** | Trading cockpit | amber |
+| **Looper** | Browser-driven mission loop | cyan |
+| **Business** | Command and control for the autonomous SaaS agent | magenta |
 
 Above them all sits **System** — a cross-tool hub that merges usage, the neural
 "minds" (DNA), and the agent rosters from every module into one place.
 
 This is an npm-workspaces monorepo: the shell lives in `apps/shell`, each tool in
-`apps/{zts,clarify,runway}`, and the shared design tokens / UI primitives /
-Supabase client in `packages/{design,ui,supabase}`. One Netlify deploy serves the
-shell (`apps/shell/dist`) with every tool's functions merged under
-`netlify/functions`. See [docs/UNIFICATION-PLAN.md](docs/UNIFICATION-PLAN.md) for
-the architecture and [docs/DEPLOY.md](docs/DEPLOY.md) for the runbook.
+`apps/{zts,clarify,runway,macro,looper,business}`, and the shared design tokens /
+UI primitives / Supabase client in `packages/{design,ui,supabase}`. One Netlify
+deploy serves the shell (`apps/shell/dist`) with every tool's functions merged
+under `netlify/functions`. See
+[docs/UNIFICATION-PLAN.md](docs/UNIFICATION-PLAN.md) for the architecture and
+[docs/DEPLOY.md](docs/DEPLOY.md) for the runbook.
+
+One exception to "one login": **Business** talks to a different Supabase project
+from every other tool, so it carries its own client and its own sign-in. See
+below.
 
 ---
 
@@ -107,6 +115,43 @@ doctrine. State lives in the same `zts_` localStorage namespace as the rest of t
 app — no new infrastructure — and the whole tab is built on the shared **light
 design system** (`src/ui.jsx` tokens, Syne / DM Mono, white glass over the ZTS
 canvas), so it looks and feels native next to every other tab.
+
+## AI Business module
+
+Command and control for an agent that runs a SaaS business unattended. Built for
+one usage pattern and no other: a look every six hours, from a phone, for under
+two minutes.
+
+It is the only tool here that does **not** use `@cc/supabase`. The agent lives in
+its own Supabase project behind `VITE_AGENT_SUPABASE_URL` /
+`VITE_AGENT_SUPABASE_ANON_KEY`, so a compromise of the agent reaches spend and
+strategy and stops there. That isolation costs a second sign-in, and the tab
+refuses to boot if it detects both URLs pointing at the same project.
+
+Four ideas carry the design:
+
+- **Halt has its own path to the database.** `src/lib/halt.js` imports nothing —
+  no client wrapper, no cache, no shared fetch. It builds its own request and
+  believes only the row the server hands back. When the rest of the page is
+  throwing, the halt button still works, and it says "halted" only once the
+  database has said so.
+- **Silent failure is the enemy, so nothing renders as a calm zero.** Loading,
+  empty, stale and unreachable are four visually distinct treatments, every
+  panel carries the age of its data, and a panel whose newest row is older than
+  its window alarms. "No actions in the last hour" and "we couldn't reach the
+  database" can never look alike.
+- **Approvals cannot expire quietly.** Anything closing within the hour pins to
+  the top with a live countdown; anything that lapsed unreviewed while you were
+  away gets its own *auto-proceeded without you* list, never merged into history.
+- **Read-only except three verbs**, enforced by column-level `GRANT` in the
+  agent's database — halt/resume, approve/veto, and the goal. An insert into
+  `action_ledger` from the browser console fails at Postgres, not at a disabled
+  button.
+
+`schema.sql` at the repo root is the agent project's schema, RLS and grants;
+`supabase/agent/README.md` is the setup runbook and the self-verification steps.
+`?fault=db`, `?fault=loader` and `?fault=stale` inject failures on demand so the
+honesty of the surface can be checked rather than assumed.
 
 ## Stack
 

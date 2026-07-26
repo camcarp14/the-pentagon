@@ -1,0 +1,18 @@
+{
+  "name": "@app/business",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/Root.jsx"
+  },
+  "dependencies": {
+    "@cc/design": "*",
+    "@cc/ui": "*",
+    "@supabase/supabase-js": "^2.45.0"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}

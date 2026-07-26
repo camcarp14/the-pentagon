@@ -3,7 +3,8 @@
 //
 // One site, one login, one toggle. The shell owns exactly four things:
 //   • auth (a single login gates all three tools)
-//   • the top-of-screen app toggle (ZTS · Clarify · Runway · Macro), plus ⌥1-4
+//   • the top-of-screen app toggle (ZTS · Clarify · Runway · Macro · Looper ·
+//     Business), plus ⌥1-6
 //   • per-tool theming (it stamps @cc/design's CSS vars on a wrapper, so
 //     switching tools re-accents the whole page over the shared dark canvas)
 //   • the cross-tool System hub (usage · minds · agents)
@@ -24,6 +25,7 @@ const TOOLS = {
   runway: lazy(() => import("@app/runway")),
   macro: lazy(() => import("@app/macro")),
   looper: lazy(() => import("@app/looper")),
+  business: lazy(() => import("@app/business")),
 };
 
 // The shell-owned cross-tool management surface (Usage / Minds / Agents).
@@ -208,7 +210,7 @@ function AppToggle({ active, onPick, compact }) {
                 nothing on a flex container, so with the text as a direct child
                 of the button an over-wide label overflowed its segment and ran
                 into its neighbour instead of clipping. */}
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, display: "block" }}>{m.label}</span>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, display: "block" }}>{compact ? m.short : m.label}</span>
           </button>
         );
       })}
@@ -337,7 +339,7 @@ export default function Shell() {
       // Match e.code, not e.key: on macOS, Option composes the digit into a glyph
       // (⌥1 → "¡"), so e.key is never "1"/"2"/"3" and the shortcut would silently
       // do nothing. e.code stays "Digit1".."Digit3" regardless of the modifier.
-      const i = ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5"].indexOf(e.code);
+      const i = ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "Digit6"].indexOf(e.code);
       if (i === -1 || !APPS[i]) return;
       e.preventDefault();
       pick(APPS[i]);

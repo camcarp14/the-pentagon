@@ -21,6 +21,7 @@ export default defineConfig({
       "@app/runway": r("../runway/src/Root.jsx"),
       "@app/macro": r("../macro/src/Root.jsx"),
       "@app/looper": r("../looper/src/Root.jsx"),
+      "@app/business": r("../business/src/Root.jsx"),
     },
   },
   server: { fs: { allow: [r("../../")] } },
