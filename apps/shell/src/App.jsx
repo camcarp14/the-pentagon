@@ -16,6 +16,7 @@ import { Component, lazy, Suspense, useCallback, useEffect, useLayoutEffect, use
 import { appMeta, cssVars, APPS } from "@cc/design";
 import { SkeletonBoard, EmptyIcon, M, useIsMobile } from "@cc/ui";
 import { auth, isConfigured } from "@cc/supabase";
+import { Ambient } from "./Ambient.jsx";
 
 // Lazily-mounted tools. Wired in per Phase-C increment; a tool without an entry
 // here renders the "coming in this build" panel so the toggle always works.
@@ -78,12 +79,64 @@ const PentagonLogo = ({ size = 22 }) => (
   </svg>
 );
 
+// The pre-auth surfaces (boot, login) render before any tool is chosen, so they
+// sat outside the token system entirely — hardcoded #0b0d12, a spinner in
+// Macro's amber for no reason, and no ambient. Themed wraps them in the same
+// vars + `isolation: isolate` + wash the signed-in shell gets, so the first two
+// screens anyone sees belong to the same product as the rest.
+//
+// PLATFORM_VARS' neutral accent is the honest choice here: before sign-in there
+// is no active tool, and picking one of the six would promise a room you are
+// not in yet. The Pentagon mark carries the colour instead — its gradient
+// already sweeps all of them.
+// Pre-auth accent: the violet the Pentagon mark already glows with (its first
+// gradient stop, and the drop-shadow on the logo). Not one of the six tool
+// ramps — before sign-in there is no active tool, and borrowing one would
+// promise a room you are not in yet — but not the System hub's flat steel
+// either, because this is the product's front door and it should have a pulse.
+const BRAND_VARS = {
+  ...PLATFORM_VARS,
+  "--accent": "#8B7CFF", "--accent-hi": "#A99BFF", "--accent-deep": "#6C5CE7",
+  "--accent-grad": "linear-gradient(135deg, #A99BFF 0%, #6C5CE7 100%)",
+  "--accent-soft": "rgba(139,124,255,0.14)", "--accent-line": "rgba(139,124,255,0.32)",
+  "--accent-ink": "#120A2E",
+  "--surface-2": "#0E1118",
+  "--shadow-modal": "0 24px 70px rgba(0,0,0,0.65), 0 8px 24px rgba(0,0,0,0.5)",
+};
+
+function Themed({ vars = BRAND_VARS, children, style }) {
+  return (
+    <div data-app="platform" data-theme="dark" style={{
+      ...vars, minHeight: "100vh", background: "var(--bg)", color: "var(--ink)",
+      fontFamily: "var(--font-body)", isolation: "isolate", ...style,
+    }}>
+      <Ambient />
+      {children}
+    </div>
+  );
+}
+
+// The boot screen shows for a few hundred ms while the session resolves, so it
+// gets the mark rather than a bare spinner: one glyph that says which product
+// is loading, breathing instead of whipping round. A 30px ring spinning at
+// 0.8s was the single loudest "internal tool" tell in the building.
 function Boot() {
   return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#0b0d12" }}>
-      <div style={{ width: 30, height: 30, border: "2px solid rgba(255,255,255,0.1)", borderTopColor: "#FFB224", borderRadius: "50%", animation: "spin .8s linear infinite" }} />
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    </div>
+    <Themed style={{ display: "grid", placeItems: "center" }}>
+      <div style={{ display: "grid", placeItems: "center", gap: 16, animation: `fadein ${M.durSlow} ${M.easeOut} both` }}>
+        <span style={{ animation: "bootbreathe 2.4s cubic-bezier(0.65,0,0.35,1) infinite" }}><PentagonLogo size={40} /></span>
+        <span style={{
+          fontSize: 10.5, fontWeight: 700, letterSpacing: "0.22em", textTransform: "uppercase",
+          color: "var(--faint)", fontFamily: "'Syne',system-ui",
+        }}>The Pentagon</span>
+      </div>
+      {/* Opacity + scale only — a filter or box-shadow pulse on a gradient-filled
+          SVG repaints it every frame. Reduced motion holds it still and lit. */}
+      <style>{`
+        @keyframes bootbreathe { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.55; transform: scale(0.94); } }
+        @media (prefers-reduced-motion: reduce) { [style*="bootbreathe"] { animation: none !important; } }
+      `}</style>
+    </Themed>
   );
 }
 
@@ -98,26 +151,51 @@ function LoginScreen() {
     try { await auth.signIn(email.trim(), password); }
     catch (ex) { setErr(ex?.message || "Sign in failed"); setBusy(false); }
   };
-  const field = { width: "100%", padding: "11px 13px", background: "#0e1118", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 9, color: "#e9e7e0", fontSize: 14, outline: "none", fontFamily: "'Inter',system-ui" };
+  // Tokenised. Every value here used to be a literal (#0e1118, #12151d, #9aa1ae,
+  // and a hardcoded amber gradient on the button — Macro's accent, on the one
+  // screen that belongs to no tool), so the login screen drifted whenever the
+  // palette moved and could never carry the wash.
+  const field = {
+    width: "100%", padding: "11px 13px", background: "var(--surface-2)",
+    border: "1px solid var(--border)", borderRadius: 9, color: "var(--ink)",
+    fontSize: 16, outline: "none", fontFamily: "var(--font-body)",
+  };
+  const label = { fontSize: 11, color: "var(--muted)", fontWeight: 600 };
   return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "radial-gradient(1200px 600px at 50% -10%, #171b26 0%, #0b0d12 60%)", padding: 20 }}>
-      <form onSubmit={submit} style={{ width: "100%", maxWidth: 360, background: "#12151d", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 18, padding: "30px 26px", boxShadow: "0 24px 70px rgba(0,0,0,0.55)" }}>
+    <Themed style={{ display: "grid", placeItems: "center", padding: 20 }}>
+      <form onSubmit={submit} style={{
+        width: "100%", maxWidth: 360, background: "var(--surface)",
+        border: "1px solid var(--border)", borderRadius: 18, padding: "30px 26px",
+        boxShadow: "var(--shadow-modal, 0 24px 70px rgba(0,0,0,0.55))",
+        animation: `rise ${M.durSlow} ${M.easeOut} both`,
+      }}>
         <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 20 }}>
           <PentagonLogo size={26} />
-          <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", color: "#e9e7e0", fontFamily: "'Syne',system-ui" }}>The Pentagon</span>
+          <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--ink)", fontFamily: "'Syne',system-ui" }}>The Pentagon</span>
         </div>
-        <div style={{ fontSize: 12.5, color: "#9aa1ae", marginBottom: 18, lineHeight: 1.6 }}>One sign-in for ZTS, Clarify, and Runway.</div>
-        <label style={{ fontSize: 11, color: "#9aa1ae", fontWeight: 600 }}>Email</label>
-        <input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} style={{ ...field, margin: "6px 0 14px" }} />
-        <label style={{ fontSize: 11, color: "#9aa1ae", fontWeight: 600 }}>Password</label>
-        <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ ...field, margin: "6px 0 4px" }} />
-        {err && <div style={{ color: "#ff6f6f", fontSize: 12, marginTop: 10 }}>{err}</div>}
-        {!isConfigured() && <div style={{ color: "#FFB224", fontSize: 11.5, marginTop: 10, lineHeight: 1.5 }}>Supabase isn't configured — set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.</div>}
-        <button type="submit" disabled={busy} style={{ width: "100%", marginTop: 18, padding: "11px", borderRadius: 9, border: "none", cursor: busy ? "default" : "pointer", background: "linear-gradient(135deg,#FFC155,#E09000)", color: "#1a1204", fontWeight: 800, fontSize: 13.5, fontFamily: "'Syne',system-ui", opacity: busy ? 0.7 : 1 }}>
+        {/* Was "One sign-in for ZTS, Clarify, and Runway" — three of the six
+            tools that actually live here. Named from APPS so it cannot go stale
+            again when a seventh lands. */}
+        <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 18, lineHeight: 1.6 }}>
+          One sign-in for all {APPS.length} tools.
+        </div>
+        <label htmlFor="pentagon-email" style={label}>Email</label>
+        <input id="pentagon-email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} style={{ ...field, margin: "6px 0 14px" }} />
+        <label htmlFor="pentagon-password" style={label}>Password</label>
+        <input id="pentagon-password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ ...field, margin: "6px 0 4px" }} />
+        {/* role=alert so a failed sign-in is announced, not just recoloured. */}
+        {err && <div role="alert" style={{ color: "var(--bad)", fontSize: 12, marginTop: 10 }}>{err}</div>}
+        {!isConfigured() && <div style={{ color: "var(--warn)", fontSize: 11.5, marginTop: 10, lineHeight: 1.5 }}>Supabase isn't configured — set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.</div>}
+        <button type="submit" disabled={busy} className="btn primary" style={{
+          width: "100%", marginTop: 18, minHeight: 44, padding: "11px", borderRadius: 9, border: "none",
+          cursor: busy ? "default" : "pointer", background: "var(--accent-grad, var(--accent))",
+          color: "var(--accent-ink, #0B0F1A)", fontWeight: 800, fontSize: 13.5,
+          fontFamily: "'Syne',system-ui", opacity: busy ? 0.7 : 1,
+        }}>
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>
-    </div>
+    </Themed>
   );
 }
 
@@ -359,7 +437,22 @@ export default function Shell() {
   const Tool = TOOLS[active];
 
   return (
-    <div data-app={systemOpen ? "system" : active} data-theme={systemOpen ? "dark" : m.mode} style={{ ...(systemOpen ? PLATFORM_VARS : cssVars(active)), minHeight: "100vh", background: "var(--bg)", color: "var(--ink)", fontFamily: "var(--font-body)", transition: `background ${M.durSlow} ${M.easeStd}` }}>
+    // `isolation: isolate` is load-bearing, not decoration. This div paints an
+    // opaque var(--bg), and the ambient layer inside it sits at z-index -1; in a
+    // plain stacking context an in-flow block's background paints AFTER
+    // negative-z descendants, so without the isolate this element would cover
+    // the wash entirely — and silently, since nothing depends on it. Making the
+    // wrapper its own stacking context puts its background at step 1 and the
+    // ambient at step 2, above it. `isolation` and not `position: relative`
+    // because it forms the context without becoming a containing block for
+    // anything, and every tool's fixed bottom bar must keep the viewport.
+    <div data-app={systemOpen ? "system" : active} data-theme={systemOpen ? "dark" : m.mode} style={{ ...(systemOpen ? PLATFORM_VARS : cssVars(active)), minHeight: "100vh", background: "var(--bg)", color: "var(--ink)", fontFamily: "var(--font-body)", isolation: "isolate", transition: `background ${M.durSlow} ${M.easeStd}` }}>
+      {/* The wash. Inside the themed wrapper so it reads the active tool's
+          --accent: switching tools re-colours the whole room, and cross-fades
+          while it does. System gets PLATFORM_VARS' neutral accent, which is
+          exactly right — the hub is not one of the six. */}
+      <Ambient />
+
       {/* Shell top bar — the ONE global chrome, themed to the active tool */}
       <div style={{
         position: "sticky", top: 0, zIndex: 100,

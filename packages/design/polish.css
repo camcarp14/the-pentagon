@@ -1,0 +1,154 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   @cc/design — THE POLISH SYSTEM.
+
+   One physics for every state change, in every tool. This file was Runway's
+   (apps/runway/src/styles/polish.css) and lived there alone: Runway had press
+   physics, page transitions, staggered entrances, skeletons and a reduced-motion
+   mandate, while ZTS, Clarify, Macro, Looper and Business had none of it. Same
+   product, six different feels. The shell mounts this once, so all six get the
+   same one.
+
+   Two rules kept it safe to promote from one app's stylesheet to the platform's:
+
+   1. ACCENT COMES FROM THE TOKEN, NEVER A LITERAL. Runway's copy hardcoded
+      violet in ::selection and the primary-button hover glow, which was
+      invisible while only Runway used the file and would have painted every
+      other tool violet the moment it was shared. Everything here reads
+      var(--accent), so each tool keeps its own colour.
+   2. NOTHING HERE MAY BLEED. The shell mounts one tool at a time and the
+      inline-style tools (ZTS, Clarify) never opted into a class vocabulary, so
+      this file only ever touches (a) utility classes it owns outright —
+      .pagefade, .stagger, .sk*, .expand — and (b) the shared component
+      vocabulary Runway and Macro actually share (.btn, .card, .seg, .tabs,
+      .chip). A tool that uses none of those names is simply unaffected.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Motion tokens. @cc/design's cssVars() already stamps --dur-1..3 and
+   --ease-out/--ease-spring per tool; these are the fallbacks for any surface
+   mounted outside that wrapper (the login screen, the boot seal), so the
+   vocabulary resolves everywhere rather than silently dropping declarations. */
+:root {
+  --dur-1: 140ms; --dur-2: 240ms; --dur-3: 420ms;
+  --dur-shimmer: 1400ms; --stagger-step: 45ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.44, 1);
+  --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* ── global manners ─────────────────────────────────────────────────────────
+   Numbers behave like instruments, headings balance, prose loses its orphans. */
+.big, .mono, .val, table td, .badge, .metric, kbd { font-variant-numeric: tabular-nums; }
+h1, h2, h3 { text-wrap: balance; }
+p { text-wrap: pretty; }
+/* Tokenised: was rgba(139,124,255,0.32) — Runway's violet, on every tool. */
+::selection { background: color-mix(in srgb, var(--accent, #8B7CFF) 32%, transparent); }
+* { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transparent; }
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 99px; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.24); }
+
+/* ── focus — the state that was missing everywhere ──────────────────────────
+   Every tool relied on the browser default, which the dark canvas renders as a
+   near-invisible thin outline, and several surfaces killed it outright with
+   `outline: none`. One accent ring, on :focus-visible only, so pointer users
+   never see it and keyboard users always do. [tabindex="-1"] is excluded: that
+   is the programmatic-focus escape hatch (scroll containers, dialog roots) and
+   should not light up when code calls .focus() on it. */
+:where(button, a, input, select, textarea, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring, 0 0 0 3px color-mix(in srgb, var(--accent, #8B7CFF) 34%, transparent));
+}
+
+/* ── press physics — every interactive element acknowledges touch <100ms ─────
+   Scoped to the vocabulary Runway and Macro share; a tool that doesn't use
+   these class names is untouched. */
+.btn, .tabs button, .seg button, .step, .chip.pick {
+  transition: transform var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-2) var(--ease-out), color var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out);
+}
+.btn:active:not(:disabled), .tabs button:active, .seg button:active, .step:active, .chip.pick:active { transform: scale(0.97); }
+.card, .kcard { transition: border-color var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out); }
+
+/* Hover: lift, and glow in the TOOL'S accent rather than Runway's violet.
+   Pointer devices only — on touch there is no hover state to get stuck in.
+   The :active rule follows so a hovered button still sinks when pressed
+   instead of staying lifted (same specificity, later wins). */
+@media (hover: hover) {
+  .btn.primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 22px color-mix(in srgb, var(--accent, #8B7CFF) 28%, transparent);
+  }
+  .card.pressable:hover, .kcard.pressable:hover { transform: translateY(-1px); }
+}
+.btn.primary:active:not(:disabled) { transform: scale(0.97); }
+
+/* ── page + tab transitions: nothing hard-cuts ───────────────────────────────
+   Wrap routed/tabbed content in a keyed div so the entrance re-runs on change. */
+.pagefade { animation: pagein var(--dur-3) var(--ease-out) both; }
+@keyframes pagein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ── entrance choreography: sections develop top-to-bottom ───────────────── */
+.stagger > * { animation: rise var(--dur-3) var(--ease-out) both; animation-delay: calc(var(--i, 0) * var(--stagger-step)); }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.stagger > *:nth-child(1){--i:0}.stagger > *:nth-child(2){--i:1}.stagger > *:nth-child(3){--i:2}.stagger > *:nth-child(4){--i:3}
+.stagger > *:nth-child(5){--i:4}.stagger > *:nth-child(6){--i:5}.stagger > *:nth-child(7){--i:6}.stagger > *:nth-child(n+8){--i:7}
+
+/* ── skeletons: pages develop instead of arriving ────────────────────────── */
+.sk { position: relative; overflow: hidden; background: rgba(255, 255, 255, 0.055); border-radius: 8px; }
+.sk::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent); animation: shimmer var(--dur-shimmer) infinite; }
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+.sk-line { height: 13px; margin: 8px 0; } .sk-line.w40 { width: 40%; } .sk-line.w60 { width: 60%; } .sk-line.w80 { width: 80%; }
+.sk-big { height: 30px; width: 55%; margin: 10px 0 6px; }
+.sk-ring { border-radius: 50%; }
+/* Card-shaped placeholders: a loading surface should have the SHAPE of what it
+   becomes, so nothing jumps when the data lands. */
+.sk-card { height: 108px; border-radius: var(--radius-lg, 14px); }
+.sk-tile { height: 64px; border-radius: var(--radius, 10px); }
+
+/* ── smooth height-auto expand with ZERO measuring: grid-rows 0fr -> 1fr ──── */
+.expand { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--dur-3) var(--ease-out); }
+.expand.open { grid-template-rows: 1fr; }
+.expand > div { overflow: hidden; min-height: 0; }
+
+/* ── toasts: spring in, fade out, never shift layout ─────────────────────── */
+.toasts { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 90; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; padding: 0 14px; width: 100%; max-width: 480px; }
+.toast { pointer-events: auto; background: var(--surface); border: 1px solid rgba(255, 255, 255, 0.09); color: var(--text, var(--ink)); border-radius: 12px; padding: 11px 16px; font-size: 14px; box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45); animation: toastin var(--dur-3) var(--ease-spring) both; display: flex; gap: 10px; align-items: center; }
+.toast.out { animation: toastout var(--dur-2) var(--ease-out) both; }
+.toast .tdot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex: none; }
+.toast .tbtn { background: none; border: none; color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; padding: 2px 4px; margin-left: 4px; }
+.toast.err .tdot { background: var(--bad); }
+@keyframes toastin { from { opacity: 0; transform: translateY(14px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes toastout { to { opacity: 0; transform: translateY(8px) scale(0.98); } }
+
+/* ── command palette (⌘K) ────────────────────────────────────────────────── */
+.cmdk-wrap { position: fixed; inset: 0; z-index: 95; background: rgba(0, 0, 0, 0.62); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); display: grid; place-items: start center; padding: 12vh 16px 16px; animation: fadein var(--dur-2) var(--ease-out) both; }
+.cmdk { width: 100%; max-width: 560px; background: var(--surface); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 16px; overflow: hidden; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55); animation: rise var(--dur-2) var(--ease-spring) both; }
+.cmdk input { border: none; background: transparent; padding: 16px 18px; font-size: 16px; width: 100%; color: inherit; border-bottom: 1px solid rgba(255, 255, 255, 0.09); border-radius: 0; }
+.cmdk input:focus { outline: none; border-color: rgba(255, 255, 255, 0.09); }
+.cmdk input:focus-visible { box-shadow: none; } /* the panel is already the focus affordance */
+.cmdk .list { max-height: 320px; overflow-y: auto; padding: 6px; }
+.cmdk .item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 10px; cursor: pointer; font-size: 14.5px; opacity: 0.75; }
+.cmdk .item.on { background: rgba(255, 255, 255, 0.07); opacity: 1; }
+.cmdk .item .hint { color: rgba(255, 255, 255, 0.4); font-size: 12px; white-space: nowrap; }
+kbd { font-family: ui-monospace, monospace; font-size: 10.5px; border: 1px solid rgba(255, 255, 255, 0.12); border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px; opacity: 0.8; }
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── mobile ergonomics ───────────────────────────────────────────────────── */
+@media (max-width: 767.98px) {
+  .btn, .tabs button { min-height: 44px; }
+  input, select, textarea { font-size: 16px; } /* iOS zooms focused inputs under 16px */
+  /* toasts rise above the fixed bottom nav (~76px + safe area tall) */
+  .toasts { bottom: calc(88px + max(22px, var(--safe-bottom, 0px))); }
+}
+
+/* ── the mandate: everything above is optional to the user's nervous system ── */
+@media (prefers-reduced-motion: reduce) {
+  .pagefade, .stagger > *, .toast, .cmdk, .cmdk-wrap { animation: none !important; }
+  .expand, .btn, .card, .kcard, .tabs button, .seg button, .step, .chip.pick { transition: none; }
+  .sk::after { animation: none; }
+  .bar i { transition: none; }
+  /* Hover keeps its shadow (a real depth cue) and drops the travel. */
+  .btn.primary:hover:not(:disabled), .card.pressable:hover, .kcard.pressable:hover { transform: none; }
+}

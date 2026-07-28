@@ -153,6 +153,49 @@ Four ideas carry the design:
 `?fault=db`, `?fault=loader` and `?fault=stale` inject failures on demand so the
 honesty of the surface can be checked rather than assumed.
 
+## One feel: the polish system and the ambient canvas
+
+`packages/design` owns three files, and the shell mounts all three once so every
+tool inherits them — no per-tool forks, nothing to remember when a seventh lands.
+
+- **`index.js`** — the tokens (one midnight canvas, six accents).
+- **`polish.css`** — the motion system: press physics, page/tab transitions,
+  staggered entrances, skeletons, `grid-rows` expand, toasts, ⌘K chrome, focus
+  rings, and one `prefers-reduced-motion` mandate over all of it. This was
+  `apps/runway/src/styles/polish.css` and lived there alone: Runway had the
+  platform's only motion system while the other five tools had none, which is
+  most of why they read as different products. Promoting it meant tokenising it
+  — its `::selection` and primary-button hover glow were hardcoded violet, which
+  was invisible while only Runway used the file and would have painted all six
+  violet the moment it was shared. Every colour in it is `var(--accent)` now.
+- **`ambient.css`** — the wash. Three enormous, very soft pools of the **active
+  tool's accent** drifting behind everything on 54s/63s/78s cycles. Switching
+  tools re-colours the whole room and cross-fades while it does; the pool
+  colours are registered with `@property` as `<color>` specifically so they can
+  animate. ZTS is emerald, Clarify brass, Runway violet, Macro amber, Looper
+  cyan, Business magenta — the background says which tool you are in before you
+  read a word.
+
+Two things about the wash are load-bearing and both fail *silently*, so
+`packages/design/__tests__/polish.test.js` pins them:
+
+1. The shell wrapper sets **`isolation: isolate`**. The layer sits at
+   `z-index: -1`, and in a plain stacking context an in-flow block's background
+   paints after negative-z descendants — so the wrapper's own `var(--bg)` fill
+   covered it completely. For the same reason, **no full-height tool root may
+   paint `var(--bg)`**; the shell already does. (Business's error screen did,
+   and was the one tool in six left with a dead flat canvas.)
+2. The `@property` registrations use **`inherits: true`**. The colours are
+   declared on `.ambient` but consumed by its children's gradients, so
+   `inherits: false` renders three perfectly transparent circles — present,
+   animating, invisible.
+
+Motion is transform-only, the grain is a pseudo-element rather than a fourth
+box, and the composition is drawn in one clamped unit; each of those is worth
+2–3× of the frame budget and the test asserts them. Reduced motion freezes the
+drift and keeps the light — the accent tells you which tool you are in, so it is
+information, not decoration.
+
 ## Stack
 
 - Vite + React 18, single-page; design tokens + shared primitives in `src/ui.jsx`

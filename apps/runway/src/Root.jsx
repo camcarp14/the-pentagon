@@ -11,7 +11,12 @@
 import { useEffect } from "react";
 import { MemoryRouter } from "react-router-dom";
 import appCss from "./styles/app.css?inline";
-import polishCss from "./styles/polish.css?inline";
+// styles/polish.css is gone: it is now @cc/design/polish.css, mounted once by
+// the shell for every tool. Runway had the platform's only motion system and
+// kept it to itself — same product, six different feels. Nothing is lost here
+// (the shared file is that file, tokenised so ::selection and the primary
+// button's hover glow use each tool's accent instead of Runway's violet); it
+// just no longer arrives and departs with Runway's mount.
 import App from "./App.jsx";
 
 // Standardize Runway's nav with the other tools: a TOP bar on desktop (matching
@@ -23,7 +28,7 @@ import App from "./App.jsx";
 // ONE breakpoint, 768px, in FOUR places that must move together:
 //   • this EMBED_OVERRIDES query        (min-width: 768px)
 //   • styles/app.css mobile block       (max-width: 767.98px)
-//   • styles/polish.css mobile block    (max-width: 767.98px)
+//   • @cc/design/polish.css mobile block (max-width: 767.98px)  <- now shared
 //   • ui/primitives.jsx useIsMobile()   (max-width: 767.98px)  <- the JS half
 // 768px is also the shell's own flip (packages/ui useIsMobile), so tool chrome
 // and shell chrome change on the same pixel. Two ways this has already broken:
@@ -67,7 +72,7 @@ export default function RunwayRoot() {
   useEffect(() => {
     const el = document.createElement("style");
     el.id = "rw-scoped-styles";
-    el.textContent = `${polishCss}\n${appCss}\n${EMBED_OVERRIDES}`;
+    el.textContent = `${appCss}\n${EMBED_OVERRIDES}`;
     document.head.appendChild(el);
     return () => el.remove();
   }, []);

@@ -217,9 +217,13 @@ function FaultBanner({ fault }) {
 
 function Centered({ children }) {
   return (
+    // No background fill: the shell wrapper already paints var(--bg), so this
+    // was redundant — and as an in-flow block it painted OVER the shell's
+    // ambient layer (z-index -1), which made Business the one tool in six whose
+    // env-check and error screens sat on a dead flat canvas.
     <div className="biz-root" style={{
       minHeight: "calc(100vh - 52px)", display: "grid", placeItems: "center",
-      padding: "24px 18px", background: "var(--bg)", color: "var(--ink)", fontFamily: "var(--font-body)",
+      padding: "24px 18px", color: "var(--ink)", fontFamily: "var(--font-body)",
     }}>
       {children}
     </div>

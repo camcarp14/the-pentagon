@@ -1,4 +1,5 @@
-// THE POLISH PRIMITIVES — pairs with styles/polish.css.
+// THE POLISH PRIMITIVES — pairs with @cc/design/polish.css (the platform's,
+// mounted by the shell; this file's classes are the same vocabulary).
 import { useState, useEffect, useRef, useMemo, createContext, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -34,7 +35,7 @@ export function Num({ v, f = (x) => x.toLocaleString('en-US'), dur }) {
 
 // ---- responsive branch point ----
 // MUST stay in lockstep with the CSS mobile breakpoint, which lives in three
-// places: app.css and polish.css (max-width: 767.98px) and Root.jsx's
+// places: app.css and @cc/design/polish.css (max-width: 767.98px) and Root.jsx's
 // EMBED_OVERRIDES (min-width: 768px). 768px is also the shell's own flip
 // (@cc/ui useIsMobile), so tool chrome and shell chrome change together.
 // When this disagreed with the CSS (it was 820px while the CSS moved to 768px),

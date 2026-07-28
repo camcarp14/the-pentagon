@@ -293,7 +293,7 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
   /* other .grid uses (skeletons) just go single-column */
   .grid:not(.metrics) { grid-template-columns: 1fr; gap: 8px; }
 
-  /* touch targets: polish.css bumps .btn/.tabs to 42px; cover the rest of
+  /* touch targets: @cc/design/polish.css bumps .btn/.tabs to 44px; cover the rest of
      the tappable set (the stepper is THE move control on mobile) */
   .step, .chip.pick, .seg button { min-height: 44px; }
 

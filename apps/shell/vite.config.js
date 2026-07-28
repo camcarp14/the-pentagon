@@ -12,17 +12,24 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     dedupe: ["react", "react-dom"],
-    alias: {
-      "@cc/design": r("../../packages/design/index.js"),
-      "@cc/ui": r("../../packages/ui/index.jsx"),
-      "@cc/supabase": r("../../packages/supabase/index.js"),
-      "@app/zts": r("../zts/src/Root.jsx"),
-      "@app/clarify": r("../clarify/src/Root.jsx"),
-      "@app/runway": r("../runway/src/Root.jsx"),
-      "@app/macro": r("../macro/src/Root.jsx"),
-      "@app/looper": r("../looper/src/Root.jsx"),
-      "@app/business": r("../business/src/Root.jsx"),
-    },
+    // Array form, not the object shorthand, because these aliases are PREFIX
+    // rewrites: with `"@cc/design": ".../design/index.js"`, an import of
+    // `@cc/design/polish.css` resolves to `.../design/index.js/polish.css` and
+    // the build dies on ENOTDIR. Anchoring the bare specifier with /^…$/ and
+    // giving subpaths their own directory rule is what lets @cc/design ship
+    // stylesheets (polish.css, ambient.css) beside its JS.
+    alias: [
+      { find: /^@cc\/design$/, replacement: r("../../packages/design/index.js") },
+      { find: /^@cc\/design\//, replacement: r("../../packages/design/") },
+      { find: /^@cc\/ui$/, replacement: r("../../packages/ui/index.jsx") },
+      { find: /^@cc\/supabase$/, replacement: r("../../packages/supabase/index.js") },
+      { find: /^@app\/zts$/, replacement: r("../zts/src/Root.jsx") },
+      { find: /^@app\/clarify$/, replacement: r("../clarify/src/Root.jsx") },
+      { find: /^@app\/runway$/, replacement: r("../runway/src/Root.jsx") },
+      { find: /^@app\/macro$/, replacement: r("../macro/src/Root.jsx") },
+      { find: /^@app\/looper$/, replacement: r("../looper/src/Root.jsx") },
+      { find: /^@app\/business$/, replacement: r("../business/src/Root.jsx") },
+    ],
   },
   // .env lives at the REPO ROOT (that is where .env.example sits and what it
   // tells you to copy), but this config's root is apps/shell — npm workspaces

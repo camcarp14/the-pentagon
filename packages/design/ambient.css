@@ -1,0 +1,165 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   AMBIENT — the room takes the colour of the tool you're in.
+
+   One fixed layer behind the whole Pentagon: three enormous, very soft pools of
+   the ACTIVE TOOL'S ACCENT drifting on minute-long cycles over the shared
+   midnight canvas, plus a fine grain that keeps them from banding.
+
+   This is the one place a gradient is allowed, and the reason it earns that is
+   the reason it exists: six tools share one canvas and differ only by accent
+   (see index.js), so a wash built from var(--accent) is the single cheapest way
+   to make switching tools feel like walking into a different room rather than
+   swapping a stylesheet. ZTS is emerald, Clarify brass, Runway violet, Macro
+   amber, Looper cyan, Business magenta — and the background says so before you
+   read a word. Adding a seventh tool needs no work here at all.
+
+   It never touches content: cards, bars and modals are opaque, so the wash reads
+   in the gutters, behind the sticky top bar's glass, and around the edges.
+
+   Everything below about MOTION was profiled in the Board Room app first, where
+   each of these cost real frames. Carried over deliberately — do not "simplify"
+   any of the three:
+
+   · TRANSLATE, NEVER SCALE. Animating scale re-rasterises the layer every
+     frame; translating it does not. (Measured there: 16.7ms → 116ms.)
+   · THE GRAIN IS ::after, NOT AN ELEMENT. As a fourth box it pushed the stack
+     past the point where the pools stayed composited and doubled frame time,
+     for a layer that never moves.
+   · --amb-u IS CLAMPED. Sizing straight off vmax asks a large monitor for
+     2400px pools and doubles the raster cost. Below ~13px/vmax — every phone,
+     most tablets — the clamp is inert.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── the recipe ──────────────────────────────────────────────────────────────
+   The Pentagon is dark-only (MIDNIGHT, #0B0F1A), and every tool accent is
+   already the bright end of its ramp, so the accent goes in unlifted — no
+   toward-surface lift is needed here (the light-mode problem that requires one
+   does not exist on this canvas).
+
+   Registered with @property so they are ANIMATABLE. Custom properties are
+   normally untyped and therefore un-transitionable; typing them as <color> is
+   what lets the whole wash cross-fade when the shell swaps --accent on a tool
+   switch, instead of hard-cutting mid-glide with the toggle pill. That
+   cross-fade is the entire reason this file uses @property.
+
+   `inherits: true` is not a detail — it is the whole thing working. The colours
+   are declared on .ambient but CONSUMED by the .amb-* children's gradients, so
+   with `inherits: false` (the intuitive choice, and the first thing tried here)
+   every pool resolves var(--amb-N) to the initial-value instead of the parent's
+   colour. That renders three fully transparent circles: the layer is present,
+   animating, and completely invisible, with only the grain reaching the screen.
+   Caught by a pixel probe showing a flat grey delta where a green one belonged. */
+@property --amb-1 { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --amb-2 { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --amb-3 { syntax: "<color>"; inherits: true; initial-value: transparent; }
+
+.ambient {
+  --amb-1: color-mix(in srgb, var(--accent) 17%, transparent);
+  --amb-2: color-mix(in srgb, var(--accent-hi, var(--accent)) 11%, transparent);
+  --amb-3: color-mix(in srgb, var(--accent-deep, var(--accent)) 15%, transparent);
+  --amb-grain: 0.05;
+  /* The one unit the composition is drawn in. vmax holds the layout in portrait
+     and landscape; the clamp stops a large display from asking for huge pools. */
+  --amb-u: min(1vmax, 13px);
+
+  position: fixed;
+  inset: 0;
+  /* -1, and the themed wrapper in the shell sets `isolation: isolate` so this
+     lands ABOVE that wrapper's opaque var(--bg) fill instead of under it. In a
+     plain stacking context an in-flow block's background paints after
+     negative-z descendants, which would hide this layer completely and in total
+     silence — it is decoration, so nothing would break, it would just stop
+     being there. That is why the shell's isolate is load-bearing, and why
+     ambient.test.js asserts it. */
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  contain: layout paint style;
+
+  /* Both transitions are one-shot, driven by --accent changing on a tool
+     switch. 520ms lands just after the toggle pill finishes its glide, so the
+     room re-lights as the new tool's name settles. */
+  transition: --amb-1 520ms var(--ease-out, ease), --amb-2 520ms var(--ease-out, ease), --amb-3 520ms var(--ease-out, ease);
+  /* The room wakes up rather than snapping on. */
+  animation: amb-wake 1600ms var(--ease-out, ease) both;
+}
+@keyframes amb-wake { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── grain ───────────────────────────────────────────────────────────────────
+   Desaturated fractal noise, tiled at 140px, riding on the layer itself. It
+   does one unglamorous job: a 17%-alpha gradient spread across a screen crosses
+   barely a dozen 8-bit steps, and on a near-black canvas those steps are
+   visible as rings. Noise dithers them away. Static — animated grain is a
+   battery bill for a shimmer nobody asked for. */
+.ambient::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--amb-grain);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+}
+
+/* Pools are anchored well outside the viewport: you only ever see the soft
+   shoulder of one, never its edge. closest-side plus a mid stop gives a falloff
+   that reads as light rather than as a circle. */
+.amb-pool {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+.amb-1 {
+  width: calc(96 * var(--amb-u)); height: calc(96 * var(--amb-u));
+  top: calc(-44 * var(--amb-u)); left: calc(-32 * var(--amb-u));
+  background: radial-gradient(closest-side, var(--amb-1), color-mix(in srgb, var(--amb-1) 45%, transparent) 46%, transparent 100%);
+  animation: amb-drift-1 54s var(--ease-inout, ease-in-out) infinite alternate;
+}
+.amb-2 {
+  width: calc(104 * var(--amb-u)); height: calc(104 * var(--amb-u));
+  bottom: calc(-52 * var(--amb-u)); right: calc(-38 * var(--amb-u));
+  background: radial-gradient(closest-side, var(--amb-2), color-mix(in srgb, var(--amb-2) 45%, transparent) 46%, transparent 100%);
+  animation: amb-drift-2 78s var(--ease-inout, ease-in-out) infinite alternate;
+}
+/* The small one is the highlight — it crosses the middle of the screen, which
+   is the only reason the wash reads as depth instead of two corner glows. */
+.amb-3 {
+  width: calc(58 * var(--amb-u)); height: calc(58 * var(--amb-u));
+  top: 22%; left: 26%;
+  background: radial-gradient(closest-side, var(--amb-3), transparent 100%);
+  animation: amb-drift-3 63s var(--ease-inout, ease-in-out) infinite alternate;
+}
+
+/* Coprime-ish periods (54 / 78 / 63) mean the three cycles do not re-align for
+   hours — there is no frame the eye can learn. Travel works out at roughly a
+   pixel a second: you should notice the room looks different, never that
+   something moved. */
+@keyframes amb-drift-1 {
+  from { transform: translate3d(0, 0, 0); }
+  50%  { transform: translate3d(calc(10 * var(--amb-u)), calc(7 * var(--amb-u)), 0); }
+  to   { transform: translate3d(calc(-6 * var(--amb-u)), calc(13 * var(--amb-u)), 0); }
+}
+@keyframes amb-drift-2 {
+  from { transform: translate3d(0, 0, 0); }
+  50%  { transform: translate3d(calc(-12 * var(--amb-u)), calc(-6 * var(--amb-u)), 0); }
+  to   { transform: translate3d(calc(7 * var(--amb-u)), calc(-13 * var(--amb-u)), 0); }
+}
+@keyframes amb-drift-3 {
+  from { transform: translate3d(0, 0, 0); }
+  50%  { transform: translate3d(calc(15 * var(--amb-u)), calc(-10 * var(--amb-u)), 0); }
+  to   { transform: translate3d(calc(-13 * var(--amb-u)), calc(9 * var(--amb-u)), 0); }
+}
+
+/* ── the mandate ─────────────────────────────────────────────────────────────
+   Reduced motion keeps the light and stops the drift — and keeps the tool
+   re-colour, which is information, not decoration: it tells you which tool you
+   are in. Removing the layer outright would hand these users a flatter, less
+   informative app instead of the same room standing still. */
+@media (prefers-reduced-motion: reduce) {
+  .ambient { animation: none; }
+  .amb-pool { animation: none !important; will-change: auto; }
+  .amb-1 { transform: translate3d(calc(10 * var(--amb-u)), calc(7 * var(--amb-u)), 0); }
+  .amb-2 { transform: translate3d(calc(-12 * var(--amb-u)), calc(-6 * var(--amb-u)), 0); }
+  .amb-3 { transform: translate3d(calc(15 * var(--amb-u)), calc(-10 * var(--amb-u)), 0); }
+}

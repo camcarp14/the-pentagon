@@ -5,6 +5,8 @@
   "type": "module",
   "main": "index.js",
   "exports": {
-    ".": "./index.js"
+    ".": "./index.js",
+    "./polish.css": "./polish.css",
+    "./ambient.css": "./ambient.css"
   }
 }
