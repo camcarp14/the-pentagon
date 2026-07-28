@@ -110,7 +110,9 @@ export default function TradeCard({ derived, settings, position, plan }) {
         <Row
           k="Leverage"
           v={derived.beta == null ? '—' : `${round2(derived.beta)}× BTC`}
-          tone={derived.torqueRead?.grade === 'rich' ? 'warn' : derived.torqueRead?.grade === 'cheap' ? 'go' : 'flat'}
+          // 'efficient', not 'cheap' — torque.js has only ever emitted
+          // efficient/fair/rich/unknown, so the green tone was unreachable.
+          tone={derived.torqueRead?.grade === 'rich' ? 'warn' : derived.torqueRead?.grade === 'efficient' ? 'go' : 'flat'}
           note={leverageNote(derived)}
         />
         <Row

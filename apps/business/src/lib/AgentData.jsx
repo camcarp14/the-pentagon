@@ -90,7 +90,15 @@ export function AgentDataProvider({ children }) {
   const inflight = useRef({});
   const fault = activeFault();
 
-  useEffect(() => () => { mounted.current = false; }, []);
+  // Set on the way IN as well as cleared on the way out. A cleanup-only version
+  // is a one-way latch: React 18 runs mount → cleanup → mount for every effect
+  // under StrictMode, which leaves `mounted` false for the life of the provider
+  // and makes fetchSource discard every response it ever receives — ten panels
+  // stuck in the loading skeleton with the network tab full of 200s.
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   const fetchSource = useCallback(async (key) => {
     const spec = SOURCES[key];

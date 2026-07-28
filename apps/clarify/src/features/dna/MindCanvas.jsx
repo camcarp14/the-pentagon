@@ -757,7 +757,13 @@ function MindCanvasImpl({
     }
   });
   const flareRefCb = (id) => cached(S.refCbs.flare, id, () => (el) => { if (el) S.flareEls.set(id, el); else S.flareEls.delete(id); });
-  const edgeRefCb = (id, key) => cached(S.refCbs.edge, `${id} ${key}`, () => (el) => {
+  // The cache key separator is a NUL written as the ESCAPE \u0000, not as a
+  // literal NUL byte in the source. It was a raw byte, which made this
+  // 1060-line file read as `binary` to grep/ripgrep: every repo-wide search
+  // silently skipped the whole file, so a rename or a sweep for a call site
+  // inside it reported clean while having looked at none of it. Same
+  // separator, same runtime string; the file is plain text again.
+  const edgeRefCb = (id, key) => cached(S.refCbs.edge, `${id}\u0000${key}`, () => (el) => {
     let rec = S.edgeEls.get(id);
     if (!rec) { rec = { g: null, vis: null, hit: null }; S.edgeEls.set(id, rec); }
     rec[key] = el;

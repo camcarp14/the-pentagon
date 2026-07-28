@@ -62,6 +62,14 @@ export function initialStop({ mode, entry, atr, atrMult = 2.5, swingLow, padAtr 
   }
   stop = round2(stop)
   if (stop >= entry) return out(null, detail, 'stop_not_below_entry')
+  // A stop must be a PRICE, and prices are positive. `stop >= entry` alone let
+  // the other end through: a wide ATR (or a large atrMult) against a low entry
+  // produced a stop at or below zero — e.g. entry 10, ATR 20, mult 2.5 → -40 —
+  // and returned it with warning: null, i.e. as a good stop. Downstream that is
+  // a per-share risk of 50 on a share that can only lose 10, so the sizer takes
+  // a fifth of the position the risk budget actually allows, and the cockpit
+  // renders "stop −40" as a level to work from.
+  if (!(stop > 0)) return out(null, detail, 'stop_below_zero')
   return out(stop, detail)
 }
 

@@ -23,6 +23,12 @@ export function unauthorized() {
   return json({ error: 'unauthorized' }, 401)
 }
 
+// A valid session proves the caller signed in somewhere on this project; it does
+// not prove they are the operator. These handlers read and REWRITE the trade
+// journal, the position and the risk settings, so the same ALLOWED_EMAIL pin
+// that netlify/functions/lib/auth.mjs applies is applied here. Enforced only
+// when the variable is set, so an unconfigured deploy keeps working — see the
+// matching note in netlify/functions/_shared/requireAuth.cjs.
 export async function checkAuth(req) {
   const header = req.headers.get('authorization') || req.headers.get('Authorization') || ''
   const token = header.replace(/^Bearer\s+/i, '').trim()
@@ -31,7 +37,11 @@ export async function checkAuth(req) {
     const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
       headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${token}` },
     })
-    return res.ok
+    if (!res.ok) return false
+    const allowed = process.env.ALLOWED_EMAIL
+    if (!allowed) return true
+    const user = await res.json().catch(() => null)
+    return String(user?.email || '').toLowerCase() === String(allowed).toLowerCase()
   } catch {
     return false
   }

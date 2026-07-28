@@ -73,7 +73,17 @@ export function validateTrade(body) {
   return { ok: true, value: { entryDate, exitDate, entry, exit, shares, initialStop, kind, note } }
 }
 
+// Shape AND existence. `Date.parse` is not a calendar check: it silently rolls
+// an out-of-range day forward, so '2026-02-31' parsed fine and was stored as a
+// valid date that every later render and sort showed as March 3rd. Same for
+// '2026-04-31' (→ May 1) and '2026-02-29' in a non-leap year (→ Mar 1) — a
+// journal entry dated a day the user never picked, with nothing anywhere saying
+// it had been moved. Round-tripping the parse back to YYYY-MM-DD is the only
+// way to catch it: a rolled-over date no longer equals what came in.
 function isIsoDate(s) {
-  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`))
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false
+  const t = Date.parse(`${s}T00:00:00Z`)
+  if (Number.isNaN(t)) return false
+  return new Date(t).toISOString().slice(0, 10) === s
 }
 function err(errors) { return { ok: false, errors } }

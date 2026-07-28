@@ -61,10 +61,24 @@ In the **clarify** project → **Settings → API → Exposed schemas**: add `ru
 | `SUPABASE_URL` | clarify URL (server-side) |
 | `SUPABASE_ANON_KEY` | clarify anon |
 | `SUPABASE_SERVICE_ROLE_KEY` | clarify service role — Runway scans, Clarify writes, `scan-cron` |
-| `ALLOWED_EMAIL` | `cam.carp14@gmail.com` (function-side gate) |
+| `ALLOWED_EMAIL` | `cam.carp14@gmail.com` — the function-side operator gate |
 | `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` / `GMAIL_REFRESH_TOKEN` | Clarify send/read email |
 
 `COMMIT_REF` / `CONTEXT` are injected by Netlify automatically.
+
+**On `ALLOWED_EMAIL`.** Every operator function now pins to it, not just
+Runway's: `_shared/requireAuth.cjs` (claude proxy, send-email, read-emails,
+check-replies, prospect-proxy, shopify-publish, queue-execute) and
+`netlify/shared/util.mjs` (Macro's journal / position / settings) both compare
+the verified session's email against it and answer 403 on a mismatch. Verifying
+a token only proves the caller signed in *somewhere on the project* — these
+handlers send mail as Cameron, spend the API budget and rewrite the trade
+journal, so a second account on the project would otherwise inherit all of it.
+
+It is enforced **only when set**, so a half-configured deploy keeps working
+rather than locking its own operator out of every tool at once. Leaving it unset
+is not a supported configuration — `/.netlify/functions/env-check` reports it as
+missing, and until it is set any signed-in account passes these gates.
 
 ## 4. Deploy
 

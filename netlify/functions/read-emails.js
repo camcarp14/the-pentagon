@@ -24,14 +24,26 @@ exports.handler = async (event) => {
       }),
     });
 
-    const { access_token } = await tokenRes.json();
+    // A revoked or rotated refresh token answers 400 with an error body and no
+    // access_token. Unchecked, the Gmail calls below then went out with
+    // "Bearer undefined", came back 401, and `listData.messages || []` turned
+    // that into an empty inbox — good news reported while completely blind.
+    // _shared/replies.cjs already refuses to make that trade; so does this now.
+    const tokenData = await tokenRes.json().catch(() => ({}));
+    if (!tokenData.access_token) {
+      throw new Error(`GMAIL_TOKEN_FAILED: ${JSON.stringify(tokenData).slice(0, 300)}`);
+    }
+    const access_token = tokenData.access_token;
 
     // List recent messages in inbox (replies to our outreach)
     const listRes = await fetch(
       "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=20&q=in:inbox",
       { headers: { Authorization: `Bearer ${access_token}` } }
     );
-    const listData = await listRes.json();
+    const listData = await listRes.json().catch(() => ({}));
+    if (!listRes.ok) {
+      throw new Error(`GMAIL_LIST_FAILED: HTTP ${listRes.status} ${JSON.stringify(listData).slice(0, 300)}`);
+    }
     const messages = listData.messages || [];
 
     // Fetch details for each message

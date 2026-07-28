@@ -19,6 +19,7 @@
 // screen exists to give.
 // ═══════════════════════════════════════════════════════════════════════════
 import { useCallback, useEffect, useMemo, useState } from "react";
+import DOMPurify from "dompurify";
 import { supabase } from "./supabaseClient";
 import { T, syne } from "./theme";
 import { enginePhase, enginePlays, humanGap, PHASE } from "@cc/ops/plays.js";
@@ -233,7 +234,13 @@ export default function EnginePanel({ isMobile }) {
           {openId === item.id && (
             <div style={{ padding: "0 14px 14px" }}>
               <div style={{ background: T.navy, border: `1px solid ${T.line}`, borderRadius: 10, padding: 12, maxHeight: 320, overflowY: "auto", fontSize: 12.5, color: T.ink, lineHeight: 1.65, marginBottom: 10 }}
-                dangerouslySetInnerHTML={{ __html: drafts.find((d) => d.id === item.id)?.body_html || "" }} />
+                // SANITISE. body_html is model-written and lands in the table
+                // through the content engine, so it is untrusted markup by the
+                // time it reaches a browser — a <script> or an onerror= handler
+                // in a draft would run against a signed-in operator's session.
+                // App.jsx and factory.jsx already pass their HTML through
+                // DOMPurify; this render site was the one that did not.
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(drafts.find((d) => d.id === item.id)?.body_html || "") }} />
               <div style={{ display: "flex", gap: 8 }}>
                 <Btn onClick={decide(item, "approve")} disabled={!!busy} tone={T.green}>{busy === item.id ? "…" : "Publish"}</Btn>
                 <Btn onClick={decide(item, "reject")} disabled={!!busy}>Reject</Btn>

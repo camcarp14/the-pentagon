@@ -582,7 +582,7 @@ function MissionView({ L, onStarted }) {
           <div className="lp-ttl">How long</div>
           <div className="lp-seg c3">
             {DURATIONS.map((d) => (
-              <button type="button" key={d} type="button" className={durationMin === d ? "on" : ""} onClick={() => setDurationMin(d)}>
+              <button type="button" key={d} className={durationMin === d ? "on" : ""} onClick={() => setDurationMin(d)}>
                 <span className="k">{d < 60 ? `${d}m` : `${d / 60}h`}</span>
               </button>
             ))}

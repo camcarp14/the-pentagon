@@ -42,7 +42,7 @@ const BAND = [
  * @param arm        armChecklist(mstrCandles, btcCandles) result
  * @param pullback   derived.pullback
  * @param breakout   derived.breakout
- * @param torqueRead derived.torqueRead  ({ grade: 'cheap'|'fair'|'rich', text })
+ * @param torqueRead derived.torqueRead  ({ grade: 'efficient'|'fair'|'rich'|'unknown', text })
  * @param mNav       derived.nav?.mNav   (null when holdings/shares are unknown)
  * @returns { score, max, band, label, plain, gatesPassed, gatesTotal, triggerLive, parts }
  */
@@ -69,9 +69,15 @@ export function tradeWindow({ arm, pullback, breakout, torqueRead, mNav } = {}) 
     { key: 'trigger', label: triggerLive ? 'trigger live' : 'no live trigger', points: triggerLive ? 3 : 0 },
   ]
 
+  // GRADE NAMES COME FROM torqueRead(), NOT FROM THIS FILE'S MEMORY OF THEM.
+  // torque.js emits 'efficient' | 'fair' | 'rich' | 'unknown'. This branch used
+  // to test for 'cheap', a grade nothing has ever produced, so the documented
+  // "+1 when the leverage is cheap" was unreachable: an efficient read scored
+  // the same 0 as a fair one, and only the -1 penalty could ever fire. The
+  // scale was silently 0-9 with a downward tilt, not the 0-10 above.
   let leveragePoints = 0
-  if (mNav != null && torqueRead?.grade) {
-    leveragePoints = torqueRead.grade === 'cheap' ? 1 : torqueRead.grade === 'rich' ? -1 : 0
+  if (mNav != null && torqueRead?.grade && torqueRead.grade !== 'unknown') {
+    leveragePoints = torqueRead.grade === 'efficient' ? 1 : torqueRead.grade === 'rich' ? -1 : 0
     parts.push({ key: 'leverage', label: `leverage ${torqueRead.grade}`, points: leveragePoints })
   }
 

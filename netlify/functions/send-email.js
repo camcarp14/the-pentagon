@@ -16,7 +16,17 @@ exports.handler = async (event) => {
   const auth = await requireAuth(event);
   if (!auth.ok) return { statusCode: auth.status, body: JSON.stringify({ error: auth.error }) };
 
-  const { to, subject, body, replyToMessageId, threadId } = JSON.parse(event.body);
+  // Parsed inside a guard: this was a bare JSON.parse outside the try below, so
+  // an absent or malformed body threw straight out of the handler. The caller
+  // saw an opaque platform 502 with no message instead of the 400 that says
+  // what was wrong.
+  let payload;
+  try {
+    payload = JSON.parse(event.body || "{}");
+  } catch {
+    return { statusCode: 400, body: JSON.stringify({ error: "Invalid JSON body" }) };
+  }
+  const { to, subject, body, replyToMessageId, threadId } = payload;
 
   if (!to || !subject || !body) {
     return { statusCode: 400, body: "Missing required fields: to, subject, body" };
