@@ -111,22 +111,37 @@ export const handler = async () => {
       return { statusCode: 200, body: JSON.stringify({ skipped: 'direction_incomplete', missing }) };
     }
 
+    //
+    // A FAILED COUNT IS NOT A COUNT OF ZERO — see the matching note in
+    // content-engine.mjs. `count || 0` on an errored query read as "nothing
+    // drafted today, nothing awaiting review", which is the most permissive
+    // reading of the two numbers whose whole job is to say STOP. On this engine
+    // that means writing cold emails past the daily cap.
     const dayStart = new Date(now); dayStart.setUTCHours(0, 0, 0, 0);
-    const [{ count: preparedToday }, { count: pendingTotal }] = await Promise.all([
+    const [todayRes, pendingRes] = await Promise.all([
       sb.from('outreach').select('id', { count: 'exact', head: true })
         .in('status', OUTREACH_DRAFT_STATUSES).gte('created_at', dayStart.toISOString()),
       sb.from('outreach').select('id', { count: 'exact', head: true }).in('status', OUTREACH_DRAFT_STATUSES),
     ]);
+    const countErr = todayRes.error || pendingRes.error;
+    if (countErr || !Number.isFinite(todayRes.count) || !Number.isFinite(pendingRes.count)) {
+      const why = countErr?.message || 'count came back null';
+      await finishRun(sb, runId, { ok: true, note: `budget unreadable, refusing to draft: ${why}` }, Date.now());
+      console.warn(`[clarify.outbound] budget unreadable, skipping pass: ${why}`);
+      return { statusCode: 200, body: JSON.stringify({ skipped: 'budget_unreadable', error: why }) };
+    }
+    const preparedToday = todayRes.count;
+    const pendingTotal = pendingRes.count;
 
     const budget = preparationBudget({
       perDay: direction.perDay,
-      preparedToday: preparedToday || 0,
-      pendingTotal: pendingTotal || 0,
+      preparedToday,
+      pendingTotal,
     });
     if (budget < 1) {
       await finishRun(sb, runId, {
         ok: true,
-        note: `at capacity: ${preparedToday || 0} today (cap ${direction.perDay}), ${pendingTotal || 0} awaiting review`,
+        note: `at capacity: ${preparedToday} today (cap ${direction.perDay}), ${pendingTotal} awaiting review`,
       }, Date.now());
       return { statusCode: 200, body: JSON.stringify({ skipped: 'at_capacity' }) };
     }
