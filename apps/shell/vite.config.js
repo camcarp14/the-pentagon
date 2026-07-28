@@ -14,6 +14,7 @@ export default defineConfig({
     dedupe: ["react", "react-dom"],
     alias: {
       "@cc/design": r("../../packages/design/index.js"),
+      "@cc/mind": r("../../packages/mind/index.js"),
       "@cc/ui": r("../../packages/ui/index.jsx"),
       "@cc/supabase": r("../../packages/supabase/index.js"),
       "@app/zts": r("../zts/src/Root.jsx"),
