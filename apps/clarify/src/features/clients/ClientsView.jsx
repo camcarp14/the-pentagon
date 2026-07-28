@@ -3,7 +3,7 @@ import { T, SEV as SEV_TOKENS } from "../../theme";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "../../config.js";
 import { sm } from "../../lib/store.js";
 import { sbAuth, currentAccessToken } from "../../lib/supabase.js";
-import { EmptyState } from "../../ui.jsx";
+import { EmptyState, SkeletonRows } from "../../ui.jsx";
 
 // ─── Clients View ─────────────────────────────────────────────────────────────
 // ─── Client Detail — full account intelligence page ──────────────────────────
@@ -504,9 +504,12 @@ export function ClientsView({ deepClientId = null, onNavigate }) {
   const ca = (id) => filteredActions.filter(a => a.client_id === id);
   const criticals = filteredFindings.filter(f => f.severity === "critical").length;
 
+  // A skeleton shaped like the client list it resolves into, not a spinner in
+  // the middle of an empty screen. The page then DEVELOPS — the rows are
+  // already where they will be, so nothing jumps when the data lands.
   if (loading) return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "calc(100vh - 48px)", background: "transparent" }}>
-      <div style={{ width: "28px", height: "28px", border: `2px solid ${T.line}`, borderTopColor: T.gold, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+    <div className="pagefade" style={{ padding: "16px 0" }}>
+      <SkeletonRows count={4} />
     </div>
   );
 

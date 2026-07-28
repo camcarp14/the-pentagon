@@ -11,8 +11,16 @@
 // ═══════════════════════════════════════════════════════════════════════════
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { M } from "@cc/design";
+import { installPolish } from "./polish.js";
 
 export { M };
+export { POLISH_CSS, installPolish } from "./polish.js";
+
+// The motion + ergonomics floor, installed on import. Every tool already reaches
+// for something in this module, so importing @cc/ui IS the wiring — there is no
+// per-app setup step to forget, and no tool can end up as the one that hard-cuts
+// while the other five glide. Idempotent; six lazy tools install one stylesheet.
+installPolish();
 
 // One responsive hook for the whole platform. Each surface passes the breakpoint
 // it wants (phones ~680, tablets ~820, the shell chrome 768) instead of every
@@ -107,6 +115,14 @@ const shimmerStyle = (extra) => ({
 
 export function SkeletonLine({ width = "100%", height = "11px", style }) {
   return <div style={shimmerStyle({ width, height, borderRadius: "5px", ...style })} />;
+}
+
+/** A solid block placeholder — for a chart, a map, an editor pane. Sized by the
+ *  caller so it matches the thing it resolves into rather than being a generic
+ *  grey box, which is the difference between a page developing and a page
+ *  showing a loading state. */
+export function SkeletonBlock({ width = "100%", height = "80px", radius = "14px", style }) {
+  return <div style={shimmerStyle({ width, height, borderRadius: radius, ...style })} />;
 }
 
 export function SkeletonCard({ style }) {
@@ -341,6 +357,114 @@ export function CommandPalette({ open, onClose, actions }) {
           <span>↑↓ navigate</span><span>↵ select</span><span>esc close</span>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Expand — height:auto with zero measuring ────────────────────────────────
+// grid-template-rows 0fr → 1fr animates to the content's natural height without
+// a ResizeObserver, a measured max-height, or the jank both produce. The CSS
+// lives in polish.js; this is the markup contract it needs (one wrapper, one
+// overflow-hidden child).
+//
+// Children are unmounted while closed so a collapsed panel cannot keep polling,
+// hold a subscription, or trap focus — a closed panel that is still working is
+// the bug this shape prevents.
+export function Expand({ open, children, style }) {
+  return (
+    <div className={`expand${open ? " open" : ""}`} aria-hidden={!open} style={style}>
+      <div>{open ? children : null}</div>
+    </div>
+  );
+}
+
+// ─── ErrorState — a dead end is never acceptable ─────────────────────────────
+// The rule this enforces: every error offers a way forward. A banner that says
+// what broke and nothing else leaves the operator with reload-the-page as their
+// only move, which on a phone at 7am means giving up.
+export function ErrorState({ title = "That didn't load", detail, onRetry, retryLabel = "Try again", compact = false, style }) {
+  return (
+    <div
+      role="alert"
+      style={{
+        display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 10,
+        padding: compact ? "12px 14px" : "18px 20px",
+        border: `1px solid color-mix(in srgb, ${U.red} 34%, transparent)`,
+        background: `color-mix(in srgb, ${U.red} 8%, transparent)`,
+        borderRadius: 14, ...style,
+      }}
+    >
+      <div style={{ fontSize: compact ? 13 : 14, fontWeight: 700, color: U.ink, fontFamily: U.fontDisplay }}>{title}</div>
+      {detail && (
+        <div style={{ fontSize: 12.5, color: U.sub, lineHeight: 1.55, fontFamily: U.fontMono, wordBreak: "break-word" }}>
+          {detail}
+        </div>
+      )}
+      {onRetry && (
+        <button type="button" onClick={onRetry} style={{
+          minHeight: 36, padding: "0 14px", borderRadius: 9, cursor: "pointer",
+          border: `1px solid ${U.line}`, background: U.surface, color: U.ink,
+          fontSize: 12.5, fontWeight: 700, fontFamily: U.fontDisplay,
+        }}>{retryLabel}</button>
+      )}
+    </div>
+  );
+}
+
+// ─── useTween — the hook behind AnimatedNumber, exposed ──────────────────────
+// Rings and gauges need the tweened NUMBER rather than a rendered element, and
+// two apps had each grown their own copy to get at it. Same ease-out cubic and
+// the same reduced-motion bail as AnimatedNumber, so a page cannot animate one
+// figure and snap another.
+export function useTween(target, dur = 700) {
+  const [v, setV] = useState(target ?? 0);
+  const fromRef = useRef(target ?? 0);
+  useEffect(() => {
+    if (target == null) return undefined;
+    const from = fromRef.current ?? 0;
+    if (from === target || reduceMotion()) { fromRef.current = target; setV(target); return undefined; }
+    let raf;
+    const t0 = performance.now();
+    const step = (now) => {
+      const p = Math.min(1, (now - t0) / dur);
+      setV(from + (target - from) * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) raf = requestAnimationFrame(step);
+      else fromRef.current = target;
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, dur]);
+  return target == null ? null : Math.round(v);
+}
+
+// ─── Short aliases ───────────────────────────────────────────────────────────
+// Macro and Runway grew a terser vocabulary (Num, SkLine, SkCard) for the same
+// components ZTS and Clarify call AnimatedNumber and Skeleton*. Both names now
+// resolve to ONE implementation: renaming eleven files to settle a style
+// argument would be churn with a regression budget and no user-visible gain.
+export const Num = ({ v, f, dur, style }) => <AnimatedNumber value={v} format={f} duration={dur} style={style} />;
+export const SkLine = SkeletonLine;
+export const SkCard = SkeletonCard;
+export const SkBoard = SkeletonBoard;
+
+/** A full-page skeleton shaped like the page it resolves into. Replaces a
+ *  page-level spinner, which is the single loudest "this is a tool, not a
+ *  product" tell there is. */
+export function SkPage({ cards = 4, rings = 0 }) {
+  return (
+    <div className="pagefade" style={{ padding: 4 }}>
+      {rings > 0 && (
+        <div style={{ display: "flex", gap: 22, alignItems: "center", flexWrap: "wrap", margin: "6px 0 18px" }}>
+          {Array.from({ length: rings }).map((_, i) => (
+            <SkeletonBlock key={i} width="84px" height="84px" radius="50%" />
+          ))}
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <SkeletonLine width="60%" style={{ marginBottom: 8 }} />
+            <SkeletonLine width="80%" />
+          </div>
+        </div>
+      )}
+      <SkeletonRows count={cards} />
     </div>
   );
 }

@@ -100,17 +100,6 @@ export function Btn({ tone = "ghost", size = "md", disabled, busy, children, sty
   );
 }
 
-export function Spinner({ size = 12 }) {
-  return (
-    <span
-      className="biz-spin"
-      style={{
-        width: size, height: size, borderRadius: "50%", flexShrink: 0,
-        border: "2px solid currentColor", borderTopColor: "transparent", opacity: 0.8, display: "inline-block",
-      }}
-    />
-  );
-}
 
 // ─── badges ──────────────────────────────────────────────────────────────────
 export function Badge({ tone = "empty", children, title, mono = true }) {

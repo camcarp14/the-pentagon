@@ -3,7 +3,7 @@ import { callClaude } from "../../lib/claudeApi.js";
 import { ANALYST_SYSTEM_PROMPT } from "../../lib/prompts.js";
 import { memoryHistory, sm, store } from "../../lib/store.js";
 import { T, SEV } from "../../theme";
-import { EmptyState } from "../../ui.jsx";
+import { EmptyState, SkeletonLine, SkeletonRows } from "../../ui.jsx";
 
 // ─── Analyst: Upload Card ─────────────────────────────────────────────────────
 export function UploadCard({ type, upload, onUpload, onRemove }) {
@@ -632,11 +632,16 @@ export function AnalystView() {
 
         {/* Loading */}
         {analyzing && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "360px" }}>
-            <div style={{ width: "36px", height: "36px", border: `2px solid ${T.lineSoft}`, borderTopColor: T.gold, borderRadius: "50%", animation: "spin 0.8s linear infinite", marginBottom: "16px" }} />
-            <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          // The status line stays — an analysis run takes long enough that
+          // naming the stage is real information, not decoration. What changes
+          // is the shape underneath it: a skeleton of the findings list it
+          // resolves into, so the answer arrives in place instead of replacing
+          // a spinner with a full page of content.
+          <div className="pagefade" style={{ minHeight: "360px", paddingTop: "8px" }}>
             <div style={{ fontSize: "13px", fontWeight: 600, color: T.muted, fontFamily: T.fontDisplay }}>Analyzing account data…</div>
-            <div style={{ fontSize: "11px", color: T.faint, marginTop: "4px" }}>Diagnosing, prioritizing, prescribing</div>
+            <div style={{ fontSize: "11px", color: T.faint, marginTop: "4px", marginBottom: "18px" }}>Diagnosing, prioritizing, prescribing</div>
+            <SkeletonLine width="46%" height="15px" style={{ marginBottom: "14px" }} />
+            <SkeletonRows count={3} />
           </div>
         )}
 
