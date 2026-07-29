@@ -124,7 +124,11 @@ export function VoiceProvider({ children }) {
       },
       onError: (e) => {
         setMicError(e.message);
-        if (e.kind === "denied") setSettings({ ambient: false });
+        // Anything that isn't a passing network blip leaves the microphone dead
+        // until someone changes something, so the ambient switch must stop
+        // claiming SYNC is listening. `network` is the one kind that recovers
+        // on its own, so it alone leaves the setting where it was.
+        if (e.kind !== "network") setSettings({ ambient: false });
       },
       getWake: () => settingsRef.current.wakeWord || "sync",
     });

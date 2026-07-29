@@ -8,7 +8,7 @@
 // getUserMedia and an AudioContext, both of which work in a standalone app, and
 // sends audio to a transcription service that runs anywhere.
 //
-// Two decisions worth knowing:
+// Decisions worth knowing:
 //
 // RAW PCM, NOT MediaRecorder. MediaRecorder's container support splits along
 // exactly the wrong line — Chrome gives webm/opus, Safari gives mp4/AAC, and
@@ -22,7 +22,16 @@
 // number. Correct on hardware that honours the request and on hardware that
 // ignores it.
 //
-// The credential is a two-minute key minted per session by
+// THE CREDENTIAL GOES IN THE URL, NOT THE SUBPROTOCOL. Browsers cannot set
+// headers on a WebSocket, so Deepgram's documented workaround for an API key is
+// to smuggle it through `Sec-WebSocket-Protocol` — `new WebSocket(url, ["token",
+// key])`. That trick is reported broken for the short-lived JWTs this app uses:
+// identical code succeeds with a permanent key and fails the handshake with a
+// temporary one. The working form is a query parameter. Since the reports
+// disagree on which parameter name, connect() tries one and falls back to the
+// other on a refused handshake, then remembers which worked — see AUTH_FORMS.
+//
+// The credential is a 60-second token minted per connection by
 // netlify/functions/deepgram-key.mjs. A WebSocket cannot be proxied through a
 // Netlify function, so the browser has to hold something; this is the smallest
 // something that works.
@@ -52,6 +61,20 @@ class PcmTap extends AudioWorkletProcessor {
 registerProcessor("pcm-tap", PcmTap);
 `;
 
+// Two ways of putting a JWT on the URL. Deepgram's own fix for the failing
+// subprotocol handshake names `access_token`; its query-parameter reference
+// documents `authorization` taking a scheme-prefixed value. Rather than bet on
+// one and leave the operator with a dead microphone and a 1006 close code, we
+// try the first and fall back to the second.
+const AUTH_FORMS = [
+  (token) => ({ access_token: token }),
+  (token) => ({ authorization: `bearer ${token}` }),
+];
+
+// Survives across recognizer instances: once a handshake completes we stop
+// paying for the fallback dance on every reconnect.
+let provenForm = null;
+
 /** Is this browser capable of the capture path at all? */
 export const supported =
   typeof window !== "undefined" &&
@@ -59,23 +82,25 @@ export const supported =
   !!(window.AudioContext || window.webkitAudioContext) &&
   typeof AudioWorkletNode !== "undefined";
 
-async function mintKey() {
+async function mintToken() {
   const { supabase } = await import("../lib/supabase.js");
-  const token = (await supabase?.auth.getSession())?.data?.session?.access_token;
+  const session = (await supabase?.auth.getSession())?.data?.session?.access_token;
 
   const res = await fetch("/.netlify/functions/deepgram-key", {
     method: "POST",
-    headers: token ? { authorization: `Bearer ${token}` } : {},
+    headers: session ? { authorization: `Bearer ${session}` } : {},
   });
 
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    const message = body?.error?.message || `Couldn't get a voice key (${res.status}).`;
+    const message = body?.error?.message || `Couldn't get a voice token (${res.status}).`;
     const err = new Error(message);
     err.status = res.status;
     throw err;
   }
-  return (await res.json()).key;
+  const body = await res.json();
+  if (!body?.token) throw new Error("The voice token endpoint returned nothing usable.");
+  return body.token;
 }
 
 /**
@@ -93,6 +118,10 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
   let buffer = "";         // finalised text for the current utterance
   let armed = false;       // ambient only: the wake word has been heard
   let mode = "off";
+
+  let connecting = false;  // a connect() is already in flight
+  let formIx = 0;          // which AUTH_FORMS entry to try next
+  let refusals = 0;        // consecutive handshakes that never opened
 
   const setMode = (m) => { mode = m; onState?.(m); };
 
@@ -128,124 +157,192 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
     if (speechFinal && (!ambient || armed)) commit(buffer);
   }
 
-  async function open() {
-    if (socket || !wanted) return;
+  /**
+   * Build the microphone graph. Idempotent, and deliberately separate from the
+   * socket: a reconnect must NOT rebuild this.
+   *
+   * Two reasons. The cheap one is that the old code leaked — every reopen
+   * created a fresh AudioContext and MediaStream over the top of the last ones
+   * without stopping them, and iOS caps how many contexts a page may hold. The
+   * real one is that a reconnect happens on a timer, with no user gesture in
+   * scope, and iOS will not let a context created there leave the suspended
+   * state. Keeping the graph alive across reconnects means the microphone is
+   * only ever opened from the tap that asked for it.
+   */
+  async function ensureAudio() {
+    if (node) return;
 
-    let key;
-    try {
-      key = await mintKey();
-    } catch (e) {
-      wanted = false;
-      setMode("off");
-      onError?.({ kind: e.status === 503 ? "unconfigured" : "key", message: e.message });
-      return;
-    }
-    if (!wanted) return;                // stopped while the key was in flight
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    ctx = new Ctx({ sampleRate: 16000 });
+    // iOS starts every context suspended until a gesture unlocks it. start()
+    // and capture() are both called from a tap, so this resolves.
+    if (ctx.state === "suspended") await ctx.resume();
 
-    try {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      ctx = new Ctx({ sampleRate: 16000 });
-      // iOS starts every context suspended until a gesture unlocks it. start()
-      // and capture() are both called from a tap, so this resolves.
-      if (ctx.state === "suspended") await ctx.resume();
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+    });
 
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+    const blob = new Blob([WORKLET_SRC], { type: "application/javascript" });
+    const url = URL.createObjectURL(blob);
+    await ctx.audioWorklet.addModule(url);
+    URL.revokeObjectURL(url);
+
+    node = new AudioWorkletNode(ctx, "pcm-tap");
+    // Reads `socket` fresh on every frame, so the graph outliving any one
+    // connection is fine — audio captured while there is no open socket is
+    // simply dropped.
+    node.port.onmessage = (e) => {
+      if (socket?.readyState === WebSocket.OPEN) socket.send(e.data);
+    };
+    ctx.createMediaStreamSource(stream).connect(node);
+    // Terminating into the destination keeps the node pulled by the graph. The
+    // worklet writes nothing to its output, so this is silent — it does not
+    // echo the microphone back out of the speaker.
+    node.connect(ctx.destination);
+  }
+
+  function reportOpenFailure(e) {
+    const name = e?.name || "";
+    if (name === "NotAllowedError" || name === "SecurityError") {
+      onError?.({
+        kind: "denied",
+        message: "Microphone access is blocked for this site. On iPhone: Settings → Safari → Microphone → Ask, then reload. Permission is per-site, so a new address asks again even if you allowed the old one.",
       });
-
-      const blob = new Blob([WORKLET_SRC], { type: "application/javascript" });
-      const url = URL.createObjectURL(blob);
-      await ctx.audioWorklet.addModule(url);
-      URL.revokeObjectURL(url);
-
-      if (!wanted) { teardown(); return; }
-
-      const params = new URLSearchParams({
-        model: "nova-3",
-        encoding: "linear16",
-        sample_rate: String(ctx.sampleRate),   // whatever we actually got
-        channels: "1",
-        interim_results: "true",
-        smart_format: "true",
-        // 300ms of silence ends an utterance. Long enough to think mid-sentence,
-        // short enough that the reply doesn't feel delayed.
-        endpointing: "300",
-        // Excludes this audio from Deepgram's Model Improvement Partnership
-        // Program. Accounts are opted out by default, but that is an account
-        // setting someone can flip in a console months from now — setting it
-        // per request means the guarantee travels with the code rather than
-        // depending on a checkbox nobody remembers. Deepgram documents that
-        // opted-out audio is retained only for as long as it takes to process
-        // the request, which is the strongest retention answer on offer.
-        mip_opt_out: "true",
-      });
-
-      // Deepgram takes the credential as a WebSocket subprotocol; browsers give
-      // no other way to set a header on a WebSocket.
-      socket = new WebSocket(`${ENDPOINT}?${params}`, ["token", key]);
-
-      socket.onopen = () => {
-        node = new AudioWorkletNode(ctx, "pcm-tap");
-        node.port.onmessage = (e) => {
-          if (socket?.readyState === WebSocket.OPEN) socket.send(e.data);
-        };
-        ctx.createMediaStreamSource(stream).connect(node);
-        // Terminating into the destination would echo the microphone back out
-        // of the speaker. The worklet emits nothing, so this is silent.
-        node.connect(ctx.destination);
-        setMode(ambient ? "ambient" : "capturing");
-      };
-
-      socket.onmessage = (e) => {
-        let msg;
-        try { msg = JSON.parse(e.data); } catch { return; }
-        if (msg.type !== "Results") return;
-        const alt = msg.channel?.alternatives?.[0];
-        const text = alt?.transcript || "";
-        if (!text) return;
-        if (msg.is_final) absorb(text, !!msg.speech_final);
-        else if (armed || !ambient) onInterim?.(`${buffer} ${text}`.trim());
-      };
-
-      socket.onerror = () => {
-        onError?.({ kind: "network", message: "Lost the connection to the transcription service." });
-      };
-
-      socket.onclose = () => {
-        socket = null;
-        // A close we didn't ask for, while still wanted, is worth one reopen —
-        // the two-minute key expiring mid-conversation lands here.
-        if (wanted) setTimeout(() => { if (wanted && !socket) open(); }, 400);
-      };
-    } catch (e) {
-      wanted = false;
-      teardown();
-      setMode("off");
-      const name = e?.name || "";
-      if (name === "NotAllowedError" || name === "SecurityError") {
-        onError?.({
-          kind: "denied",
-          message: "Microphone access is blocked for this site. On iPhone: Settings → Safari → Microphone → Ask, then reload. Permission is per-site, so a new address asks again even if you allowed the old one.",
-        });
-      } else if (name === "NotFoundError") {
-        onError?.({ kind: "nomic", message: "No microphone found on this device." });
-      } else {
-        onError?.({ kind: "audio", message: e?.message || "Couldn't open the microphone." });
-      }
+    } else if (name === "NotFoundError") {
+      onError?.({ kind: "nomic", message: "No microphone found on this device." });
+    } else {
+      onError?.({ kind: "audio", message: e?.message || "Couldn't open the microphone." });
     }
   }
 
+  async function connect() {
+    if (socket || connecting || !wanted) return;
+    connecting = true;
+
+    let token;
+    try {
+      // Microphone first, token second: if permission is refused there is no
+      // point spending a token, and the prompt appears while the tap that
+      // triggered it is still the reason the user is looking at the screen.
+      await ensureAudio();
+      token = await mintToken();
+    } catch (e) {
+      connecting = false;
+      wanted = false;
+      teardown();
+      setMode("off");
+      if (e?.status) {
+        onError?.({ kind: e.status === 503 ? "unconfigured" : "key", message: e.message });
+      } else {
+        reportOpenFailure(e);
+      }
+      return;
+    }
+
+    if (!wanted) { connecting = false; return; }
+
+    const ix = provenForm ?? formIx;
+    const params = new URLSearchParams({
+      model: "nova-3",
+      encoding: "linear16",
+      sample_rate: String(ctx.sampleRate),   // whatever we actually got
+      channels: "1",
+      interim_results: "true",
+      smart_format: "true",
+      // 300ms of silence ends an utterance. Long enough to think mid-sentence,
+      // short enough that the reply doesn't feel delayed.
+      endpointing: "300",
+      // Excludes this audio from Deepgram's Model Improvement Partnership
+      // Program. Accounts are opted out by default, but that is an account
+      // setting someone can flip in a console months from now — setting it
+      // per request means the guarantee travels with the code rather than
+      // depending on a checkbox nobody remembers. Deepgram documents that
+      // opted-out audio is retained only for as long as it takes to process
+      // the request, which is the strongest retention answer on offer.
+      mip_opt_out: "true",
+      ...AUTH_FORMS[ix](token),
+    });
+
+    const ws = new WebSocket(`${ENDPOINT}?${params}`);
+    socket = ws;
+    connecting = false;
+    let opened = false;
+
+    ws.onopen = () => {
+      opened = true;
+      refusals = 0;
+      provenForm = ix;                  // this one works; stop trying the other
+      setMode(ambient ? "ambient" : "capturing");
+    };
+
+    ws.onmessage = (e) => {
+      let msg;
+      try { msg = JSON.parse(e.data); } catch { return; }
+      if (msg.type !== "Results") return;
+      const alt = msg.channel?.alternatives?.[0];
+      const text = alt?.transcript || "";
+      if (!text) return;
+      if (msg.is_final) absorb(text, !!msg.speech_final);
+      else if (armed || !ambient) onInterim?.(`${buffer} ${text}`.trim());
+    };
+
+    // A browser will not tell us the HTTP status behind a refused upgrade — a
+    // rejected handshake and a dropped cable both arrive as a 1006 close. So
+    // onerror stays quiet and onclose does the reasoning, using "did we ever
+    // open?" as the signal onerror can't give us.
+    ws.onerror = () => {};
+
+    ws.onclose = () => {
+      if (socket !== ws) return;        // already superseded by teardown()
+      socket = null;
+      if (!wanted) return;
+
+      if (!opened) {
+        // Never opened. If we have not yet proven an auth form, the likeliest
+        // cause is that we picked the wrong one — try the next before blaming
+        // the network.
+        if (provenForm === null && ix + 1 < AUTH_FORMS.length) {
+          formIx = ix + 1;
+          connect();
+          return;
+        }
+        // Out of forms. Two strikes, then stop: retrying a refused handshake
+        // forever would mint a token per attempt and never recover.
+        if (++refusals >= 2) {
+          wanted = false;
+          teardown();
+          setMode("off");
+          onError?.({
+            kind: "auth",
+            message: "Deepgram refused the voice connection. The token was issued but rejected at the handshake — if this persists, the DEEPGRAM_API_KEY may belong to a different project than the one being billed.",
+          });
+          return;
+        }
+      }
+
+      // A close we didn't ask for, while still wanted, is worth reopening —
+      // and because Deepgram only checks the credential at the handshake, a
+      // reconnect needs a fresh token rather than the expired one.
+      setTimeout(() => { if (wanted && !socket) connect(); }, 400);
+    };
+  }
+
+  /** Close the socket but leave the microphone graph standing. */
+  function closeSocket() {
+    if (!socket) return;
+    const s = socket;
+    socket = null;                      // clear first so onclose bails out
+    s.onclose = null;
+    s.onmessage = null;
+    try { s.close(); } catch { /* already closing */ }
+  }
+
   function teardown() {
-    try { node?.port && (node.port.onmessage = null); node?.disconnect(); } catch { /* already gone */ }
+    closeSocket();
+    try { if (node?.port) node.port.onmessage = null; node?.disconnect(); } catch { /* already gone */ }
     node = null;
     try { for (const t of stream?.getTracks() || []) t.stop(); } catch { /* already gone */ }
     stream = null;
-    if (socket) {
-      const s = socket;
-      socket = null;                    // clear first so onclose doesn't reopen
-      s.onclose = null;
-      try { s.close(); } catch { /* already closing */ }
-    }
     try { ctx?.close(); } catch { /* already closed */ }
     ctx = null;
   }
@@ -258,7 +355,7 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
       ambient = true;
       wanted = true;
       settle();
-      open();
+      connect();
     },
 
     /** Close the ear entirely, including wake-word listening. */
@@ -277,7 +374,7 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
       wanted = true;
       buffer = "";
       setMode("capturing");
-      open();
+      connect();
     },
 
     /** Commit whatever has been heard right now (push-to-talk release). */
