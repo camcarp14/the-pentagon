@@ -170,6 +170,14 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
         // 300ms of silence ends an utterance. Long enough to think mid-sentence,
         // short enough that the reply doesn't feel delayed.
         endpointing: "300",
+        // Excludes this audio from Deepgram's Model Improvement Partnership
+        // Program. Accounts are opted out by default, but that is an account
+        // setting someone can flip in a console months from now — setting it
+        // per request means the guarantee travels with the code rather than
+        // depending on a checkbox nobody remembers. Deepgram documents that
+        // opted-out audio is retained only for as long as it takes to process
+        // the request, which is the strongest retention answer on offer.
+        mip_opt_out: "true",
       });
 
       // Deepgram takes the credential as a WebSocket subprotocol; browsers give
