@@ -936,7 +936,12 @@
    the top inset from a cold start (WebKit 254868) while vh reports it whole.
    Subtracting the inset explicitly is correct in both. */
 .sy-root {
-  height: calc(100vh - 52px - 0px);
+  /* The shell's bar is env(safe-area-inset-top) + 51px + 1px, NOT 52px — the
+     52 is only its inner row plus border. Forgetting the inset hands this
+     column ~59pt more height than the window has on a notched phone, and the
+     overflow lands exactly where it is least visible: the tab bar's labels,
+     pushed below the fold while its icons still show. */
+  height: calc(100vh - 52px - env(safe-area-inset-top, 0px));
   display: flex;
   flex-direction: column;
   overflow: hidden;

@@ -64,6 +64,18 @@ describe("stylesheet isolation", () => {
     expect(css).not.toMatch(/padding[^;]*env\(safe-area-inset-bottom/);
   });
 
+  it("subtracts the status-bar inset from the frame height, not just the bar", () => {
+    // The shell's bar is env(safe-area-inset-top) + 51px + 1px. Sizing to
+    // `100vh - 52px` overshoots by the inset on every notched phone, and the
+    // overflow lands on the tab bar's labels — icons still visible, words
+    // below the fold. A blanket inset-normalising regex flattened this to
+    // `- 0px` once already, which is exactly the kind of edit no build or
+    // type check can see.
+    const frame = css.match(/height:\s*calc\(100vh[^;]*\);/);
+    expect(frame).not.toBeNull();
+    expect(frame[0]).toContain("env(safe-area-inset-top");
+  });
+
   it("carries no light room", () => {
     // The Pentagon is one dark canvas and the shell hardcodes data-theme.
     // A scoped-but-later light palette would win outright over the dark one.
