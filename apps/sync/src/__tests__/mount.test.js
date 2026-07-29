@@ -109,6 +109,14 @@ describe("mount contract", () => {
     expect(root.indexOf('className="sy-scope"')).toBeLessThan(root.indexOf('className="sy-root"'));
   });
 
+  it("locks the document while mounted and gives it back on unmount", () => {
+    // The lock is the only thing SYNC touches outside .sy-root, so the restore
+    // is what keeps that honest — without it, switching to ZTS would leave its
+    // page unscrollable with no clue why.
+    expect(root).toMatch(/body\.style\.overflow = "hidden"/);
+    expect(root).toMatch(/return \(\) => \{[\s\S]*body\.style\.overflow = prev\.bodyOverflow/);
+  });
+
   it("no longer owns a window", () => {
     // The frame, the visualViewport measurement and the boot screen were all
     // answers to problems the shell now owns.

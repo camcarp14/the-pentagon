@@ -29,6 +29,37 @@ export default function SyncRoot() {
   // and unmounting the tab repeatedly does not stack listeners.
   useEffect(() => { startCloud(); }, []);
 
+  // SYNC is a fixed frame — the orb sits still, the transcript scrolls inside
+  // itself, and the tab bar is pinned. The document underneath must not move.
+  //
+  // It does by default, and not because of anything in this tool: the shell's
+  // wrapper is minHeight:100vh, and on an installed iOS app 100vh reports the
+  // screen (852pt) while the window under a `black` status bar is 793 — so the
+  // document is ~59pt taller than the glass and the whole app rubber-bands.
+  //
+  // Done in JS rather than CSS on purpose. This is the one rule that has to
+  // reach outside .sy-root, and a stylesheet rule for html/body would keep
+  // applying to whichever tool mounted next until SYNC's sheet was removed.
+  // Saving and restoring the exact previous values means the lock lasts exactly
+  // as long as this tab is on screen.
+  useEffect(() => {
+    const root = document.documentElement;
+    const { body } = document;
+    const prev = {
+      rootOverflow: root.style.overflow,
+      bodyOverflow: body.style.overflow,
+      overscroll: body.style.overscrollBehavior,
+    };
+    root.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    body.style.overscrollBehavior = "none";
+    return () => {
+      root.style.overflow = prev.rootOverflow;
+      body.style.overflow = prev.bodyOverflow;
+      body.style.overscrollBehavior = prev.overscroll;
+    };
+  }, []);
+
   useEffect(() => {
     const el = document.createElement("style");
     el.id = "sy-scoped-styles";
