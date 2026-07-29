@@ -941,7 +941,17 @@
      column ~59pt more height than the window has on a notched phone, and the
      overflow lands exactly where it is least visible: the tab bar's labels,
      pushed below the fold while its icons still show. */
-  height: calc(100vh - 52px - env(safe-area-inset-top, 0px));
+  /* Two declarations, and the order matters.
+     100vh on an installed iOS app reports the SCREEN (852pt on a 15 Pro), but
+     under the shell's `black` status-bar style the web view sits below the
+     status bar and the window is only 793. Sizing to vh therefore overshoots
+     by exactly the status bar, the document grows taller than the window, and
+     the overflow lands on the least visible thing in the column — the tab
+     bar's labels, pushed under the fold while its icons still show.
+     100dvh is the window, which is what this column actually gets. The vh line
+     stays underneath as the fallback for anything too old to know dvh. */
+  height: calc(100vh - 52px);
+  height: calc(100dvh - 52px);
   display: flex;
   flex-direction: column;
   overflow: hidden;

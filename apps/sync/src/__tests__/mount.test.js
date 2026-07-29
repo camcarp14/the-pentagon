@@ -64,16 +64,18 @@ describe("stylesheet isolation", () => {
     expect(css).not.toMatch(/padding[^;]*env\(safe-area-inset-bottom/);
   });
 
-  it("subtracts the status-bar inset from the frame height, not just the bar", () => {
-    // The shell's bar is env(safe-area-inset-top) + 51px + 1px. Sizing to
-    // `100vh - 52px` overshoots by the inset on every notched phone, and the
-    // overflow lands on the tab bar's labels — icons still visible, words
-    // below the fold. A blanket inset-normalising regex flattened this to
-    // `- 0px` once already, which is exactly the kind of edit no build or
-    // type check can see.
-    const frame = css.match(/height:\s*calc\(100vh[^;]*\);/);
-    expect(frame).not.toBeNull();
-    expect(frame[0]).toContain("env(safe-area-inset-top");
+  it("sizes the frame to the window, with vh only as a fallback under dvh", () => {
+    // The bug this pins cost two rounds. Under the shell's `black` status-bar
+    // style the web view starts BELOW the status bar, so the window is the
+    // screen minus that strip — but 100vh on an installed iOS app reports the
+    // screen anyway. The column then runs ~59pt past the bottom of the window
+    // and the tab bar's labels go under the fold while its icons still show,
+    // which reads as a sizing nudge rather than an overflow.
+    //
+    // Order is the whole point: the dvh line must come after the vh line, or
+    // the fallback wins in every browser that supports both.
+    const frame = [...css.matchAll(/height:\s*calc\(100(vh|dvh)\s*-\s*52px\);/g)].map((m) => m[1]);
+    expect(frame).toEqual(["vh", "dvh"]);
   });
 
   it("carries no light room", () => {

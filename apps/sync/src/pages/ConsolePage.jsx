@@ -262,18 +262,16 @@ export default function ConsolePage() {
                 </div>
               </div>
 
-              {!s.settings.apiKey && (
-                <div className="act" style={{ marginTop: 12 }}>
-                  <span className="act-ic" style={{ color: "var(--amber)" }}><IcAlert size={15} /></span>
-                  <span className="act-body">
-                    <span className="act-title">No API key yet</span>
-                    <span className="act-detail">
-                      SYNC needs an Anthropic key to think. Add one in Settings — it stays in this browser and is never
-                      included in an export.
-                    </span>
-                  </span>
-                </div>
-              )}
+              {/* No key banner any more. Standalone SYNC held an Anthropic key
+                  in localStorage and genuinely could not think without one, so
+                  an empty key was worth interrupting for. Inside the Pentagon
+                  the key lives server-side and requests go out over the shared
+                  session, which makes `!settings.apiKey` the normal, healthy
+                  state — and a warning that is always on trains you to ignore
+                  the one place warnings appear. A deploy with no key IS a real
+                  failure, and it surfaces where it happens: the proxy answers
+                  503 and the transport's `noproxy` sentence names the variable
+                  to set. */}
             </div>
           ) : (
             turns.map((t) => <Turn key={t.id} turn={t} onUndo={handleUndo} onRetry={retry} />)
