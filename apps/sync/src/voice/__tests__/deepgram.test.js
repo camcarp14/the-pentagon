@@ -172,7 +172,61 @@ describe("websocket authentication (client)", () => {
   });
 });
 
+describe("interface parity with the Web Speech recognizer", () => {
+  // The bug this exists to prevent, in full: createDeepgramRecognizer's
+  // docstring said "same shape as createRecognizer()" and was wrong — it had no
+  // mode(). VoiceProvider.talk() opens with `if (rec.mode() === "capturing")`,
+  // so every tap on the orb threw TypeError before reaching capture(), inside a
+  // click handler with no error boundary. Nothing was logged, nothing was
+  // rendered, the button just did nothing. It read as a dead microphone and
+  // cost a full round of debugging in the wrong place.
+  //
+  // A comment claiming two objects match is not a contract. This is.
+  const iface = (src) => {
+    const body = src.slice(src.lastIndexOf("return {"));
+    const names = new Set();
+    // `foo() {`, `foo: () =>`, `foo: value`
+    for (const m of body.matchAll(/^\s{4}([a-zA-Z][a-zA-Z0-9]*)\s*(\(|:)/gm)) names.add(m[1]);
+    return names;
+  };
+
+  const speech = readFileSync(join(here, "..", "recognizer.js"), "utf8");
+  // The no-op stub returned when the browser has no engine — the most complete
+  // written-out list of the interface in the codebase.
+  const stub = speech.slice(speech.indexOf("supported: false"), speech.indexOf("supported: false") + 400);
+  const required = [...stub.matchAll(/([a-zA-Z][a-zA-Z0-9]*)\s*:/g)].map((m) => m[1]);
+
+  it("found the stub to compare against", () => {
+    expect(required).toContain("mode");
+    expect(required.length).toBeGreaterThanOrEqual(7);
+  });
+
+  it("implements every member the Web Speech recognizer exposes", () => {
+    const mine = iface(clientSrc);
+    expect([...required].filter((k) => !mine.has(k))).toEqual([]);
+  });
+
+  it("reports wake-word listening, not any-socket-open", () => {
+    // VoiceProvider calls listening() to decide whether switching ambient off
+    // has anything to stop. Returning `wanted` would also be true mid
+    // push-to-talk and would cut a held utterance short.
+    expect(clientSrc).toMatch(/listening: \(\) => ambient/);
+  });
+});
+
 describe("microphone lifetime", () => {
+  it("exposes its own level so nothing opens a second microphone", () => {
+    // createMeter() in recognizer.js calls getUserMedia and builds a second
+    // AudioContext. Harmless beside Web Speech, which holds no stream; beside
+    // this engine it is a second concurrent capture, and iOS answers that by
+    // sometimes starving the first — a socket that connects and carries
+    // silence.
+    expect(clientSrc).toMatch(/level\(\)\s*\{/);
+    expect(clientSrc).toContain("createAnalyser");
+    const provider = readFileSync(join(here, "..", "VoiceProvider.jsx"), "utf8");
+    expect(provider).toMatch(/typeof own === "function"/);
+  });
+
   it("builds the audio graph once, separately from the socket", () => {
     // Two bugs in one. The old code rebuilt the AudioContext and MediaStream
     // inside the reconnect path without stopping the previous ones, so every

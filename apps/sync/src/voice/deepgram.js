@@ -132,6 +132,8 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
   let stream = null;
   let node = null;
   let socket = null;
+  let analyser = null;
+  let levelBins = null;
 
   let wanted = false;      // should we be listening at all
   let ambient = false;     // true = waiting for the wake word, false = every word counts
@@ -214,11 +216,25 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
     node.port.onmessage = (e) => {
       if (socket?.readyState === WebSocket.OPEN) socket.send(e.data);
     };
-    ctx.createMediaStreamSource(stream).connect(node);
+    const source = ctx.createMediaStreamSource(stream);
+    source.connect(node);
     // Terminating into the destination keeps the node pulled by the graph. The
     // worklet writes nothing to its output, so this is silent — it does not
     // echo the microphone back out of the speaker.
     node.connect(ctx.destination);
+
+    // The orb's level meter taps THIS graph rather than opening its own.
+    // createMeter() in recognizer.js calls getUserMedia a second time and
+    // builds a second AudioContext, which was harmless next to Web Speech
+    // (that engine hands out no stream) but means two concurrent captures next
+    // to this one. iOS is not reliable about that: the second request can
+    // interrupt the first, which presents as a socket that connects happily
+    // and then carries silence.
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.72;
+    source.connect(analyser);
+    levelBins = new Uint8Array(analyser.frequencyBinCount);
   }
 
   function reportOpenFailure(e) {
@@ -367,6 +383,9 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
     closeSocket();
     try { if (node?.port) node.port.onmessage = null; node?.disconnect(); } catch { /* already gone */ }
     node = null;
+    try { analyser?.disconnect(); } catch { /* already gone */ }
+    analyser = null;
+    levelBins = null;
     try { for (const t of stream?.getTracks() || []) t.stop(); } catch { /* already gone */ }
     stream = null;
     try { ctx?.close(); } catch { /* already closed */ }
@@ -415,8 +434,36 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
       else { wanted = false; teardown(); setMode("off"); }
     },
 
-    listening() {
-      return wanted;
+    /**
+     * Current state: off | ambient | capturing.
+     *
+     * Its absence is what broke the orb. VoiceProvider.talk() opens with
+     * `if (rec.mode() === "capturing")` to decide whether a tap starts a
+     * capture or ends one — so on a recognizer without it, every tap threw
+     * TypeError before reaching capture(), and threw it inside a click handler
+     * where nothing renders the failure. The button simply did nothing, which
+     * reads as a dead microphone rather than a missing method.
+     */
+    mode: () => mode,
+
+    /**
+     * Wake-word listening specifically, NOT "is anything open" — VoiceProvider
+     * uses it to decide whether turning the ambient switch off has something to
+     * stop. Returning `wanted` here would also report true mid push-to-talk and
+     * cut a held utterance short.
+     */
+    listening: () => ambient,
+
+    /** 0..1, weighted toward speech frequencies. Matches createMeter()'s curve
+     *  so the orb behaves identically whichever engine is driving it. */
+    level() {
+      if (!analyser || !levelBins) return 0;
+      analyser.getByteFrequencyData(levelBins);
+      // Roughly 150Hz–3.5kHz across a 512-point FFT at typical sample rates —
+      // the band where a voice actually lives, so keyboard noise moves it less.
+      let sum = 0, n = 0;
+      for (let i = 2; i < 44; i++) { sum += levelBins[i]; n++; }
+      return Math.min(1, (sum / n / 255) * 2.1);
     },
 
     destroy() {

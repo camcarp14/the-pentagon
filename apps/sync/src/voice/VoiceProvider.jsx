@@ -162,11 +162,22 @@ export function VoiceProvider({ children }) {
     };
 
     if (earOpen) {
-      createMeter().then((m) => {
-        if (cancelled) { m?.close(); return; }
-        meterRef.current = m;
-        if (m) raf = requestAnimationFrame(tick);
-      });
+      // If the engine already holds a microphone, read the level off that graph
+      // instead of opening a second one. createMeter() calls getUserMedia and
+      // builds its own AudioContext — fine beside Web Speech, which hands out
+      // no stream, but beside Deepgram it means two live captures at once, and
+      // iOS will sometimes answer that by quietly starving the first.
+      const own = recRef.current?.level;
+      if (typeof own === "function") {
+        meterRef.current = { level: () => recRef.current?.level() ?? 0, close() {} };
+        raf = requestAnimationFrame(tick);
+      } else {
+        createMeter().then((m) => {
+          if (cancelled) { m?.close(); return; }
+          meterRef.current = m;
+          if (m) raf = requestAnimationFrame(tick);
+        });
+      }
     } else {
       meterRef.current?.close();
       meterRef.current = null;
