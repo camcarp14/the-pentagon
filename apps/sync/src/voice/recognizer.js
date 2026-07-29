@@ -51,6 +51,46 @@ function looksLikeEcho(heard) {
  */
 const WAKE_ALIASES = { sync: ["sync", "sink", "sinc", "syncs", "think", "cink", "sync's"] };
 
+/**
+ * Work out which of two very different problems just happened.
+ *
+ * SpeechRecognition reports `not-allowed` and `service-not-allowed` for
+ * situations that need opposite responses, and browsers send either one for
+ * the other. Collapsing them into "microphone access is blocked" sends someone
+ * whose microphone is working perfectly into a settings screen where nothing
+ * looks wrong and nothing they change helps.
+ *
+ * getUserMedia settles it. If the microphone opens, permission was never the
+ * problem — the speech ENGINE declined to start, which is the usual answer on
+ * an installed iOS app. If it rejects, the permission really is the problem
+ * and the instructions should be about permission.
+ */
+async function diagnose() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    return { kind: "unsupported", message: "This browser can't open a microphone. Typing still works." };
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // Release it immediately — this is a question, not a recording.
+    for (const track of stream.getTracks()) track.stop();
+    return {
+      kind: "engine",
+      message:
+        "The microphone is fine — iOS refused to start its speech service. That is usually one of two things: Dictation is off (Settings → General → Keyboard → Enable Dictation), or this is the installed app, where iOS keeps Web Speech to Safari. Opening the Pentagon in Safari lets you dictate; typing works everywhere.",
+    };
+  } catch (err) {
+    const name = err?.name || "";
+    if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+      return { kind: "nomic", message: "No microphone found on this device." };
+    }
+    return {
+      kind: "denied",
+      message:
+        "Microphone access is blocked for this site. On iPhone: Settings → Safari → Microphone → Ask, then reload. Permission is per-site, so a new address asks again even if you allowed the old one.",
+    };
+  }
+}
+
 export function afterWake(text, wake = "sync") {
   const aliases = WAKE_ALIASES[wake.toLowerCase()] || [wake.toLowerCase()];
   const w = words(text);
@@ -177,7 +217,8 @@ export function createRecognizer({ onInterim, onCommit, onState, onError, getWak
       if (kind === "not-allowed" || kind === "service-not-allowed") {
         wanted = false;
         setMode("off");
-        onError?.({ kind: "denied", message: "Microphone access is blocked. Allow it in the browser's site settings, then turn listening back on." });
+        // Don't guess which of these it is — ask the microphone. See diagnose().
+        diagnose().then((d) => onError?.(d));
         return;
       }
       if (kind === "network") {
