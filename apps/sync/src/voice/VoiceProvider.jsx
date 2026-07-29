@@ -1,5 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { createRecognizer, createMeter, supported as sttSupported } from "./recognizer.js";
+import { createRecognizer, createMeter, supported as webSpeechSupported } from "./recognizer.js";
+import { createDeepgramRecognizer, supported as deepgramSupported } from "./deepgram.js";
+
+// Either engine can carry voice input, and the UI only cares that one of them
+// can — "this browser has no speech recognition" is the same message either way.
+const sttSupported = deepgramSupported || webSpeechSupported;
 import * as speaker from "./speaker.js";
 import { runTurn } from "../agent/runtime.js";
 import { getState, setSettings } from "../data/store.js";
@@ -93,7 +98,13 @@ export function VoiceProvider({ children }) {
   /* ── the ear ─────────────────────────────────────────────────────────── */
   useEffect(() => {
     if (!sttSupported) return;
-    const rec = createRecognizer({
+    // Deepgram first, wherever the browser can capture audio at all. Web Speech
+    // is the fallback, not the default: iOS keeps its engine to Safari, so in
+    // the installed app — the one surface this is actually used from — it
+    // reports service-not-allowed and there is nothing to be done about it.
+    // Deepgram needs only getUserMedia and an AudioContext, which do work there.
+    const make = deepgramSupported ? createDeepgramRecognizer : createRecognizer;
+    const rec = make({
       onInterim: setInterim,
       onCommit: (text) => {
         // Barge-in: if SYNC is mid-sentence when a command lands, it stops
