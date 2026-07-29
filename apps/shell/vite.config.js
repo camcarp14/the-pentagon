@@ -23,6 +23,7 @@ export default defineConfig({
       "@app/macro": r("../macro/src/Root.jsx"),
       "@app/looper": r("../looper/src/Root.jsx"),
       "@app/business": r("../business/src/Root.jsx"),
+      "@app/sync": r("../sync/src/Root.jsx"),
     },
   },
   // .env lives at the REPO ROOT (that is where .env.example sits and what it

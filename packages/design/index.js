@@ -125,6 +125,22 @@ const MIDNIGHT = {
   shadowModal: "0 24px 70px rgba(0,0,0,0.65), 0 8px 24px rgba(0,0,0,0.5)",
 };
 
+// Orchid — SYNC, the voice layer that runs the day. Picked by elimination, and
+// the elimination is short. SYNC's standalone accent was a signal blue
+// (#6AA8FF, ~215°) sitting almost exactly on the `info` signal (#6EA8FE), so it
+// could not come across. The six taken accents hold 155/43/250/40/189/330°, and
+// the four signals hold 155/40/0/215°, which leaves ~270-300° as the only wide
+// gap clear of all ten. Orchid is the pink-purple end of it. Violet is its
+// nearest neighbour at 33°; they read apart at an 8px dot because violet leans
+// blue and this leans pink, but they are the closest pair in the set — nothing
+// else should be added between them.
+const ORCHID = {
+  accent: "#C36BFF", accentHi: "#D89BFF", accentDeep: "#9333EA",
+  accentGrad: "linear-gradient(135deg, #D89BFF 0%, #9333EA 100%)",
+  accentSoft: "rgba(195,107,255,0.14)", accentLine: "rgba(195,107,255,0.32)",
+  accentInk: "#1E0733", focusRing: "0 0 0 3px rgba(195,107,255,0.34)",
+};
+
 const APP_DEF = {
   zts: { base: MIDNIGHT, ramp: EMERALD, label: "ZTS", brand: "Zero To Secure" },
   clarify: { base: MIDNIGHT, ramp: BRASS, label: "Clarify", brand: "Clarify Outreach" },
@@ -136,9 +152,10 @@ const APP_DEF = {
   // against ~45px of available segment, so it would ellipsise to "Busines…".
   // A deliberate three-letter form beats a truncated eight-letter one.
   business: { base: MIDNIGHT, ramp: MAGENTA, label: "Business", short: "Biz", brand: "AI Business" },
+  sync: { base: MIDNIGHT, ramp: ORCHID, label: "SYNC", brand: "SYNC — the workday layer" },
 };
 
-export const APPS = ["zts", "clarify", "runway", "macro", "looper", "business"];
+export const APPS = ["zts", "clarify", "runway", "macro", "looper", "business", "sync"];
 export const appMeta = (app) => {
   const d = APP_DEF[app] || APP_DEF.zts;
   return { app, label: d.label, short: d.short || d.label, brand: d.brand, mode: d.base.mode, accent: d.ramp.accent };

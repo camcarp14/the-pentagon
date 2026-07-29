@@ -1,0 +1,954 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   SYNC — one flat, scoped stylesheet.
+
+   GENERATED from the standalone app's tokens.css + components.css +
+   styles.css by scripts/scope-css.mjs. Every selector is prefixed with
+   .sy-root, for two reasons that both matter inside the Pentagon:
+
+     · @cc/ui installs a global, permanent <style id="cc-polish"> (it calls
+       installPolish() at module scope and the shell imports it), which styles
+       seven classes SYNC also uses — .seg .sk .sk-line .sk-big .expand
+       .stagger .pagefade. Scoping wins those on specificity, so neither sheet
+       has to know about the other.
+
+     · The shell stamps cssVars(app) as an INLINE STYLE on its wrapper. An
+       inline style cannot be beaten by a stylesheet rule on the same element,
+       but a DESCENDANT that redefines the same custom property does win — so
+       SYNC's 71 tokens, declared on .sy-root below, hold inside SYNC and
+       nowhere else.
+
+   The Quartz (light) room is gone: the Pentagon is one dark canvas and the
+   shell hardcodes data-theme="dark", so a second room would be unreachable.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SYNC — design tokens. Two rooms, one architecture:
+   OBSIDIAN (true black, the default — a console you talk to at 6am and 11pm)
+   and QUARTZ (cool paper, for the hours you want the room bright).
+   Every colour in the app resolves through these variables. There are no
+   ad-hoc rgba() values anywhere in this codebase; use the ladders below.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Inter — the house typeface. Self-hosted (rsms/inter v20, SIL OFL, see
+   src/fonts/Inter-LICENSE.txt) so it ships from our own origin, never a CDN.
+   One variable file carries every weight; the system stack stays as the
+   fallback so a cold cache renders in SF/Segoe, never in serif.
+   The URLs are relative on purpose — Vite fingerprints these and rewrites
+   them against whatever base the app is served from, which is what lets the
+   same build run at a domain root and at /sync/ on GitHub Pages. */
+
+
+
+.sy-root {
+  /* motion — the only physics in the building. Every transition and every
+     animation in this app uses one of these four durations and one of these
+     three curves. No exceptions, no one-off timings. */
+  --dur-1: 140ms;   /* acknowledgement: press, hover, tint */
+  --dur-2: 240ms;   /* state: toggle, thumb, chevron */
+  --dur-3: 420ms;   /* arrival: page, sheet, stagger */
+  --dur-4: 700ms;   /* atmosphere: boot, orb settle */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.44, 1);
+  --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* type — Inter for everything readable, a true monospace only where digits
+     must column up (clocks, durations, token counts). */
+  --font-body: "Inter Variable", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+  /* shape */
+  --r-card: 18px;
+  --r-well: 12px;
+  --r-ctl: 10px;
+}
+
+/* ── OBSIDIAN — true black, elevated graphite, signal blue ────────────────── */
+.sy-root {
+  color-scheme: dark;
+  --bg: #000000;
+  --surface: #131417;
+  --surface-2: #1D1F24;
+  --ink: #ECEEF2;
+  --sub: #9DA3AE;
+  --faint: #676C77;
+  --line: rgba(236, 238, 242, 0.09);
+  --line-strong: rgba(236, 238, 242, 0.18);
+
+  --accent: #6AA8FF;
+  --accent-hi: #93C1FF;
+  --accent-deep: #3D7FDB;
+  --on-accent: #04101F;
+
+  --green: #35C08A;
+  --red: #F2615A;
+  --amber: #E0A030;
+  --blue: #6AA8FF;
+  --purple: #A98BF5;
+  --pink: #EE6FA8;
+
+  --seg-bg: rgba(236, 238, 242, 0.07);
+  --seg-thumb: #2C2F36;
+  --scrim: rgba(0, 0, 0, 0.62);
+  --glass: rgba(10, 11, 13, 0.78);
+  --glass-raised: rgba(24, 26, 30, 0.92);
+
+  --shadow-card: 0 1px 1px rgba(0, 0, 0, 0.32), 0 6px 24px rgba(0, 0, 0, 0.38);
+  --shadow-float: 0 12px 40px rgba(0, 0, 0, 0.58);
+  --shadow-deep: 0 24px 70px rgba(0, 0, 0, 0.72);
+
+  /* the orb's living gradient — three stops, cool, never neon */
+  --orb-1: #6AA8FF;
+  --orb-2: #A98BF5;
+  --orb-3: #35C08A;
+}
+
+/* ── QUARTZ — cool paper, borderless white cards, deep signal blue ────────── */
+
+
+/* ── derived ladders — one definition serves both rooms ──────────────────────
+   Use the ladder, never ad-hoc rgba. color-mix is a hard dependency of this
+   codebase and is supported everywhere this app is meant to run. */
+.sy-root {
+  --ink-a02: color-mix(in srgb, var(--ink) 2%, transparent);
+  --ink-a03: color-mix(in srgb, var(--ink) 3%, transparent);
+  --ink-a04: color-mix(in srgb, var(--ink) 4%, transparent);
+  --ink-a05: color-mix(in srgb, var(--ink) 5%, transparent);
+  --ink-a06: color-mix(in srgb, var(--ink) 6%, transparent);
+  --ink-a08: color-mix(in srgb, var(--ink) 8%, transparent);
+  --ink-a10: color-mix(in srgb, var(--ink) 10%, transparent);
+  --ink-a12: color-mix(in srgb, var(--ink) 12%, transparent);
+  --ink-a16: color-mix(in srgb, var(--ink) 16%, transparent);
+  --ink-a20: color-mix(in srgb, var(--ink) 20%, transparent);
+  --ink-a25: color-mix(in srgb, var(--ink) 25%, transparent);
+
+  --accent-a06: color-mix(in srgb, var(--accent) 6%, transparent);
+  --accent-a08: color-mix(in srgb, var(--accent) 8%, transparent);
+  --accent-a10: color-mix(in srgb, var(--accent) 10%, transparent);
+  --accent-a12: color-mix(in srgb, var(--accent) 12%, transparent);
+  --accent-a16: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-a20: color-mix(in srgb, var(--accent) 20%, transparent);
+  --accent-a25: color-mix(in srgb, var(--accent) 25%, transparent);
+  --accent-a32: color-mix(in srgb, var(--accent) 32%, transparent);
+  --accent-a40: color-mix(in srgb, var(--accent) 40%, transparent);
+  --accent-a55: color-mix(in srgb, var(--accent) 55%, transparent);
+
+  --green-a10: color-mix(in srgb, var(--green) 10%, transparent);
+  --green-a14: color-mix(in srgb, var(--green) 14%, transparent);
+  --green-a50: color-mix(in srgb, var(--green) 50%, transparent);
+  --amber-a10: color-mix(in srgb, var(--amber) 10%, transparent);
+  --amber-a14: color-mix(in srgb, var(--amber) 14%, transparent);
+  --red-a10: color-mix(in srgb, var(--red) 10%, transparent);
+  --red-a14: color-mix(in srgb, var(--red) 14%, transparent);
+  --purple-a14: color-mix(in srgb, var(--purple) 14%, transparent);
+
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-a55);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SYNC — components & chrome.
+   Rules of the house:
+     · cards have no borders; hairlines live only inside lists and glass edges
+     · accent appears on the active destination, the primary action, live
+       indicators and selection — nowhere else
+     · every touch target reaches 44pt; no text below 10.5px
+     · every state is drawn: hover, active, focus, loading, empty, error
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── type ──────────────────────────────────────────────────────────────────── */
+.sy-root .t-ltitle { font-size: 32px; line-height: 1.14; font-weight: 700; letter-spacing: -0.024em; color: var(--ink); text-wrap: balance; }
+.sy-root .t-title1 { font-size: 26px; line-height: 1.2;  font-weight: 700; letter-spacing: -0.02em;  color: var(--ink); text-wrap: balance; }
+.sy-root .t-title2 { font-size: 21px; line-height: 1.25; font-weight: 700; letter-spacing: -0.016em; color: var(--ink); }
+.sy-root .t-head { font-size: 17px; line-height: 1.3;  font-weight: 600; letter-spacing: -0.011em; color: var(--ink); }
+.sy-root .t-body { font-size: 15px; line-height: 1.55; font-weight: 400; color: var(--ink); }
+.sy-root .t-call { font-size: 13.5px; line-height: 1.45; font-weight: 400; color: var(--ink); }
+.sy-root .t-foot { font-size: 12.5px; line-height: 1.4; font-weight: 400; color: var(--sub); }
+.sy-root .t-cap { font-size: 11.5px; line-height: 1.3; font-weight: 500; color: var(--sub); }
+.sy-root .t-label { font-size: 11.5px; line-height: 1; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--faint); }
+.sy-root .t-num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1, "cv05" 1; }
+.sy-root .t-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+
+/* ── press physics — every touch acknowledged inside 100ms ─────────────────── */
+.sy-root button { font-family: inherit; }
+.sy-root button:active:not(:disabled) { transform: scale(0.97); }
+.sy-root .press { transition: transform var(--dur-1) var(--ease-out), opacity var(--dur-1) ease; }
+.sy-root .press:active { transform: scale(0.97); }
+.sy-root .hoverable { transition: background var(--dur-1) ease; }
+@media (hover: hover) { .sy-root .hoverable:hover { background: var(--ink-a03); } }
+.sy-root :focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 8px; }
+
+/* ── entrances — quiet, brief, only on arrival ─────────────────────────────── */
+.sy-root .pagefade { animation: pagein var(--dur-3) var(--ease-out) both; }
+@keyframes pagein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.sy-root .stagger > * { animation: rise var(--dur-3) var(--ease-out) both; animation-delay: calc(var(--i, 0) * 34ms); }
+@keyframes rise { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+.sy-root .stagger > *:nth-child(1) { --i: 0 } .sy-root .stagger > *:nth-child(2) { --i: 1 }
+.sy-root .stagger > *:nth-child(3) { --i: 2 } .sy-root .stagger > *:nth-child(4) { --i: 3 }
+.sy-root .stagger > *:nth-child(5) { --i: 4 } .sy-root .stagger > *:nth-child(6) { --i: 5 }
+.sy-root .stagger > *:nth-child(7) { --i: 6 } .sy-root .stagger > *:nth-child(8) { --i: 7 }
+.sy-root .stagger > *:nth-child(n+9) { --i: 8 }
+
+/* ── skeletons — pages develop instead of arrive ───────────────────────────── */
+.sy-root .sk { position: relative; overflow: hidden; background: var(--ink-a05); border-radius: 8px; }
+.sy-root .sk::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, var(--ink-a04), transparent); animation: shimmer 1.4s infinite; }
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+.sy-root .sk-line { height: 12px; margin: 8px 0; }
+.sy-root .sk-line.w30 { width: 30%; } .sy-root .sk-line.w40 { width: 40%; }
+.sy-root .sk-line.w60 { width: 60%; } .sy-root .sk-line.w80 { width: 80%; }
+.sy-root .sk-big { height: 28px; width: 52%; margin: 10px 0 6px; }
+
+/* ── height:auto expansion, zero measuring, zero jank ──────────────────────── */
+.sy-root .expand { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--dur-3) var(--ease-out); }
+.sy-root .expand.open { grid-template-rows: 1fr; }
+.sy-root .expand > div { overflow: hidden; min-height: 0; }
+
+/* ── shared keyframes ──────────────────────────────────────────────────────── */
+@keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes breathe { 0%, 100% { transform: scale(1); opacity: 0.55; } 50% { transform: scale(1.06); opacity: 0.9; } }
+
+/* ── thinking — three quiet dots, one thought ──────────────────────────────── */
+.sy-root .think { display: inline-flex; align-items: center; gap: 7px; }
+.sy-root .think .td { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--accent); animation: thinkdot 1.25s var(--ease-inout) infinite; }
+.sy-root .think .td:nth-child(2) { animation-delay: 0.16s; }
+.sy-root .think .td:nth-child(3) { animation-delay: 0.32s; }
+@keyframes thinkdot { 0%, 100% { opacity: 0.22; transform: scale(0.75); } 40% { opacity: 1; transform: scale(1); } }
+
+/* ═══ THE KIT ════════════════════════════════════════════════════════════════ */
+
+/* cards — one material, no outlines */
+.sy-root .card { background: var(--surface); border: none; border-radius: var(--r-card); box-shadow: var(--shadow-card); }
+.sy-root .card.pad-lg { padding: 20px; }
+.sy-root .card.pad-md { padding: 16px; }
+.sy-root .card.pad-sm { padding: 12px; }
+.sy-root .card.pad-none { padding: 0; }
+.sy-root .card.pressable { cursor: pointer; transition: transform var(--dur-1) var(--ease-out), box-shadow var(--dur-2) var(--ease-out); }
+@media (hover: hover) { .sy-root .card.pressable:hover { box-shadow: var(--shadow-float); } }
+.sy-root .card.pressable:active { transform: scale(0.985); }
+
+/* section header */
+.sy-root .sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 0 4px 8px; margin-top: 4px; }
+.sy-root .sec-link { font-size: 12.5px; font-weight: 500; color: var(--accent); background: none; border: none; cursor: pointer; padding: 4px; }
+
+/* cells — inset-grouped list grammar */
+.sy-root .cellgroup { background: var(--surface); border-radius: var(--r-card); box-shadow: var(--shadow-card); overflow: hidden; }
+.sy-root .cell {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  min-height: 46px; padding: 10px 16px; background: transparent; border: none;
+  text-align: left; color: var(--ink); position: relative; font-family: inherit;
+}
+.sy-root .cell.tappable { cursor: pointer; }
+@media (hover: hover) { .sy-root .cell.tappable:hover { background: var(--ink-a03); } }
+.sy-root .cell.tappable:active { background: var(--ink-a05); transform: none; }
+.sy-root .cell + .cell::before, .sy-root .cell-sep {
+  content: ''; position: absolute; top: 0; right: 0; height: 0.5px;
+  left: 16px; background: var(--line);
+}
+.sy-root .cell.has-leading + .cell.has-leading::before { left: 56px; }
+.sy-root .cell-leading { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 9px; }
+.sy-root .cell-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.sy-root .cell-title { font-size: 15.5px; font-weight: 500; letter-spacing: -0.008em; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sy-root .cell-sub { font-size: 12.5px; color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sy-root .cell-value { flex: none; font-size: 14px; color: var(--sub); display: inline-flex; align-items: center; gap: 6px; }
+.sy-root .cell-chevron { flex: none; color: var(--faint); display: inline-flex; margin-right: -4px; }
+.sy-root .cell.destructive .cell-title { color: var(--red); }
+.sy-root .cell.done .cell-title { color: var(--faint); text-decoration: line-through; text-decoration-thickness: 1px; }
+
+/* the tick — an open item shows an empty box, not a grey check. A check that
+   is always visible reads as "already done" at a glance, which is exactly the
+   wrong thing for a queue to say. */
+.sy-root .tickbox {
+  flex: none; width: 30px; height: 30px; border-radius: 9px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; cursor: pointer; background: transparent; color: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--ink-a16);
+  transition: background var(--dur-1) ease, color var(--dur-1) ease, box-shadow var(--dur-1) ease;
+}
+@media (hover: hover) {
+  .sy-root .tickbox:hover { color: var(--green); box-shadow: inset 0 0 0 1.5px var(--green-a50); background: var(--green-a10); }
+}
+.sy-root .tickbox:active { transform: scale(0.92); }
+.sy-root .tickbox.on { background: var(--green-a14); color: var(--green); box-shadow: none; }
+
+/* stat tiles — hero numbers */
+.sy-root .stattile {
+  background: var(--surface-2); border: none; border-radius: var(--r-well);
+  padding: 12px 12px 11px; text-align: left; display: flex; flex-direction: column; gap: 3px;
+  min-width: 0; position: relative; font-family: inherit;
+}
+.sy-root .stattile.on-canvas { background: var(--surface); box-shadow: var(--shadow-card); border-radius: var(--r-card); padding: 16px; }
+.sy-root .stattile.tappable { cursor: pointer; transition: transform var(--dur-1) var(--ease-out); }
+.sy-root .stattile.tappable:active { transform: scale(0.97); }
+.sy-root .stattile.selected { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.sy-root .stattile-value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sy-root .stattile-label { font-size: 10.5px; font-weight: 500; color: var(--sub); line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sy-root .stattile-delta { font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+
+/* buttons */
+.sy-root .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  border: none; cursor: pointer; font-family: var(--font-body);
+  font-weight: 600; letter-spacing: -0.008em; border-radius: 12px; white-space: nowrap;
+  transition: opacity var(--dur-1) ease, transform var(--dur-1) var(--ease-out), background var(--dur-1) ease;
+  -webkit-user-select: none; user-select: none;
+}
+.sy-root .btn:disabled { opacity: 0.42; cursor: default; }
+.sy-root .btn.lg { height: 50px; padding: 0 22px; font-size: 16px; }
+.sy-root .btn.md { height: 44px; padding: 0 18px; font-size: 15px; }
+.sy-root .btn.sm { height: 34px; padding: 0 14px; font-size: 13px; border-radius: 10px; }
+.sy-root .btn.full { width: 100%; }
+.sy-root .btn.primary { background: var(--accent); color: var(--on-accent); }
+.sy-root .btn.tinted { background: var(--accent-a16); color: var(--accent); }
+.sy-root .btn.quiet { background: var(--ink-a06); color: var(--ink); }
+.sy-root .btn.plain { background: transparent; color: var(--accent); }
+.sy-root .btn.danger { background: var(--red-a14); color: var(--red); }
+.sy-root .btn.danger-solid { background: var(--red); color: #fff; }
+@media (hover: hover) {
+  .sy-root .btn.quiet:hover:not(:disabled) { background: var(--ink-a10); }
+  .sy-root .btn.tinted:hover:not(:disabled) { background: var(--accent-a25); }
+  .sy-root .btn.plain:hover:not(:disabled) { background: var(--accent-a10); }
+}
+
+/* icon button — 38px box, 44pt reach */
+.sy-root .icon-btn {
+  width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: none; border-radius: 11px; color: var(--sub);
+  cursor: pointer; padding: 0; flex: none; position: relative;
+  transition: background var(--dur-1) ease, color var(--dur-1) ease;
+}
+.sy-root .icon-btn::after { content: ''; position: absolute; inset: -4px; }
+.sy-root .icon-btn:disabled { opacity: 0.4; cursor: default; }
+@media (hover: hover) { .sy-root .icon-btn:hover:not(:disabled) { background: var(--ink-a06); color: var(--ink); } }
+.sy-root .icon-btn.on { color: var(--accent); background: var(--accent-a12); }
+
+/* pills — monochrome filters (accent is not for filters) */
+.sy-root .pill {
+  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px;
+  border-radius: 999px; border: none; background: var(--ink-a05); color: var(--sub);
+  font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; flex: none;
+  font-family: inherit; transition: background var(--dur-1) ease, color var(--dur-1) ease;
+}
+.sy-root .pill.active { background: var(--ink); color: var(--bg); font-weight: 600; }
+@media (hover: hover) { .sy-root .pill:not(.active):hover { background: var(--ink-a10); color: var(--ink); } }
+.sy-root .pillrow { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 10px; scrollbar-width: none; -ms-overflow-style: none; }
+.sy-root .pillrow::-webkit-scrollbar { display: none; }
+
+/* segmented — ≤4 options, equal width, thumb glides */
+.sy-root .seg { display: flex; background: var(--seg-bg); border-radius: 10px; padding: 2px; position: relative; }
+.sy-root .seg-opt {
+  flex: 1; min-height: 32px; border: none; background: transparent; border-radius: 8px;
+  font-size: 13px; font-weight: 500; color: var(--sub); cursor: pointer; position: relative; z-index: 1;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 4px; min-width: 0; font-family: inherit;
+}
+.sy-root .seg-opt.active { color: var(--ink); font-weight: 600; }
+.sy-root .seg-opt:active:not(:disabled) { transform: none; }
+.sy-root .seg-thumb {
+  position: absolute; top: 2px; bottom: 2px; border-radius: 8px; background: var(--seg-thumb);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14), 0 3px 8px rgba(0, 0, 0, 0.07);
+  transition: left var(--dur-2) var(--ease-out), width var(--dur-2) var(--ease-out);
+}
+
+/* fields */
+.sy-root .field, .sy-root textarea.field {
+  width: 100%; background: var(--surface-2); border: none; border-radius: 12px;
+  color: var(--ink); font-size: 15px; padding: 12px 14px; min-height: 44px;
+  font-family: var(--font-body); line-height: 1.45; resize: none;
+  transition: background var(--dur-1) ease;
+}
+.sy-root .field::placeholder { color: var(--faint); }
+.sy-root .field.on-well { background: var(--ink-a05); }
+
+/* switch — iOS proportions */
+.sy-root .switch { width: 51px; height: 31px; border-radius: 999px; background: var(--ink-a16); position: relative; cursor: pointer; display: inline-block; flex: none; border: none; padding: 0; transition: background var(--dur-2) ease; }
+.sy-root .switch.on { background: var(--green); }
+.sy-root .switch:active:not(:disabled) { transform: none; }
+.sy-root .switch-knob { position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 1px 1px rgba(0,0,0,0.12), 0 3px 8px rgba(0,0,0,0.16); transition: left var(--dur-2) var(--ease-out); }
+.sy-root .switch.on .switch-knob { left: 22px; }
+.sy-root .switch.small { width: 40px; height: 25px; }
+.sy-root .switch.small .switch-knob { width: 21px; height: 21px; }
+.sy-root .switch.small.on .switch-knob { left: 17px; }
+
+/* status dot */
+.sy-root .dotstatus { width: 7px; height: 7px; border-radius: 50%; flex: none; display: inline-block; }
+.sy-root .dotstatus.pulse { animation: pulse 2s var(--ease-inout) infinite; }
+
+/* empty states — always guide, never just "no data" */
+.sy-root .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 40px 24px; }
+.sy-root .empty-icon { color: var(--faint); margin-bottom: 2px; }
+.sy-root .empty-title { font-size: 15px; font-weight: 600; color: var(--ink); }
+.sy-root .empty-sub { font-size: 12.5px; line-height: 1.55; color: var(--sub); max-width: 320px; }
+
+/* spinner — a drawn arc, not a gif */
+.sy-root .spinner { display: inline-block; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ink-a10); border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
+
+/* scrollbars — slim, palette-matched, both themes */
+.sy-root .scroll-thin { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; overscroll-behavior: contain; }
+.sy-root .scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+.sy-root .scroll-thin::-webkit-scrollbar-track { background: transparent; }
+.sy-root .scroll-thin::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
+.sy-root .scroll-thin:hover::-webkit-scrollbar-thumb { background: var(--faint); background-clip: padding-box; }
+
+.sy-root kbd {
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--sub);
+  background: var(--ink-a06); border: none; border-radius: 5px; padding: 3px 6px; line-height: 1;
+}
+
+/* ═══ CHROME ═════════════════════════════════════════════════════════════════ */
+
+/* sidebar rail — tablet / desktop */
+.sy-root .sidebar {
+  width: 232px; flex: none;
+  border-right: 0.5px solid var(--line);
+  padding: 16px 10px calc(14px + var(--safe-bottom, 0px));
+  display: flex; flex-direction: column; gap: 14px;
+  height: 100%; overflow: hidden;
+}
+.sy-root .side-nav { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.sy-root .side-brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 6px; }
+.sy-root .side-brand-name { font-size: 15px; font-weight: 700; letter-spacing: 0.14em; color: var(--ink); }
+.sy-root .side-item {
+  display: flex; align-items: center; gap: 11px; width: 100%;
+  padding: 0 10px; height: 38px; border-radius: 10px; border: none;
+  background: transparent; cursor: pointer; color: var(--sub);
+  font-size: 14.5px; font-weight: 500; text-align: left; font-family: inherit;
+  transition: background var(--dur-1) ease, color var(--dur-1) ease;
+}
+.sy-root .side-item .side-ic { color: var(--faint); display: inline-flex; flex: none; transition: transform var(--dur-1) var(--ease-out), color var(--dur-1) ease; }
+@media (hover: hover) { .sy-root .side-item:hover { background: var(--ink-a04); color: var(--ink); } }
+.sy-root .side-item:active { transform: none; }
+.sy-root .side-item:active .side-ic { transform: scale(0.9); }
+.sy-root .side-item.active { background: var(--accent-a12); color: var(--ink); font-weight: 600; }
+.sy-root .side-item.active .side-ic { color: var(--accent); }
+.sy-root .side-badge { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--faint); font-variant-numeric: tabular-nums; }
+.sy-root .side-item.active .side-badge { color: var(--accent); }
+.sy-root .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+
+/* mobile dock — safe-area padding lives inside each tab */
+.sy-root .dock {
+  position: relative; display: flex; flex: none;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(22px) saturate(1.8); backdrop-filter: blur(22px) saturate(1.8);
+  border-top: 0.5px solid var(--line);
+}
+.sy-root .dock-tab {
+  flex: 1; position: relative; background: none; border: none;
+  cursor: pointer; display: flex; flex-direction: column; align-items: center;
+  justify-content: flex-start; gap: 3px; font-family: inherit;
+  padding: 8px 0 calc(8px + var(--safe-bottom, 0px));
+  color: var(--faint); -webkit-user-select: none; user-select: none;
+  transition: color var(--dur-1) ease;
+}
+.sy-root .dock-tab.active { color: var(--accent); }
+.sy-root .dock-tab:active:not(:disabled) { transform: none; }
+.sy-root .dock-tab:active .dock-icon { transform: scale(0.88); }
+.sy-root .dock-icon { display: inline-flex; transition: transform var(--dur-1) var(--ease-out); position: relative; }
+.sy-root .dock-label { font-size: 10px; font-weight: 600; line-height: 1; white-space: nowrap; }
+.sy-root .dock-pip { position: absolute; top: -2px; right: -6px; min-width: 7px; height: 7px; border-radius: 999px; background: var(--accent); }
+
+/* content column */
+.sy-root .content-head {
+  flex: none; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
+  padding: 16px 28px 12px;
+  position: relative; z-index: 20;
+}
+.sy-root .content-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+/* Every page in SYNC is a single column of lists and cards. 900px is where a
+   line of body text stops being a paragraph and starts being a spreadsheet —
+   past it, list rows read as empty space with a word at each end. */
+.sy-root .content-max { width: 100%; max-width: 900px; margin: 0 auto; padding: 4px 28px 48px; }
+@media (max-width: 760px) {
+  .sy-root .content-head { padding: 10px 16px 8px; }
+  .sy-root .content-max { padding: 4px 16px 32px; }
+  .sy-root .stream-inner { padding: 0 16px; }
+}
+
+
+/* ═══ SHEETS ═════════════════════════════════════════════════════════════════ */
+.sy-root .sheet-scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 300; animation: fadein var(--dur-2) ease both; -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+.sy-root .sheet {
+  position: fixed; z-index: 301; background: var(--surface);
+  display: flex; flex-direction: column;
+  left: 0; right: 0; bottom: 0;
+  border-radius: 22px 22px 0 0;
+  box-shadow: var(--shadow-deep);
+  max-height: calc(100% - 24px);
+  padding-bottom: var(--safe-bottom, 0px);
+  animation: sheetin var(--dur-3) var(--ease-spring) both;
+  overscroll-behavior: contain;
+}
+@keyframes sheetin { from { opacity: 0.5; transform: translateY(56px); } to { opacity: 1; transform: none; } }
+.sy-root .sheet-grab { flex: none; display: flex; justify-content: center; padding: 9px 0 3px; }
+.sy-root .sheet-grab::after { content: ''; width: 36px; height: 5px; border-radius: 999px; background: var(--ink-a12); }
+.sy-root .sheet-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 18px 10px; }
+.sy-root .sheet-body { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 18px 16px; }
+.sy-root .sheet-foot { flex: none; padding: 10px 18px calc(14px + var(--safe-bottom, 0px)); display: flex; gap: 10px; }
+@media (min-width: 761px) {
+  .sy-root .sheet {
+    left: 50%; right: auto; bottom: auto; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 580px; max-width: calc(100vw - 48px);
+    border-radius: 18px; max-height: calc(100% - 96px);
+    animation: modalin var(--dur-3) var(--ease-spring) both;
+  }
+  @keyframes modalin { from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+  .sy-root .sheet-grab { display: none; }
+  .sy-root .sheet-head { padding: 18px 22px 10px; }
+  .sy-root .sheet-body { padding: 4px 22px 18px; }
+  .sy-root .sheet-foot { padding: 12px 22px 20px; }
+}
+
+/* ═══ TOASTS ═════════════════════════════════════════════════════════════════ */
+.sy-root .toasts {
+  position: fixed; bottom: calc(92px + var(--safe-bottom, 0px)); left: 50%;
+  transform: translateX(-50%); z-index: 900; display: flex; flex-direction: column;
+  gap: 8px; align-items: center; pointer-events: none; padding: 0 14px; width: 100%; max-width: 460px;
+}
+@media (min-width: 761px) { .sy-root .toasts { bottom: 24px; } }
+.sy-root .toast {
+  pointer-events: auto; background: var(--glass-raised);
+  -webkit-backdrop-filter: blur(22px) saturate(1.8); backdrop-filter: blur(22px) saturate(1.8);
+  color: var(--ink); border-radius: 999px; padding: 11px 18px; font-size: 13.5px; font-weight: 500;
+  box-shadow: var(--shadow-float); animation: toastin var(--dur-3) var(--ease-spring) both;
+  display: flex; gap: 9px; align-items: center; max-width: 100%;
+}
+.sy-root .toast.out { animation: toastout var(--dur-2) var(--ease-out) both; }
+.sy-root .toast .tdot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--green); }
+.sy-root .toast.err .tdot { background: var(--red); }
+.sy-root .toast .tmsg { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@keyframes toastin { from { opacity: 0; transform: translateY(14px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes toastout { to { opacity: 0; transform: translateY(8px) scale(0.98); } }
+
+/* ═══ COMMAND PALETTE ════════════════════════════════════════════════════════ */
+.sy-root .cmdk-scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 700; animation: fadein var(--dur-2) ease both; -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+.sy-root .cmdk {
+  position: fixed; z-index: 701; left: 50%; top: 14vh; transform: translateX(-50%);
+  width: 620px; max-width: calc(100vw - 32px); background: var(--glass-raised);
+  -webkit-backdrop-filter: blur(26px) saturate(1.7); backdrop-filter: blur(26px) saturate(1.7);
+  border-radius: 16px; box-shadow: var(--shadow-deep); overflow: hidden;
+  display: flex; flex-direction: column; max-height: 62vh;
+  animation: cmdkin var(--dur-3) var(--ease-spring) both;
+}
+@keyframes cmdkin { from { opacity: 0; transform: translateX(-50%) translateY(-10px) scale(0.98); } to { opacity: 1; transform: translateX(-50%); } }
+.sy-root .cmdk-input { flex: none; display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 0.5px solid var(--line); }
+/* No focus ring here: the palette is a modal whose entire purpose is this one
+   field. A ring around it says "you may have focus elsewhere", which is a lie. */
+.sy-root .cmdk-input input { flex: 1; background: none; border: none; outline: none; color: var(--ink); font-size: 16px; font-family: inherit; min-width: 0; }
+.sy-root .cmdk-input input:focus-visible { box-shadow: none; }
+.sy-root .cmdk-input input::placeholder { color: var(--faint); }
+.sy-root .cmdk-list { flex: 1; min-height: 0; overflow-y: auto; padding: 6px; }
+.sy-root .cmdk-group { padding: 10px 10px 4px; }
+.sy-root .cmdk-item {
+  display: flex; align-items: center; gap: 11px; width: 100%; padding: 9px 10px;
+  border-radius: 10px; border: none; background: transparent; color: var(--ink);
+  cursor: pointer; text-align: left; font-size: 14.5px; font-family: inherit;
+}
+.sy-root .cmdk-item:active { transform: none; }
+.sy-root .cmdk-item.sel { background: var(--accent-a16); }
+.sy-root .cmdk-item .ci { color: var(--faint); flex: none; display: inline-flex; }
+.sy-root .cmdk-item.sel .ci { color: var(--accent); }
+.sy-root .cmdk-item .chint { margin-left: auto; flex: none; }
+.sy-root .cmdk-foot { flex: none; display: flex; gap: 14px; align-items: center; padding: 9px 14px; border-top: 0.5px solid var(--line); }
+
+/* ═══ THE ORB — the one piece of atmosphere in the building ══════════════════ */
+.sy-root .orb-wrap { position: relative; display: grid; place-items: center; flex: none; }
+.sy-root .orb-halo {
+  position: absolute; inset: -18%; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, var(--accent-a25), transparent 66%);
+  opacity: 0; transition: opacity var(--dur-3) var(--ease-out);
+}
+.sy-root .orb-wrap[data-state="listening"] .orb-halo, .sy-root .orb-wrap[data-state="speaking"] .orb-halo { opacity: 1; }
+.sy-root .orb-wrap[data-state="thinking"] .orb-halo { opacity: 0.6; }
+.sy-root .orb-canvas { display: block; border-radius: 50%; }
+.sy-root .orb-btn {
+  position: absolute; inset: 0; border-radius: 50%; background: transparent;
+  border: none; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.sy-root .orb-btn:active:not(:disabled) { transform: scale(0.98); }
+
+/* the ring that reports what SYNC is doing without a word of copy */
+.sy-root .orb-ring { position: absolute; inset: 0; pointer-events: none; }
+.sy-root .orb-ring circle { fill: none; stroke-linecap: round; transform-origin: center; }
+
+/* ═══ CONSOLE ════════════════════════════════════════════════════════════════ */
+.sy-root .console { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.sy-root .stage {
+  flex: none; display: flex; flex-direction: column; align-items: center; gap: 12px;
+  /* No safe-area maths here. The status-bar zone is reserved by .notch-cap,
+     a flex child in App.jsx — padding on this rule was clobbered twice by a
+     later `padding` shorthand without producing a single error. */
+  padding: 10px 20px 8px;
+  position: relative; z-index: 2;
+}
+/* The Console has no page header, so this row is what clears the top of the
+   screen. It stays in flow so the stage's safe-area padding moves it down. */
+.sy-root .console-bar {
+  width: 100%; display: flex; justify-content: flex-end; align-items: center; gap: 4px;
+  flex: none; min-height: 38px;
+}
+.sy-root .utterance {
+  min-height: 44px; display: flex; align-items: center; justify-content: center;
+  text-align: center; max-width: 640px; padding: 0 8px;
+}
+.sy-root .utterance .u-text { font-size: 19px; line-height: 1.35; font-weight: 500; letter-spacing: -0.016em; color: var(--ink); text-wrap: balance; }
+.sy-root .utterance .u-text.interim { color: var(--sub); }
+.sy-root .utterance .u-hint { font-size: 13.5px; color: var(--faint); }
+
+/* transcript stream — the top edge dissolves under the stage instead of being
+   guillotined by it, so a scrolled conversation never shows a half-cut line */
+.sy-root .stream {
+  flex: 1; min-height: 0; overflow-y: auto; padding: 14px 0 20px;
+  /* Fades at both ends. Without the lower one a reply is guillotined
+     mid-sentence where the composer begins, which reads as a broken layout
+     rather than as something you can scroll. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 26px, #000 calc(100% - 22px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 26px, #000 calc(100% - 22px), transparent 100%);
+}
+.sy-root .stream-inner { max-width: 760px; margin: 0 auto; padding: 0 20px; display: flex; flex-direction: column; gap: 14px; }
+.sy-root .turn { display: flex; flex-direction: column; gap: 8px; animation: rise var(--dur-3) var(--ease-out) both; }
+.sy-root .turn-you { align-self: flex-end; max-width: 84%; background: var(--accent); color: var(--on-accent); padding: 10px 15px; border-radius: 16px 16px 5px 16px; font-size: 15px; line-height: 1.45; }
+.sy-root .turn-sync { align-self: flex-start; max-width: 92%; display: flex; flex-direction: column; gap: 9px; }
+.sy-root .turn-sync .say { font-size: 15.5px; line-height: 1.6; color: var(--ink); white-space: pre-wrap; }
+.sy-root .turn-sync .say strong { font-weight: 700; }
+.sy-root .turn-sync .say code { font-family: var(--font-mono); font-size: 13px; background: var(--ink-a06); padding: 1.5px 5px; border-radius: 5px; }
+.sy-root .turn-meta { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
+
+/* the execution ledger — one row per action SYNC actually took */
+.sy-root .act {
+  display: flex; align-items: flex-start; gap: 10px; padding: 9px 12px;
+  background: var(--ink-a04); border-radius: var(--r-well);
+  animation: rise var(--dur-2) var(--ease-out) both;
+}
+.sy-root .act.pending { background: var(--accent-a08); }
+.sy-root .act.failed { background: var(--red-a10); }
+.sy-root .act-ic { flex: none; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; color: var(--green); margin-top: 1px; }
+.sy-root .act.pending .act-ic { color: var(--accent); }
+.sy-root .act.failed .act-ic { color: var(--red); }
+.sy-root .act-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.sy-root .act-title { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.sy-root .act-detail { font-size: 12px; color: var(--sub); line-height: 1.45; overflow-wrap: anywhere; }
+.sy-root .act-undo { flex: none; font-size: 11.5px; font-weight: 600; color: var(--accent); background: none; border: none; cursor: pointer; padding: 4px 6px; margin: -4px -6px; border-radius: 7px; }
+@media (hover: hover) { .sy-root .act-undo:hover { background: var(--accent-a12); } }
+
+/* the composer — text is always available; voice is the default */
+.sy-root .composer {
+  flex: none; padding: 10px 20px calc(12px + var(--safe-bottom, 0px));
+  display: flex; justify-content: center;
+  background: linear-gradient(to top, var(--bg) 60%, transparent);
+}
+.sy-root .composer-inner { width: 100%; max-width: 760px; display: flex; align-items: flex-end; gap: 9px; }
+.sy-root .composer textarea {
+  flex: 1; background: var(--surface); box-shadow: var(--shadow-card);
+  border: none; border-radius: 16px; color: var(--ink);
+  font-size: 15px; font-family: inherit; line-height: 1.45;
+  padding: 13px 15px; min-height: 46px; max-height: 168px; resize: none; outline: none;
+}
+.sy-root .composer textarea::placeholder { color: var(--faint); }
+.sy-root .composer textarea:focus-visible { box-shadow: var(--shadow-card), var(--focus-ring); }
+
+/* ═══ DAY TIMELINE ═══════════════════════════════════════════════════════════ */
+.sy-root .tl { position: relative; padding-left: 58px; }
+.sy-root .tl-hour { position: relative; height: var(--hour-h, 62px); }
+.sy-root .tl-hour::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 0.5px; background: var(--line);
+}
+.sy-root .tl-hour-label {
+  position: absolute; left: -58px; top: -7px; width: 48px; text-align: right;
+  font-family: var(--font-mono); font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums;
+}
+.sy-root .tl-blocks { position: absolute; inset: 0; left: 58px; pointer-events: none; }
+.sy-root .tl-block {
+  position: absolute; left: 0; right: 0; pointer-events: auto;
+  border-radius: 11px; padding: 6px 11px; overflow: hidden;
+  background: var(--surface); box-shadow: var(--shadow-card);
+  border-left: 3px solid var(--tone, var(--accent));
+  cursor: pointer; text-align: left; font-family: inherit;
+  transition: transform var(--dur-1) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
+  display: flex; flex-direction: column; justify-content: center; gap: 1px; min-height: 0;
+}
+/* A 30-minute block is 29px tall. Its title must still fit, so short blocks
+   drop to a single centred line rather than clipping their own text. */
+.sy-root .tl-block.short { padding: 0 11px; }
+.sy-root .tl-block.short .tl-block-t { font-size: 12.5px; }
+@media (hover: hover) { .sy-root .tl-block:hover { box-shadow: var(--shadow-float); } }
+.sy-root .tl-block:active { transform: scale(0.99); }
+.sy-root .tl-block.done { opacity: 0.5; }
+.sy-root .tl-block.now { box-shadow: var(--shadow-float), inset 0 0 0 1.5px var(--tone, var(--accent)); }
+.sy-root .tl-block-t { font-size: 13px; font-weight: 600; color: var(--ink); letter-spacing: -0.008em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sy-root .tl-block-s { font-size: 11px; color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The now-line sits in the same gutter grid as the hour labels: the time reads
+   in the left column, the rule crosses the blocks. */
+.sy-root .tl-now {
+  position: absolute; left: 0; right: 0; height: 0; z-index: 5; pointer-events: none;
+  border-top: 1.5px solid var(--red);
+}
+.sy-root .tl-now::before {
+  content: ''; position: absolute; left: -4px; top: -4.5px; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--red);
+}
+.sy-root .tl-now-label {
+  position: absolute; left: -58px; top: -7px; width: 48px; text-align: right;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+  color: var(--red); font-variant-numeric: tabular-nums;
+}
+
+/* focus session bar */
+.sy-root .focusbar {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  background: var(--accent-a12); border-radius: var(--r-card);
+}
+.sy-root .focusbar-ring { flex: none; }
+.sy-root .focusbar-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+
+/* ═══ BOOT — the mark draws itself while the room wakes ═════════════════════ */
+.sy-root .boot {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+  background: var(--bg);
+}
+.sy-root .boot.leaving { animation: bootout var(--dur-3) var(--ease-out) both; }
+@keyframes bootout { to { opacity: 0; } }
+
+.sy-root .boot-mark .ba {
+  fill: none; stroke: var(--accent); stroke-width: 2.4; stroke-linecap: round;
+  /* r=29 → circumference ≈ 182.2; each arc draws 40% of the ring */
+  stroke-dasharray: 73 110;
+  transform-origin: center;
+}
+.sy-root .boot-mark .ba-1 { animation: bsweep1 1.35s var(--ease-inout) both; }
+.sy-root .boot-mark .ba-2 { animation: bsweep2 1.35s var(--ease-inout) both; }
+@keyframes bsweep1 { from { transform: rotate(-140deg); opacity: 0; } 30% { opacity: 1; } to { transform: rotate(0deg); opacity: 1; } }
+@keyframes bsweep2 { from { transform: rotate(320deg); opacity: 0; } 30% { opacity: 1; } to { transform: rotate(180deg); opacity: 1; } }
+
+.sy-root .boot-mark .bcore {
+  fill: var(--accent); opacity: 0; transform-origin: center;
+  animation: bcore 0.55s var(--ease-spring) 1.15s both;
+}
+@keyframes bcore { from { opacity: 0; transform: scale(0.2); } to { opacity: 1; transform: scale(1); } }
+
+.sy-root .boot-word {
+  font-size: 15px; font-weight: 700; letter-spacing: 0.42em; text-indent: 0.42em;
+  color: var(--ink); animation: fadein var(--dur-4) ease 0.85s both;
+}
+.sy-root .boot-sub {
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em;
+  color: var(--faint); animation: fadein var(--dur-4) ease 1.3s both;
+}
+
+/* ═══ ONBOARDING ═════════════════════════════════════════════════════════════ */
+/* A real scroll container: definite height from the frame, and `margin: auto`
+   on the card rather than flex centring. Centring a flex child taller than its
+   container clips the TOP of it and makes the start unscrollable — which is how
+   the Start button ended up unreachable on a phone. margin:auto centres when
+   there is room and yields when there isn't. */
+.sy-root .entrance {
+  height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  display: flex; flex-direction: column;
+  padding: 18px 16px calc(18px + var(--safe-bottom, 0px));
+}
+.sy-root .entrance-card {
+  margin: auto; flex: none;
+  width: 480px; max-width: 100%; padding: 26px;
+  background: var(--surface); border-radius: var(--r-card);
+  box-shadow: var(--shadow-deep);
+  animation: rise var(--dur-4) var(--ease-out) both;
+  display: flex; flex-direction: column; gap: 16px;
+}
+@media (max-width: 760px) {
+  .sy-root .entrance-card { padding: 20px; gap: 14px; border-radius: 20px; }
+  .sy-root .entrance-card .t-title1 { font-size: 23px; }
+}
+
+/* Onboarding option rows. The tick aligns with the title, not with the middle
+   of a four-line description — which is most of what made this look jumbled. */
+.sy-root .opt {
+  display: flex; align-items: flex-start; gap: 11px; width: 100%;
+  padding: 12px 13px; border-radius: 13px; border: none; cursor: pointer;
+  background: var(--surface-2); text-align: left; font-family: inherit;
+  transition: background var(--dur-1) ease;
+}
+.sy-root .opt.on { background: var(--accent-a12); }
+.sy-root .opt:active { transform: scale(0.99); }
+.sy-root .opt-tick {
+  flex: none; width: 22px; height: 22px; border-radius: 7px; margin-top: 1px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--ink-a08); color: transparent;
+  transition: background var(--dur-1) ease, color var(--dur-1) ease;
+}
+.sy-root .opt.on .opt-tick { background: var(--accent); color: var(--on-accent); }
+.sy-root .opt-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.sy-root .opt-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+.sy-root .opt-sub { font-size: 12.5px; line-height: 1.45; color: var(--sub); }
+
+/* ═══ REDUCED MOTION — motion is optional to the user's nervous system ═══════ */
+@media (prefers-reduced-motion: reduce) {
+  .sy-root *, .sy-root *::before, .sy-root *::after { animation-duration: 0.01ms !important; animation-delay: 0s !important; transition-duration: 0.01ms !important; }
+  .sy-root .pagefade, .sy-root .stagger > *, .sy-root .toast, .sy-root .sheet, .sy-root .cmdk, .sy-root .turn, .sy-root .act { animation: none !important; }
+  .sy-root .expand, .sy-root .seg-thumb, .sy-root .switch-knob { transition: none; }
+  .sy-root .sk::after { animation: none; }
+  .sy-root .dotstatus.pulse { animation: none; }
+}
+
+
+
+
+/* ── the ground floor ─────────────────────────────────────────────────────── */
+
+/* Deliberately no height on this chain — see .app below. Percentage heights
+   here inherit iOS's wrong idea of the screen and hand it to everything. */
+
+.sy-root {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  /* the app owns its own scrolling regions; the document never scrolls */
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--dur-2) ease, color var(--dur-2) ease;
+}
+.sy-root h1, .sy-root h2, .sy-root h3, .sy-root h4, .sy-root p { margin: 0; }
+.sy-root a { color: var(--accent); text-decoration: none; }
+@media (hover: hover) { .sy-root a:hover { text-decoration: underline; } }
+.sy-root ::selection { background: var(--accent-a32); color: var(--ink); }
+
+/* every number in this app columns up */
+.sy-root .t-num, .sy-root .t-mono, .sy-root .stattile-value, .sy-root .stattile-delta, .sy-root input[type="time"], .sy-root input[type="number"] {
+  font-variant-numeric: tabular-nums;
+}
+
+.sy-root .app { flex: 1; min-height: 0; display: flex; }
+.sy-root .app-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.sy-root .app-page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+@media (max-width: 760px) { .sy-root .app { flex-direction: column; } }
+
+/* the document-level scrollbar treatment, applied to every scroll region */
+.sy-root .content-scroll, .sy-root .stream, .sy-root .sheet-body, .sy-root .side-nav, .sy-root .cmdk-list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+.sy-root .content-scroll::-webkit-scrollbar, .sy-root .stream::-webkit-scrollbar, .sy-root .sheet-body::-webkit-scrollbar, .sy-root .side-nav::-webkit-scrollbar, .sy-root .cmdk-list::-webkit-scrollbar { width: 8px; }
+.sy-root .content-scroll::-webkit-scrollbar-thumb, .sy-root .stream::-webkit-scrollbar-thumb, .sy-root .sheet-body::-webkit-scrollbar-thumb, .sy-root .side-nav::-webkit-scrollbar-thumb, .sy-root .cmdk-list::-webkit-scrollbar-thumb {
+  background: var(--line-strong); border-radius: 4px;
+  border: 2px solid transparent; background-clip: padding-box;
+}
+
+/* touch targets on phones never drop below 44pt */
+@media (max-width: 760px) {
+  .sy-root .btn.sm { height: 38px; }
+  .sy-root .icon-btn { width: 42px; height: 42px; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ADOPTING THE PENTAGON
+
+   The shell stamps cssVars(app) as an INLINE STYLE on the wrapper it renders
+   this tool inside. An inline style cannot be beaten by a stylesheet rule on
+   the same element — but a DESCENDANT that redefines the same custom property
+   does win, for itself and its subtree. That is the whole mechanism here:
+
+     .sy-scope   captures the Pentagon's values under private names. It never
+                 redefines them, so var(--accent) here resolves to the shell's.
+     .sy-root    republishes them under SYNC's names. Reading and writing the
+                 same property on ONE element would be a cycle (and CSS drops
+                 both sides of a cycle silently), which is why this needs two
+                 elements rather than one clever block.
+
+   Only the base stops are re-pointed. Every ladder above — --accent-a06 …
+   --accent-a55, the --ink-a* set, --focus-ring — is already color-mix()'d off
+   these, so the entire palette follows from twenty lines.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.sy-scope {
+  --sy-p-accent: var(--accent);
+  --sy-p-accent-hi: var(--accent-hi);
+  --sy-p-accent-deep: var(--accent-deep);
+  --sy-p-accent-ink: var(--accent-ink);
+  --sy-p-bg: var(--bg);
+  --sy-p-surface: var(--surface);
+  --sy-p-surface-2: var(--surface-2);
+  --sy-p-ink: var(--ink);
+  --sy-p-muted: var(--muted);
+  --sy-p-faint: var(--faint);
+  --sy-p-border: var(--border);
+  --sy-p-border-strong: var(--border-strong);
+  --sy-p-good: var(--good);
+  --sy-p-bad: var(--bad);
+  --sy-p-warn: var(--warn);
+  --sy-p-info: var(--info);
+  --sy-p-font-body: var(--font-body);
+  --sy-p-font-mono: var(--font-mono);
+}
+
+.sy-root {
+  --bg: var(--sy-p-bg);
+  --surface: var(--sy-p-surface);
+  --surface-2: var(--sy-p-surface-2);
+  --ink: var(--sy-p-ink);
+  --sub: var(--sy-p-muted);
+  --faint: var(--sy-p-faint);
+  --line: var(--sy-p-border);
+  --line-strong: var(--sy-p-border-strong);
+
+  --accent: var(--sy-p-accent);
+  --accent-hi: var(--sy-p-accent-hi);
+  --accent-deep: var(--sy-p-accent-deep);
+  --on-accent: var(--sy-p-accent-ink);
+
+  /* SYNC's signal names map onto the Pentagon's four semantic signals, so a
+     failed action reads the same red here as everywhere else in the estate. */
+  --green: var(--sy-p-good);
+  --red: var(--sy-p-bad);
+  --amber: var(--sy-p-warn);
+  --blue: var(--sy-p-info);
+
+  --font-body: var(--sy-p-font-body);
+  --font-mono: var(--sy-p-font-mono);
+
+  /* Glass and segmented controls were hand-mixed against SYNC's true black;
+     re-derive them from the Pentagon canvas or they read as a darker app
+     floating on a lighter one. */
+  --glass: color-mix(in srgb, var(--sy-p-bg) 82%, transparent);
+  --glass-raised: color-mix(in srgb, var(--sy-p-surface) 94%, transparent);
+  --seg-bg: color-mix(in srgb, var(--sy-p-ink) 7%, transparent);
+  --seg-thumb: var(--sy-p-surface-2);
+  --scrim: color-mix(in srgb, var(--sy-p-bg) 72%, transparent);
+
+  /* The orb is the one place the accent becomes the subject rather than the
+     highlight, so it spans accent → highlight → the good signal. */
+  --orb-1: var(--sy-p-accent);
+  --orb-2: var(--sy-p-accent-hi);
+  --orb-3: var(--sy-p-good);
+}
+
+/* ── geometry, now that the host owns the window ────────────────────────────
+   Everything SYNC used to compute — a position:fixed frame sized to
+   visualViewport, a .notch-cap flex child, .lbx — is gone. The shell renders a
+   sticky bar of 0px + 51px + 1px above this tool and
+   publishes --safe-bottom for the home indicator, so the whole problem reduces
+   to one subtraction and one padding.
+
+   100vh, not 100dvh: on an installed iOS app dvh/svh report the screen MINUS
+   the top inset from a cold start (WebKit 254868) while vh reports it whole.
+   Subtracting the inset explicitly is correct in both. */
+.sy-root {
+  height: calc(100vh - 52px - 0px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sy-root .app { flex: 1; min-height: 0; display: flex; }
+.sy-root .app-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.sy-root .app-page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+@media (max-width: 760px) { .sy-root .app { flex-direction: column; } }
+
+/* The tab bar is the last in-flow child of the column and clears the home
+   indicator with the shell's variable — never var(--safe-bottom, 0px)
+   directly, which reports dead space on a letterboxed install. */
+.sy-root .dock-tab { padding: 8px 0 calc(8px + var(--safe-bottom, 0px)); }
+.sy-root .composer { padding-bottom: 12px; }
+.sy-root .entrance { height: 100%; padding-top: 18px; padding-bottom: calc(18px + var(--safe-bottom, 0px)); }
