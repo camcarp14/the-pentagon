@@ -3,19 +3,22 @@
 //
 // One site, one login, one toggle. The shell owns exactly four things:
 //   • auth (a single login gates all three tools)
-//   • the top-of-screen app toggle (ZTS · Clarify · Runway · Macro · Looper ·
-//     Business), plus ⌥1-6
+//   • the top-of-screen app toggle, plus ⌥1-N. WHICH tools it shows and in what
+//     order is a preference (tabPrefs.js), edited in System → Tabs — so the
+//     toggle renders the visible list, never the full APPS list, and the
+//     shortcuts index that same list so ⌥2 is always the second thing on screen
 //   • per-tool theming (it stamps @cc/design's CSS vars on a wrapper, so
 //     switching tools re-accents the whole page over the shared dark canvas)
-//   • the cross-tool System hub (usage · minds · agents)
+//   • the cross-tool System hub (ops · usage · minds · agents · tabs)
 // Each tool keeps its own internal nav — and its own ⌘K palette — directly
 // beneath (two clear layers), and is lazy-loaded so opening one never
 // downloads the others.
 // ═══════════════════════════════════════════════════════════════════════════
 import { Component, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { appMeta, cssVars, APPS } from "@cc/design";
+import { appMeta, cssVars } from "@cc/design";
 import { SkeletonBoard, EmptyIcon, M, useIsMobile } from "@cc/ui";
 import { auth, isConfigured } from "@cc/supabase";
+import { loadTabPrefs, saveTabPrefs, visibleTabs, resolveActive, TAB_PREFS_KEY } from "./tabPrefs.js";
 
 // Lazily-mounted tools. Wired in per Phase-C increment; a tool without an entry
 // here renders the "coming in this build" panel so the toggle always works.
@@ -122,7 +125,7 @@ function LoginScreen() {
 }
 
 // ─── the app toggle ───────────────────────────────────────────────────────────
-function AppToggle({ active, onPick, compact }) {
+function AppToggle({ active, onPick, compact, apps }) {
   const refs = useRef({});
   const [ind, setInd] = useState({ left: 0, width: 0, ready: false });
   // Measure the active button so the pill glides between tools instead of
@@ -142,7 +145,9 @@ function AppToggle({ active, onPick, compact }) {
     let alive = true;
     document.fonts?.ready?.then(() => { if (alive) measure(); });
     return () => { alive = false; window.removeEventListener("resize", measure); };
-  }, [active, compact]);
+    // `apps` is in the deps because hiding or reordering a tool changes every
+    // segment's offset — without it the pill stays parked over the old position.
+  }, [active, compact, apps]);
   return (
     <div
       // Deliberately NOT role="tablist": a real tablist owes arrow-key
@@ -171,7 +176,7 @@ function AppToggle({ active, onPick, compact }) {
       {ind.ready && (
         <div style={{ position: "absolute", top: compact ? 2 : 3, bottom: compact ? 2 : 3, left: ind.left, width: ind.width, background: "var(--surface-2, var(--surface))", borderRadius: compact ? 9 : 8, boxShadow: "var(--shadow-tab)", transition: `left ${M.durBase} ${M.easeSpring}, width ${M.durBase} ${M.easeSpring}` }} />
       )}
-      {APPS.map((a) => {
+      {apps.map((a) => {
         const m = appMeta(a);
         const on = a === active;
         return (
@@ -285,13 +290,40 @@ export default function Shell() {
   const isMobile = useIsMobile();
   // Always open on ZTS — the Pentagon's home tool. (We still remember the last
   // pick within a session for niceties, but every fresh load lands on ZTS.)
-  const [active, setActive] = useState("zts");
+  const [tabPrefs, setTabPrefs] = useState(loadTabPrefs);
+  const tabs = visibleTabs(tabPrefs);
+  // Open on the first visible tool rather than a hardcoded "zts", which would
+  // land on a tab the operator has hidden.
+  const [active, setActive] = useState(() => visibleTabs(loadTabPrefs())[0]);
   const [systemOpen, setSystemOpen] = useState(false);
 
   const pick = useCallback((a) => {
     setActive(a);
     setSystemOpen(false);
-    try { localStorage.setItem("cc_active_app", a); } catch {}
+  }, []);
+
+  // Preference changes come from System → Tabs, which is rendered by this same
+  // component, so they arrive through here rather than through storage events.
+  const applyTabPrefs = useCallback((next) => {
+    const saved = saveTabPrefs(next);
+    setTabPrefs(saved);
+    // Hiding the tool you are looking at has to go somewhere. resolveActive
+    // owns that rule so the shell cannot strand you on a surface the toggle can
+    // no longer reach.
+    setActive((cur) => resolveActive(saved, cur));
+  }, []);
+
+  // Another tab of the same site editing preferences should not leave this one
+  // rendering a toggle that no longer matches what was saved.
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key && e.key !== TAB_PREFS_KEY) return;
+      const next = loadTabPrefs();
+      setTabPrefs(next);
+      setActive((cur) => resolveActive(next, cur));
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   // ─── iOS standalone letterbox guard → publishes --safe-bottom ──────────────
@@ -344,13 +376,16 @@ export default function Shell() {
       // (⌥1 → "¡"), so e.key is never "1"/"2"/"3" and the shortcut would silently
       // do nothing. e.code stays "Digit1".."Digit3" regardless of the modifier.
       const i = ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "Digit6"].indexOf(e.code);
-      if (i === -1 || !APPS[i]) return;
+      // Indexed into the VISIBLE tabs, so ⌥2 is always the second thing on
+      // screen. Indexing the full APPS list would make the shortcuts point at
+      // hidden tools and skip numbers.
+      if (i === -1 || !tabs[i]) return;
       e.preventDefault();
-      pick(APPS[i]);
+      pick(tabs[i]);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [pick]);
+  }, [pick, tabs]);
 
   if (session === undefined) return <Boot />;
   if (!session) return <LoginScreen />;
@@ -389,7 +424,7 @@ export default function Shell() {
               <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--ink)", fontFamily: "'Syne',system-ui", whiteSpace: "nowrap" }}>The Pentagon</span>
             )}
           </span>
-          <AppToggle active={active} onPick={pick} compact={isMobile} />
+          <AppToggle active={active} onPick={pick} compact={isMobile} apps={tabs} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, marginLeft: 8 }}>
           {/* Icon-only on mobile: the four labelled tool segments need that ~43px
@@ -420,7 +455,7 @@ export default function Shell() {
       <ToolBoundary key={systemOpen ? "system" : active}>
         <Suspense fallback={<div style={{ padding: 24 }}><SkeletonBoard /></div>}>
           {systemOpen
-            ? <System onExit={() => setSystemOpen(false)} onOpenTool={pick} />
+            ? <System onExit={() => setSystemOpen(false)} onOpenTool={pick} tabPrefs={tabPrefs} onTabPrefs={applyTabPrefs} />
             : Tool ? <Tool key={active} /> : <ComingSoon app={active} />}
         </Suspense>
       </ToolBoundary>

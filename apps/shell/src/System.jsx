@@ -11,6 +11,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 import { useMemo, useState } from "react";
 import { appMeta, APPS } from "@cc/design";
+import { visibleTabs, isHidden, canHide, toggleTab, moveTab, resetTabPrefs, DEFAULT_HIDDEN } from "./tabPrefs.js";
 import { AnimatedNumber, EmptyState, useIsMobile } from "@cc/ui";
 import { auth } from "@cc/supabase";
 import Ops from "./Ops.jsx";
@@ -386,6 +387,107 @@ const Header = ({ title, sub, right }) => (
     {right}
   </div>
 );
+// ─── Tabs — which tools are in the top toggle, and in what order ─────────────
+// Lives in System because it is chrome preference, not a tool's own setting:
+// putting it inside ZTS would mean opening one tool to control whether another
+// is visible.
+//
+// Reorder is up/down buttons rather than drag-and-drop. Dragging is worse on
+// the surface that matters most here — a phone, where a long-press drag fights
+// the page scroll — and it is unusable by keyboard. Two buttons are operable by
+// touch, mouse and keyboard with no library.
+function Tabs({ prefs, onChange, isMobile }) {
+  const shownCount = visibleTabs(prefs).length;
+  const rowBtn = (enabled) => ({
+    width: 34, height: 34, flex: "none", display: "grid", placeItems: "center",
+    background: "none", border: `1px solid ${P.line}`, borderRadius: 8,
+    color: enabled ? P.muted : P.faint, cursor: enabled ? "pointer" : "default",
+    opacity: enabled ? 1 : 0.35, fontSize: 13,
+  });
+
+  return (
+    <div className="pagefade">
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, fontFamily: P.display }}>Top bar</div>
+        <button
+          onClick={() => onChange(resetTabPrefs())}
+          style={{ background: "none", border: `1px solid ${P.line}`, color: P.muted, borderRadius: 8, padding: "6px 12px", fontSize: 11.5, cursor: "pointer", fontFamily: P.display, fontWeight: 600 }}
+        >Reset to default</button>
+      </div>
+      <div style={{ fontSize: 12.5, color: P.muted, lineHeight: 1.6, marginBottom: 16, maxWidth: 620 }}>
+        Choose which tools appear in the toggle and the order they sit in. Hiding a
+        tool only removes it from this bar — nothing it runs on a schedule stops,
+        and its data is untouched. <span style={{ color: P.faint }}>⌥1–⌥{Math.min(shownCount, 6)} jump to the visible tools in this order.</span>
+      </div>
+
+      <div className="stagger" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {prefs.order.map((app, i) => {
+          const m = appMeta(app);
+          const hidden = isHidden(prefs, app);
+          const canUp = i > 0;
+          const canDown = i < prefs.order.length - 1;
+          // The last visible tool cannot be hidden — the control is disabled and
+          // says why, rather than absorbing the tap and doing nothing.
+          const blockedLast = !hidden && !canHide(prefs, app);
+          return (
+            <div key={app} style={{
+              display: "flex", alignItems: "center", gap: isMobile ? 8 : 12,
+              padding: isMobile ? "10px 12px" : "12px 14px",
+              background: P.surface, border: `1px solid ${P.line}`, borderRadius: 12,
+              opacity: hidden ? 0.55 : 1,
+            }}>
+              <span aria-hidden="true" style={{ width: 9, height: 9, borderRadius: "50%", flex: "none", background: m.accent, boxShadow: hidden ? "none" : `0 0 8px ${m.accent}` }} />
+              <span style={{ minWidth: 0, flex: 1 }}>
+                <span style={{ display: "block", fontSize: 13.5, fontWeight: 700, fontFamily: P.display, color: P.ink }}>{m.label}</span>
+                <span style={{ display: "block", fontSize: 11.5, color: P.faint, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {hidden ? "Hidden" : m.brand}
+                </span>
+              </span>
+
+              <button type="button" onClick={() => canUp && onChange(moveTab(prefs, app, -1))}
+                disabled={!canUp} aria-label={`Move ${m.label} earlier`} title="Move earlier"
+                style={rowBtn(canUp)}>↑</button>
+              <button type="button" onClick={() => canDown && onChange(moveTab(prefs, app, 1))}
+                disabled={!canDown} aria-label={`Move ${m.label} later`} title="Move later"
+                style={rowBtn(canDown)}>↓</button>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={!hidden}
+                aria-label={`${hidden ? "Show" : "Hide"} ${m.label}`}
+                disabled={blockedLast}
+                title={blockedLast ? "At least one tool has to stay visible" : hidden ? "Show in the top bar" : "Hide from the top bar"}
+                onClick={() => !blockedLast && onChange(toggleTab(prefs, app))}
+                style={{
+                  width: 46, height: 28, flex: "none", padding: 3, borderRadius: 999,
+                  border: `1px solid ${hidden ? P.line : m.accent}`,
+                  background: hidden ? P.surface2 : `color-mix(in srgb, ${m.accent} 26%, transparent)`,
+                  cursor: blockedLast ? "not-allowed" : "pointer",
+                  opacity: blockedLast ? 0.4 : 1,
+                  display: "flex", justifyContent: hidden ? "flex-start" : "flex-end", alignItems: "center",
+                  transition: "background var(--dur-2, 240ms) ease, border-color var(--dur-2, 240ms) ease, justify-content var(--dur-2, 240ms) ease",
+                }}
+              >
+                <span aria-hidden="true" style={{
+                  width: 20, height: 20, borderRadius: "50%", display: "block",
+                  background: hidden ? P.faint : m.accent,
+                  transition: "background var(--dur-2, 240ms) ease",
+                }} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ fontSize: 11.5, color: P.faint, marginTop: 14, lineHeight: 1.6 }}>
+        System is always reachable from the top bar, whatever is hidden.
+        {" "}Default: {DEFAULT_HIDDEN.map((a) => appMeta(a).label).join(", ")} start hidden.
+      </div>
+    </div>
+  );
+}
+
 function Segment({ value, onChange, options }) {
   return (
     <div style={{ display: "inline-flex", gap: 2, padding: 3, borderRadius: 10, background: P.surface2, border: `1px solid ${P.line}` }}>
@@ -398,9 +500,9 @@ function Segment({ value, onChange, options }) {
 
 // Ops sits first after Overview: it is the containment console, and the one
 // tab whose contents you might need in a hurry.
-const TABS = [["overview", "Overview"], ["ops", "Ops"], ["usage", "Usage"], ["minds", "Minds"], ["agents", "Agents"]];
+const TABS = [["overview", "Overview"], ["ops", "Ops"], ["usage", "Usage"], ["minds", "Minds"], ["agents", "Agents"], ["tabs", "Tabs"]];
 
-export default function System({ onExit, onOpenTool }) {
+export default function System({ onExit, onOpenTool, tabPrefs, onTabPrefs }) {
   // The Desk used to live here. It was dissolved into ZTS Mission and Clarify
   // Today instead of relocated: a queue you navigate to is a queue you miss,
   // and the work belongs on the screen for the tool that produced it.
@@ -426,6 +528,7 @@ export default function System({ onExit, onOpenTool }) {
         {tab === "usage" && <Usage isMobile={isMobile} />}
         {tab === "minds" && <Minds onOpenTool={onOpenTool} isMobile={isMobile} />}
         {tab === "agents" && <Agents isMobile={isMobile} />}
+        {tab === "tabs" && tabPrefs && <Tabs prefs={tabPrefs} onChange={onTabPrefs} isMobile={isMobile} />}
       </div>
     </div>
   );
