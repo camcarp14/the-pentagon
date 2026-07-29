@@ -214,6 +214,64 @@ describe("interface parity with the Web Speech recognizer", () => {
   });
 });
 
+describe("the tap can always move the machine", () => {
+  it("resolves the mode before bailing on an empty utterance", () => {
+    // The dead end this pins: VoiceProvider.talk() routes every tap on a
+    // recognizer already in "capturing" into commitNow(). So if commit() can
+    // return with mode still "capturing", the orb becomes permanently inert —
+    // it looks like it is listening and no tap can change anything. Nothing
+    // throws, nothing logs, the button just stops meaning anything.
+    //
+    // The Web Speech engine gets this right by accident of structure: ITS
+    // settle() resolves the mode and commit() calls it before the empty-text
+    // return. This one's settle() only clears the buffer, so the same early
+    // return had to move below the mode handling.
+    const body = clientSrc.slice(clientSrc.indexOf("function commit(text)"));
+    const fn = body.slice(0, body.indexOf("\n  }"));
+    const bail = fn.indexOf("if (!said) return");
+    const resolves = fn.indexOf('setMode("off")');
+    expect(bail).toBeGreaterThan(-1);
+    expect(resolves).toBeGreaterThan(-1);
+    expect(resolves).toBeLessThan(bail);
+  });
+
+  it("makes the thing that says 'tap' actually tappable", () => {
+    // The user's report was literally "it won't let me even tap where it says
+    // tap". They were aiming at the caption, which was a <span>. A control
+    // whose label instructs an action has to accept that action, or the label
+    // is a lie and the failure is invisible.
+    const page = readFileSync(join(here, "..", "..", "pages", "ConsolePage.jsx"), "utf8");
+    const block = page.slice(page.indexOf('className="utterance"'), page.indexOf('className="utterance"') + 700);
+    expect(block).toMatch(/<button[\s\S]*className="u-hint"/);
+    expect(block).toMatch(/onClick=\{voice\.busy \? voice\.stop : voice\.talk\}/);
+  });
+
+  it("says Connecting before it claims to be Listening", () => {
+    // Opening the microphone, fetching a token and completing the handshake
+    // all happen after the tap and any of them can hang. Calling that
+    // "Listening…" made a dead connection and a silent room identical.
+    const page = readFileSync(join(here, "..", "..", "pages", "ConsolePage.jsx"), "utf8");
+    expect(page).toMatch(/voice\.mode === "starting" \? "Connecting…"/);
+    expect(clientSrc).toMatch(/setMode\("starting"\)/);
+    // ...and the promotion to a real listening state happens on the socket
+    // opening, not on the tap.
+    const open = clientSrc.slice(clientSrc.indexOf("ws.onopen"), clientSrc.indexOf("ws.onmessage"));
+    expect(open).toMatch(/setMode\(ambient \? "ambient" : "capturing"\)/);
+  });
+
+  it("does not push a level update on every animation frame", () => {
+    // `level` is a dependency of the context useMemo, so each setLevel
+    // re-renders every consumer of useVoice(). At 60fps on a phone that is
+    // enough to stop the tab answering taps. Silence returns a jittering
+    // near-zero float, so an epsilon is needed as well as a rate cap —
+    // without it React never bails out and every frame is a "change".
+    const provider = readFileSync(join(here, "..", "VoiceProvider.jsx"), "utf8");
+    expect(provider).toMatch(/PUSH_MS/);
+    expect(provider).toMatch(/EPSILON/);
+    expect(provider).toMatch(/Math\.abs\(v - lastValue\) >= EPSILON/);
+  });
+});
+
 describe("microphone lifetime", () => {
   it("exposes its own level so nothing opens a second microphone", () => {
     // createMeter() in recognizer.js calls getUserMedia and builds a second

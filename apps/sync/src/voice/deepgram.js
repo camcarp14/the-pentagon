@@ -152,8 +152,22 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
   function commit(text) {
     const said = text.trim();
     settle();
+
+    // Resolve the mode FIRST, and unconditionally. Returning early on an empty
+    // buffer used to leave mode stuck at "capturing", which was a dead end
+    // there was no way out of: VoiceProvider.talk() routes every tap on a
+    // capturing recognizer into commitNow(), so once nothing had been heard,
+    // the orb sat there looking like it was listening and no further tap could
+    // change anything. Nothing threw and nothing was logged — the button had
+    // simply stopped meaning anything.
+    //
+    // An empty commit is not an error. It is what a tap-to-start/tap-to-stop
+    // control does every time someone changes their mind, and it has to leave
+    // the machine somewhere a tap can move it from.
+    if (ambient) setMode("ambient");
+    else { wanted = false; teardown(); setMode("off"); }
+
     if (!said) return;
-    if (ambient) { setMode("ambient"); } else { setMode("off"); wanted = false; teardown(); }
     onCommit?.(said);
   }
 
@@ -418,7 +432,13 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
       armed = true;
       wanted = true;
       buffer = "";
-      setMode("capturing");
+      // "starting", not "capturing" — the microphone is not open yet and the
+      // socket does not exist. Claiming to listen here is how an hour went
+      // into debugging a microphone that was never the problem: the caption
+      // said "Listening…" from the instant of the tap, so a failure to connect
+      // and a failure to hear looked identical from the outside. ws.onopen
+      // promotes this to "capturing" once there is genuinely an ear.
+      setMode("starting");
       connect();
     },
 

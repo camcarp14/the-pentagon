@@ -117,7 +117,11 @@ export function VoiceProvider({ children }) {
       onState: (m) => {
         setMode(m);
         setPhase((p) => {
-          if (m === "capturing") return "listening";
+          // "starting" counts as listening for the orb's sake — the tap has to
+          // produce motion immediately or it reads as ignored — but the
+          // caption distinguishes the two, so "connecting" and "connected but
+          // hearing nothing" stop looking alike.
+          if (m === "capturing" || m === "starting") return "listening";
           if (p === "listening") return busyRef.current ? "thinking" : "idle";
           return p;
         });
@@ -149,15 +153,41 @@ export function VoiceProvider({ children }) {
   // Held only while the ear is actually open — wake-word listening, or the
   // length of one push-to-talk. An app you aren't talking to must not leave a
   // live-microphone indicator sitting in the browser chrome.
-  const earOpen = settings.ambient || mode === "capturing";
+  const earOpen = settings.ambient || mode === "capturing" || mode === "starting";
 
   useEffect(() => {
     let cancelled = false;
     let raf = 0;
+    let lastPush = 0;
+    let lastValue = 0;
 
-    const tick = () => {
+    // `level` is a dependency of the context value below, so every setLevel
+    // rebuilds it and re-renders every consumer of useVoice() — the console,
+    // the transcript, the composer, the orb. Pushing a fresh float on every
+    // animation frame means doing that 60 times a second on a phone, which is
+    // enough to make the whole tab stop answering taps.
+    //
+    // This was survivable before only by accident: the loop used to start only
+    // if createMeter() resolved to something, and on iOS that second
+    // getUserMedia often didn't, so it frequently never ran at all.
+    //
+    // The orb eases toward whatever it is given, so it cannot tell the
+    // difference between 60 and 20 updates a second. The epsilon matters more
+    // than the rate: silence produces a jittering near-zero float, and without
+    // it every frame is a "change" and React never bails out.
+    const PUSH_MS = 50;
+    const EPSILON = 0.02;
+
+    const tick = (now) => {
       const m = meterRef.current;
-      if (m) setLevel(m.level());
+      if (m) {
+        const v = m.level();
+        if (Number.isFinite(v) && (now - lastPush >= PUSH_MS) && Math.abs(v - lastValue) >= EPSILON) {
+          lastPush = now;
+          lastValue = v;
+          setLevel(v);
+        }
+      }
       raf = requestAnimationFrame(tick);
     };
 
@@ -197,7 +227,12 @@ export function VoiceProvider({ children }) {
     const rec = recRef.current;
     if (!rec?.supported) return false;
     speaker.shutUp();
-    if (rec.mode() === "capturing") { rec.commitNow(); return true; }
+    // "starting" counts as in-progress: a second tap while the socket is still
+    // opening has to be able to call it off, or the control is unresponsive for
+    // exactly as long as the connection is slow — which is precisely when
+    // someone taps again.
+    const m = rec.mode();
+    if (m === "capturing" || m === "starting") { rec.commitNow(); return true; }
     setMicError(null);
     rec.capture();
     return true;

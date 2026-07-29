@@ -166,8 +166,14 @@ export default function ConsolePage() {
     voice.phase === "speaking" ? "speaking" :
     voice.phase === "error" ? "error" : "idle";
 
+  // "Connecting…" is a state of its own on purpose. It covers opening the
+  // microphone, fetching a voice token and completing the WebSocket handshake —
+  // any of which can fail or simply hang. Folding all three into "Listening…"
+  // is what made a dead connection and a silent room indistinguishable, and
+  // sent an afternoon into debugging a microphone that was working.
   const caption =
     voice.interim ? voice.interim :
+    voice.mode === "starting" ? "Connecting…" :
     voice.phase === "listening" ? "Listening…" :
     voice.phase === "thinking" ? "Working on it" :
     voice.phase === "speaking" ? "" :
@@ -207,10 +213,23 @@ export default function ConsolePage() {
           label={voice.busy ? "Stop" : "Talk to SYNC"}
         />
 
+        {/* The hint is a button, not a label. It says "Tap to talk"; people
+            tap it. For as long as it was a <span> that did nothing, aiming at
+            the words instead of the orb was indistinguishable from a dead
+            microphone. It drives the same handler as the orb. */}
         <div className="utterance">
           {voice.interim
             ? <span className="u-text interim">{voice.interim}</span>
-            : <span className="u-hint">{caption}</span>}
+            : (
+              <button
+                type="button"
+                className="u-hint"
+                onClick={voice.busy ? voice.stop : voice.talk}
+                disabled={!voice.sttSupported && !voice.busy}
+              >
+                {caption}
+              </button>
+            )}
         </div>
 
         {voice.micError && (

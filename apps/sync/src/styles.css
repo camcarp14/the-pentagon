@@ -592,7 +592,20 @@
 }
 .sy-root .utterance .u-text { font-size: 19px; line-height: 1.35; font-weight: 500; letter-spacing: -0.016em; color: var(--ink); text-wrap: balance; }
 .sy-root .utterance .u-text.interim { color: var(--sub); }
-.sy-root .utterance .u-hint { font-size: 13.5px; color: var(--faint); }
+/* The hint is a real button, because it says "Tap to talk" and people tap it.
+   It was inert label text for as long as it existed, so anyone aiming at the
+   words rather than the orb above them got nothing back and reasonably
+   concluded the microphone was dead. The negative margin cancels the padding
+   so the caption still sits where it did while carrying a real hit target. */
+.sy-root .utterance .u-hint {
+  font-size: 13.5px; color: var(--faint);
+  background: none; border: 0; font: inherit; font-size: 13.5px;
+  padding: 8px 14px; margin: -8px -14px; border-radius: 10px;
+  -webkit-tap-highlight-color: transparent;
+}
+.sy-root .utterance button.u-hint { cursor: pointer; }
+.sy-root .utterance button.u-hint:disabled { cursor: default; }
+.sy-root .utterance button.u-hint:active:not(:disabled) { color: var(--sub); }
 
 /* transcript stream — the top edge dissolves under the stage instead of being
    guillotined by it, so a scrolled conversation never shows a half-cut line */
