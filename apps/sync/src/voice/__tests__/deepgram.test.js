@@ -123,23 +123,42 @@ describe("credential minting (server)", () => {
 });
 
 describe("websocket authentication (client)", () => {
-  it("never uses the subprotocol trick for the token", () => {
-    // `new WebSocket(url, ["token", key])` is the documented way to pass an
-    // API key from a browser, and it is reported broken for the short-lived
-    // JWTs this path uses — same code, permanent key works, temporary token
-    // 401s. Reaching for it again is the single most likely regression here,
-    // because every Deepgram browser example on the internet shows it.
-    expect(client).not.toMatch(/new WebSocket\([^)]*,\s*\[/);
+  it("never pairs the API-key scheme word with a JWT", () => {
+    // `["token", key]` is the documented subprotocol form for a permanent API
+    // key, and it is what every Deepgram browser example on the internet
+    // shows. Handing it a temporary JWT instead is the single likeliest
+    // explanation for the 401s people report with temporary tokens — the
+    // scheme word has to match the kind of credential. This is the one form
+    // that must never appear.
+    expect(client).not.toMatch(/\[\s*["']token["']\s*,/);
   });
 
-  it("puts the credential on the URL and can fall back to the other form", () => {
-    // The reports disagree about the parameter name — `access_token` in the
-    // fix for the failing handshake, `authorization` with a scheme prefix in
-    // the query-parameter reference. Trying both costs one reconnect;
-    // guessing wrong costs a dead microphone with no diagnosable symptom.
-    expect(client).toContain("access_token: token");
-    expect(client).toMatch(/authorization: `bearer \$\{token\}`/);
-    expect(client).toContain("AUTH_FORMS");
+  it("offers all three documented forms, SDK-proven one first", () => {
+    // Order is evidence, not taste. ["bearer", jwt] is what Deepgram's own JS
+    // SDK emits (src/CustomClient.ts), so it leads; the two query-parameter
+    // forms are documented fallbacks. A browser reports a refused handshake
+    // and a dropped connection identically — both 1006, no status — so there
+    // is no way to diagnose the wrong choice from the client. Trying all three
+    // costs a reconnect; guessing once costs a dead microphone.
+    const forms = client.slice(client.indexOf("const AUTH_FORMS"), client.indexOf("let provenForm"));
+    expect(forms).toMatch(/protocols: \["bearer", token\]/);
+    expect(forms).toMatch(/access_token: token/);
+    expect(forms).toMatch(/authorization: `bearer \$\{token\}`/);
+    expect(forms.indexOf("protocols:")).toBeLessThan(forms.indexOf("access_token:"));
+  });
+
+  it("spells the subprotocol scheme in lowercase", () => {
+    // The case flips between the two places it appears, and subprotocol
+    // entries are matched as exact strings: the HTTP header is `Bearer` with
+    // a capital B, the WebSocket subprotocol is lowercase `bearer`. Writing
+    // the header spelling here fails the handshake with no usable error.
+    expect(client).not.toMatch(/\[\s*["']Bearer["']/);
+  });
+
+  it("only passes a protocols argument for the form that has one", () => {
+    // `new WebSocket(url, undefined)` is not reliably the same as
+    // `new WebSocket(url)`, so the two calls stay separate.
+    expect(client).toMatch(/auth\.protocols \? new WebSocket\(url, auth\.protocols\) : new WebSocket\(url\)/);
   });
 
   it("remembers the form that worked", () => {

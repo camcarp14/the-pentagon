@@ -22,14 +22,13 @@
 // number. Correct on hardware that honours the request and on hardware that
 // ignores it.
 //
-// THE CREDENTIAL GOES IN THE URL, NOT THE SUBPROTOCOL. Browsers cannot set
-// headers on a WebSocket, so Deepgram's documented workaround for an API key is
-// to smuggle it through `Sec-WebSocket-Protocol` — `new WebSocket(url, ["token",
-// key])`. That trick is reported broken for the short-lived JWTs this app uses:
-// identical code succeeds with a permanent key and fails the handshake with a
-// temporary one. The working form is a query parameter. Since the reports
-// disagree on which parameter name, connect() tries one and falls back to the
-// other on a refused handshake, then remembers which worked — see AUTH_FORMS.
+// THE CREDENTIAL IS TRIED THREE WAYS. Browsers cannot set headers on a
+// WebSocket, so Deepgram accepts the credential either through
+// `Sec-WebSocket-Protocol` or on the query string — and the failure mode when
+// you pick wrong is a bare 1006 close with no status, indistinguishable from a
+// flaky connection. So connect() walks the documented forms in order of how
+// good the evidence for each is, and remembers the first that completes a
+// handshake. See AUTH_FORMS for what each one is and why it sits where it does.
 //
 // The credential is a 60-second token minted per connection by
 // netlify/functions/deepgram-key.mjs. A WebSocket cannot be proxied through a
@@ -61,14 +60,35 @@ class PcmTap extends AudioWorkletProcessor {
 registerProcessor("pcm-tap", PcmTap);
 `;
 
-// Two ways of putting a JWT on the URL. Deepgram's own fix for the failing
-// subprotocol handshake names `access_token`; its query-parameter reference
-// documents `authorization` taking a scheme-prefixed value. Rather than bet on
-// one and leave the operator with a dead microphone and a 1006 close code, we
-// try the first and fall back to the second.
+// Every documented way to hand a browser WebSocket a Deepgram credential,
+// strongest evidence first. A refused handshake is indistinguishable from a
+// dropped connection here — both arrive as a 1006 close with no status — so
+// guessing wrong once would leave a dead microphone and nothing to read. We
+// try them in order and remember the winner.
+//
+// [0] is what Deepgram's own JS SDK does. From src/CustomClient.ts:
+//         } else if (authHeader.startsWith("Bearer ")) {
+//             // Access token: "Bearer TOKEN" -> ["bearer", "TOKEN"]
+//             protocols.push("bearer", token);
+//     Note the case flip, which is the whole trap: the HTTP header is
+//     `Authorization: Bearer <jwt>` with a capital B, but the subprotocol
+//     value is lowercase `bearer`. Subprotocol entries are matched as exact
+//     strings, so `Bearer` fails where `bearer` succeeds.
+//
+//     There are scattered reports of temporary tokens failing this handshake
+//     with a 401 while a permanent key succeeds. The likeliest explanation is
+//     the neighbouring mistake — sending `["token", jwt]`, pairing the API-key
+//     scheme word with a JWT — rather than anything wrong with subprotocols,
+//     since the official SDK ships this exact code. Treated as unproven, which
+//     is precisely why it is not the only option here.
+//
+// [1] and [2] are the query-parameter forms: the streaming reference documents
+//     `authorization` taking a scheme-prefixed value, and `access_token` is the
+//     form named in the reports above as the production workaround.
 const AUTH_FORMS = [
-  (token) => ({ access_token: token }),
-  (token) => ({ authorization: `bearer ${token}` }),
+  (token) => ({ protocols: ["bearer", token] }),
+  (token) => ({ params: { access_token: token } }),
+  (token) => ({ params: { authorization: `bearer ${token}` } }),
 ];
 
 // Survives across recognizer instances: once a handshake completes we stop
@@ -242,6 +262,7 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
     if (!wanted) { connecting = false; return; }
 
     const ix = provenForm ?? formIx;
+    const auth = AUTH_FORMS[ix](token);
     const params = new URLSearchParams({
       model: "nova-3",
       encoding: "linear16",
@@ -260,10 +281,15 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
       // opted-out audio is retained only for as long as it takes to process
       // the request, which is the strongest retention answer on offer.
       mip_opt_out: "true",
-      ...AUTH_FORMS[ix](token),
+      ...(auth.params || {}),
     });
 
-    const ws = new WebSocket(`${ENDPOINT}?${params}`);
+    // The subprotocol form passes a second argument; the query-parameter forms
+    // must not pass one at all. `new WebSocket(url, undefined)` is not the same
+    // as `new WebSocket(url)` in every engine, so the call is branched rather
+    // than made conditional on a value.
+    const url = `${ENDPOINT}?${params}`;
+    const ws = auth.protocols ? new WebSocket(url, auth.protocols) : new WebSocket(url);
     socket = ws;
     connecting = false;
     let opened = false;
