@@ -4,6 +4,7 @@
 // This exercises it against a synthetic stream, with chunk boundaries in the
 // worst possible places.
 
+import { readFileSync } from "node:fs";
 import { describe, it, expect, beforeAll } from "vitest";
 import { installBrowserEnv } from "../../test/env.js";
 
@@ -25,12 +26,35 @@ describe("the model registry", () => {
 
 /* ── every failure has a sentence a person can act on ──────────────────────── */
 describe("every failure has a sentence a person can act on", () => {
-  for (const kind of ["nokey", "auth", "rate", "overloaded", "server", "network", "badrequest"]) {
+  // `nokey` was dropped in the move: with the key server-side, "you have no
+  // key" stopped being a thing that can happen. It was left in this loop and
+  // still passed — explain() has no case for it, so it fell through to the
+  // default and the assertion (a non-empty string) was satisfied by a sentence
+  // that answers a different question. A check that cannot fail is worse than
+  // no check, so the dead kind is out and the three real new ones are in.
+  const KINDS = ["session", "forbidden", "noproxy", "auth", "rate", "overloaded", "server", "network", "badrequest"];
+
+  for (const kind of KINDS) {
     it(`${kind} explains itself`, () => {
       const msg = explain(new TransportError("the raw detail from the API", { kind }));
       expect(typeof msg === "string" && msg.length > 10).toBe(true);
     });
   }
+
+  it("every kind explain() knows about is covered here", () => {
+    // The loop above only proves the kinds it names. This proves the list is
+    // the whole list: any future kind added to explain() without a sentence
+    // here fails, instead of quietly inheriting the default.
+    const src = readFileSync(new URL("../transport.js", import.meta.url), "utf8");
+    const cases = [...src.matchAll(/case "([a-z]+)": return "|case "([a-z]+)": return err\.message/g)]
+      .map((m) => m[1] || m[2]);
+    const explained = cases.filter((k) => !["text_delta", "input_json_delta", "thinking_delta", "signature_delta"].includes(k));
+    for (const k of explained) expect(KINDS).toContain(k);
+  });
+
+  it("a kind explain() does not know falls back rather than throwing", () => {
+    expect(() => explain(new TransportError("x", { kind: "not-a-real-kind" }))).not.toThrow();
+  });
 });
 
 /* ── SSE framing ───────────────────────────────────────────────────────────── */
@@ -275,7 +299,7 @@ describe("errors are typed, not swallowed", () => {
     // key server-side, so a 404 there means the function isn't deployed, and the
     // kind was renamed to "noproxy" with a message naming the fix. `nokey` is
     // now a dead kind: explain() has no case for it and falls to the default.
-    it("a missing proxy with no key reads as nokey", () => expect(caught?.kind).toEqual("noproxy"));
+    it("a missing proxy reads as noproxy", () => expect(caught?.kind).toEqual("noproxy"));
   });
 
   describe("a dead connection", () => {
