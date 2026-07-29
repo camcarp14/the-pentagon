@@ -84,10 +84,38 @@ export default function VoiceOrb({
     let t = 0;
     let paused = false;
 
-    const onVis = () => { paused = document.hidden; if (!paused) loop(performance.now()); };
-    document.addEventListener("visibilitychange", onVis);
-
     let last = performance.now();
+
+    // One loop, ever. This used to call loop() directly on becoming visible,
+    // which quietly doubled the number of running loops on every app switch.
+    //
+    // Backgrounding stops rAF callbacks from FIRING but does not cancel the one
+    // already queued. So on return there were two: the stale callback the
+    // browser resumed, and the fresh one started here — each rescheduling
+    // itself forever. rafRef.current only ever held the newest, so the effect's
+    // cleanup could cancel exactly one of them.
+    //
+    // 2, 4, 8, 16… every time you switched away and back, each one a full
+    // canvas draw of three radial gradients at 2.5× DPR. An installed
+    // home-screen app is backgrounded on every switch, so an afternoon of
+    // testing saturates the main thread — and the symptom is not a broken orb,
+    // it is a page that gradually stops answering taps at all.
+    //
+    // Cancelling before every schedule makes the invariant structural: there is
+    // never more than one pending callback, whatever order the browser chooses
+    // to resume and deliver events in.
+    const schedule = () => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(loop);
+    };
+
+    const onVis = () => {
+      paused = document.hidden;
+      if (paused) { cancelAnimationFrame(rafRef.current); return; }
+      last = performance.now();   // don't bill the whole background gap as one frame
+      schedule();
+    };
+    document.addEventListener("visibilitychange", onVis);
 
     const drawLobes = (e, lvl, hot, mid, scale = 1) => {
       for (let i = 0; i < 3; i++) {
@@ -202,7 +230,7 @@ export default function VoiceOrb({
       // Reduced motion still gets a rendered orb — it just doesn't move.
       draw();
     } else {
-      rafRef.current = requestAnimationFrame(loop);
+      schedule();
     }
 
     return () => {

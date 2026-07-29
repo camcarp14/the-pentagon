@@ -95,6 +95,23 @@ const AUTH_FORMS = [
 // paying for the fallback dance on every reconnect.
 let provenForm = null;
 
+/**
+ * Reject if a promise hasn't settled in time.
+ *
+ * Needed because the two things this file waits on have no deadline of their
+ * own: getUserMedia never settles at all in a backgrounded tab, and the token
+ * fetch carries no AbortSignal. Left unbounded, a bad connection leaves the app
+ * showing "Connecting…" forever with no way to tell that from a slow one. A
+ * rejection at least ends somewhere a tap can move.
+ */
+const withTimeout = (promise, ms, message) => {
+  let timer;
+  return Promise.race([
+    promise.finally(() => clearTimeout(timer)),
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); }),
+  ]);
+};
+
 /** Is this browser capable of the capture path at all? */
 export const supported =
   typeof window !== "undefined" &&
@@ -142,6 +159,7 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
   let mode = "off";
 
   let connecting = false;  // a connect() is already in flight
+  let attempt = 0;         // generation counter; teardown() bumps it too
   let formIx = 0;          // which AUTH_FORMS entry to try next
   let refusals = 0;        // consecutive handshakes that never opened
 
@@ -268,16 +286,74 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
   async function connect() {
     if (socket || connecting || !wanted) return;
     connecting = true;
+    // Which attempt this is. teardown() bumps it too, so anything the user does
+    // to stop listening also orphans a connect that is still parked on an
+    // await — without this, a slow token fetch could resurrect a machine that
+    // had already been switched off, or write its socket over a newer one's.
+    const gen = ++attempt;
 
-    let token;
+    // EVERYTHING is inside this try, and `connecting` is cleared in a finally.
+    // Both are load-bearing, and the old shape had neither: the try closed
+    // right after mintToken(), leaving `String(ctx.sampleRate)` and
+    // `new WebSocket(...)` outside it and ahead of `connecting = false`. A
+    // throw from either — trivially reachable, since teardown() nulls ctx and
+    // can run while this function is awaiting — became an unhandled rejection
+    // that stranded `connecting` at true. From then on the guard above returned
+    // instantly on every call, so the microphone could never open again for the
+    // life of the page. Silent, permanent, and indistinguishable from a dead
+    // tap. In an installed app there is no reload button to escape it.
     try {
       // Microphone first, token second: if permission is refused there is no
       // point spending a token, and the prompt appears while the tap that
       // triggered it is still the reason the user is looking at the screen.
-      await ensureAudio();
-      token = await mintToken();
+      //
+      // Both are bounded. getUserMedia has no timeout of its own and does not
+      // settle at all in a backgrounded tab, and the token fetch carries no
+      // AbortSignal — so on a bad connection the honest outcomes were "wait
+      // forever showing Connecting…" or, worse, a stranded latch. A rejection
+      // is strictly better: it lands in the catch, says so, and the next tap
+      // starts clean.
+      await withTimeout(ensureAudio(), 15000, "The microphone didn't open in time. Tap to try again.");
+      const token = await withTimeout(mintToken(), 10000, "Couldn't reach the voice service. Tap to try again.");
+
+      // Superseded while we were awaiting — a later tap, or a teardown.
+      if (!wanted || gen !== attempt) return;
+
+      const ix = provenForm ?? formIx;
+      const auth = AUTH_FORMS[ix](token);
+      const params = new URLSearchParams({
+        model: "nova-3",
+        encoding: "linear16",
+        sample_rate: String(ctx.sampleRate),   // whatever we actually got
+        channels: "1",
+        interim_results: "true",
+        smart_format: "true",
+        // 300ms of silence ends an utterance. Long enough to think mid-sentence,
+        // short enough that the reply doesn't feel delayed.
+        endpointing: "300",
+        // Excludes this audio from Deepgram's Model Improvement Partnership
+        // Program. Accounts are opted out by default, but that is an account
+        // setting someone can flip in a console months from now — setting it
+        // per request means the guarantee travels with the code rather than
+        // depending on a checkbox nobody remembers. Deepgram documents that
+        // opted-out audio is retained only for as long as it takes to process
+        // the request, which is the strongest retention answer on offer.
+        mip_opt_out: "true",
+        ...(auth.params || {}),
+      });
+
+      // The subprotocol form passes a second argument; the query-parameter forms
+      // must not pass one at all. `new WebSocket(url, undefined)` is not the same
+      // as `new WebSocket(url)` in every engine, so the call is branched rather
+      // than made conditional on a value.
+      const url = `${ENDPOINT}?${params}`;
+      const ws = auth.protocols ? new WebSocket(url, auth.protocols) : new WebSocket(url);
+      socket = ws;
+      wire(ws, ix, gen);
     } catch (e) {
-      connecting = false;
+      // A superseded attempt reports nothing: the user has already moved on,
+      // and its failure is not news about the state they are actually in.
+      if (gen !== attempt) return;
       wanted = false;
       teardown();
       setMode("off");
@@ -286,42 +362,14 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
       } else {
         reportOpenFailure(e);
       }
-      return;
+    } finally {
+      connecting = false;
     }
+  }
 
-    if (!wanted) { connecting = false; return; }
-
-    const ix = provenForm ?? formIx;
-    const auth = AUTH_FORMS[ix](token);
-    const params = new URLSearchParams({
-      model: "nova-3",
-      encoding: "linear16",
-      sample_rate: String(ctx.sampleRate),   // whatever we actually got
-      channels: "1",
-      interim_results: "true",
-      smart_format: "true",
-      // 300ms of silence ends an utterance. Long enough to think mid-sentence,
-      // short enough that the reply doesn't feel delayed.
-      endpointing: "300",
-      // Excludes this audio from Deepgram's Model Improvement Partnership
-      // Program. Accounts are opted out by default, but that is an account
-      // setting someone can flip in a console months from now — setting it
-      // per request means the guarantee travels with the code rather than
-      // depending on a checkbox nobody remembers. Deepgram documents that
-      // opted-out audio is retained only for as long as it takes to process
-      // the request, which is the strongest retention answer on offer.
-      mip_opt_out: "true",
-      ...(auth.params || {}),
-    });
-
-    // The subprotocol form passes a second argument; the query-parameter forms
-    // must not pass one at all. `new WebSocket(url, undefined)` is not the same
-    // as `new WebSocket(url)` in every engine, so the call is branched rather
-    // than made conditional on a value.
-    const url = `${ENDPOINT}?${params}`;
-    const ws = auth.protocols ? new WebSocket(url, auth.protocols) : new WebSocket(url);
-    socket = ws;
-    connecting = false;
+  /** Attach the handlers for one socket. Split out only so connect() reads as
+   *  a single guarded sequence rather than a wall. */
+  function wire(ws, ix, gen) {
     let opened = false;
 
     ws.onopen = () => {
@@ -349,7 +397,8 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
     ws.onerror = () => {};
 
     ws.onclose = () => {
-      if (socket !== ws) return;        // already superseded by teardown()
+      // Superseded by a teardown or a newer attempt — not ours to react to.
+      if (socket !== ws || gen !== attempt) return;
       socket = null;
       if (!wanted) return;
 
@@ -394,6 +443,11 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
   }
 
   function teardown() {
+    // Orphan any connect() still parked on an await. One line, and it covers
+    // stop(), cancel(), commit() and destroy() at once: whatever the user just
+    // did to stop listening, an in-flight attempt can no longer come back and
+    // reopen a microphone they closed, or overwrite a newer socket.
+    attempt++;
     closeSocket();
     try { if (node?.port) node.port.onmessage = null; node?.disconnect(); } catch { /* already gone */ }
     node = null;

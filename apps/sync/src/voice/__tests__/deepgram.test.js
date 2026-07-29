@@ -307,6 +307,91 @@ describe("microphone lifetime", () => {
 
   it("asks for the microphone before spending a token", () => {
     const body = client.slice(client.indexOf("async function connect()"));
-    expect(body.indexOf("await ensureAudio()")).toBeLessThan(body.indexOf("await mintToken()"));
+    expect(body.indexOf("ensureAudio()")).toBeGreaterThan(-1);
+    expect(body.indexOf("ensureAudio()")).toBeLessThan(body.indexOf("mintToken()"));
+  });
+
+  it("bounds both waits so a hang cannot masquerade as Connecting…", () => {
+    // Neither has a deadline of its own: getUserMedia never settles in a
+    // backgrounded tab and the token fetch has no AbortSignal. Unbounded, a
+    // bad connection is indistinguishable from a slow one and the caption sits
+    // on "Connecting…" forever.
+    const body = client.slice(client.indexOf("async function connect()"));
+    expect(body).toMatch(/withTimeout\(ensureAudio\(\), \d+/);
+    expect(body).toMatch(/withTimeout\(mintToken\(\), \d+/);
+  });
+});
+
+describe("no latch can outlive the attempt that set it", () => {
+  // Everything here guards ONE failure shape, and it is the worst one in this
+  // file: a flag that gates entry to connect() getting stuck true. The guard is
+  // `if (socket || connecting || !wanted) return;`, so a stranded `connecting`
+  // means the microphone can never open again for the life of the page —
+  // silently, with no error and no state change. An installed home-screen app
+  // has no reload button, and Safari keeps the page in memory across app
+  // switches, so "closing and reopening" does not clear it either.
+
+  const connect = client.slice(client.indexOf("async function connect()"), client.indexOf("function wire("));
+
+  it("clears `connecting` in a finally, not on the happy path", () => {
+    expect(connect).toMatch(/finally \{[\s\S]*connecting = false;[\s\S]*\}/);
+    // And nowhere else: a stray assignment on one branch is how the original
+    // shape looked correct while leaving three exits uncovered.
+    expect([...connect.matchAll(/connecting = false/g)]).toHaveLength(1);
+  });
+
+  it("builds the URL and the socket inside the try", () => {
+    // These two lines were outside it, and ahead of the flag reset. teardown()
+    // nulls ctx and can run while connect() is awaiting, so reading
+    // ctx.sampleRate was a genuinely reachable throw — and it escaped as an
+    // unhandled rejection because connect() is called bare, never with .catch.
+    const tryAt = connect.indexOf("try {");
+    const catchAt = connect.indexOf("} catch (e) {");
+    const sampleRate = connect.indexOf("String(ctx.sampleRate)");
+    const socket = connect.indexOf("new WebSocket(url");
+    expect(tryAt).toBeGreaterThan(-1);
+    expect(catchAt).toBeGreaterThan(tryAt);
+    for (const ix of [sampleRate, socket]) {
+      expect(ix).toBeGreaterThan(tryAt);
+      expect(ix).toBeLessThan(catchAt);
+    }
+  });
+
+  it("orphans an in-flight attempt when the user stops listening", () => {
+    // teardown() bumps the generation, so a connect() parked on an await cannot
+    // come back and reopen a microphone that was just closed, or write its
+    // socket over a newer one's.
+    expect(client).toMatch(/function teardown\(\)[\s\S]{0,600}attempt\+\+;/);
+    expect(connect).toMatch(/const gen = \+\+attempt;/);
+    expect(connect).toMatch(/gen !== attempt/);
+  });
+
+  it("leaves one control that always returns the ear to a known state", () => {
+    // listening() reports wake-word listening only, so switching the mic off
+    // during a push-to-talk called nothing — there was no single control
+    // anywhere that could unstick a wedged machine.
+    const provider = readFileSync(join(here, "..", "VoiceProvider.jsx"), "utf8");
+    expect(provider).toMatch(/rec\.mode\(\) !== "off"\) rec\.stop\(\)/);
+  });
+});
+
+describe("the orb runs exactly one animation loop", () => {
+  const orb = readFileSync(join(here, "..", "VoiceOrb.jsx"), "utf8");
+
+  it("cancels before scheduling, so a resumed frame cannot double it", () => {
+    // Backgrounding stops rAF callbacks firing but does not cancel the queued
+    // one. The old code called loop() directly on becoming visible, so on
+    // return there were two self-perpetuating loops — the resumed stale
+    // callback and the fresh one — and rafRef only held the newest, so cleanup
+    // cancelled one. Every app switch doubled the count: 2, 4, 8, 16, each a
+    // full canvas draw of three radial gradients. An installed app backgrounds
+    // on every switch, so a long session saturates the main thread and the
+    // page stops answering taps — which looks nothing like an orb bug.
+    expect(orb).toMatch(/const schedule = \(\) => \{\s*cancelAnimationFrame\(rafRef\.current\);\s*rafRef\.current = requestAnimationFrame\(loop\);/);
+    expect(orb).not.toMatch(/if \(!paused\) loop\(/);
+  });
+
+  it("stops the loop when hidden instead of leaving one queued", () => {
+    expect(orb).toMatch(/if \(paused\) \{ cancelAnimationFrame\(rafRef\.current\); return; \}/);
   });
 });

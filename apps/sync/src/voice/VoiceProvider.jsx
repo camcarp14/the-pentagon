@@ -146,7 +146,12 @@ export function VoiceProvider({ children }) {
     const rec = recRef.current;
     if (!rec?.supported) return;
     if (settings.ambient) { setMicError(null); rec.start(); }
-    else if (rec.listening()) rec.stop();
+    // `mode() !== "off"`, not `listening()`. listening() reports wake-word
+    // listening only, so switching the mic off during a push-to-talk used to
+    // call nothing at all — leaving no single control anywhere in the UI that
+    // returns the ear to a known state. When the machine wedges, that is the
+    // one thing a person needs.
+    else if (rec.mode() !== "off") rec.stop();
   }, [settings.ambient]);
 
   /* ── the meter ───────────────────────────────────────────────────────── */
