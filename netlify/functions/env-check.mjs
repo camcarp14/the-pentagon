@@ -42,6 +42,13 @@ export const handler = async () => {
     anon_key_role: jwtRole(SUPA_ANON), // expect 'anon'
     anthropic_key_present: !!process.env.ANTHROPIC_API_KEY,
     allowed_email_present: !!process.env.ALLOWED_EMAIL,
+    // SYNC's microphone. Worth a field of its own because this one has a
+    // failure mode the dashboard hides: a function-scoped variable is resolved
+    // at deploy time, so setting it after the last build leaves the value
+    // visibly present in the UI and absent from the running function. Read
+    // together with `commit` above, this says which build saw the key — which
+    // is the actual question when voice answers 503.
+    deepgram_key_present: !!process.env.DEEPGRAM_API_KEY,
     // optional: powers scheduled scans only. The role decode catches the
     // silent killer — an anon key pasted into the service slot.
     service_key_present: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -65,6 +72,11 @@ export const handler = async () => {
       !AGENT_KEY && 'VITE_AGENT_SUPABASE_ANON_KEY',
       !process.env.ANTHROPIC_API_KEY && 'ANTHROPIC_API_KEY',
       !process.env.ALLOWED_EMAIL && 'ALLOWED_EMAIL',
+      // Listed here even though it is not fatal — SYNC still takes typing
+      // without it. It earns the slot because its absence is invisible from
+      // the app: the mic just refuses, and on iOS there is no fallback engine
+      // to refuse to.
+      !process.env.DEEPGRAM_API_KEY && 'DEEPGRAM_API_KEY',
     ].filter(Boolean),
   };
   return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(out, null, 2) };
