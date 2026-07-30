@@ -396,7 +396,7 @@ export default function Shell() {
   const Tool = TOOLS[active];
 
   return (
-    <div data-app={systemOpen ? "system" : active} data-theme={systemOpen ? "dark" : m.mode} style={{ ...(systemOpen ? PLATFORM_VARS : cssVars(active)), minHeight: "100vh", background: "var(--bg)", color: "var(--ink)", fontFamily: "var(--font-body)", transition: `background ${M.durSlow} ${M.easeStd}` }}>
+    <div data-app={systemOpen ? "system" : active} data-palette={systemOpen ? "sync" : active} data-theme={systemOpen ? "dark" : m.mode} style={{ ...(systemOpen ? PLATFORM_VARS : cssVars(active)), minHeight: "100vh", background: "var(--bg)", color: "var(--ink)", fontFamily: "var(--font-body)", transition: `background ${M.durSlow} ${M.easeStd}` }}>
       {/* Shell top bar — the ONE global chrome, themed to the active tool */}
       <div style={{
         position: "sticky", top: 0, zIndex: 100,

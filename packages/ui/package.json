@@ -5,7 +5,8 @@
   "type": "module",
   "main": "index.jsx",
   "exports": {
-    ".": "./index.jsx"
+    ".": "./index.jsx",
+    "./components.css": "./components.css"
   },
   "dependencies": {
     "@cc/design": "*"

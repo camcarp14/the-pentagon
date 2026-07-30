@@ -1,0 +1,12 @@
+/* ─── @cc/design — one import for the whole token layer ──────────────────────
+ *
+ * Import order is load-bearing: tokens.css establishes the neutral ground and
+ * every derived ladder, themes.css then overrides ~10 authored tokens per tool
+ * via [data-palette]. Reversing them means a tool's accent is overwritten by
+ * the neutral fallback on every render.
+ *
+ * themes.css is GENERATED. Edit packages/design/gen-themes.mjs and re-run
+ * `npm run themes`; a hand-edit here is silently reverted by the next run.
+ * ─────────────────────────────────────────────────────────────────────────── */
+@import "./tokens.css";
+@import "./themes.css";

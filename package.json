@@ -13,7 +13,8 @@
     "preview": "npm --workspace @app/shell run preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "npm run test && npm run build"
+    "verify": "npm run test && npm run build",
+    "themes": "node packages/design/gen-themes.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

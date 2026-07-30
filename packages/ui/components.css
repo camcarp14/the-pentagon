@@ -1,0 +1,386 @@
+/* ─── @cc/ui/components — the kit, as CSS ────────────────────────────────────
+ *
+ * Ported from Board Room's SESSION language (board-room/src/design/components.css).
+ * The type scale, the motion system, and the class layer every kit component
+ * renders against: card, cell, stattile, btn, pill, seg, field, switch, sheet,
+ * toast, skeleton.
+ *
+ * Board Room's own product surfaces did NOT come across — its grocery list, news
+ * wire, login seal, Brief page and sidebar wordmark are screens, not a kit, and
+ * a shared package that carries another app's screens is how a design system
+ * turns back into a fork.
+ *
+ * Pairs with @cc/design/tokens.css and the generated themes.css. Every colour
+ * here is a var(); there are no literals, so a tool's palette reaches this sheet
+ * without it knowing which tool it is in.
+ * ─────────────────────────────────────────────────────────────────────────── *//* ═══════════════════════════════════════════════════════════════════════════
+   SESSION — components & shells.
+   Type classes, chrome (nav bar · tab bar · sidebar), and the kit.
+   Rules of the house: cards have no borders; hairlines live only inside
+   lists and on glass edges; gold appears on the active tab, the primary
+   action, live indicators, and selection — nowhere else.
+   ═══════════════════════════════════════════════════════════════════════════ *//* ── type ──────────────────────────────────────────────────────────────────── */
+[data-kit] .t-ltitle { font-size: 32px; line-height: 1.15; font-weight: 700; letter-spacing: -0.022em; color: var(--ink); }
+[data-kit] .t-title1 { font-size: 26px; line-height: 1.2;  font-weight: 700; letter-spacing: -0.02em;  color: var(--ink); }
+[data-kit] .t-title2 { font-size: 21px; line-height: 1.25; font-weight: 700; letter-spacing: -0.015em; color: var(--ink); }
+[data-kit] .t-head { font-size: 17px; line-height: 1.3;  font-weight: 600; letter-spacing: -0.01em;  color: var(--ink); }
+[data-kit] .t-body { font-size: 15px; line-height: 1.5;  font-weight: 400; color: var(--ink); }
+[data-kit] .t-call { font-size: 13.5px; line-height: 1.45; font-weight: 400; color: var(--ink); }
+[data-kit] .t-foot { font-size: 12.5px; line-height: 1.4; font-weight: 400; color: var(--sub); }
+[data-kit] .t-cap { font-size: 11.5px; line-height: 1.3; font-weight: 500; color: var(--sub); }
+[data-kit] .t-label { font-size: 12px; line-height: 1; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--sub); }
+/* Inline dates, times, and tags — proportional Inter with tabular figures so
+   digits still column up, but the letters read as prose, not a terminal. */
+
+[data-kit] .t-num { font-weight: 500; font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1, "cv05" 1; }
+/* ── press physics — every touch acknowledged inside 100ms ─────────────────── */
+
+[data-kit] button:active:not(:disabled) { transform: scale(0.97); }
+[data-kit] .press { transition: transform var(--dur-1) var(--ease-out), opacity var(--dur-1) ease; }
+[data-kit] .press:active { transform: scale(0.97); }
+[data-kit] .hoverable { transition: background var(--dur-1) ease; }
+@media (hover: hover) { [data-kit] .hoverable:hover { background: var(--ink-a03); }}
+/* ── entrances — quiet, brief, only on arrival ─────────────────────────────── */
+
+[data-kit] .pagefade { animation: pagein var(--dur-3) var(--ease-out) both; }
+@keyframes pagein { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+[data-kit] .pageslide-l { animation: slidel var(--dur-3) var(--ease-out) both; }
+[data-kit] .pageslide-r { animation: slider var(--dur-3) var(--ease-out) both; }
+@keyframes slidel { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+@keyframes slider { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
+[data-kit] .stagger > * { animation: rise var(--dur-3) var(--ease-out) both; animation-delay: calc(var(--i, 0) * 30ms); }
+@keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+[data-kit] .stagger > *:nth-child(1) { --i: 0 } [data-kit] .stagger > *:nth-child(2) { --i: 1 }
+[data-kit] .stagger > *:nth-child(3) { --i: 2 } [data-kit] .stagger > *:nth-child(4) { --i: 3 }
+[data-kit] .stagger > *:nth-child(5) { --i: 4 } [data-kit] .stagger > *:nth-child(n+6) { --i: 5 }
+/* ── skeletons — pages develop instead of arrive ───────────────────────────── */
+
+[data-kit] .sk { position: relative; overflow: hidden; background: var(--ink-a05); border-radius: 8px; }
+[data-kit] .sk::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, var(--ink-a04), transparent); animation: shimmer 1.4s infinite; }
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+[data-kit] .sk-line { height: 12px; margin: 8px 0; }
+[data-kit] .sk-line.w40 { width: 40%; } [data-kit] .sk-line.w60 { width: 60%; } [data-kit] .sk-line.w80 { width: 80%; }
+[data-kit] .sk-big { height: 28px; width: 55%; margin: 10px 0 6px; }
+/* ── height:auto expansion, zero measuring, zero jank ──────────────────────── */
+
+[data-kit] .expand { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--dur-3) var(--ease-out); }
+[data-kit] .expand.open { grid-template-rows: 1fr; }
+[data-kit] .expand > div { overflow: hidden; min-height: 0; }
+/* ── shared keyframes (legacy names kept — call sites reference them) ──────── */
+@keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes sheetup { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
+@keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.75; } }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes shake {
+  10%, 90% { transform: translateX(-2px); } 20%, 80% { transform: translateX(4px); }
+  30%, 50%, 70% { transform: translateX(-8px); } 40%, 60% { transform: translateX(8px); }
+}
+/* ── convening — three quiet dots, one thought ─────────────────────────────── */
+
+[data-kit] .convene { display: inline-flex; align-items: center; gap: 7px; }
+[data-kit] .convene .cd { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--accent); animation: convene 1.25s var(--ease-inout) infinite; }
+[data-kit] .convene .cd:nth-child(2) { animation-delay: 0.16s; }
+[data-kit] .convene .cd:nth-child(3) { animation-delay: 0.32s; }
+@keyframes convene { 0%, 100% { opacity: 0.25; transform: scale(0.75); } 40% { opacity: 1; transform: scale(1); } }
+/* ═══ CHROME — phone ═════════════════════════════════════════════════════════ *//* The .nav-bar rules lived here for a pinned header MobileShell no longer
+   renders — the large title and its controls scroll inside #page-scroll now. */
+
+[data-kit] .nav-actions { display: flex; align-items: center; gap: 6px; }
+[data-kit] .icon-btn {
+  width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: none; border-radius: 12px; color: var(--sub);
+  cursor: pointer; padding: 0; flex: none; position: relative;
+}
+/* the visual box stays 38px; the touch target reaches 44pt */
+
+[data-kit] .icon-btn::after { content: ''; position: absolute; inset: -4px; }
+@media (hover: hover) { [data-kit] .icon-btn:hover { background: var(--ink-a05); }}
+/* Large-title block — the first thing on every page. Kept tight to the nav
+   bar so the useful content sits high on the screen. */
+
+[data-kit] .lt-block { padding: 2px 16px 6px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+[data-kit] .lt-sub { margin-top: 2px; font-size: 12.5px; line-height: 1.35; color: var(--sub); }
+/* ── tab bar — native grammar; the safe-area padding lives INSIDE each tab
+   so icons sit above the home indicator. Anatomy (in-flow last flex child,
+   .lbx collapse) is load-bearing on iOS standalone — do not reposition. ── */
+
+[data-kit] .dock-wrap { padding: 0; }
+[data-kit] .dock {
+  pointer-events: auto; position: relative; display: flex;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8); backdrop-filter: blur(20px) saturate(1.8);
+  border: none; border-top: 0.5px solid var(--line); border-radius: 0;
+}
+[data-kit] .dock-tab {
+  flex: 1; position: relative; background: none; border: none;
+  cursor: pointer; display: flex; flex-direction: column; align-items: center;
+  justify-content: flex-start; gap: 3px;
+  padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+  color: var(--faint);
+  -webkit-user-select: none; user-select: none;
+}
+[data-kit] .dock-tab.active { color: var(--accent); }
+[data-kit] .dock-tab:active:not(:disabled) { transform: none; } /* tabs don't shrink — the icon nudges instead */
+ [data-kit] .dock-tab:active .dock-icon { transform: scale(0.88); }
+[data-kit] .dock-icon { display: inline-flex; transition: transform var(--dur-1) var(--ease-out); }
+[data-kit] .dock-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em; line-height: 1; white-space: nowrap; max-width: 100%; overflow: hidden; }
+[data-kit] .lbx .dock-tab { padding: 8px 0; } /* letterboxed standalone — OS already cleared the indicator *//* ═══ CHROME — sidebar (tablet / desktop) ════════════════════════════════════ *//* A 236px rail, not 300: four destinations in a flat list (no section headers —
+   see nav.js) don't need the width, and the surplus was dead canvas next to
+   every page. Padding and row height came down with it. */
+ [data-kit] .sidebar {
+  border-right: 0.5px solid var(--line);
+  padding: calc(16px + env(safe-area-inset-top)) 10px calc(14px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 14px;
+  /* dvh, not vh: on iPad Safari 100vh runs behind the toolbar, pushing the
+     footer (live BTC) below the fold. dvh tracks the visible height so the
+     rail always fits. The nav scrolls if it must; the footer stays pinned. */
+  height: 100vh; height: 100dvh; position: sticky; top: 0; overflow: hidden;
+}
+[data-kit] .side-nav { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+[data-kit] .side-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 0 10px; height: 38px; border-radius: 10px; border: none;
+  background: transparent; cursor: pointer; color: var(--sub);
+  font-size: 14.5px; font-weight: 500; text-align: left;
+}
+[data-kit] .side-item .side-ic { color: var(--faint); display: inline-flex; flex: none; transition: transform var(--dur-1) var(--ease-out); }
+@media (hover: hover) { [data-kit] .side-item:hover { background: var(--ink-a04); }}
+[data-kit] .side-item:active .side-ic { transform: scale(0.9); }
+[data-kit] .side-item.active { background: var(--accent-a10); color: var(--ink); font-weight: 600; }
+[data-kit] .side-item.active .side-ic { color: var(--accent); }
+[data-kit] .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+/* content header (tablet/desktop) */
+
+[data-kit] .content-head {
+  flex: none; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
+  padding: 15px 28px 12px; position: relative; z-index: 20;
+}
+[data-kit] .content-head .head-title { flex: 1; min-width: 0; }
+[data-kit] .content-head .head-title .t-foot { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1023px) {}
+[data-kit] .content-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+/* Outer bound for page content in the desktop/tablet shell. Wide enough for the
+   Brief's 3-column layout to breathe on a large monitor; every other page sets
+   its own narrower inner max-width, so they stay centered and unaffected. */
+
+[data-kit] .content-max { width: 100%; max-width: 1480px; margin: 0 auto; padding: 4px 28px 40px; }
+/* ═══ THE KIT ════════════════════════════════════════════════════════════════ *//* cards — one material, no outlines */
+
+[data-kit] .card { background: var(--surface); border: none; border-radius: var(--r-card); box-shadow: var(--shadow-card); }
+[data-kit] .card.pad-lg { padding: 20px; }
+[data-kit] .card.pad-md { padding: 16px; }
+[data-kit] .card.pad-sm { padding: 12px; }
+[data-kit] .card.pressable { cursor: pointer; transition: transform var(--dur-1) var(--ease-out), box-shadow var(--dur-2) var(--ease-out); }
+[data-kit] .card.pressable:active { transform: scale(0.985); }
+/* section header */
+
+[data-kit] .sec-head { display: flex; align-items: baseline; justify-content: space-between; padding: 0 4px 8px; margin-top: 4px; }
+[data-kit] .sec-link { font-size: 12.5px; font-weight: 500; color: var(--accent); background: none; border: none; cursor: pointer; padding: 4px; letter-spacing: 0; }
+/* cells — inset-grouped list grammar */
+
+[data-kit] .cellgroup { background: var(--surface); border-radius: var(--r-card); box-shadow: var(--shadow-card); overflow: hidden; }
+[data-kit] .cell {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  min-height: 46px; padding: 10px 16px; background: transparent; border: none;
+  text-align: left; color: var(--ink); position: relative;
+}
+[data-kit] .cell.tappable { cursor: pointer; }
+@media (hover: hover) { [data-kit] .cell.tappable:hover { background: var(--ink-a03); }}
+[data-kit] .cell.tappable:active { background: var(--ink-a05); }
+[data-kit] .cell + .cell::before, [data-kit] .cell-sep {
+  content: ''; position: absolute; top: 0; right: 0; height: 0.5px;
+  left: 16px; background: var(--line);
+}
+[data-kit] .cell.has-leading + .cell.has-leading::before { left: 56px; }
+[data-kit] .cell-leading { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; }
+[data-kit] .cell-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+[data-kit] .cell-title { font-size: 15.5px; font-weight: 500; letter-spacing: -0.008em; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-kit] .cell-sub { font-size: 12.5px; color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-kit] .cell-value { flex: none; font-size: 15px; color: var(--sub); display: inline-flex; align-items: center; gap: 6px; }
+[data-kit] .cell-chevron { flex: none; color: var(--faint); display: inline-flex; margin-right: -4px; }
+[data-kit] .cell.destructive .cell-title { color: var(--red); }
+/* stat tiles — hero numbers */
+
+[data-kit] .stattile {
+  background: var(--surface-2); border: none; border-radius: var(--r-well);
+  padding: 12px 9px 10px; text-align: left; display: flex; flex-direction: column; gap: 3px;
+  min-width: 0; position: relative;
+}
+[data-kit] .stattile.on-canvas { background: var(--surface); box-shadow: var(--shadow-card); border-radius: var(--r-card); padding: 16px; }
+[data-kit] .stattile.tappable { cursor: pointer; transition: transform var(--dur-1) var(--ease-out); }
+[data-kit] .stattile.tappable:active { transform: scale(0.97); }
+[data-kit] .stattile.selected { box-shadow: inset 0 0 0 1.5px var(--accent); }
+[data-kit] .stattile-value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-kit] .stattile-label {
+  font-size: 10.5px; font-weight: 500; letter-spacing: -0.003em; color: var(--sub);
+  line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+[data-kit] .stattile-delta { font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+/* buttons */
+
+[data-kit] .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  border: none; cursor: pointer; font-family: var(--font-body);
+  font-weight: 600; letter-spacing: -0.008em; border-radius: 12px;
+  transition: opacity var(--dur-1) ease, transform var(--dur-1) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
+  -webkit-user-select: none; user-select: none;
+}
+[data-kit] .btn:disabled { opacity: 0.45; cursor: default; }
+[data-kit] .btn.lg { height: 50px; padding: 0 22px; font-size: 16px; }
+[data-kit] .btn.md { height: 44px; padding: 0 18px; font-size: 15px; }
+[data-kit] .btn.sm { height: 34px; padding: 0 14px; font-size: 13px; border-radius: 10px; }
+[data-kit] .btn.full { width: 100%; }
+[data-kit] .btn.primary { background: var(--accent); color: var(--on-accent); }
+[data-kit] .btn.tinted { background: var(--accent-a12); color: var(--accent); }
+[data-kit] .btn.quiet { background: var(--ink-a06); color: var(--ink); }
+[data-kit] .btn.plain { background: transparent; color: var(--accent); }
+[data-kit] .btn.danger { background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red); }
+[data-kit] .btn.danger-solid { background: var(--red); color: #fff; }
+/* pills — monochrome filters (accent is not for filters) */
+
+[data-kit] .pill {
+  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px;
+  border-radius: 999px; border: none; background: var(--ink-a05); color: var(--sub);
+  font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; flex: none;
+  transition: transform var(--dur-1) var(--ease-out);
+}
+[data-kit] .pill.active { background: var(--ink); color: var(--bg); font-weight: 600; }
+[data-kit] .pillrow { display: flex; gap: 8px; overflow-x: auto; padding: 2px 16px 10px; scrollbar-width: none; -ms-overflow-style: none; }
+[data-kit] .pillrow::-webkit-scrollbar { display: none; }
+/* segmented — ≤4 options, equal width */
+
+[data-kit] .seg { display: flex; background: var(--seg-bg); border-radius: 10px; padding: 2px; position: relative; }
+[data-kit] .seg-opt {
+  flex: 1; min-height: 32px; height: auto; border: none; background: transparent; border-radius: 8px;
+  font-size: 13px; font-weight: 500; color: var(--sub); cursor: pointer; position: relative; z-index: 1;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 4px 4px; min-width: 0;
+}
+[data-kit] .seg-opt.active { color: var(--ink); font-weight: 600; }
+[data-kit] .seg-thumb {
+  position: absolute; top: 2px; bottom: 2px; border-radius: 8px; background: var(--seg-thumb);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12), 0 3px 8px rgba(0, 0, 0, 0.06);
+  transition: left var(--dur-2) var(--ease-out), width var(--dur-2) var(--ease-out);
+}
+[data-kit] .seg-opt:active:not(:disabled) { transform: none; }
+/* fields */
+
+[data-kit] .field, [data-kit] textarea.field {
+  width: 100%; background: var(--surface-2); border: none; border-radius: 12px;
+  color: var(--ink); font-size: 15px; padding: 12px 14px; min-height: 44px;
+  font-family: var(--font-body); line-height: 1.4;
+}
+[data-kit] .field::placeholder { color: var(--faint); }
+[data-kit] .field:focus-visible { box-shadow: var(--focus-ring); }
+[data-kit] .field.on-well { background: var(--surface); }
+/* switch — iOS proportions */
+
+[data-kit] .switch { width: 51px; height: 31px; border-radius: 999px; background: var(--ink-a12); position: relative; cursor: pointer; display: inline-block; flex: none; border: none; padding: 0; transition: background var(--dur-2) ease; }
+[data-kit] .switch.on { background: var(--green); }
+[data-kit] .switch-knob { position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 1px 1px rgba(0,0,0,0.12), 0 3px 8px rgba(0,0,0,0.15); transition: left var(--dur-2) var(--ease-out); }
+[data-kit] .switch.on .switch-knob { left: 22px; }
+[data-kit] .switch.small { width: 40px; height: 25px; }
+[data-kit] .switch.small .switch-knob { width: 21px; height: 21px; }
+[data-kit] .switch.small.on .switch-knob { left: 17px; }
+/* status dot */
+
+[data-kit] .dotstatus { width: 7px; height: 7px; border-radius: 50%; flex: none; display: inline-block; }
+[data-kit] .dotstatus.pulse { animation: pulse 2s infinite; }
+/* empty states */
+
+[data-kit] .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 36px 24px; }
+[data-kit] .empty-icon { color: var(--faint); margin-bottom: 4px; }
+[data-kit] .empty-title { font-size: 15px; font-weight: 600; color: var(--ink); }
+[data-kit] .empty-sub { font-size: 12.5px; line-height: 1.55; color: var(--sub); max-width: 300px; }
+/* spinner — a drawn arc, not a gif */
+
+[data-kit] .spinner { display: inline-block; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ink-a10); border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
+/* ── sheets — bottom on phone, centered on tablet ──────────────────────────── */
+
+[data-kit] .sheet-scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 300; animation: fadein var(--dur-2) ease both; }
+[data-kit] .sheet {
+  position: fixed; z-index: 301; background: var(--surface);
+  display: flex; flex-direction: column;
+  left: 0; right: 0; bottom: 0;
+  border-radius: 22px 22px 0 0;
+  box-shadow: var(--shadow-deep);
+  max-height: calc(100% - env(safe-area-inset-top) - 24px);
+  padding-bottom: env(safe-area-inset-bottom); /* footer-less sheets still clear the home indicator */
+  animation: sheetin var(--dur-3) var(--ease-spring) both;
+  overscroll-behavior: contain;
+}
+@keyframes sheetin { from { opacity: 0.5; transform: translateY(56px); } to { opacity: 1; transform: none; } }
+[data-kit] .sheet-grab { flex: none; display: flex; justify-content: center; padding: 9px 0 3px; }
+[data-kit] .sheet-grab::after { content: ''; width: 36px; height: 5px; border-radius: 999px; background: var(--ink-a12); }
+[data-kit] .sheet-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 18px 10px; }
+[data-kit] .sheet-body { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 18px 16px; }
+[data-kit] .sheet-foot { flex: none; padding: 10px 18px calc(14px + env(safe-area-inset-bottom)); display: flex; gap: 10px; }
+@media (min-width: 761px) {
+  [data-kit] .sheet {
+    left: 50%; right: auto; bottom: auto; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 560px; max-width: calc(100vw - 48px);
+    border-radius: 18px; max-height: calc(100vh - 96px);
+    animation: modalin var(--dur-3) var(--ease-spring) both;
+  }
+  @keyframes modalin { from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+  [data-kit] .sheet-grab { display: none; }
+  [data-kit] .sheet-head { padding: 18px 22px 10px; }
+  [data-kit] .sheet-body { padding: 4px 22px 18px; }
+  [data-kit] .sheet-foot { padding: 12px 22px 20px; }}
+/* ── toasts — glass, spring in, never shift layout ─────────────────────────── */
+
+[data-kit] .toasts {
+  position: fixed; bottom: calc(84px + env(safe-area-inset-bottom)); left: 50%;
+  transform: translateX(-50%); z-index: 900; display: flex; flex-direction: column;
+  gap: 8px; align-items: center; pointer-events: none; padding: 0 14px; width: 100%; max-width: 440px;
+}
+@media (min-width: 761px) { [data-kit] .toasts { bottom: 22px; }}
+[data-kit] .toast {
+  pointer-events: auto; background: var(--glass-raised);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8); backdrop-filter: blur(20px) saturate(1.8);
+  border: none; color: var(--ink); border-radius: 999px; padding: 11px 18px; font-size: 13.5px; font-weight: 500;
+  box-shadow: var(--shadow-float); animation: toastin var(--dur-3) var(--ease-spring) both;
+  display: flex; gap: 9px; align-items: center;
+}
+[data-kit] .toast.out { animation: toastout var(--dur-2) var(--ease-out) both; }
+[data-kit] .toast .tdot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--green); }
+[data-kit] .toast.err .tdot { background: var(--red); }
+@keyframes toastin { from { opacity: 0; transform: translateY(14px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes toastout { to { opacity: 0; transform: translateY(8px) scale(0.98); } }
+[data-kit] .entrance { min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 20px; flex-direction: column; gap: 26px; }
+[data-kit] .entrance-card {
+  width: 380px; max-width: 94vw; padding: 28px;
+  background: var(--surface); border: none; border-radius: var(--r-card);
+  box-shadow: var(--shadow-deep);
+  animation: rise var(--dur-4) var(--ease-out) 0.5s both;
+}
+/* ── controls kept from the old house (restyled) ───────────────────────────── */
+
+[data-kit] input[type=range].scoreSlider {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 4px; border-radius: 999px;
+  background: linear-gradient(to right, var(--slider-color, var(--faint)) 0%, var(--slider-color, var(--faint)) var(--slider-fill, 50%), var(--ink-a10) var(--slider-fill, 50%), var(--ink-a10) 100%);
+  outline: none; cursor: pointer; margin: 0;
+}
+[data-kit] input[type=range].scoreSlider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 26px; height: 26px; border-radius: 50%;
+  background: #FFFFFF; border: none;
+  box-shadow: 0 0.5px 2px rgba(0,0,0,0.18), 0 3px 10px rgba(0,0,0,0.16); cursor: pointer;
+}
+[data-kit] input[type=range].scoreSlider::-moz-range-thumb {
+  width: 26px; height: 26px; border-radius: 50%; background: #FFFFFF;
+  border: none; box-shadow: 0 0.5px 2px rgba(0,0,0,0.18), 0 3px 10px rgba(0,0,0,0.16); cursor: pointer;
+}
+[data-kit] input[type=range].scoreSlider::-moz-range-track { height: 4px; border-radius: 999px; background: var(--ink-a10); }
+[data-kit] input[type=range].scoreSlider::-moz-range-progress { height: 4px; border-radius: 999px; background: var(--slider-color, var(--faint)); }
+[data-kit] kbd {
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--sub);
+  background: var(--ink-a05); border: none; border-radius: 5px; padding: 2px 6px;
+}
+/* ── the mandate: motion is optional to the user's nervous system ──────────── */
+@media (prefers-reduced-motion: reduce) {
+  [data-kit] *, [data-kit] *::before, [data-kit] *::after { animation-duration: 0.01ms !important; animation-delay: 0s !important; transition-duration: 0.01ms !important; }
+  [data-kit] .pagefade, [data-kit] .pageslide-l, [data-kit] .pageslide-r, [data-kit] .stagger > *, [data-kit] .toast, [data-kit] .sheet { animation: none !important; }
+  [data-kit] .expand, [data-kit] .seg-thumb, [data-kit] .switch-knob { transition: none; }
+  [data-kit] .sk::after { animation: none; }}

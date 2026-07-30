@@ -5,6 +5,10 @@
   "type": "module",
   "main": "index.js",
   "exports": {
-    ".": "./index.js"
+    ".": "./index.js",
+    "./index.css": "./index.css",
+    "./tokens.css": "./tokens.css",
+    "./themes.css": "./themes.css",
+    "./palettes.js": "./palettes.js"
   }
 }
