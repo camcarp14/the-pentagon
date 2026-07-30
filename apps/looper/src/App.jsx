@@ -67,6 +67,10 @@ const IDLE_RUN = {
   status: "idle", startedAt: null, endsAt: null, durationMin: 30,
   difficulty: "standard", interrupt: "questions", notify: false,
   iterations: 0, spendUsd: 0, capUsd: 1, errors: 0, stopReason: null, awaiting: null,
+  // Bumped by reset(): the one moment spend and iterations legitimately go
+  // backwards. Sibling tabs use it to tell "the same run, seen from another
+  // tab" apart from "the run this tab has already cleared".
+  resetAt: 0,
 };
 
 /* ─── storage (durable across reloads; the run survives a closed tab) ────── */
@@ -153,12 +157,18 @@ function useLooper() {
   // about the run, not about the tab: whichever number is higher is the true
   // one, so adopt a sibling's as soon as it lands. The merge converges — an
   // echo that changes nothing writes nothing.
+  //
+  // Monotonic only WITHIN a run, though. "Clear run history" zeroes spend, and
+  // a sibling that has not seen the reset yet keeps writing the old total; a
+  // blind max would merge it back in and leave the operator's fresh run already
+  // at $0.90 of its $1. Ignore anything from a different generation instead.
   useEffect(() => {
     const onStorage = (e) => {
       if (e.key !== K("run") || !e.newValue) return;
       let other;
       try { other = JSON.parse(e.newValue); } catch { return; }
       setRun((r) => {
+        if ((Number(other.resetAt) || 0) !== (r.resetAt || 0)) return r;
         const spendUsd = Math.max(r.spendUsd, Number(other.spendUsd) || 0);
         const iterations = Math.max(r.iterations, Number(other.iterations) || 0);
         if (spendUsd === r.spendUsd && iterations === r.iterations) return r;
@@ -318,7 +328,7 @@ function useLooper() {
     endsAt: r.endsAt && Date.now() < r.endsAt ? r.endsAt : Date.now() + r.durationMin * 60000,
     capUsd: r.capUsd + (Number(addUsd) || 0),
   })), []);
-  const reset = useCallback(() => { setRun({ ...IDLE_RUN }); setJournal([]); setChat([]); }, []);
+  const reset = useCallback(() => { setRun({ ...IDLE_RUN, resetAt: Date.now() }); setJournal([]); setChat([]); }, []);
 
   const say = useCallback((text) => {
     const t = text.trim();

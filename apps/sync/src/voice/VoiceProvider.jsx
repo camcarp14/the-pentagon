@@ -38,6 +38,17 @@ const BARGE_CONFIRM_MS = 1800;
 const VoiceCtx = createContext(null);
 export const useVoice = () => useContext(VoiceCtx);
 
+// Is a conversation live, or one beat away from being live? Every manual
+// control has to ask, because none of them mean what they usually mean while
+// one is running. `mode()` alone is not enough: between converse() and
+// ws.onopen the recognizer reads "starting", which is indistinguishable from a
+// push-to-talk that is still connecting — so the setting has the final say.
+// The setting is only consulted on an engine that can actually hold a
+// conversation: on the Web Speech fallback `handsFree` can sit true with
+// nothing listening, and there tap and spacebar still mean push-to-talk.
+const inConversation = (rec) =>
+  rec.mode() === "conversing" || (!!rec.converse && getState().settings.handsFree);
+
 export function VoiceProvider({ children }) {
   const store = useStore();
   const { settings } = store;
@@ -398,21 +409,21 @@ export function VoiceProvider({ children }) {
     const rec = recRef.current;
     if (!rec?.supported) return false;
     speaker.shutUp();
-    // "starting" counts as in-progress: a second tap while the socket is still
-    // opening has to be able to call it off, or the control is unresponsive for
-    // exactly as long as the connection is slow — which is precisely when
-    // someone taps again.
-    const m = rec.mode();
     // A conversation has no tap-to-commit — the turn ends itself — so a tap is
     // an interrupt and nothing more. Falling through to capture() here called
     // setMode("starting") on a socket that had already opened, and nothing can
     // promote it again once ws.onopen has fired: the caption sat on
     // "Connecting…" while the conversation kept working underneath, and the
     // next tap matched "starting", committed, and tore the whole thing down.
-    if (m === "conversing" || getState().settings.handsFree) {
+    if (inConversation(rec)) {
       auraRef.current?.stop();
       return true;
     }
+    // "starting" counts as in-progress: a second tap while the socket is still
+    // opening has to be able to call it off, or the control is unresponsive for
+    // exactly as long as the connection is slow — which is precisely when
+    // someone taps again.
+    const m = rec.mode();
     if (m === "capturing" || m === "starting") { rec.commitNow(); return true; }
     setMicError(null);
     rec.capture();
@@ -423,10 +434,21 @@ export function VoiceProvider({ children }) {
     const rec = recRef.current;
     if (!rec?.supported || busyRef.current) return;
     speaker.shutUp();
+    // Space is push-to-talk, and a conversation has nothing to push into — so
+    // holding it is only ever an interrupt. Falling through to capture() here
+    // put "starting" back on an already-open socket that ws.onopen can no
+    // longer promote, and the release's commitNow() then ran the non-ambient
+    // branch of commit(): microphone torn down, mode "off", while `handsFree`
+    // stayed true and the effect that owns the ear never re-ran. One tap of
+    // the spacebar left the orb offering "Interrupt" over a dead ear.
+    if (inConversation(rec)) { auraRef.current?.stop(); return; }
     rec.capture();
   }, []);
 
-  const holdEnd = useCallback(() => { recRef.current?.commitNow(); }, []);
+  const holdEnd = useCallback(() => {
+    const rec = recRef.current;
+    if (rec && !inConversation(rec)) rec.commitNow();
+  }, []);
 
   const toggleAmbient = useCallback(() => {
     setSettings({ ambient: !getState().settings.ambient });

@@ -68,7 +68,8 @@ export function composeBriefing({
   // metric, and because priorCandidates was non-empty the card also suppressed
   // its "baseline doesn't cover the window" note: a calm "nothing moved" for a
   // window in which nothing was measured. No baseline is the honest answer.
-  if (baseline === latest) baseline = null;
+  const allPredateWindow = baseline !== null && baseline === latest;
+  if (allPredateWindow) baseline = null;
 
   const deltas = ["objective", "mrr_usd", "customers", "trials", "conversion"]
     .map((key) => {
@@ -87,6 +88,15 @@ export function composeBriefing({
     .filter(Boolean);
 
   const baselineCoversWindow = baseline !== null && priorCandidates.length > 0;
+
+  // Two different situations end with no baseline and the card has to name the
+  // right one — it used to be able to assume "no baseline" meant "one snapshot
+  // ever", and saying that over eight snapshots from a writer that stopped ten
+  // hours ago is both false and a way of burying the actual news.
+  const baselineReason = baseline !== null
+    ? null
+    : allPredateWindow ? "all_predate_window"
+      : snaps.length ? "single_snapshot" : "no_snapshots";
 
   // ─── what it learned ───────────────────────────────────────────────────────
   const newLearnings = (learnings || [])
@@ -138,6 +148,7 @@ export function composeBriefing({
     latestSnapshotAtMs: latest?.atMs ?? null,
     baselineAtMs: baseline?.atMs ?? null,
     baselineCoversWindow,
+    baselineReason,
     newLearnings,
     wantsNext,
     blockedOn,

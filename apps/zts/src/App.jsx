@@ -1198,8 +1198,13 @@ function AgentEngine({ creators, shorts, articles, onArticleDraft }) {
             // over stage/auto_drafted let a "stage":"published" key in the JSON
             // drop the draft straight into the Published column, past the review
             // gate this cadence exists to feed.
-            onArticleDraft({ id: `a_${Date.now()}`, created_at: new Date().toISOString(), ...pickArticleFields(pkg), stage: "review", auto_drafted: true, keyword: kw });
-            kb.add([{ agent: "seoCadence", type: "observation", signal: "info", text: `Drafted a new article for review: "${pkg.title_tag}" (${pkg.target_keyword}). Approve or reject it in the SEO tab.` }]);
+            // Awaited and checked, like the worker's copy of this call: the insert
+            // can fail (RLS, offline) and used to be swallowed into a console.warn
+            // while the knowledge base told the operator to go approve a draft that
+            // never reached the SEO tab.
+            const saved = await onArticleDraft({ id: `a_${Date.now()}`, created_at: new Date().toISOString(), ...pickArticleFields(pkg), stage: "review", auto_drafted: true, keyword: kw });
+            if (saved) kb.add([{ agent: "seoCadence", type: "observation", signal: "info", text: `Drafted a new article for review: "${pkg.title_tag}" (${pkg.target_keyword}). Approve or reject it in the SEO tab.` }]);
+            else kb.add([{ agent: "seoCadence", type: "observation", signal: "warning", text: `Auto-draft "${pkg.title_tag}" (${pkg.target_keyword || kw || "no keyword"}) was generated but could not be saved to the review queue — nothing to approve in the SEO tab.` }]);
           }
         }
       }
@@ -1390,7 +1395,10 @@ function ArticleDetail({ article, onClose, onUpdate, onDelete, isMobile }) {
     const kw = article.target_keyword || article.keyword || "";
     const pkg = await generateArticle({ keyword: kw });
     setRegenerating(false);
-    if (pkg) { onUpdate(article.id, { ...pkg, stage: "review" }); toast.push(`Draft ready for review: "${pkg.title_tag}"`, { tone: "success" }); }
+    // Whitelisted like every other spread of a model reply into a row: an
+    // invented key here would ride straight into the Supabase update, either
+    // rewriting published_url/approved_at or erroring the whole write.
+    if (pkg) { onUpdate(article.id, { ...pickArticleFields(pkg), stage: "review" }); toast.push(`Draft ready for review: "${pkg.title_tag}"`, { tone: "success" }); }
     else toast.push("Drafting failed again — try in a moment.", { tone: "error" });
   };
   const publish = async () => {

@@ -168,7 +168,14 @@ export default function BriefingCard({ now }) {
               {/* The comparison window has to be stated before the numbers are
                   read, not after: a +12 over 40 minutes and a +12 over six
                   hours are different news, and the row cannot tell you which. */}
-              {b.baselineAtMs === null ? (
+              {b.baselineReason === "all_predate_window" ? (
+                // Not the same news as "we only have one row": the metrics
+                // writer stopped, and the reason there is nothing to compare
+                // against is that nothing was measured in this window at all.
+                <Note tone="stale" lead="Every snapshot predates this window.">
+                  Nothing was measured in the last {b.windowHours}h — these are the last values recorded, not changes.
+                </Note>
+              ) : b.baselineAtMs === null ? (
                 <Note tone="stale" lead="Only one snapshot exists.">
                   These are current values with nothing to compare them against, not changes.
                 </Note>

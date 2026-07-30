@@ -109,11 +109,12 @@ const Stat = ({ label, children, sub }) => (
 
 // ─── OVERVIEW (cross-tool digest) ────────────────────────────────────────────
 // The top line: total AI spend, tokens, and calls across every tool, plus a
-// per-tool breakdown. ZTS, Clarify and Looper log every call to localStorage;
-// Runway runs its AI server-side and Macro is keyless market data, so those two
-// read honestly as "not logged here" rather than a fake $0. Looper matters most
-// here — it is the only tool that spends unattended, so its running total needs
-// to sit next to the others rather than only inside Looper's own log.
+// per-tool breakdown. ZTS, Clarify and Looper log every call to localStorage
+// and Ideas is read back from Postgres; every other tool has a total this
+// screen cannot reach, so it gets its own UNTRACKED_NOTE line saying where its
+// spend does live rather than a fake $0. Looper matters most here — it is the
+// only tool that spends unattended, so its running total needs to sit next to
+// the others rather than only inside Looper's own log.
 function Overview({ isMobile }) {
   const ideas = useIdeasSpend(0); // Overview is all-time; Usage does the windowing
   const per = APPS.map((app) => {

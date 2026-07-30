@@ -227,6 +227,14 @@ export const worklog = {
   clear: () => sm.set("dna_worklog", []),
 };
 
+// Why the mind went quiet. The worker's halt latch is in-memory, so without this
+// key on screen the dock kept rendering "Running" over a worker that had stopped
+// for good. Clearing it is also how the operator restarts the worker.
+export const workerHalt = {
+  reason: () => sm.get("dna_worker_halted"),
+  clear: () => sm.del("dna_worker_halted"),
+};
+
 export const suggestions = {
   all: () => sm.get("dna_suggestions") || [],
   // A suggestion is a node the mind wants to grow: {label, region, text, dedupKey}.
@@ -625,9 +633,15 @@ export function DnaWorker({ creators, shorts, articles, onArticleDraft }) {
     // the daily-constant kinds re-propose (and re-pay) on every tick. A guard
     // whose write failed has to stop the worker, not wave it through.
     let halted = false;
+    let haltNoticed = false; // the dock's banner landed, so dismissing it can revive us
 
     const poll = setInterval(async () => {
-      if (busy || halted) return;
+      if (busy) return;
+      // The operator revives a halted worker by clearing dna_worker_halted (the
+      // dock's banner, dismissed by the play toggle or Clear log). If the banner
+      // itself could not be written there is nothing to dismiss and no way to tell
+      // the operator why — so stay down rather than loop on unrecordable paid work.
+      if (halted) { if (!haltNoticed || sm.get("dna_worker_halted")) return; halted = false; }
       const ctrl = wk.get();
       const shiftOn = ctrl.eveningShift.enabled && inShift(ctrl.eveningShift);
       if (!ctrl.running && !shiftOn) return;               // fully off — truly $0
@@ -646,7 +660,8 @@ export function DnaWorker({ creators, shorts, articles, onArticleDraft }) {
 
         // Lock: cost cap — paid kinds go dark, free ones (scout, grow) still run.
         // Every worker call is dna_-prefixed, so workerSpendThisHour() is the whole
-        // bill. The dock reads dna_cost_capped to say why the mind went quiet.
+        // bill. dna_cost_capped is a diagnostic record of the last pass's verdict;
+        // nothing renders it (the dock surfaces dna_worker_halted, not this).
         const capped = workerSpendThisHour() >= ctrl.hourlyCostCap;
         sm.set("dna_cost_capped", capped);
         const types = { ...ctrl.taskTypes };
@@ -685,10 +700,17 @@ export function DnaWorker({ creators, shorts, articles, onArticleDraft }) {
         if (!worklog.add(entry)) {
           // Shed the tail and try once more — the worklog is the biggest thing
           // ZTS holds in localStorage, so trimming usually gets the write in.
-          sm.set("dna_worklog", worklog.all().slice(0, 40));
+          // Shed by AGE, not by a fixed count: the today-dedup reads every entry
+          // stamped today and the hourly cap the last 60 minutes, so a slice(0,40)
+          // could drop the keys for paid tasks already attempted today and let
+          // them be re-proposed and re-paid on the next tick — the exact hole this
+          // latch exists to close. If even the guard window won't fit, halt.
+          const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
+          const cutoff = Math.min(dayStart.getTime(), now - 3600000);
+          sm.set("dna_worklog", worklog.all().filter(e => new Date(e.ts).getTime() >= cutoff));
           if (!worklog.add(entry)) {
             halted = true;
-            sm.set("dna_worker_halted", "Local storage is full — the worker stopped rather than repeat paid work it cannot record.");
+            haltNoticed = sm.set("dna_worker_halted", "Local storage is full — the worker stopped rather than repeat paid work it cannot record. Clear the work log to free space and restart it.");
           }
         }
       } catch {} finally {

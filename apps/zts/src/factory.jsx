@@ -206,7 +206,15 @@ export function FactoryPanel({ isMobile }) {
     if (!review) return;
     setApproving(true);
     try {
-      const res = await bridgeFetch(`/projects/${encodeURIComponent(review.project.name)}/approve`, { method: "POST" });
+      // Send the version the modal is actually showing. The project list is a
+      // 15s-old snapshot and this modal holds an older one still, so without it
+      // "Approve draft v1" can land after a `revise` in a terminal bumped the
+      // project to v2 and approve a draft nobody watched — which then exports.
+      // The bridge holds us to it and 409s if the draft moved on.
+      const res = await bridgeFetch(`/projects/${encodeURIComponent(review.project.name)}/approve`, {
+        method: "POST",
+        body: JSON.stringify({ version: review.project.draft_version }),
+      });
       if (res?.ok) {
         toast.push(`Draft v${res.approved_version} approved — export when ready.`, { tone: "success" });
         setReview(null);

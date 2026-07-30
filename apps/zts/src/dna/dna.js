@@ -369,7 +369,7 @@ export function addNode(genome, { label, region, text, weight = 0.6, x = 0, y = 
   while (genome.nodes.some(nd => nd.id === id)) id = `${base}_${n++}`;
   const node = {
     id, label: String(label || "New node").slice(0, 28), region: reg, weight: clamp01(weight),
-    enabled: true, locked: false, text: String(text || ""), x, y, source,
+    enabled: true, locked: false, text: String(text || "").slice(0, MAX_NODE_TEXT), x, y, source,
     created_at: new Date().toISOString(),
   };
   const next = recordMutation(
@@ -389,6 +389,10 @@ export function updateNode(genome, id, patch) {
   }
   if (p.weight !== undefined) p.weight = clamp01(p.weight);
   if (p.label !== undefined) p.label = String(p.label).slice(0, 28);
+  // Clamped to the bound validateGenome enforces: a longer directive saved here
+  // would fail validation on the NEXT loadGenome, and that path re-seeds — one
+  // oversized paste into the inspector would silently destroy the whole mind.
+  if (p.text !== undefined) p.text = String(p.text).slice(0, MAX_NODE_TEXT);
   if (Object.keys(p).length === 0) return genome;
   const next = { ...genome, nodes: genome.nodes.map(n => (n.id === id ? { ...n, ...p } : n)) };
   // Position-only patches are layout, not thought — the canvas writes x,y on
@@ -472,9 +476,11 @@ export function removeEdge(genome, id) {
 // skill to any model id and any token budget. Bounds match the inspector exactly.
 // The text bound is deliberately generous — validateGenome also gates loadGenome,
 // where a false positive re-seeds and throws away the operator's real mind, so it
-// only catches a runaway payload, not a long hand-written directive.
+// only catches a runaway payload, not a long hand-written directive. addNode and
+// updateNode clamp text to the same bound for that reason: locally-authored nodes
+// must never be able to save something the next load would reject and re-seed over.
 const ALLOWED_MODELS = [HAIKU, SONNET];
-const MAX_NODE_TEXT = 8000;
+export const MAX_NODE_TEXT = 8000;
 
 export function validateGenome(g) {
   const errors = [];

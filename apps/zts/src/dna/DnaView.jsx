@@ -6,11 +6,11 @@ import {
   REGIONS, ZTS_GOVERNANCE,
   loadGenome, saveGenome, resetGenome, recordMutation,
   addNode, updateNode, removeNode, addEdge, updateEdge, removeEdge,
-  validateGenome, compileGenome, propagate, dnaBus, genomeStats,
+  validateGenome, compileGenome, propagate, dnaBus, genomeStats, MAX_NODE_TEXT,
 } from "./dna.js";
 // The worker is a sibling module (built in parallel, spec §3). We import ONLY the
 // stores + helpers the dock reads; the worker component itself mounts at App root.
-import { wk, worklog, suggestions, inShift, WORKER_DEFAULTS } from "./dnaWorker.js";
+import { wk, worklog, suggestions, workerHalt, inShift, WORKER_DEFAULTS } from "./dnaWorker.js";
 import { useToast, M } from "../ui.jsx";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -218,7 +218,7 @@ function Switch({ on, onClick, disabled, title }) {
 
 // Directive textarea that grows with its content — a fixed rows count either
 // wastes panel space or hides the second half of a principle.
-function AutoTextarea({ value, onChange, onBlur, placeholder }) {
+function AutoTextarea({ value, onChange, onBlur, placeholder, maxLength }) {
   const ref = useRef(null);
   useEffect(() => {
     const el = ref.current;
@@ -227,7 +227,7 @@ function AutoTextarea({ value, onChange, onBlur, placeholder }) {
     el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
   }, [value]);
   return (
-    <textarea ref={ref} rows={2} value={value} onChange={onChange} onBlur={onBlur} placeholder={placeholder}
+    <textarea ref={ref} rows={2} value={value} onChange={onChange} onBlur={onBlur} placeholder={placeholder} maxLength={maxLength}
       style={{ ...inputBase, padding: "8px 11px", fontSize: "12px", lineHeight: 1.55, resize: "none", overflow: "hidden", fontFamily: T.fontBody }} />
   );
 }
@@ -319,7 +319,9 @@ function NodeInspector({ genome, node, apply, onSelect, onDeleted }) {
 
       <div>
         <div style={rowLabel}>Directive</div>
-        <AutoTextarea value={text} onChange={(e) => setText(e.target.value)} onBlur={commitText} placeholder="What this node tells the mind…" />
+        {/* Bounded at the same length validateGenome enforces, so what the box
+            shows is what updateNode will store — not a silently clamped copy. */}
+        <AutoTextarea value={text} onChange={(e) => setText(e.target.value)} onBlur={commitText} placeholder="What this node tells the mind…" maxLength={MAX_NODE_TEXT} />
       </div>
 
       {/* Skill execution settings — the worker reads model + maxTokens off the
@@ -548,7 +550,7 @@ function DockBody({ ctrl, log, tasksToday, bump, replay, toast }) {
           </div>
         )}
         {log.length > 0 && (
-          <button onClick={() => { try { worklog.clear(); } catch { /* store may not expose clear */ } bump(); toast.push("Work log cleared."); }}
+          <button onClick={() => { try { worklog.clear(); } catch { /* store may not expose clear */ } workerHalt.clear(); bump(); toast.push("Work log cleared."); }}
             style={{ marginTop: "6px", background: "none", border: "none", color: T.faint, fontSize: "10px", cursor: "pointer", fontWeight: 600, padding: 0 }}>
             Clear log
           </button>
@@ -583,7 +585,8 @@ export function DnaView({ creators, shorts, articles, onArticleDraft }) { // esl
   // where every Pulse keystroke would pay the parse again.
   const readWorker = () => {
     let log; try { log = worklog.all() || []; } catch { log = []; }
-    return { ctrl: readCtrl(), log, pending: pendingSuggestions() };
+    let halted; try { halted = workerHalt.reason(); } catch { halted = null; }
+    return { ctrl: readCtrl(), log, pending: pendingSuggestions(), halted };
   };
   const [wkState, setWkState] = useState(readWorker);
   const bump = () => setWkState(readWorker());
@@ -636,7 +639,7 @@ export function DnaView({ creators, shorts, articles, onArticleDraft }) { // esl
   // refusals (locked delete, dupe edge…) return the same reference — a no-op.
   const apply = useCallback((next) => { if (next && next !== genomeRef.current) setGenome(saveGenome(next)); }, []);
 
-  const { ctrl, log, pending } = wkState;
+  const { ctrl, log, pending, halted } = wkState;
   const stats = genomeStats(genome);
   const compiled = useMemo(() => compileGenome(genome), [genome]);
   const tasksToday = useMemo(() => log.filter((e) => isToday(e.ts)).length, [log]);
@@ -667,13 +670,15 @@ export function DnaView({ creators, shorts, articles, onArticleDraft }) { // esl
 
   // Worker status line — ● idle/working, ◐ armed. "Current task" is inferred from
   // the freshest log entry (the worker runs serially, one task per pass).
+  // A halted worker takes over the line: ctrl.running stays true through a halt,
+  // so without this the dock read "Working" over a worker that had stopped for good.
   const shiftLive = !!ctrl.eveningShift.enabled && inShift(ctrl.eveningShift);
-  const workerActive = !!ctrl.running || shiftLive;
+  const workerActive = (!!ctrl.running || shiftLive) && !halted;
   const lastEntry = log[0];
   const lastFresh = lastEntry && Date.now() - new Date(lastEntry.ts).getTime() < 90000;
-  const statusDot = workerActive ? T.green : ctrl.eveningShift.enabled ? T.violet : T.faint;
-  const statusGlyph = workerActive ? "●" : ctrl.eveningShift.enabled ? "◐" : "●";
-  const statusText = workerActive
+  const statusDot = halted ? T.red : workerActive ? T.green : ctrl.eveningShift.enabled ? T.violet : T.faint;
+  const statusGlyph = halted ? "▲" : workerActive ? "●" : ctrl.eveningShift.enabled ? "◐" : "●";
+  const statusText = halted ? halted : workerActive
     ? `Working — ${lastFresh ? lastEntry.title : "watching the pipeline"}${shiftLive && !ctrl.running ? " (evening shift)" : ""}`
     : ctrl.eveningShift.enabled ? `Evening shift armed — starts ${ctrl.eveningShift.start}` : "Idle";
 
@@ -887,7 +892,9 @@ export function DnaView({ creators, shorts, articles, onArticleDraft }) { // esl
       : null;
 
   const playBtn = (
-    <button onClick={(e) => { e.stopPropagation(); wk.set({ running: !ctrl.running }); bump(); toast.push(ctrl.running ? "Worker paused." : "Worker running — one task per pass, drafts only.", { tone: ctrl.running ? "default" : "success" }); }}
+    // Toggling the worker also dismisses a halt: the latch inside the worker loop
+    // stays down until this key is gone, so this is the operator's restart.
+    <button onClick={(e) => { e.stopPropagation(); workerHalt.clear(); wk.set({ running: !ctrl.running }); bump(); toast.push(ctrl.running ? "Worker paused." : "Worker running — one task per pass, drafts only.", { tone: ctrl.running ? "default" : "success" }); }}
       title={ctrl.running ? "Pause the worker" : "Start the worker"}
       style={{ width: "36px", height: "36px", borderRadius: "50%", border: "none", background: ctrl.running ? T.goldGrad : T.raised, color: ctrl.running ? T.textOnBrand : T.ink, fontSize: "13px", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: ctrl.running ? `0 0 0 4px ${T.goldSoft}, ${T.glowBrass}` : "none" }}>
       {ctrl.running ? "⏸" : "▶"}
@@ -897,7 +904,9 @@ export function DnaView({ creators, shorts, articles, onArticleDraft }) { // esl
   const dockStatus = (
     <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ fontSize: "12px", fontWeight: 800, color: T.ink, fontFamily: T.fontDisplay, letterSpacing: "0.02em" }}>Worker</div>
-      <div style={{ fontSize: "10px", color: workerActive ? T.green : T.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+      {/* The halt reason is a sentence, not a task title — let it wrap instead of
+          ellipsing away the part that says what to do about it. */}
+      <div style={{ fontSize: "10px", color: halted ? T.red : workerActive ? T.green : T.muted, ...(halted ? { lineHeight: 1.45 } : { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }) }}>
         <span style={{ color: statusDot }}>{statusGlyph}</span> {statusText}
       </div>
     </div>

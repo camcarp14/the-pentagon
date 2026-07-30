@@ -127,10 +127,19 @@ export const handler = async () => {
     // cap of one, with the run note reporting "0 today". The draft write is what
     // sets updated_at and draft_subject, so that pair is what "drafted today"
     // actually means.
+    //
+    // AND NO STATUS FILTER, unlike the pending count below. Narrowing this one
+    // to draft/draft_ready counted "drafts still sitting in the queue", not
+    // "drafts written today": approving a draft (→ sent) or rejecting it took it
+    // out of the count and handed the day's allowance straight back, so under a
+    // cap of one, sending the morning's draft paid for another that afternoon.
+    // pendingRes keeps the filter because it measures backlog, not spend.
+    // replies-cron also bumps updated_at, so a reply recorded today spends one
+    // of the day's allowance — over-counting is the safe side of a number whose
+    // whole job is to say STOP.
     const dayStart = new Date(now); dayStart.setUTCHours(0, 0, 0, 0);
     const [todayRes, pendingRes] = await Promise.all([
       sb.from('outreach').select('id', { count: 'exact', head: true })
-        .in('status', OUTREACH_DRAFT_STATUSES)
         .not('draft_subject', 'is', null)
         .gte('updated_at', dayStart.toISOString()),
       sb.from('outreach').select('id', { count: 'exact', head: true }).in('status', OUTREACH_DRAFT_STATUSES),

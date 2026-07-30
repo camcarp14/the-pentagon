@@ -71,13 +71,14 @@ def validate(popups: list, duration: float, settings: dict) -> list:
         t1 = min(duration - 0.1, float(pu.get("t_end", t0 + pc["default_duration"])))
         if t1 - t0 < pc["min_duration"]:
             t1 = min(duration - 0.1, t0 + pc["min_duration"])
-            if t1 - t0 < pc["min_duration"]:
+            if t1 <= t0:
                 # Only t_end was clamped to the clip, never t_start, so a pop-up
                 # timed against a longer earlier cut survived inverted
                 # (t_start > t_end). ffmpeg's between() is then never true: the
                 # graphic never appears, yet it still spends a budget slot and
-                # still gets listed in the review doc as present.
-                print(f"  dropping {pu['id']}: no room before the end of the clip")
+                # still gets listed in the review doc as present. A span that is
+                # short but positive still shows, so it is kept as before.
+                print(f"  dropping {pu['id']}: starts at or after the end of the clip")
                 continue
         if t0 < last_end:            # no simultaneous pop-ups
             t0 = last_end + 0.1
@@ -111,10 +112,11 @@ def render_overlays(pdir, popups: list, settings: dict):
         except Exception as e:
             print(f"  skipping {pu.get('id')}: {e}")
             continue
-        fn = f"{_safe_id(pu.get('id'), f'p{i + 1}')}.png"
+        sid = _safe_id(pu.get("id"), f"p{i + 1}")
+        fn = f"{sid}.png"
         img.save(p["overlays"] / fn)
         manifest.append({"png": fn, "t0": pu["t_start"], "t1": pu["t_end"],
-                         "id": pu["id"]})
+                         "id": sid})
     util.write_json(p["work"] / "overlays.json", manifest)
     print(f"Rendered {len(manifest)} overlay(s)")
     return manifest

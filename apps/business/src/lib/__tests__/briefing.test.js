@@ -196,11 +196,27 @@ describe("baseline selection — what moved", () => {
     expect(v.deltas.find((d) => d.key === "mrr_usd").delta).toBe(20);
   });
 
+  it("names WHY there is no baseline, so the card cannot claim one snapshot over eight", () => {
+    // A writer that stopped leaves every row before the window start, which
+    // makes the latest row its own baseline. Dropping the baseline is right;
+    // letting the card read that as "only one snapshot exists" is not.
+    const v = brief({
+      metrics: [
+        { captured_at: ago(15), mrr_usd: 500 },
+        { captured_at: ago(8), mrr_usd: 520 },
+      ],
+    });
+    expect(v.baselineAtMs).toBe(null);
+    expect(v.baselineReason).toBe("all_predate_window");
+    expect(v.deltas.find((d) => d.key === "mrr_usd").delta).toBe(null);
+  });
+
   it("a single snapshot yields no delta at all rather than a delta of zero", () => {
     // "0" reads as "nothing changed". The truth is "we have nothing to compare to".
     const v = brief({ metrics: [{ captured_at: ago(1), mrr_usd: 400 }] });
     expect(v.baselineCoversWindow).toBe(false);
     expect(v.baselineAtMs).toBe(null);
+    expect(v.baselineReason).toBe("single_snapshot");
     const mrr = v.deltas.find((d) => d.key === "mrr_usd");
     expect(mrr.to).toBe(400);
     expect(mrr.from).toBe(null);

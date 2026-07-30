@@ -249,7 +249,16 @@ class Handler(BaseHTTPRequestHandler):
             # after a `revise` in a terminal bumped the project to v2 and
             # approve a draft nobody watched — which then exports. When the
             # caller tells us which draft it was looking at, hold it to that.
+            # No shipped client sends `version` yet, so the guard is dormant
+            # until apps/zts/src/factory.jsx passes the reviewed draft_version.
             claimed = body.get("version")
+            if claimed is not None:
+                # A version that arrives as the string "1" is the same draft as
+                # 1; refusing it would 409 every approval from such a client.
+                try:
+                    claimed = int(claimed)
+                except (TypeError, ValueError):
+                    return self._send(400, {"ok": False, "error": "bad version"})
             if claimed is not None and claimed != v:
                 return self._send(409, {"ok": False, "draft_version": v,
                                         "error": f"draft moved on to v{v} while you were "

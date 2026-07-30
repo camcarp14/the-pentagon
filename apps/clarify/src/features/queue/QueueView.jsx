@@ -32,13 +32,25 @@ async function wrapLinks(messageId, body) {
   // track-click reads the last path segment as the id.
   const urls = [...new Set(raw.map((u) => u.replace(/[.,;:!?]+$/, "")))].sort((a, b) => b.length - a.length);
   let out = body;
+  // Ordering alone is not enough: the tracked link is itself a PUBLIC_SITE_URL,
+  // so a body mentioning both the bare site and a deeper page on it wraps the
+  // deep one first and then the bare URL matches the prefix of that fresh
+  // replacement, shipping "/r/<id2>/r/<id1>". Park each match on a sentinel that
+  // contains no URL text and substitute the real links in one final pass, so no
+  // replacement can ever be rewritten by a later, shorter URL.
+  const parked = [];
   for (const url of urls) {
     if (!url || url.startsWith(`${PUBLIC_SITE_URL}/r/`)) continue; // already wrapped
     try {
       const link = await seqDb.createTrackedLink(messageId, url);
-      if (link?.id) out = out.split(url).join(`${PUBLIC_SITE_URL}/r/${link.id}`);
+      if (link?.id) {
+        const token = `\u0000clarify-link-${parked.length}\u0000`;
+        out = out.split(url).join(token);
+        parked.push([token, `${PUBLIC_SITE_URL}/r/${link.id}`]);
+      }
     } catch {}
   }
+  for (const [token, href] of parked) out = out.split(token).join(href);
   return out;
 }
 
