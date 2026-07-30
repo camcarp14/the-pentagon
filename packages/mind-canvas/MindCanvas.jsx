@@ -5,7 +5,7 @@ import { acquireStyle, paletteVars } from "./css.js";
 import {
   ZOOM_MIN, ZOOM_MAX, LABEL_ZOOM, ALPHA_SLEEP, REHEAT, BOW, STEP_MS,
   PARTICLES, SPECK_N, SPECK_BOUND, POOL_IDX, EMPTY_GENOME,
-  r1, buildSim, tick, edgeD, fitView, zoomAtView, wheelPixels,
+  r1, nodeR, buildSim, tick, edgeD, fitView, zoomAtView, wheelPixels,
 } from "./sim.js";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -105,7 +105,16 @@ function MindCanvasImpl({
   bus,                       // optional {on, emit} — activation pulses; omit for a still mind
   label = "Mind — neural map",   // accessible name; hosts say whose mind this is
 }) {
-  const g = genome && Array.isArray(genome.nodes) ? genome : EMPTY_GENOME;
+  // Both arrays, or neither. The old guard only checked `nodes`, so a genome
+  // carrying nodes and no `edges` key — a partial import, a hand-written seed, a
+  // store that dropped the field — passed the check and then threw on
+  // `g.edges.map`, blanking the tool. Normalising costs nothing and removes a
+  // whole shape of crash.
+  const g = useMemo(() => {
+    if (!genome || !Array.isArray(genome.nodes)) return EMPTY_GENOME;
+    if (Array.isArray(genome.edges)) return genome;
+    return { ...genome, edges: [] };
+  }, [genome]);
 
   // Every derived colour is memoized on the palette, never computed at module
   // scope. Two of the three old copies evaluated their CSS template at import
@@ -920,7 +929,11 @@ function MindCanvasImpl({
                   filter: disabled ? `saturate(${LOOK.disabledSaturate})` : undefined,
                 }}
               >
-                <title>{n.label}{n.text ? ` — ${n.text}` : ""}</title>
+                {/* One string, not two children. SVG <title> takes a single text node;
+                    two expressions make React emit an array, which it warns about
+                    and which breaks hydration. Present in all three copies, and
+                    invisible until something finally rendered the component. */}
+                <title>{n.text ? `${n.label} — ${n.text}` : n.label}</title>
                 {/* The soft outer glow only exists in the "solid" treatment —
                     the orb carries its own falloff in the gradient's outer stop. */}
                 {LOOK.nodePaint === "solid" && (
