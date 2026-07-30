@@ -234,14 +234,23 @@ alter table public.metrics_snapshot  enable row level security;
 alter table public.invariant_checks  enable row level security;
 alter table public.approvals         enable row level security;
 
--- Read: any signed-in user. This project has exactly one user and signups are
--- disabled in the dashboard (Authentication → Providers → "Allow new users to
--- sign up" OFF), so "authenticated" and "the operator" are the same set.
+-- Read: THE OPERATOR, by email, checked in the database.
 --
--- To pin it harder — worth doing the moment a second account could ever
--- exist — replace `using (true)` with:
---     using ((auth.jwt() ->> 'email') = 'you@example.com')
--- on every policy below, including the two update policies.
+-- This used to be `using (true)` for any signed-in user, resting on the note
+-- that "this project has exactly one user and signups are disabled in the
+-- dashboard". That made the authorization boundary a dashboard toggle rather
+-- than a database check — one setting away from every signed-up account
+-- reading the agent's spend and strategy — and the paragraph itself said the
+-- pin was "worth doing the moment a second account could ever exist". It has
+-- been applied.
+--
+-- The literal email rather than a helper function is deliberate: this is the
+-- authorization boundary for spend and strategy, and it should be readable
+-- straight out of pg_policies without chasing an indirection.
+--
+-- If the operator's email ever changes, it changes in three places here: this
+-- loop and the two update policies below. Nothing else grants access, so
+-- forgetting one locks that surface rather than opening it.
 do $$
 declare t text;
 begin
@@ -251,7 +260,8 @@ begin
   ] loop
     execute format('drop policy if exists %I on public.%I', t || '_read', t);
     execute format(
-      'create policy %I on public.%I for select to authenticated using (true)',
+      'create policy %I on public.%I for select to authenticated '
+      'using ((auth.jwt() ->> ''email'') = ''cam.carp14@gmail.com'')',
       t || '_read', t
     );
   end loop;
@@ -260,7 +270,9 @@ end $$;
 -- Write: exactly two tables, and (below) exactly six columns across them.
 drop policy if exists agent_config_operator_update on public.agent_config;
 create policy agent_config_operator_update on public.agent_config
-  for update to authenticated using (true) with check (true);
+  for update to authenticated
+  using ((auth.jwt() ->> 'email') = 'cam.carp14@gmail.com')
+  with check ((auth.jwt() ->> 'email') = 'cam.carp14@gmail.com');
 
 -- A decision may only be recorded while the veto window is still open and the
 -- row is still pending. Once it has lapsed, the agent has already acted on the
@@ -269,8 +281,14 @@ create policy agent_config_operator_update on public.agent_config
 drop policy if exists approvals_operator_decide on public.approvals;
 create policy approvals_operator_decide on public.approvals
   for update to authenticated
-  using (decision = 'pending' and veto_until > now())
-  with check (decision in ('approved','vetoed'));
+  using (
+    (auth.jwt() ->> 'email') = 'cam.carp14@gmail.com'
+    and decision = 'pending' and veto_until > now()
+  )
+  with check (
+    (auth.jwt() ->> 'email') = 'cam.carp14@gmail.com'
+    and decision in ('approved','vetoed')
+  );
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- GRANTS — where "read-only except three verbs" is actually enforced.
