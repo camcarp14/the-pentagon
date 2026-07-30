@@ -8,7 +8,7 @@ import { Button, IconButton, Dot, useToast } from "../ui/kit.jsx";
 import { useMedia } from "../ui/hooks.js";
 import {
   IcSend, IcStop, IcMic, IcMicOff, IcSpeaker, IcSpeakerOff, IcCheck,
-  IcAlert, IcSparkle,
+  IcAlert, IcSparkle, IcSettings,
 } from "../ui/icons.jsx";
 
 // ─── The Console ─────────────────────────────────────────────────────────────
@@ -99,7 +99,7 @@ const OPENERS = [
   { label: "Take a note…", fill: "Take a note — " },
 ];
 
-export default function ConsolePage() {
+export default function ConsolePage({ onSettings }) {
   const s = useStore();
   const voice = useVoice();
   const toast = useToast();
@@ -203,6 +203,13 @@ export default function ConsolePage() {
             onClick={() => { setSettings({ speak: !s.settings.speak }); if (s.settings.speak) voice.shutUp(); }}
           >
             {s.settings.speak ? <IcSpeaker size={17} /> : <IcSpeakerOff size={17} />}
+          </IconButton>
+          {/* Settings left the dock — seven nowrap labels overflowed the row on a
+              phone and pushed the last one off the glass, present but untappable.
+              It sits here instead: one tap from the screen the operator is
+              already on, and no longer competing for width with destinations. */}
+          <IconButton label="Settings" onClick={onSettings}>
+            <IcSettings size={17} />
           </IconButton>
           <IconButton
             label={s.settings.ambient ? "Stop listening" : "Listen for the wake word"}

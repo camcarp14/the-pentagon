@@ -639,4 +639,38 @@ describe("the mind is the prompt", () => {
     expect(store).toMatch(/export function getMind\(\)/);
     expect(store).toMatch(/if \(state\.mind\) return state\.mind;/);
   });
+
+  it("is the same canvas the other tools have, not a second idea of one", () => {
+    // A list was built first and rejected. The point of a shared mind is that it
+    // looks and behaves the same wherever it appears — a bespoke SYNC view would
+    // teach a second vocabulary for the same object.
+    const page = readFileSync(join(here, "..", "..", "pages", "MindPage.jsx"), "utf8");
+    expect(page).toMatch(/<MindCanvas/);
+    expect(page).toMatch(/onAddEdge=/);       // synapses are drawable, not just visible
+    expect(page).toMatch(/onNodeMove=/);      // positions persist
+  });
+
+  it("gives the canvas a destination and leaves the data reachable", () => {
+    const nav = readFileSync(join(here, "..", "..", "nav.js"), "utf8");
+    const app = readFileSync(join(here, "..", "..", "App.jsx"), "utf8");
+    expect(nav).toMatch(/key: "mind"/);
+    expect(nav).not.toMatch(/key: "memory"/);
+    // Memory lost the dock slot, not the data. An orphaned route would strand
+    // the operator's facts, notes and action ledger with no way in.
+    expect(app).toMatch(/memory: MemoryPage/);
+    const page = readFileSync(join(here, "..", "..", "pages", "MindPage.jsx"), "utf8");
+    expect(page).toMatch(/setPage\("memory"\)/);
+  });
+
+  it("keeps Settings out of the dock but still reachable", () => {
+    // Seven flex children with nowrap labels have a combined min-content width
+    // wider than a phone: the row overflowed and the last item sat off the glass,
+    // in the DOM and impossible to tap. Settings is not empty — it holds the key,
+    // the model, the spend and the export — so it moved rather than went.
+    const shell = readFileSync(join(here, "..", "..", "chrome", "Shell.jsx"), "utf8");
+    const dock = shell.slice(shell.indexOf("export function Dock"));
+    expect(dock).not.toMatch(/dock-label">Settings/);
+    const console_ = readFileSync(join(here, "..", "..", "pages", "ConsolePage.jsx"), "utf8");
+    expect(console_).toMatch(/label="Settings" onClick=\{onSettings\}/);
+  });
 });

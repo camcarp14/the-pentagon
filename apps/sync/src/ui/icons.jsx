@@ -20,6 +20,7 @@ export const IcConsole = (p) => <Ic {...p}><circle cx="12" cy="12" r="3" /><path
 export const IcDay = (p) => <Ic {...p}><rect x="3" y="4.5" width="18" height="16" rx="3" /><path d="M3 9.5h18M8 2.8v3.4M16 2.8v3.4" /><path d="M7.5 14h5" /></Ic>;
 export const IcQueue = (p) => <Ic {...p}><path d="M4 6.5h11M4 12h11M4 17.5h7" /><path d="m17.5 15.6 1.8 1.9 3-3.6" /></Ic>;
 export const IcBrief = (p) => <Ic {...p}><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v4h4" /><path d="M9.5 12.5h5M9.5 16h3" /></Ic>;
+export const IcMind = (p) => <Ic {...p}><circle cx="12" cy="5.2" r="2" /><circle cx="5.6" cy="12" r="2" /><circle cx="18.4" cy="12" r="2" /><circle cx="9" cy="19" r="1.8" /><circle cx="16" cy="18.6" r="1.8" /><path d="M10.4 6.6 7.2 10.4M13.6 6.6l3.2 3.8M6.6 13.7 8.4 17.2M17.4 13.7l-1.1 3.2M10.8 18.9h3.4" /></Ic>;
 export const IcMemory = (p) => <Ic {...p}><path d="M12 4.2a3.4 3.4 0 0 0-3.4 3.4A3 3 0 0 0 6 10.5a3 3 0 0 0 1.2 2.4A3 3 0 0 0 9 18.4a3 3 0 0 0 3 1.4V4.2Z" /><path d="M12 4.2a3.4 3.4 0 0 1 3.4 3.4A3 3 0 0 1 18 10.5a3 3 0 0 1-1.2 2.4A3 3 0 0 1 15 18.4a3 3 0 0 1-3 1.4" /></Ic>;
 
 /* voice */

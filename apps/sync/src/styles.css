@@ -592,6 +592,46 @@
 }
 .sy-root .utterance .u-text { font-size: 19px; line-height: 1.35; font-weight: 500; letter-spacing: -0.016em; color: var(--ink); text-wrap: balance; }
 .sy-root .utterance .u-text.interim { color: var(--sub); }
+/* ── the mind canvas ──────────────────────────────────────────────────────── */
+/* The canvas IS the page, so it takes the whole frame and everything else floats
+   over it. The stage is positioned so the HUD and legend can be absolute against
+   it rather than against the viewport — the shell's tab bar is in normal flow at
+   the bottom, and a viewport-anchored legend would sit underneath it. */
+.sy-root .mind-stage {
+  position: relative; flex: 1; min-height: 0;
+  border-radius: 14px; overflow: hidden;
+  border: 1px solid var(--ink-a06); background: var(--ink-a02);
+}
+.sy-root .mind-hud {
+  position: absolute; top: 10px; left: 10px; right: 10px;
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 10px; pointer-events: none;
+}
+.sy-root .mind-hud > * { pointer-events: auto; }
+.sy-root .mind-hud-stats { display: flex; gap: 6px; min-width: 0; }
+.sy-root .mind-hud-row { display: flex; gap: 6px; flex: none; }
+/* Horizontally scrollable rather than wrapped: six region chips will not fit
+   across a phone, and a legend that grows to two rows eats the canvas it is
+   describing. */
+.sy-root .mind-legend {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; gap: 6px; padding: 10px;
+  overflow-x: auto; scrollbar-width: none;
+  background: linear-gradient(to top, var(--bg), transparent);
+}
+.sy-root .mind-legend::-webkit-scrollbar { display: none; }
+.sy-root .mind-chip {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  padding: 6px 11px; border-radius: 999px; cursor: pointer;
+  font: inherit; font-size: 11.5px; font-weight: 500; white-space: nowrap;
+  color: var(--faint); background: var(--glass); border: 1px solid var(--ink-a08);
+  -webkit-tap-highlight-color: transparent;
+}
+.sy-root .mind-chip.on { color: var(--ink); border-color: var(--ink-a16, var(--ink-a08)); }
+.sy-root .mind-chip-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.sy-root .mind-chip-n { font-family: var(--font-mono); font-size: 10px; opacity: 0.6; }
+.sy-root .mind-insp-head { display: flex; align-items: center; gap: 8px; }
+
 /* ── the mind ─────────────────────────────────────────────────────────────── */
 /* A neuron reads as a row until you open it, because there are twenty-odd of
    them and the list has to be scannable before it is editable. A silenced one

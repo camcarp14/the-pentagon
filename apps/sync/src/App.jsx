@@ -10,6 +10,10 @@ import ConsolePage from "./pages/ConsolePage.jsx";
 import DayPage from "./pages/DayPage.jsx";
 import QueuePage from "./pages/QueuePage.jsx";
 import BriefPage from "./pages/BriefPage.jsx";
+import MindPage from "./pages/MindPage.jsx";
+// Still routable, no longer a destination: the dock slot became Mind, but the
+// facts, notes and action ledger it holds are the operator's data and stay one
+// tap away from the Mind page rather than being orphaned.
 import MemoryPage from "./pages/MemoryPage.jsx";
 import VoicePage from "./pages/VoicePage.jsx";
 
@@ -18,6 +22,7 @@ const PAGES = {
   day: DayPage,
   queue: QueuePage,
   brief: BriefPage,
+  mind: MindPage,
   memory: MemoryPage,
   voice: VoicePage,
 };
@@ -121,7 +126,7 @@ function Workspace() {
         {/* Keying on `page` restarts the entrance animation, so a destination
             develops instead of snapping into place. */}
         <div key={page} className="app-page">
-          <Page />
+          <Page onSettings={() => setSettingsOpen(true)} setPage={setPage} />
         </div>
 
         {/* The tab bar — last flex child, in normal flow at the bottom of the

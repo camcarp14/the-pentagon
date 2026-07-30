@@ -101,15 +101,17 @@ export function Dock({ page, setPage, onSettings }) {
           <span className="dock-label">{label}</span>
         </button>
       ))}
-      {/* Settings used to live only in the desktop rail, so on a phone it was
-          simply unreachable — which is how the API key came to be unset on the
-          one device that actually gets used. It is a sheet rather than a
-          destination, so it never takes `active`; it only has to be one tap
-          away from everywhere. */}
-      <button className="dock-tab" onClick={onSettings} aria-label="Settings">
-        <span className="dock-icon"><IcSettings size={22} /></span>
-        <span className="dock-label">Settings</span>
-      </button>
+      {/* Settings is NOT in the dock any more, and the reason is worth keeping.
+          It was added here because on a phone it had been unreachable entirely —
+          which is how the API key came to be unset on the one device that gets
+          used. That was right at five destinations. At six it made a seventh
+          flex child, and seven `white-space: nowrap` labels have a combined
+          min-content width wider than an iPhone: the row overflowed and the last
+          item sat off the edge of the glass, present in the DOM and impossible
+          to tap. Reported, correctly, as "the settings tab won't let me tap it".
+          It now lives as a gear in the Console's own top bar — one tap from the
+          screen the operator is actually on, and no longer competing for width
+          with the destinations. */}
     </nav>
   );
 }
