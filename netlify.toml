@@ -88,6 +88,30 @@
 [functions."replies-cron"]
   schedule = "*/15 * * * *"
 
+# ── Security headers ─────────────────────────────────────────────────────────
+# The deploy shipped with none of these. The one that actually mattered is
+# frame-ancestors: Ops carries the global autonomy kill switch, and every
+# control on it is a same-origin click on an already-authenticated session. With
+# no framing rule, any page anywhere could load the shell in an invisible iframe
+# and steer a click onto "STOP EVERYTHING" — or, before the fix in this same
+# audit, onto the button that armed it. X-Frame-Options is the legacy spelling,
+# kept for older browsers that do not read frame-ancestors.
+#
+# Deliberately NOT a full CSP yet. A script-src/connect-src policy here has to
+# enumerate two Supabase projects, Anthropic, Deepgram (https AND wss), Shopify
+# and the market-data feeds Macro uses; guessing that list ships a site that
+# half-works. These are the headers that are correct without knowing it.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    Content-Security-Policy = "frame-ancestors 'none'"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    # SYNC needs the microphone on this origin; nothing embedded should get it,
+    # and nothing here needs a camera or geolocation.
+    Permissions-Policy = "microphone=(self), camera=(), geolocation=(), interest-cohort=()"
+
 # Specific rewrites must resolve BEFORE the SPA catch-all.
 # Clarify tracked links / open pixel:
 [[redirects]]
