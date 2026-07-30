@@ -60,7 +60,7 @@ function trimHistory(history, budgetChars = 48000) {
  * @param {AbortSignal} o.signal
  * @returns {Promise<{turnId: string, text: string, acts: Array, error?: string}>}
  */
-export async function runTurn({ text, onDelta, onSpeakable, onAct, signal }) {
+export async function runTurn({ text, onDelta, onSpeakable, onAct, signal, revealWithSpeech = false }) {
   const utterance = String(text || "").trim();
   if (!utterance) return null;
 
@@ -133,7 +133,19 @@ export async function runTurn({ text, onDelta, onSpeakable, onAct, signal }) {
 
   const onText = (chunk, full) => {
     assembled = full;
-    patchTurn(turn.id, { text: full });
+    // When the reply is being spoken, reveal it in step with the voice rather
+    // than all at once.
+    //
+    // This is not decoration. Text arrives far faster than anyone can say it, so
+    // dumping the whole reply the instant it is written means you have finished
+    // reading before the first word is spoken — and then sit through a voice
+    // telling you something you already know. Revealing up to `spoken` keeps the
+    // two channels together, which is the difference between being read to and
+    // being read at.
+    //
+    // Only while speaking. With the voice off, holding text back would be pure
+    // loss: there is nothing to stay in step with.
+    patchTurn(turn.id, { text: revealWithSpeech ? assembled.slice(0, spoken) : full });
     onDelta?.(chunk, full);
     flushSpeakable(false);
   };

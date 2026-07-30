@@ -30,7 +30,7 @@ const SILENCE =
   "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
 
 /** One clip: the text, and the object URL its audio lives at. */
-export function createAuraSpeaker({ onStart, onEnd, onError, getVoice = () => undefined }) {
+export function createAuraSpeaker({ onStart, onEnd, onError, getVoice = () => undefined, getRate = () => 1 }) {
   /** @type {HTMLAudioElement|null} */
   let el = null;
   let queue = [];           // [{ text, url }]
@@ -87,6 +87,12 @@ export function createAuraSpeaker({ onStart, onEnd, onError, getVoice = () => un
     playing = next;
     const a = ensureEl();
     a.src = next.url;
+    // Set per clip, not once: assigning playbackRate before a source is loaded
+    // does not stick, and the rate must survive every clip in a long reply.
+    // Note this is the one audio property iOS does honour — `volume` is ignored,
+    // which is why interruption pauses rather than ducks.
+    const rate = Number(getRate()) || 1;
+    a.playbackRate = Math.min(1.6, Math.max(0.7, rate));
     const p = a.play();
     if (p?.catch) p.catch(() => { advance(); });
   }

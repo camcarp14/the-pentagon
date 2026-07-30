@@ -34,6 +34,20 @@ export function emptyState() {
       // state a person should have to choose each time, not inherit.
       handsFree: false,
       auraVoice: "aura-2-thalia-en",
+      // Playback rate for the spoken reply, 0.8–1.4. Separate from `rate`, which
+      // belongs to the system voice and means something different to it.
+      speakRate: 1,
+      // brief | normal | full. Reaches the system prompt, because reply length is
+      // a property of what gets written, not of how it is read out.
+      replyLength: "normal",
+      // How eager interrupting is. A named tier rather than a number: the
+      // underlying threshold is a margin over a measured noise floor and is not
+      // a quantity anyone can reason about directly.
+      bargeSensitivity: "normal",
+      // Minutes of silence before a conversation ends itself.
+      idleMinutes: 5,
+      // Reveal the reply in step with the voice instead of all at once.
+      syncReveal: true,
       wakeWord: "sync",
       voiceURI: null,
       rate: 1.03,

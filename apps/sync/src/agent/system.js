@@ -56,6 +56,16 @@ export function buildSystem(state) {
   const lines = [];
   lines.push(`RIGHT NOW: ${dayLabel(day, { long: true })}, ${fmtTime(now)}. (${greeting(now)}.)`);
 
+  // Reply length is a property of what gets WRITTEN, not of how it is read out,
+  // so it belongs here and not in the speaker. CHARACTER already sets two or
+  // three sentences as the house default; these override it in either direction —
+  // clipped answers for a corridor, the full reasoning at a desk.
+  const LENGTH = {
+    brief: "LENGTH: One sentence wherever one will do, never more than two. If a real answer needs more room, give the headline and offer the rest.",
+    full: "LENGTH: The two-or-three-sentence default is lifted. Give the reasoning where it earns its place — but you are still being spoken aloud, so keep it prose, and stop when you are done rather than filling the space.",
+  }[s.settings?.replyLength];
+  if (LENGTH) lines.push(LENGTH);
+
   const who = [p.name && `You are talking to ${p.name}.`, p.role && `They do this: ${p.role}.`].filter(Boolean).join(" ");
   if (who) lines.push(who);
   lines.push(`Working hours: ${fmtTime(p.workStart)} to ${fmtTime(p.workEnd)}.`);

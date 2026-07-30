@@ -23,6 +23,11 @@ const ECHO_TAIL_MS = 300;
 const BARGE_MARGIN = 0.16;
 const BARGE_FLOOR_MIN = 0.11;
 const BARGE_MIN_MS = 240;
+// Named tiers rather than a slider. The underlying value is a margin over a
+// measured noise floor, which is not a quantity anyone can reason about — but
+// "it keeps cutting me off" and "it won't let me interrupt" are things people
+// can say, and these are the two directions to move in when they do.
+const BARGE_TIERS = { eager: 0.10, normal: 0.16, patient: 0.26 };
 // Speech is paused, not cancelled, on a candidate interruption. If no words
 // arrive by the time this elapses, it was a noise and playback resumes where it
 // left off. This is what turns "it keeps stopping for no reason" — the most
@@ -119,6 +124,7 @@ export function VoiceProvider({ children }) {
         setMicError(`Couldn't use the natural voice — falling back to the system one. ${e?.message || ""}`.trim());
       },
       getVoice: () => settingsRef.current.auraVoice,
+      getRate: () => settingsRef.current.speakRate,
     });
     auraRef.current = a;
     return () => { a.destroy(); auraRef.current = null; };
@@ -156,10 +162,14 @@ export function VoiceProvider({ children }) {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
+    const willSpeak = speakReply && settingsRef.current.speak;
     const res = await runTurn({
       text: utterance,
       signal: ctrl.signal,
-      onSpeakable: speakReply ? (sentence) => speak(sentence) : undefined,
+      onSpeakable: willSpeak ? (sentence) => speak(sentence) : undefined,
+      // Only hold text back when there is a voice for it to keep step with.
+      // With speech off this would be pure loss.
+      revealWithSpeech: willSpeak && !!settingsRef.current.syncReveal,
     });
 
     abortRef.current = null;
@@ -295,7 +305,8 @@ export function VoiceProvider({ children }) {
       return;
     }
 
-    const threshold = Math.max(b.floor + BARGE_MARGIN, BARGE_FLOOR_MIN);
+    const margin = BARGE_TIERS[settingsRef.current.bargeSensitivity] ?? BARGE_MARGIN;
+    const threshold = Math.max(b.floor + margin, BARGE_FLOOR_MIN);
     if (v < threshold) { b.hot = 0; return; }
     if (!b.hot) { b.hot = now; return; }
     if (now - b.hot < BARGE_MIN_MS || b.pending) return;
@@ -452,10 +463,12 @@ export function VoiceProvider({ children }) {
   const armIdle = useCallback(() => {
     clearTimeout(idleRef.current);
     if (!settingsRef.current.handsFree) return;
+    const mins = Number(settingsRef.current.idleMinutes) || 0;
+    if (mins <= 0) return;               // 0 means "never end it on my behalf"
     idleRef.current = setTimeout(() => {
       setSettings({ handsFree: false });
-      setMicError("Conversation ended after five quiet minutes. Tap to start another.");
-    }, IDLE_END_MS);
+      setMicError(`Conversation ended after ${mins} quiet ${mins === 1 ? "minute" : "minutes"}. Tap to start another.`);
+    }, mins * 60 * 1000);
   }, []);
   armIdleRef.current = armIdle;
 

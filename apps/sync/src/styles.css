@@ -592,6 +592,19 @@
 }
 .sy-root .utterance .u-text { font-size: 19px; line-height: 1.35; font-weight: 500; letter-spacing: -0.016em; color: var(--ink); text-wrap: balance; }
 .sy-root .utterance .u-text.interim { color: var(--sub); }
+/* A labelled control row on the Voice page. Wraps rather than squashes: a
+   Segmented of three options and a title do not both fit across a phone, and a
+   crushed control is worse than a stacked one. */
+.sy-root .v-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px 14px; flex-wrap: wrap; padding: 9px 0;
+}
+.sy-root .v-row + .v-row { border-top: 1px solid var(--ink-a06); }
+.sy-root .v-row-text { min-width: 0; flex: 1 1 190px; }
+.sy-root .v-row-title { font-size: 14px; font-weight: 500; color: var(--ink); letter-spacing: -0.008em; }
+.sy-root .v-row-sub { font-size: 12px; color: var(--faint); line-height: 1.45; margin-top: 2px; }
+.sy-root .v-row .seg { flex: 1 1 210px; }
+
 /* Start/end a hands-free conversation. Reads as a pill rather than an icon
    because it is the one control in the app that changes what the microphone is
    doing for minutes at a time, and that deserves a word rather than a glyph.

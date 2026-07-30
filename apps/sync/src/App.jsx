@@ -11,6 +11,7 @@ import DayPage from "./pages/DayPage.jsx";
 import QueuePage from "./pages/QueuePage.jsx";
 import BriefPage from "./pages/BriefPage.jsx";
 import MemoryPage from "./pages/MemoryPage.jsx";
+import VoicePage from "./pages/VoicePage.jsx";
 
 const PAGES = {
   console: ConsolePage,
@@ -18,6 +19,7 @@ const PAGES = {
   queue: QueuePage,
   brief: BriefPage,
   memory: MemoryPage,
+  voice: VoicePage,
 };
 
 function useIsPhone() {

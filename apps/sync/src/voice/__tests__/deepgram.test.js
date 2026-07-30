@@ -535,6 +535,48 @@ describe("conversation mode", () => {
     expect(provider).toMatch(/setSettings\(\{ handsFree: false \}\)/);
   });
 
+  it("reveals the reply in step with the voice, and only when speaking", () => {
+    // Text arrives far faster than anyone can say it, so dumping the whole reply
+    // the moment it is written means finishing reading before the first word is
+    // spoken — then sitting through a voice recounting what you just read. With
+    // speech off, holding text back would be pure loss.
+    const rt = readFileSync(join(here, "..", "..", "agent", "runtime.js"), "utf8");
+    expect(rt).toMatch(/revealWithSpeech \? assembled\.slice\(0, spoken\) : full/);
+    expect(provider).toMatch(/revealWithSpeech: willSpeak && !!settingsRef\.current\.syncReveal/);
+    // The finished turn must always carry the complete text, or the transcript
+    // would be permanently truncated by however much went unspoken.
+    expect(rt).toMatch(/patchTurn\(turn\.id, \{ text: finalText, status: "done" \}\)/);
+  });
+
+  it("puts the tunables a person can actually feel behind settings", () => {
+    // Interrupting is a margin over a measured noise floor — not a number anyone
+    // can reason about. "It keeps cutting me off" is, so the control is named
+    // tiers over that margin rather than a slider on it.
+    expect(provider).toMatch(/const BARGE_TIERS = \{ eager:[^}]+patient:/);
+    expect(provider).toMatch(/BARGE_TIERS\[settingsRef\.current\.bargeSensitivity\]/);
+    expect(provider).toMatch(/settingsRef\.current\.idleMinutes/);
+    // 0 minutes has to mean "never", not "immediately".
+    expect(provider).toMatch(/if \(mins <= 0\) return;/);
+  });
+
+  it("applies the speaking rate per clip, on the one property iOS honours", () => {
+    // playbackRate assigned before a source loads does not stick, and it has to
+    // survive every clip of a long reply. `volume` is ignored on iOS, which is
+    // also why interruption pauses rather than ducks.
+    expect(aura).toMatch(/a\.playbackRate = Math\.min\(1\.6, Math\.max\(0\.7, rate\)\)/);
+    const adv = aura.slice(aura.indexOf("function advance()"));
+    expect(adv.slice(0, 900)).toMatch(/playbackRate/);
+  });
+
+  it("gives voice its own destination, wired end to end", () => {
+    const nav = readFileSync(join(here, "..", "..", "nav.js"), "utf8");
+    const app = readFileSync(join(here, "..", "..", "App.jsx"), "utf8");
+    expect(nav).toMatch(/key: "voice"/);
+    // A destination with no badge entry renders NaN in the pip logic.
+    expect(nav).toMatch(/voice: 0,/);
+    expect(app).toMatch(/voice: VoicePage,/);
+  });
+
   it("never resumes a conversation on its own after a reload", () => {
     // It holds the microphone open and streams continuously to a third party.
     // That is a state a person chooses each time, not one they inherit.
