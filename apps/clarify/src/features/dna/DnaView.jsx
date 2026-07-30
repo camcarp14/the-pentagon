@@ -8,7 +8,8 @@ import {
 } from "../../lib/dna.js";
 import { wk, worklog, suggestions, inShift, WORKER_DEFAULTS } from "../../lib/dnaWorker.js";
 import { callClaude } from "../../lib/claudeApi.js";
-import { MindCanvas } from "./MindCanvas.jsx";
+import { MindCanvas } from "@cc/mind-canvas";
+import { CLARIFY_MIND_PALETTE } from "./palette.js";
 
 // ════════════════════════════════════════════════════════════════════════════
 // DNA VIEW — the tab around the mind. The canvas IS the page; everything else
@@ -764,6 +765,9 @@ export function DnaView({ cards, toneMemory }) { // eslint-disable-line no-unuse
       <div style={{ position: "absolute", inset: 0 }}>
         <MindCanvas
           genome={genome}
+          bus={dnaBus}
+          palette={CLARIFY_MIND_PALETTE}
+          label="Clarify DNA — neural map"
           selection={selection}
           onSelect={setSelection}
           onNodeMove={handleNodeMove}

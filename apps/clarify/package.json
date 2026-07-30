@@ -9,7 +9,8 @@
   "dependencies": {
     "@cc/supabase": "*",
     "@cc/ai": "*",
-    "@cc/ops": "*"
+    "@cc/ops": "*",
+    "@cc/mind-canvas": "*"
   },
   "peerDependencies": {
     "react": "^18.2.0"

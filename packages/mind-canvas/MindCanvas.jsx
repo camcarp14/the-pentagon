@@ -1,251 +1,93 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { REGIONS } from "@cc/mind";
-// Extracted so the parser that crashed this tool can be unit-tested. See
-// color.js for what it was and why it is tolerant now.
-import { hueOf, lighten, rgba } from "./color.js";
-
-// ─── Provenance, stated plainly ──────────────────────────────────────────────
-// This is Clarify's MindCanvas (apps/clarify/src/features/dna/MindCanvas.jsx),
-// carried over so SYNC's mind looks and behaves like the other tools' rather
-// than being a second, worse idea of what a mind looks like. Clarify's and not
-// ZTS's because ZTS's is tuned for a white page — "faint ink dust on white" —
-// and the Pentagon shell is Obsidian.
-//
-// That makes three copies of this file, which the @cc/mind header rightly calls
-// out as how the original fork happened. The reason it is a copy and not an
-// import is that all three are theme-coupled: Clarify reads a `T` token object,
-// ZTS reads its own. The honest consolidation is one themed component in
-// @cc/ui taking its palette as a prop — a change that touches two working apps
-// and belongs in its own pass, not smuggled into this one. The `T` shim below
-// is deliberately the ONLY app-specific surface, so that pass is a move plus a
-// prop rather than a rewrite.
-
-/** Clarify's theme tokens, mapped onto SYNC's. Read from CSS custom properties
- *  so the canvas follows the shell's palette instead of hardcoding Obsidian. */
-const T = {
-  bg: "var(--bg)",
-  surface: "var(--glass)",
-  ink: "var(--ink)",
-  inkBrand: "var(--ink)",
-  muted: "var(--sub)",
-  faint: "var(--faint)",
-  line: "var(--ink-a08)",
-  lineSoft: "var(--ink-a05)",
-  red: "var(--red)",
-  // Clarify's brass becomes SYNC's orchid. Same role — the accent that says
-  // "this is the thing you are working on" — so the names map even though the
-  // hues do not.
-  gold: "var(--accent)",
-  goldHi: "var(--accent-hi)",
-  goldLine: "var(--accent-a25)",
-  glowBrass: "var(--accent-a20)",
-  fontDisplay: "var(--font-body)",
-  fontMono: "var(--font-mono)",
-  rPill: "999px",
-};
-
-// SYNC has no activation worker firing pulses through the graph, so the bus is
-// a stub rather than a dependency. Kept as a real object with the same shape so
-// the pulse code below stays untouched — deleting it would fork the file
-// further from the two it came from, for no gain.
-const dnaBus = { on: () => () => {}, emit: () => {} };
-
+import { normalizePalette, lighten, rgba } from "./palette.js";
+import { acquireStyle, paletteVars } from "./css.js";
+import {
+  ZOOM_MIN, ZOOM_MAX, LABEL_ZOOM, ALPHA_SLEEP, REHEAT, BOW, STEP_MS,
+  PARTICLES, SPECK_N, SPECK_BOUND, POOL_IDX, EMPTY_GENOME,
+  r1, buildSim, tick, edgeD, fitView, zoomAtView, wheelPixels,
+} from "./sim.js";
 
 // ════════════════════════════════════════════════════════════════════════════
-// MIND CANVAS — the living picture of Clarify's genome. One <svg>, one rAF
-// loop, zero per-frame React. The force sim (link springs + pairwise repulsion
-// + region anchors + mild centering) lives entirely in refs and writes
-// transforms imperatively to element refs kept in Maps — React re-renders only
-// on coarse events (selection, genome edit, filter, toast). Activation pulses
-// ride the same loop: dnaBus events stage node flares and particles that travel
-// each synapse's bezier by manual quadratic interpolation — no getPointAtLength
-// in the hot path, no allocation storms (fixed particle pool, reused arrays).
+// MIND CANVAS — the living picture of a genome. One <svg>, one rAF loop, zero
+// per-frame React.
+//
+// The force sim (link springs + pairwise repulsion + region anchors + mild
+// centering) lives entirely in refs and writes transforms imperatively to
+// element refs kept in Maps — React re-renders only on coarse events
+// (selection, genome edit, filter, toast). Activation pulses ride the same
+// loop: bus events stage node flares and particles that travel each synapse's
+// bezier by manual quadratic interpolation — no getPointAtLength in the hot
+// path, no allocation storms (fixed particle pool, reused arrays).
 // prefers-reduced-motion drops to a fully static render: synchronous settle,
 // highlight-only pulses, no ambient dust, no rAF at all.
+//
+// ─── Why this file is in a package ──────────────────────────────────────────
+//
+// It used to be three files: apps/zts/src/dna/MindCanvas.jsx,
+// apps/clarify/src/features/dna/MindCanvas.jsx and apps/sync/src/mind/
+// MindCanvas.jsx — 3,236 lines expressing one component and three palettes.
+// The SYNC copy's own header called the shot: "the honest consolidation is one
+// themed component taking its palette as a prop — a move plus a prop rather
+// than a rewrite." This is that pass.
+//
+// The fork was not free while it lasted. It cost, concretely:
+//
+//   · A crash. Clarify and ZTS still carried a one-line colour parser,
+//     `hex.replace("#","")`, with no type guard. Reading a region hue off an
+//     object that did not carry one returned undefined, and undefined has no
+//     .replace — SYNC's Mind tab went white. Only SYNC got the hardened
+//     parser; the other two were one missing key from the same white screen.
+//   · Cross-app colour bleed. All three injected a <style> into document.head
+//     with IDENTICAL global selectors and their own accent baked in. In the
+//     shell, which shares one document, the later mount won for both — so
+//     which accent Clarify's drop target wore depended on whether you had
+//     opened ZTS first. See css.js.
+//   · A shadow that never rendered. SYNC's shim had no `shadowPopover`; two
+//     call sites read it, and one composed `${undefined}, var(--accent-a20)`,
+//     an invalid shadow list, so the browser dropped the declaration whole.
+//   · Bugs fixed once and left broken twice — and a keyboard focus ring that
+//     existed only in ZTS.
+//
+// ─── The two things a host must get right ───────────────────────────────────
+//
+// PALETTE. Colour enters only through the `palette` prop, and the component
+// never resolves anything itself — no getComputedStyle, no querySelector, no
+// module cache. The accent is TWO roles, not one: `synapse*` is energy
+// (synapses, particles, the firing flare) and `select*` is intent (selection
+// halo, focus ring, drop target, rubber band). ZTS uses emerald and amber for
+// those; Clarify and SYNC use one hue for both. A single `accent` key would
+// compile, render, and quietly turn ZTS's selection ring green. See palette.js.
+//
+// LOOK. Residual visual divergence that is not colour — ZTS paints nodes as a
+// solid disc with a blur filter and has no centre lamp, where Clarify and SYNC
+// use a radial-gradient orb over a soft glow, and four opacity/blur constants
+// differ. That is the `look` prop. It is fully defaulted: Clarify and SYNC
+// pass nothing, ZTS passes one object, and nobody's canvas changed appearance
+// on the day of the merge — which was the whole point.
 // ════════════════════════════════════════════════════════════════════════════
 
-// ── Tuning — every number here is a feel decision, grouped so the whole
-//    character of the mind can be adjusted from one block. ───────────────────
-const ZOOM_MIN = 0.35, ZOOM_MAX = 2.6;   // wheel/HUD zoom clamp
-const LABEL_ZOOM = 0.55;                 // labels hide below this zoom (they'd be soup)
-const RING_R = 320;                      // region anchor ring — matches the seed layout
-const ALPHA_SLEEP = 0.005;               // below this the sim is asleep (no writes)
-const ALPHA_DECAY = 0.985;               // cooling per tick
-const REHEAT = 0.5;                      // wake energy on genome change / drag / add
-const SPRING = 0.015;                    // link spring gain
-const REPULSE = 3400;                    // pairwise push ∝ 1/d², capped below (spec ~2600; raised within tolerance so hub clusters keep labels clear)
-const ANCHOR = 0.0045;                   // pull toward the node's region anchor
-const CENTER = 0.0009;                   // mild global centering so the mind never drifts off
-const FRICTION = 0.86;
-const BOW = 0.18;                        // bezier control offset ⟂ from midpoint, ∝ edge length
-const STEP_MS = 350;                     // activation wavefront: ms between propagate steps
-const PARTICLES = 28;                    // particle pool size (head+trail pairs), reused forever
-const SPECK_N = 40;                      // ambient drifting dust behind the mind
-const SPECK_BOUND = RING_R + 340;        // dust wraps inside this world-space box
-
-const POOL_IDX = Array.from({ length: PARTICLES }, (_, i) => i);
-const EMPTY_GENOME = { nodes: [], edges: [] };
+/**
+ * Non-colour visual calibration. Every value is what Clarify and SYNC already
+ * used; ZTS overrides the ones it always differed on, so the merge is visually
+ * a no-op for all three.
+ */
+export const LOOK_DEFAULTS = Object.freeze({
+  nodePaint: "orb",        // "orb" = radial gradient (clarify/sync) · "solid" = flat fill + blur (zts)
+  centreLamp: true,        // the soft glow behind the middle of the graph
+  containerWash: false,    // zts tints its container corners; the dark apps do not
+  edgeOpacityBase: 0.25,   // zts: 0.22
+  edgeOpacityWeight: 0.35, // zts: 0.28
+  disabledOpacity: 0.25,   // zts: 0.3
+  disabledSaturate: 0.2,   // zts: 0.3
+  glassBlur: 14,           // zts: 18
+});
 
 const reduceMotion = () =>
   typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-const r1 = (v) => Math.round(v * 10) / 10;                 // short attr strings, cheap
-const nodeR = (w) => 9 + 16 * (typeof w === "number" ? w : 0.5);
-
-// Token → color math for the SVG defs — the one sanctioned spot where a theme
-// token is interpolated into computed color values (spec design rule #4).
-// Region anchors — identity holds the center; the other five sit on a hex ring
-// (center + 5 = the hexagonal arrangement), mirroring the seed genome's layout
-// so physics and persisted positions agree on where each region "lives".
-const ANCHORS = (() => {
-  const out = { identity: { x: 0, y: 0 } };
-  const ring = Object.keys(REGIONS).filter((k) => k !== "identity");
-  ring.forEach((k, i) => {
-    const th = (i / ring.length) * Math.PI * 2 - Math.PI / 2;
-    out[k] = { x: Math.round(Math.cos(th) * RING_R), y: Math.round(Math.sin(th) * RING_R) };
-  });
-  return out;
-})();
-
-// ── Sim construction — carries positions/velocities over from the previous sim
-//    so a genome save never snaps the layout; brand-new nodes seed from their
-//    persisted x/y or, failing that, jitter around their region anchor. ───────
-function buildSim(genome, prev) {
-  const byId = new Map();
-  const src = Array.isArray(genome.nodes) ? genome.nodes : [];
-  // The previous genome's STORED positions, to tell layout drift from intent:
-  // carry-over is right for incremental edits (the sim's live position is the
-  // truth), but a node whose persisted x/y CHANGED between genomes was placed
-  // by something outside this sim — an Import JSON, a reset — and must land
-  // where the incoming genome says, not where the old mind happened to drift.
-  // (Drag-end persists the live position, so its "change" re-seeds to within
-  // half a pixel of where the node already is — no snap.)
-  const prevStored = prev && prev.genome && Array.isArray(prev.genome.nodes)
-    ? new Map(prev.genome.nodes.map(n => [n.id, n])) : null;
-  const nodes = new Array(src.length);
-  for (let i = 0; i < src.length; i++) {
-    const n = src[i];
-    const old = prev ? prev.byId.get(n.id) : null;
-    const anchor = ANCHORS[n.region] || ANCHORS.identity;
-    // (0,0) outside identity means "never placed" — those get anchor + jitter.
-    const seeded = Number.isFinite(n.x) && Number.isFinite(n.y) && (n.x !== 0 || n.y !== 0 || n.region === "identity");
-    const ps = prevStored ? prevStored.get(n.id) : null;
-    const placed = seeded && (!old || (ps && (ps.x !== n.x || ps.y !== n.y)));
-    const sn = {
-      id: n.id, region: n.region, r: nodeR(n.weight),
-      x: placed ? n.x : old ? old.x : seeded ? n.x : anchor.x + (Math.random() - 0.5) * 110,
-      y: placed ? n.y : old ? old.y : seeded ? n.y : anchor.y + (Math.random() - 0.5) * 110,
-      vx: old ? old.vx : 0, vy: old ? old.vy : 0,
-      fixed: old ? old.fixed : false,          // pinned to the pointer while dragged
-      ax: anchor.x, ay: anchor.y,
-    };
-    nodes[i] = sn;
-    byId.set(n.id, sn);
-  }
-  const edgeById = new Map();
-  const edges = [];
-  const esrc = Array.isArray(genome.edges) ? genome.edges : [];
-  for (let i = 0; i < esrc.length; i++) {
-    const e = esrc[i];
-    const a = byId.get(e.from), b = byId.get(e.to);
-    if (!a || !b) continue;                    // dangling edges never reach the sim
-    const w = typeof e.weight === "number" ? e.weight : 0.5;
-    const se = { id: e.id, a, b, w, rest: 120 * (1.6 - w) };  // heavy synapses pull tight
-    edges.push(se);
-    edgeById.set(e.id, se);
-  }
-  return { nodes, byId, edges, edgeById, alpha: prev ? Math.max(prev.alpha, REHEAT) : 1, genome };
-}
-
-// One physics tick. Allocation-free: indexed loops, scalars only. O(n²) on the
-// repulsion pass is the worst case and stays cheap at the ≤80-node contract.
-function tick(sim) {
-  const ns = sim.nodes, es = sim.edges, a = sim.alpha;
-  // Link springs — rest length shrinks as weight rises.
-  for (let i = 0; i < es.length; i++) {
-    const e = es[i];
-    const dx = e.b.x - e.a.x, dy = e.b.y - e.a.y;
-    const d = Math.sqrt(dx * dx + dy * dy) || 1;
-    const f = (d - e.rest) * SPRING * a;
-    const fx = (dx / d) * f, fy = (dy / d) * f;
-    if (!e.a.fixed) { e.a.vx += fx; e.a.vy += fy; }
-    if (!e.b.fixed) { e.b.vx -= fx; e.b.vy -= fy; }
-  }
-  // Pairwise repulsion — capped so overlaps don't explode, range-limited so
-  // distant pairs cost one compare and no sqrt.
-  for (let i = 0; i < ns.length; i++) {
-    const p = ns[i];
-    for (let j = i + 1; j < ns.length; j++) {
-      const q = ns[j];
-      let dx = q.x - p.x, dy = q.y - p.y;
-      let d2 = dx * dx + dy * dy;
-      if (d2 > 96100) continue;                          // >310px apart — negligible
-      if (d2 < 1) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 1; }  // unstick perfect overlaps
-      const d = Math.sqrt(d2);
-      let f = (REPULSE / d2) * a;
-      if (f > 6) f = 6;
-      const fx = (dx / d) * f, fy = (dy / d) * f;
-      if (!p.fixed) { p.vx -= fx; p.vy -= fy; }
-      if (!q.fixed) { q.vx += fx; q.vy += fy; }
-    }
-  }
-  // Region anchor + mild centering, then integrate.
-  for (let i = 0; i < ns.length; i++) {
-    const n = ns[i];
-    if (n.fixed) { n.vx = 0; n.vy = 0; continue; }       // dragged node obeys the pointer only
-    n.vx += (n.ax - n.x) * ANCHOR * a - n.x * CENTER * a;
-    n.vy += (n.ay - n.y) * ANCHOR * a - n.y * CENTER * a;
-    n.vx *= FRICTION; n.vy *= FRICTION;
-    n.x += n.vx; n.y += n.vy;
-  }
-  sim.alpha *= ALPHA_DECAY;
-}
-
-// Synapse path — quadratic bezier bowed ⟂ from the midpoint. The SAME control
-// point feeds the particle interpolation below, so pulses ride the drawn curve.
-function edgeD(e) {
-  const x1 = e.a.x, y1 = e.a.y, x2 = e.b.x, y2 = e.b.y;
-  const cx = (x1 + x2) / 2 - (y2 - y1) * BOW;
-  const cy = (y1 + y2) / 2 + (x2 - x1) * BOW;
-  return "M" + r1(x1) + " " + r1(y1) + " Q" + r1(cx) + " " + r1(cy) + " " + r1(x2) + " " + r1(y2);
-}
-
-// Class-keyed behavior CSS — hover dimming is ONE class toggle on the world
-// group ("dna-dim") + a marked subset ("dna-hov"), never per-element React.
-const CSS = `
-.dna-canvas { display: block; touch-action: none; cursor: grab; }
-.dna-canvas.dna-grabbing { cursor: grabbing; }
-.dna-canvas text { user-select: none; -webkit-user-select: none; }
-.dna-canvas g[data-dna-node] { cursor: pointer; transition: opacity 0.18s ease; }
-.dna-canvas g[data-dna-edge] { transition: opacity 0.18s ease; }
-.dna-canvas .dna-label { transition: opacity 0.22s ease; }
-.dna-canvas .dna-zoomout .dna-label { opacity: 0; }
-.dna-canvas .dna-dim g[data-dna-node]:not(.dna-hov) { opacity: 0.35 !important; }
-.dna-canvas .dna-dim g[data-dna-edge]:not(.dna-hov) { opacity: 0.35; }
-/* The "+" link port is hover-revealed AND hover-armed: while invisible it must
-   not hit-test, or a touch near a node's 3-o'clock edge (no hover on touch)
-   silently hijacks the tap into a phantom link-drag. Touch wiring lives in the
-   inspector's "wire a synapse" control instead. */
-.dna-canvas .dna-port { opacity: 0; pointer-events: none; transition: opacity 0.15s ease; cursor: crosshair; }
-.dna-canvas g[data-dna-node]:hover .dna-port { opacity: 1; pointer-events: auto; }
-.dna-canvas .dna-droptar .dna-core { stroke: ${T.goldHi} !important; stroke-width: 2.5px !important; }
-.dna-canvas g[data-dna-node].dna-fire .dna-core { stroke: ${T.goldHi} !important; }
-.dna-canvas g[data-dna-edge].dna-fire .dna-evis { stroke: ${T.goldHi} !important; opacity: 0.95 !important; }
-/* Keyboard path — nodes are tabbable; the brass ring only shows for keyboard
-   focus (focus-visible), pointer selection keeps its own halo. */
-.dna-canvas g[data-dna-node]:focus { outline: none; }
-.dna-canvas g[data-dna-node]:focus-visible .dna-core { stroke: ${T.gold} !important; stroke-width: 2.2px !important; }
-.dna-hudbtn { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 999px; color: ${T.muted}; cursor: pointer; font-size: 13px; line-height: 1; padding: 0; }
-.dna-hudbtn:hover { background: rgba(255,255,255,0.08); color: ${T.ink}; }
-@media (max-width: 860px) {
-  /* App's mobile touch-target floor (App.jsx gives .co-icon-btn 40px) — a miss
-     on a 26px HUD button falls through to the svg and pans the viewport. */
-  .dna-hudbtn { min-width: 40px; min-height: 40px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .dna-canvas g[data-dna-node], .dna-canvas g[data-dna-edge], .dna-canvas .dna-label, .dna-canvas .dna-port { transition: none !important; }
-}
-`;
+/** No activation worker in some hosts — a bus is optional, so this is the floor. */
+const NULL_BUS = { on: () => () => {}, emit: () => {} };
 
 function MindCanvasImpl({
   genome,                    // current genome object (§1)
@@ -258,9 +100,42 @@ function MindCanvasImpl({
   height = "calc(100vh - 150px)",
   toastTop = 62,             // px offset for the activation toast — clears the host view's header band
   apiRef,                    // optional ref — exposes {centerWorld} so the host can spawn nodes in-view
+  palette: paletteIn,        // REQUIRED — see palette.js. Colour enters only here.
+  look: lookIn,              // optional non-colour calibration — see LOOK_DEFAULTS
+  bus,                       // optional {on, emit} — activation pulses; omit for a still mind
+  label = "Mind — neural map",   // accessible name; hosts say whose mind this is
 }) {
   const g = genome && Array.isArray(genome.nodes) ? genome : EMPTY_GENOME;
-  const RM = useRef(reduceMotion()).current;
+
+  // Every derived colour is memoized on the palette, never computed at module
+  // scope. Two of the three old copies evaluated their CSS template at import
+  // time, so the canvas could not follow a runtime theme change — survivable
+  // while each app had exactly one theme, wrong the moment one component serves
+  // SYNC, which legitimately renders two (standalone Obsidian vs. in-shell).
+  const T = useMemo(() => normalizePalette(paletteIn), [paletteIn]);
+  const LOOK = useMemo(() => ({ ...LOOK_DEFAULTS, ...(lookIn || null) }), [lookIn]);
+  const dnaBus = bus || NULL_BUS;
+
+  // Unique per instance, so two canvases on one page cannot steal each other's
+  // paint. The gradient ids used to be document-global literals (`dnaGrad_skill`,
+  // `dnaCenterGlow`), and `url(#…)` resolves by document order — whichever
+  // canvas mounted first supplied the region hues for every canvas after it.
+  const uid = useId().replace(/[^\w-]/g, "");
+  const gradId = (k) => `mg-${uid}-${k}`;
+  const lampId = `ml-${uid}`;
+  const glowId = `mo-${uid}`;
+
+  // Re-read on change rather than sampled once at mount. Someone who switches
+  // Reduce Motion on mid-session was previously left with a canvas that kept
+  // animating until they reloaded the whole app.
+  const [RM, setRM] = useState(reduceMotion);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const on = () => setRM(mq.matches);
+    if (mq.addEventListener) mq.addEventListener("change", on); else mq.addListener(on);
+    return () => { if (mq.removeEventListener) mq.removeEventListener("change", on); else mq.removeListener(on); };
+  }, []);
 
   // ── The mutable world — everything the rAF loop touches lives on one ref so
   //    stale closures are impossible (handlers registered once only read S). ──
@@ -287,7 +162,7 @@ function MindCanvasImpl({
       glows: new Map(),                                  // nodeId → {start, dur, level}
       marked: [], hover: null,                           // hover-dim bookkeeping
       fireEls: [], fireT: 0,                             // reduced-motion static highlight
-      gesture: { mode: null, id: null, from: null, drop: null, edge: null, startX: 0, startY: 0, vx0: 0, vy0: 0, moved: false },
+      gesture: { mode: null, pointerId: null, id: null, from: null, drop: null, edge: null, startX: 0, startY: 0, vx0: 0, vy0: 0, moved: false },
       paused: false,
       raf: 0, toastT: 0,
       userView: false,                                   // true after the first pan/zoom/drag — auto-fit stands down
@@ -335,11 +210,8 @@ function MindCanvasImpl({
   };
 
   const zoomAt = (sx, sy, k2) => {                       // zoom keeping (sx,sy) fixed on screen
-    const v = S.view;
-    k2 = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, k2));
-    v.x = sx - ((sx - v.x) / v.k) * k2;
-    v.y = sy - ((sy - v.y) / v.k) * k2;
-    v.k = k2;
+    const next = zoomAtView(S.view, sx, sy, k2);
+    S.view.x = next.x; S.view.y = next.y; S.view.k = next.k;
     applyView();
   };
 
@@ -353,29 +225,19 @@ function MindCanvasImpl({
 
   const fit = () => {                                    // frame every visible node with padding
     const svg = svgRef.current, sim = S.sim;
-    if (!svg || !sim || sim.nodes.length === 0) return;
+    if (!svg || !sim) return;
     // Cached measure — fit() runs per frame while the sim settles, right after
     // writePositions' attribute writes; a live getBoundingClientRect here is a
     // forced synchronous layout every hot frame. The ResizeObserver keeps the
     // cache honest.
     const rect = S.rect || (S.rect = svg.getBoundingClientRect());
-    if (rect.width < 10 || rect.height < 10) return;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, any = false;
-    for (let i = 0; i < sim.nodes.length; i++) {
-      const n = sim.nodes[i];
-      if (regionFilter && !regionFilter.has(n.region)) continue;
-      any = true;
-      if (n.x - n.r < minX) minX = n.x - n.r;
-      if (n.x + n.r > maxX) maxX = n.x + n.r;
-      if (n.y - n.r < minY) minY = n.y - n.r;
-      if (n.y + n.r > maxY) maxY = n.y + n.r;
-    }
-    if (!any) return;
-    const pad = 70;
-    const k = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.min(rect.width / (maxX - minX + pad * 2), rect.height / (maxY - minY + pad * 2))));
-    S.view.k = k;
-    S.view.x = rect.width / 2 - ((minX + maxX) / 2) * k;
-    S.view.y = rect.height / 2 - ((minY + maxY) / 2) * k;
+    // The maths lives in sim.js so the NaN case can be tested. It returns null
+    // rather than a half-computed view: one non-finite node coordinate used to
+    // produce transform="translate(NaN NaN)", which SVG discards silently —
+    // the whole graph vanished and nothing anywhere said why.
+    const next = fitView(sim.nodes, rect, regionFilter ? (n) => regionFilter.has(n.region) : null);
+    if (!next) return;
+    S.view.k = next.k; S.view.x = next.x; S.view.y = next.y;
     applyView();
   };
 
@@ -667,6 +529,12 @@ function MindCanvasImpl({
     const nodeG = closest("[data-dna-node]");
     const gs = S.gesture;
     S.userView = true;                                   // human touched the canvas — auto-fit stands down
+    // Own the gesture to ONE pointer. The state machine used to key off
+    // `mode` alone, so a second finger landing anywhere sent its own
+    // pointerup — which ended the first finger's drag, persisted a position
+    // mid-motion, and left the node wherever it happened to be. On a phone
+    // that is not an edge case; it is what a thumb resting on the screen does.
+    gs.pointerId = e.pointerId;
     gs.startX = e.clientX; gs.startY = e.clientY; gs.moved = false;
     try { svg.setPointerCapture(e.pointerId); } catch { /* capture is best-effort */ }
     if (nodeG && (e.shiftKey || portG)) {
@@ -691,7 +559,7 @@ function MindCanvasImpl({
 
   const onPointerMove = (e) => {
     const gs = S.gesture;
-    if (!gs.mode) return;
+    if (!gs.mode || e.pointerId !== gs.pointerId) return;
     const dx = e.clientX - gs.startX, dy = e.clientY - gs.startY;
     if (!gs.moved && dx * dx + dy * dy > 16) gs.moved = true;
     if (gs.mode === "pan") {
@@ -709,9 +577,9 @@ function MindCanvasImpl({
     }
   };
 
-  const onPointerUp = () => {
+  const onPointerUp = (e) => {
     const gs = S.gesture;
-    if (!gs.mode) return;
+    if (!gs.mode || (e && e.pointerId !== gs.pointerId)) return;
     if (svgRef.current) svgRef.current.classList.remove("dna-grabbing");
     if (gs.mode === "drag") {
       const sn = S.sim.byId.get(gs.id);
@@ -729,16 +597,27 @@ function MindCanvasImpl({
       if (gs.drop && gs.drop !== gs.from && onAddEdge) onAddEdge({ from: gs.from, to: gs.drop });
       cancelLink();
     }
-    gs.mode = null;
+    gs.mode = null; gs.pointerId = null;
   };
 
-  const onPointerCancel = () => {
+  const onPointerCancel = (e) => {
     const gs = S.gesture;
-    if (!gs.mode) return;
-    if (gs.mode === "drag") { const sn = S.sim.byId.get(gs.id); if (sn) sn.fixed = false; }
+    if (!gs.mode || (e && e.pointerId !== gs.pointerId)) return;
+    if (gs.mode === "drag") {
+      const sn = S.sim.byId.get(gs.id);
+      if (sn) {
+        sn.fixed = false;
+        // A cancelled drag used to drop the node's new position on the floor:
+        // the sim kept the moved coordinates, nothing persisted them, and the
+        // next genome rebuild snapped the node back. iOS cancels pointers for
+        // ordinary reasons — an incoming call, the app switcher, a palm — so
+        // this is the common ending for a drag on a phone, not a rare one.
+        if (gs.moved && onNodeMove) onNodeMove(gs.id, Math.round(sn.x), Math.round(sn.y));
+      }
+    }
     if (gs.mode === "link") cancelLink();
     if (svgRef.current) svgRef.current.classList.remove("dna-grabbing");
-    gs.mode = null;
+    gs.mode = null; gs.pointerId = null;
   };
 
   const onDblClick = (e) => {
@@ -821,13 +700,21 @@ function MindCanvasImpl({
   //    positioned — no flash of an unzoomed corner. Everything registered here
   //    is torn down on unmount: rAF, bus sub, listeners, style tag, timers. ────
   useLayoutEffect(() => {
-    const styleEl = document.createElement("style");
-    styleEl.textContent = CSS;
-    document.head.appendChild(styleEl);
+    // One shared, palette-free sheet, reference-counted — not a per-instance
+    // tag with this app's accent baked into globally-scoped selectors. See css.js.
+    const releaseStyle = acquireStyle();
     // Measure once, then only when the box actually changes — the per-frame
     // auto-fit reads S.rect instead of forcing layout with a live measure.
     const svg = svgRef.current;
-    const measure = () => { S.rect = svg.getBoundingClientRect(); };
+    const measure = () => {
+      S.rect = svg.getBoundingClientRect();
+      // Re-frame, don't just re-measure. The observer used to refresh the cached
+      // rect and stop, so rotating the phone or opening the keyboard left the
+      // graph framed for the old viewport — off-screen, with the canvas looking
+      // empty. Only while auto-fit is still in charge: once someone has panned
+      // or zoomed, moving their viewport out from under them is worse.
+      if (!S.userView) fit();
+    };
     measure();
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
     if (ro) ro.observe(svg);
@@ -843,19 +730,45 @@ function MindCanvasImpl({
       e.preventDefault();
       S.userView = true;                                 // wheel zoom — auto-fit stands down
       const rect = svg.getBoundingClientRect();          // live — needs left/top, and wheel is not per-frame
-      zoomAt(e.clientX - rect.left, e.clientY - rect.top, S.view.k * Math.exp(-e.deltaY * 0.0016));
+      // deltaMode was ignored, so a wheel reporting LINE units (Firefox, and
+      // some mice everywhere) sent deltas of ±3 — exp(-3 * 0.0016) is 0.995,
+      // a half-percent zoom. The wheel appeared to do nothing at all on that
+      // hardware. wheelPixels normalises it.
+      const dy = wheelPixels(e.deltaY, e.deltaMode);
+      zoomAt(e.clientX - rect.left, e.clientY - rect.top, S.view.k * Math.exp(-dy * 0.0016));
     };
     svg.addEventListener("wheel", onWheel, { passive: false });
-    if (!RM) S.raf = requestAnimationFrame(loop);
+
+    // Stop the loop while the page is hidden. The ambient dust animates forever
+    // by design, which means that without this the canvas held a 60fps rAF for
+    // as long as the tab existed — including backgrounded on a phone, where it
+    // is pure battery cost for pixels nobody can see.
+    //
+    // The cancel-before-schedule is the whole safety of it: a sibling component
+    // in this repo resumed by calling loop() directly, and because backgrounding
+    // stops rAF firing without cancelling the queued callback, every app switch
+    // left one more loop running and the animation ran a little faster each time.
+    const startLoop = () => {
+      if (RM) return;
+      cancelAnimationFrame(S.raf);
+      S.raf = requestAnimationFrame(loop);
+    };
+    const onVis = () => {
+      if (typeof document !== "undefined" && document.hidden) cancelAnimationFrame(S.raf);
+      else startLoop();
+    };
+    if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVis);
+    startLoop();
     return () => {
       cancelAnimationFrame(S.raf);
       unsub && unsub();
       window.removeEventListener("keydown", onKey);
       svg.removeEventListener("wheel", onWheel);
+      if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVis);
       if (ro) ro.disconnect();
       clearTimeout(S.toastT);
       clearTimeout(S.fireT);
-      styleEl.remove();
+      releaseStyle();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -869,23 +782,32 @@ function MindCanvasImpl({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [g]);
 
+  // ZTS used an opaque slate panel with its own border token; the dark apps
+  // derive theirs from the page colour. Both are palette values now — the
+  // component does not decide, it reads.
   const glass = {
-    background: rgba(T.bg, 0.8),
-    backdropFilter: "blur(14px)",
-    WebkitBackdropFilter: "blur(14px)",
-    border: `1px solid ${T.lineSoft}`,
-    boxShadow: T.shadowPopover,
+    background: T.glass,
+    backdropFilter: `blur(${LOOK.glassBlur}px)`,
+    WebkitBackdropFilter: `blur(${LOOK.glassBlur}px)`,
+    border: `1px solid ${T.glassBorder}`,
+    boxShadow: T.shadow,
   };
 
   return (
-    <div style={{ position: "relative", width: "100%", height, overflow: "hidden" }}>
+    <div style={{
+      position: "relative", width: "100%", height, overflow: "hidden", ...paletteVars(T),
+      // ZTS tints the container's corners; the dark apps leave it plain.
+      ...(LOOK.containerWash ? {
+        background: `radial-gradient(120% 90% at 0% 0%, ${rgba(T.synapse, 0.05)} 0%, transparent 55%), radial-gradient(120% 90% at 100% 0%, ${rgba(T.region.principle, 0.05)} 0%, transparent 55%)`,
+      } : null),
+    }}>
       <svg
         ref={svgRef}
         className="dna-canvas"
         width="100%"
         height="100%"
         role="application"
-        aria-label="Clarify DNA neural map"
+        aria-label={label}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -898,31 +820,38 @@ function MindCanvasImpl({
         <defs>
           {/* Glow orbs — center lightened region color → region color → transparent
               rim. Off-center focus gives each node a specular "lit sphere" read. */}
-          {Object.keys(REGIONS).map((k) => {
-            const c = hueOf(k);
+          {Object.keys(T.region).map((k) => {
+            const c = T.region[k];
             return (
-              <radialGradient key={k} id={`dnaGrad_${k}`} cx="38%" cy="35%" r="72%">
+              <radialGradient key={k} id={gradId(k)} cx="38%" cy="35%" r="72%">
                 <stop offset="0%" stopColor={lighten(c, 0.55)} />
                 <stop offset="55%" stopColor={c} stopOpacity="0.92" />
                 <stop offset="100%" stopColor={c} stopOpacity="0" />
               </radialGradient>
             );
           })}
-          <radialGradient id="dnaCenterGlow">
-            <stop offset="0%" stopColor={T.gold} stopOpacity="0.08" />
-            <stop offset="100%" stopColor={T.gold} stopOpacity="0" />
+          {/* Only the "solid" treatment blurs; an unused filter still costs a
+              rasterised surface on some engines, so it is not always emitted. */}
+          {LOOK.nodePaint === "solid" && (
+            <filter id={glowId} x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="5" />
+            </filter>
+          )}
+          <radialGradient id={lampId}>
+            <stop offset="0%" stopColor={T.select} stopOpacity="0.08" />
+            <stop offset="100%" stopColor={T.select} stopOpacity="0" />
           </radialGradient>
         </defs>
 
         <g ref={worldRef} className="dna-world">
           {/* The one extra lamp — a faint brass pool under the mind's center. */}
-          <circle cx="0" cy="0" r="480" fill="url(#dnaCenterGlow)" style={{ pointerEvents: "none" }} />
+          {LOOK.centreLamp && <circle cx="0" cy="0" r="480" fill={`url(#${lampId})`} style={{ pointerEvents: "none" }} />}
 
           {/* Ambient dust — skipped entirely under reduced motion. */}
           {!RM && (
             <g style={{ pointerEvents: "none" }}>
               {S.specks.map((p, i) => (
-                <circle key={i} ref={S.speckRefCbs[i]} cx={r1(p.x)} cy={r1(p.y)} r={r1(p.r)} fill={T.inkBrand} opacity={p.o} />
+                <circle key={i} ref={S.speckRefCbs[i]} cx={r1(p.x)} cy={r1(p.y)} r={r1(p.r)} fill={T.speckInk} opacity={p.o} />
               ))}
             </g>
           )}
@@ -934,19 +863,19 @@ function MindCanvasImpl({
             const inhib = e.polarity === -1;
             const sw = 0.8 + 2.6 * w;
             const bothOn = enabledOf[e.from] !== false && enabledOf[e.to] !== false;
-            const op = (0.25 + 0.35 * w) * (bothOn ? 1 : 0.25);
+            const op = (LOOK.edgeOpacityBase + LOOK.edgeOpacityWeight * w) * (bothOn ? 1 : LOOK.disabledOpacity);
             const hidden = visSet ? !(visSet.has(e.from) && visSet.has(e.to)) : false;
             const selE = selection && selection.type === "edge" && selection.id === e.id;
             return (
               <g key={e.id} data-dna-edge="" data-id={e.id} ref={edgeRefCb(e.id, "g")} style={{ display: hidden ? "none" : undefined }}>
                 {selE && (
-                  <path ref={selEdgeRefCb(e.id)} fill="none" stroke={T.goldHi} strokeWidth={sw + 3.5} opacity="0.3" strokeLinecap="round" style={{ pointerEvents: "none" }} />
+                  <path ref={selEdgeRefCb(e.id)} fill="none" stroke={T.selectHi} strokeWidth={sw + 3.5} opacity="0.3" strokeLinecap="round" style={{ pointerEvents: "none" }} />
                 )}
                 <path
                   className="dna-evis"
                   ref={edgeRefCb(e.id, "vis")}
                   fill="none"
-                  stroke={inhib ? T.red : T.gold}
+                  stroke={inhib ? T.inhibit : T.synapse}
                   strokeWidth={sw}
                   opacity={op}
                   strokeDasharray={inhib ? "6 5" : undefined}
@@ -961,7 +890,7 @@ function MindCanvasImpl({
           <path
             ref={bandRef}
             fill="none"
-            stroke={T.gold}
+            stroke={T.select}
             strokeWidth="1.5"
             strokeDasharray="7 6"
             opacity="0.85"
@@ -988,32 +917,39 @@ function MindCanvasImpl({
                 style={{
                   display: hidden ? "none" : undefined,
                   opacity: disabled ? 0.25 : 1,
-                  filter: disabled ? "saturate(0.2)" : undefined,
+                  filter: disabled ? `saturate(${LOOK.disabledSaturate})` : undefined,
                 }}
               >
                 <title>{n.label}{n.text ? ` — ${n.text}` : ""}</title>
-                <circle className="dna-flare" ref={flareRefCb(n.id)} r={r + 4} fill="none" stroke={T.goldHi} strokeWidth="2" opacity="0" style={{ pointerEvents: "none" }} />
+                {/* The soft outer glow only exists in the "solid" treatment —
+                    the orb carries its own falloff in the gradient's outer stop. */}
+                {LOOK.nodePaint === "solid" && (
+                  <circle r={r} fill={T.region[regKey]} opacity={disabled ? 0 : 0.32} filter={`url(#${glowId})`} style={{ pointerEvents: "none" }} />
+                )}
+                <circle className="dna-flare" ref={flareRefCb(n.id)} r={r + 4} fill="none" stroke={T.synapseHi} strokeWidth="2" opacity="0" style={{ pointerEvents: "none" }} />
                 {selN && (
                   <>
-                    <circle r={r + 9} fill="none" stroke={T.gold} strokeWidth="5" opacity="0.16" style={{ pointerEvents: "none" }} />
-                    <circle r={r + 5.5} fill="none" stroke={T.gold} strokeWidth="1.4" opacity="0.95" style={{ pointerEvents: "none" }} />
+                    <circle r={r + 9} fill="none" stroke={T.select} strokeWidth="5" opacity="0.16" style={{ pointerEvents: "none" }} />
+                    <circle r={r + 5.5} fill="none" stroke={T.select} strokeWidth="1.4" opacity="0.95" style={{ pointerEvents: "none" }} />
                   </>
                 )}
-                <circle className="dna-core" r={r} fill={`url(#dnaGrad_${regKey})`} stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
+                {LOOK.nodePaint === "solid"
+                  ? <circle className="dna-core" r={r} fill={T.region[regKey]} stroke={T.nodeStroke} strokeWidth="1" />
+                  : <circle className="dna-core" r={r} fill={`url(#${gradId(regKey)})`} stroke={T.nodeStroke} strokeWidth="1" />}
                 {n.locked && (
                   <g transform={`translate(${r1(r * 0.72)} ${r1(-r * 0.72)})`} style={{ pointerEvents: "none" }}>
-                    <circle r="5.4" fill={rgba(T.bg, 0.9)} stroke={T.goldLine} strokeWidth="0.8" />
-                    <path d="M -1.7 -0.4 v -0.9 a 1.7 1.7 0 0 1 3.4 0 v 0.9" fill="none" stroke={T.goldHi} strokeWidth="1.1" strokeLinecap="round" />
-                    <rect x="-2.3" y="-0.5" width="4.6" height="3.5" rx="0.9" fill={T.goldHi} />
+                    <circle r="5.4" fill={rgba(T.bg, 0.9)} stroke={T.selectLine} strokeWidth="0.8" />
+                    <path d="M -1.7 -0.4 v -0.9 a 1.7 1.7 0 0 1 3.4 0 v 0.9" fill="none" stroke={T.select} strokeWidth="1.1" strokeLinecap="round" />
+                    <rect x="-2.3" y="-0.5" width="4.6" height="3.5" rx="0.9" fill={T.select} />
                   </g>
                 )}
-                <circle className="dna-port" data-dna-port="" data-id={n.id} cx={r1(r + 7)} cy="0" r="5.5" fill={T.surface} stroke={T.goldLine} strokeWidth="1" />
-                <path className="dna-port" d={`M ${r1(r + 4.5)} 0 h 5 M ${r1(r + 7)} -2.5 v 5`} fill="none" stroke={T.gold} strokeWidth="1.2" style={{ pointerEvents: "none" }} />
+                <circle className="dna-port" data-dna-port="" data-id={n.id} cx={r1(r + 7)} cy="0" r="5.5" fill={T.surface} stroke={T.selectLine} strokeWidth="1" />
+                <path className="dna-port" d={`M ${r1(r + 4.5)} 0 h 5 M ${r1(r + 7)} -2.5 v 5`} fill="none" stroke={T.select} strokeWidth="1.2" style={{ pointerEvents: "none" }} />
                 <text
                   className="dna-label"
                   y={r1(r + 15)}
                   textAnchor="middle"
-                  style={{ fontFamily: T.fontDisplay, fontSize: "10px", fontWeight: 600, fill: T.muted, pointerEvents: "none", paintOrder: "stroke", stroke: rgba(T.bg, 0.85), strokeWidth: "3px", strokeLinejoin: "round" }}
+                  style={{ fontFamily: T.fontDisplay, fontSize: "10px", fontWeight: 600, fill: T.sub, pointerEvents: "none", paintOrder: "stroke", stroke: rgba(T.bg, 0.85), strokeWidth: "3px", strokeLinejoin: "round" }}
                 >
                   {n.label}
                 </text>
@@ -1026,8 +962,8 @@ function MindCanvasImpl({
             <g style={{ pointerEvents: "none" }}>
               {POOL_IDX.map((i) => (
                 <g key={i}>
-                  <circle ref={S.poolTRefCbs[i]} r="1.6" fill={T.goldHi} opacity="0" />
-                  <circle ref={S.poolHRefCbs[i]} r="2.5" fill={T.goldHi} opacity="0" />
+                  <circle ref={S.poolTRefCbs[i]} r="1.6" fill={T.synapseHi} opacity="0" />
+                  <circle ref={S.poolHRefCbs[i]} r="2.5" fill={T.synapseHi} opacity="0" />
                 </g>
               ))}
             </g>
@@ -1046,11 +982,11 @@ function MindCanvasImpl({
             position: "absolute", top: `${toastTop}px`, left: "50%", transform: "translateX(-50%)",
             zIndex: 12,   // above the header band and suggestions tray — it's transient and pointer-events:none, so it can never block a click
             maxWidth: "clamp(240px, 52vw, 560px)", overflow: "hidden", textOverflow: "ellipsis",
-            padding: "7px 16px", borderRadius: T.rPill, border: `1px solid ${T.goldLine}`,
-            color: T.inkBrand, fontFamily: T.fontDisplay, fontSize: "12px", fontWeight: 700,
+            padding: "7px 16px", borderRadius: "999px", border: `1px solid ${T.selectLine}`,
+            color: T.ink, fontFamily: T.fontDisplay, fontSize: "12px", fontWeight: 700,
             letterSpacing: "0.02em", whiteSpace: "nowrap", pointerEvents: "none",
-            boxShadow: `${T.shadowPopover}, ${T.glowBrass}`,
-            animation: RM ? "none" : "fadein 0.25s",
+            boxShadow: `${T.shadow}, ${T.glow}`,
+            animation: RM ? "none" : "ccMindFadein 0.25s",
           }}
         >
           {toast}
@@ -1063,11 +999,11 @@ function MindCanvasImpl({
           ...glass,
           position: "absolute", right: "14px", bottom: "14px",
           display: "flex", alignItems: "center", gap: "2px",
-          padding: "4px 6px", borderRadius: T.rPill,
+          padding: "4px 6px", borderRadius: "999px",
         }}
       >
         <button className="dna-hudbtn" title="Zoom out" onClick={() => zoomBy(1 / 1.28)}>−</button>
-        <span ref={zoomTextRef} style={{ fontFamily: T.fontMono, fontSize: "10px", color: T.muted, minWidth: "38px", textAlign: "center" }}>
+        <span ref={zoomTextRef} style={{ fontFamily: T.fontMono, fontSize: "10px", color: T.sub, minWidth: "38px", textAlign: "center" }}>
           {Math.round(S.view.k * 100)}%
         </span>
         <button className="dna-hudbtn" title="Zoom in" onClick={() => zoomBy(1.28)}>+</button>
@@ -1083,8 +1019,9 @@ function MindCanvasImpl({
         <button
           className="dna-hudbtn"
           title={physOn ? "Pause layout physics" : "Resume layout physics"}
+          aria-pressed={physOn}
           onClick={togglePhysics}
-          style={{ color: physOn ? T.gold : T.muted, fontSize: "10px" }}
+          style={{ color: physOn ? T.select : T.sub, fontSize: "10px" }}
         >
           {physOn ? "❚❚" : "▶"}
         </button>

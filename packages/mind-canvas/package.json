@@ -1,0 +1,19 @@
+{
+  "name": "@cc/mind-canvas",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./palette.js": "./palette.js",
+    "./sim.js": "./sim.js",
+    "./css.js": "./css.js"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
+  },
+  "dependencies": {
+    "@cc/mind": "*"
+  }
+}

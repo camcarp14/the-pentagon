@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   REGIONS, REGION_ORDER, compileMind, mindStats,
   updateNode, updateEdge, addNode, removeNode, addEdge, removeEdge,
 } from "@cc/mind";
-import { MindCanvas } from "../mind/MindCanvas.jsx";
+import { MindCanvas } from "@cc/mind-canvas";
+import { useSyncMindPalette } from "../mind/palette.js";
 import { getMind, setMind, resetMind } from "../data/store.js";
 import { useStore } from "../data/useStore.js";
 import {
@@ -34,6 +35,11 @@ const band = (w) => (BANDS.find(([min]) => w >= min) || BANDS[2])[1];
 
 export default function MindPage({ setPage }) {
   useStore();                                   // re-render when the genome changes
+  // The canvas takes finished colours; SYNC's depend on whether it is standing
+  // alone (Obsidian) or inside the Pentagon shell, so they are resolved against
+  // this element after mount rather than read from a module constant.
+  const stageRef = useRef(null);
+  const palette = useSyncMindPalette(stageRef);
   const toast = useToast();
   const [confirmEl, confirm] = useConfirm();
 
@@ -105,9 +111,11 @@ export default function MindPage({ setPage }) {
       {confirmEl}
 
       {/* The canvas IS the page. Everything else floats. */}
-      <div className="mind-stage">
+      <div className="mind-stage" ref={stageRef}>
         <MindCanvas
           genome={mind}
+          palette={palette}
+          label="SYNC — neural map"
           selection={selection}
           onSelect={setSelection}
           onNodeMove={(id, x, y) => patch(id, { x, y })}

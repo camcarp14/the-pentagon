@@ -14,6 +14,9 @@ export default defineConfig({
     dedupe: ["react", "react-dom"],
     alias: {
       "@cc/design": r("../../packages/design/index.js"),
+      // More specific first: Vite matches aliases in order, and a bare
+      // "@cc/mind" prefix rule would otherwise swallow "@cc/mind-canvas".
+      "@cc/mind-canvas": r("../../packages/mind-canvas/index.js"),
       "@cc/mind": r("../../packages/mind/index.js"),
       "@cc/ui": r("../../packages/ui/index.jsx"),
       "@cc/supabase": r("../../packages/supabase/index.js"),

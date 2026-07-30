@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { estimateCost } from "@cc/ai";
-import { MindCanvas } from "./MindCanvas.jsx";
+import { MindCanvas } from "@cc/mind-canvas";
+import { ZTS_MIND_PALETTE, ZTS_MIND_LOOK } from "./palette.js";
 import { supabase } from "../supabaseClient";
 import {
   REGIONS, ZTS_GOVERNANCE,
@@ -917,6 +918,10 @@ export function DnaView({ creators, shorts, articles, onArticleDraft }) { // esl
       <div style={{ position: "absolute", inset: 0 }}>
         <MindCanvas
           genome={genome}
+          bus={dnaBus}
+          palette={ZTS_MIND_PALETTE}
+          look={ZTS_MIND_LOOK}
+          label="ZTS DNA — neural map"
           selection={selection}
           onSelect={setSelection}
           onNodeMove={handleNodeMove}
