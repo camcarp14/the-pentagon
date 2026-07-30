@@ -93,15 +93,41 @@ export async function runTurn({ text, onDelta, onSpeakable, onAct, signal }) {
   // Sentence boundaries, cheaply: emit whenever the text so far ends a
   // sentence. Abbreviations occasionally split early — a half-beat of extra
   // pause is a far better failure than waiting for the whole paragraph.
+  //
+  // The FIRST chunk is allowed to break on a clause instead, and that exception
+  // is worth more than it looks. In a spoken conversation the only latency
+  // anyone feels is the gap between finishing their sentence and hearing the
+  // first syllable back; everything after that is covered by the voice still
+  // talking. Waiting for a full sentence puts the whole of the model's first
+  // sentence inside that gap. Breaking at the first comma typically halves it.
+  //
+  // Only the first, though. Clause-splitting every chunk would make the voice
+  // land on a falling comma intonation over and over, which reads as hesitant —
+  // and after the opening there is no latency left to buy.
+  let spokeOnce = false;
+  const CLAUSE_MIN = 28;
+
   const flushSpeakable = (final = false) => {
     if (!onSpeakable) return;
     const pending = assembled.slice(spoken);
     if (!pending) return;
-    if (final) { spoken = assembled.length; onSpeakable(pending); return; }
-    const m = /^[\s\S]*?[.!?…](?:["')\]]+)?(?=\s)/.exec(pending);
-    if (m && m[0].trim().length > 12) {
-      spoken += m[0].length;
-      onSpeakable(m[0]);
+    if (final) { spoken = assembled.length; spokeOnce = true; onSpeakable(pending); return; }
+
+    const sentence = /^[\s\S]*?[.!?…](?:["')\]]+)?(?=\s)/.exec(pending);
+    if (sentence && sentence[0].trim().length > 12) {
+      spoken += sentence[0].length;
+      spokeOnce = true;
+      onSpeakable(sentence[0]);
+      return;
+    }
+
+    if (!spokeOnce) {
+      const clause = /^[\s\S]*?[,;:—](?=\s)/.exec(pending);
+      if (clause && clause[0].trim().length >= CLAUSE_MIN) {
+        spoken += clause[0].length;
+        spokeOnce = true;
+        onSpeakable(clause[0]);
+      }
     }
   };
 

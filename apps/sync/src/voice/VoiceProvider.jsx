@@ -28,6 +28,11 @@ const BARGE_MIN_MS = 240;
 // left off. This is what turns "it keeps stopping for no reason" — the most
 // common complaint about voice assistants — into a brief hiccup.
 const BARGE_CONFIRM_MS = 1800;
+// A conversation nobody is having still holds the microphone open and still
+// bills by the audio minute. Ending it after a long silence is the difference
+// between a feature and a leak — a phone left face-up on a desk would otherwise
+// stream an empty room until the battery went.
+const IDLE_END_MS = 5 * 60 * 1000;
 
 // ─── The loop ────────────────────────────────────────────────────────────────
 // Ear → model → mouth, and the state machine that keeps those three from
@@ -65,6 +70,9 @@ export function VoiceProvider({ children }) {
   // system voice for the rest of the session instead of failing every turn.
   const auraOkRef = useRef(true);
   const bargeRef = useRef({ floor: BARGE_FLOOR_MIN, hot: 0, pending: false, timer: 0 });
+  // Held in a ref because the recognizer is built once, in an effect that must
+  // not re-run — so its callbacks cannot close over a function defined later.
+  const armIdleRef = useRef(null);
 
   const speak = useCallback((text) => {
     const s = settingsRef.current;
@@ -204,6 +212,7 @@ export function VoiceProvider({ children }) {
         speaker.shutUp();
         auraRef.current?.stop();
         if (busyRef.current) abortRef.current?.abort();
+        armIdleRef.current?.();
         setTimeout(() => send(text), 0);
       },
       onSpeechStarted: () => {
@@ -437,6 +446,19 @@ export function VoiceProvider({ children }) {
     }
   }, []);
 
+  // Ends a conversation that has gone quiet. Re-armed by anything that counts as
+  // the conversation being alive — a turn, a reply, an interruption.
+  const idleRef = useRef(0);
+  const armIdle = useCallback(() => {
+    clearTimeout(idleRef.current);
+    if (!settingsRef.current.handsFree) return;
+    idleRef.current = setTimeout(() => {
+      setSettings({ handsFree: false });
+      setMicError("Conversation ended after five quiet minutes. Tap to start another.");
+    }, IDLE_END_MS);
+  }, []);
+  armIdleRef.current = armIdle;
+
   // The conversation follows the setting, so the switch is the source of truth
   // and the same code path runs whether it was flipped from the orb, the toolbar
   // or Settings.
@@ -445,14 +467,17 @@ export function VoiceProvider({ children }) {
     if (!rec?.supported || !rec.converse) return;
     if (settings.handsFree) {
       rec.converse();
+      armIdle();
     } else {
+      clearTimeout(idleRef.current);
       auraRef.current?.stop();
       speaker.shutUp();
       clearTimeout(bargeRef.current.timer);
       bargeRef.current.pending = false;
       if (rec.mode() !== "off") rec.stop();
     }
-  }, [settings.handsFree]);
+    return () => clearTimeout(idleRef.current);
+  }, [settings.handsFree, armIdle]);
 
   const value = useMemo(() => ({
     phase, mode, interim, level, stage,

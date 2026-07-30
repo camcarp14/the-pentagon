@@ -512,6 +512,29 @@ describe("conversation mode", () => {
     expect(provider).toMatch(/if \(s\.handsFree && auraOkRef\.current && auraRef\.current\?\.ready\)/);
   });
 
+  it("speaks the opening clause without waiting for a full sentence", () => {
+    // The only latency anyone feels in a spoken exchange is the gap between
+    // finishing their sentence and hearing the first syllable back. Waiting for
+    // a complete sentence puts the whole of the model's first sentence inside
+    // that gap; breaking at the first comma roughly halves it.
+    const rt = readFileSync(join(here, "..", "..", "agent", "runtime.js"), "utf8");
+    expect(rt).toMatch(/let spokeOnce = false;/);
+    expect(rt).toMatch(/if \(!spokeOnce\) \{[\s\S]{0,200}\[,;:—\]/);
+    // Only the first, though — clause-splitting throughout would land the voice
+    // on a falling comma intonation repeatedly, which reads as hesitant.
+    const flush = rt.slice(rt.indexOf("const flushSpeakable"));
+    const body = flush.slice(0, flush.indexOf("\n  };"));
+    expect(body.indexOf("sentence[0]")).toBeLessThan(body.indexOf("clause"));
+  });
+
+  it("ends a conversation that has gone quiet", () => {
+    // An open microphone bills by the audio minute whether or not anyone is
+    // talking to it. A phone left face-up on a desk would otherwise stream an
+    // empty room until the battery went.
+    expect(provider).toMatch(/const IDLE_END_MS/);
+    expect(provider).toMatch(/setSettings\(\{ handsFree: false \}\)/);
+  });
+
   it("never resumes a conversation on its own after a reload", () => {
     // It holds the microphone open and streams continuously to a third party.
     // That is a state a person chooses each time, not one they inherit.
