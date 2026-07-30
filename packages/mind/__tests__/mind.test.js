@@ -73,13 +73,54 @@ describe("domain isolation — the property the merge had to preserve", () => {
   });
 
   it("compiles the shared spine into BOTH", () => {
-    const shared = "Everything you produce is a draft in a review queue";
+    // "Cite the signal", not "Draft, never send". The latter used to stand in for
+    // the spine here and is no longer shared — see the comment on n_sh_draft in
+    // seed.js. Citation is the better probe anyway: it is true of a tool that
+    // drafts AND a tool that acts, which is what `shared` is supposed to mean.
+    const shared = "Every claim names the signal it came from";
     expect(zts()).toContain(shared);
     expect(clarify()).toContain(shared);
     // …and into every other domain too — that is what `shared` means.
     for (const d of DOMAIN_ORDER.filter((x) => x !== SHARED)) {
       expect(compileMind(mind(), { domain: d }).systemPrompt).toContain(shared);
     }
+  });
+
+  it("does not hand an acting domain the advisory doctrine", () => {
+    // This shipped as far as a compiled prompt before it was caught. SYNC moves
+    // calendar blocks and sets follow-ups on the operator's spoken word — there
+    // is no review queue, because removing it is the entire point of the tool.
+    // While draft-never-send was `shared` it compiled into SYNC's prompt as a
+    // PRIMARY principle reading "you never publish, send, contact, or spend on
+    // your own", inside the section a model is told outranks everything else.
+    //
+    // A model given that either refuses work it is meant to do, or reports having
+    // drafted something it in fact did. The second is worse than a refusal: it is
+    // a false statement about the state of the operator's calendar.
+    const sync = compileMind(mind(), { domain: "sync" }).systemPrompt;
+    expect(sync).not.toContain("draft in a review queue");
+    expect(sync).not.toContain("ADVISORY system");
+    expect(sync).toContain("ACTING system");
+    // The licence has to arrive with its bound attached, or it is not a licence.
+    expect(sync).toMatch(/reversibility/i);
+    expect(sync).toMatch(/cannot be undone/i);
+
+    // And the exception must stay an exception.
+    for (const d of ["zts", "clarify", "runway", "macro", "looper", "business"]) {
+      const p = compileMind(mind(), { domain: d }).systemPrompt;
+      expect(p).toContain("ADVISORY system");
+      expect(p).toContain("draft in a review queue");
+    }
+  });
+
+  it("never states the acting/drafting conflict as a tension", () => {
+    // An earlier pass wired n_sh_draft → n_sy_execute as a tempering synapse. It
+    // compiled to "Draft, never send tempers Default to executing — when they
+    // conflict, Draft, never send wins": the wrong answer for this tool, in the
+    // most authoritative voice the compiler has. A tension is for a belief that
+    // should sometimes lose, not for one that does not apply at all.
+    expect(compileMind(mind(), { domain: "sync" }).systemPrompt)
+      .not.toMatch(/Draft, never send tempers/);
   });
 
   it("leads with the charter, then the domain clause, before any node", () => {
@@ -311,13 +352,30 @@ describe("CRUD", () => {
   });
 
   it("refuses to delete, silence, unlock or re-home a locked node", () => {
+    // n_sh_cite rather than n_sh_draft: this asserts a locked node cannot be
+    // re-homed AWAY FROM `shared`, so the probe has to actually be shared, and
+    // draft-never-send no longer is. Citation is locked and shared, so it tests
+    // the same three refusals without smuggling in an assumption about which
+    // doctrine applies to which tool.
     const m = mind();
-    expect(removeNode(m, "n_sh_draft")).toBe(m);
-    const patched = updateNode(m, "n_sh_draft", { enabled: false, locked: false, domains: ["zts"] });
-    const node = patched.nodes.find((n) => n.id === "n_sh_draft");
+    expect(removeNode(m, "n_sh_cite")).toBe(m);
+    const patched = updateNode(m, "n_sh_cite", { enabled: false, locked: false, domains: ["zts"] });
+    const node = patched.nodes.find((n) => n.id === "n_sh_cite");
     expect(node.enabled).not.toBe(false);
     expect(node.locked).toBe(true);
     expect(node.domains).toEqual([SHARED]);
+  });
+
+  it("still refuses to re-home the acting/drafting node", () => {
+    // Scoping n_sh_draft to the drafting domains must not have quietly unlocked
+    // it. Which tools draft is a code decision with a diff, not a slider.
+    const m = mind();
+    const before = m.nodes.find((n) => n.id === "n_sh_draft").domains;
+    expect(before).not.toContain("sync");
+    const patched = updateNode(m, "n_sh_draft", { domains: ["sync"], locked: false });
+    const after = patched.nodes.find((n) => n.id === "n_sh_draft");
+    expect(after.domains).toEqual(before);
+    expect(after.locked).toBe(true);
   });
 
   it("cascades edge removal so a deleted node leaves no dangling synapse", () => {

@@ -51,12 +51,13 @@ export const DOMAINS = Object.freeze({
   macro: { label: "Macro", accent: "#FFB224", desc: "The trading account" },
   looper: { label: "Looper", accent: "#38D9F0", desc: "Browser-driven mission loops" },
   business: { label: "Business", accent: "#F45CA7", desc: "The autonomous SaaS agent" },
+  sync: { label: "SYNC", accent: "#C36BFF", desc: "The workday layer — spoken aloud, and it acts" },
 });
 
 /** Stable display order: shared first (it governs the rest), then the tools in
  *  the shell's own toggle order so the UI never has to re-sort. */
 export const DOMAIN_ORDER = Object.freeze([
-  "shared", "zts", "clarify", "runway", "macro", "looper", "business",
+  "shared", "zts", "clarify", "runway", "macro", "looper", "business", "sync",
 ]);
 
 export const isDomain = (d) => Object.prototype.hasOwnProperty.call(DOMAINS, d);

@@ -31,7 +31,7 @@
 import { REGIONS, REGION_ORDER } from "./regions.js";
 import { DOMAINS, SHARED, inDomain, normalizeDomains } from "./domains.js";
 import { isAwake, djb2 } from "./graph.js";
-import { GOVERNANCE, domainCharter } from "./governance.js";
+import { charterFor, domainCharter } from "./governance.js";
 
 /** Emphasis band for a weight. Exported so the inspector can show the operator
  *  which band a slider is about to cross before they let go of it. */
@@ -84,7 +84,11 @@ export function compileMind(mind, { domain = null, lens = "full" } = {}) {
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .map((e) => `TENSION: ${byId.get(e.from).label} tempers ${byId.get(e.to).label} — when they conflict, ${byId.get(e.from).label} wins.`);
 
-  const parts = [GOVERNANCE];
+  // charterFor(), not the GOVERNANCE constant: a domain that ACTS rather than
+  // drafts compiles under a different spine. See governance.js — handing an
+  // acting tool the advisory charter tells it, in the section it may not
+  // discount, that it must not do the thing it exists for.
+  const parts = [charterFor(domain)];
   const charter = domainCharter(domain);
   if (charter) parts.push(charter);
 

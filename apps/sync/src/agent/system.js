@@ -7,6 +7,8 @@
 import { dayKey, minsOfDay, fmtTime, fmtDur, dayLabel, greeting } from "../lib/time.js";
 import { describeGaps } from "./tools.js";
 import { getCloud } from "../data/cloud.js";
+import { getMind } from "../data/store.js";
+import { compileMind } from "@cc/mind";
 
 const CHARACTER = `You are SYNC — the operating layer for one person's workday. You are not a chatbot with a microphone bolted on. You are the thing that runs the day: it gets said out loud, you make it real, and the day moves.
 
@@ -125,7 +127,27 @@ export function buildSystem(state) {
     lines.push(`\nWHAT YOU DID MOST RECENTLY\n${recent.map((e) => `· ${e.title}`).join("\n")}`);
   }
 
-  return `${CHARACTER}\n\n${"─".repeat(60)}\nLIVE CONTEXT — regenerated every turn, always current\n${"─".repeat(60)}\n${lines.join("\n")}`;
+  // The mind, not CHARACTER, is now who SYNC is.
+  //
+  // CHARACTER was a string literal only a developer could reach. Every belief in
+  // it now exists as a weighted, disable-able neuron in @cc/mind, so the Mind tab
+  // is not a visualisation of the prompt — it IS the prompt. Turning off "Push
+  // back when the plan is bad" makes SYNC stop doing it, on the next turn, with
+  // no deploy.
+  //
+  // CHARACTER survives one rung down as the fallback. compileMind is pure and the
+  // genome is validated on write, so this should not fire — but a prompt is the
+  // one thing this app cannot run without, and an empty one would leave SYNC with
+  // no idea what it is while still holding tools that change the operator's
+  // calendar. Falling back to the last known-good prose is strictly better than
+  // finding out what an unprompted tool-caller does.
+  let doctrine = CHARACTER;
+  try {
+    const compiled = compileMind(getMind(), { domain: "sync" });
+    if (compiled?.systemPrompt?.length > 400) doctrine = compiled.systemPrompt;
+  } catch { /* fall through to CHARACTER */ }
+
+  return `${doctrine}\n\n${"─".repeat(60)}\nLIVE CONTEXT — regenerated every turn, always current\n${"─".repeat(60)}\n${lines.join("\n")}`;
 }
 
 /**

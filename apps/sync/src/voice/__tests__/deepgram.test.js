@@ -605,3 +605,38 @@ describe("the orb runs exactly one animation loop", () => {
     expect(orb).toMatch(/if \(paused\) \{ cancelAnimationFrame\(rafRef\.current\); return; \}/);
   });
 });
+
+// ─── The mind ────────────────────────────────────────────────────────────────
+// The point of a mind is that it DRIVES the tool. A graph the prompt ignores is
+// a diagram, and a diagram that looks authoritative while changing nothing is
+// worse than no diagram — it would have an operator silencing a belief and
+// wondering why SYNC kept acting on it.
+describe("the mind is the prompt", () => {
+  const system = readFileSync(join(here, "..", "..", "agent", "system.js"), "utf8");
+  const store = readFileSync(join(here, "..", "..", "data", "store.js"), "utf8");
+
+  it("compiles the graph into the system prompt", () => {
+    expect(system).toMatch(/compileMind\(getMind\(\), \{ domain: "sync" \}\)/);
+  });
+
+  it("keeps the hand-written prose as a fallback, not as the source", () => {
+    // A prompt is the one thing this app cannot run without, and an empty one
+    // would leave SYNC with no idea what it is while still holding tools that
+    // change the operator's calendar.
+    expect(system).toMatch(/let doctrine = CHARACTER;/);
+    expect(system).toMatch(/if \(compiled\?\.systemPrompt\?\.length > 400\) doctrine = compiled\.systemPrompt;/);
+  });
+
+  it("scopes the operator's graph to SYNC and drops dangling synapses", () => {
+    // The other tools' neurons live in the same seed. Showing them here would
+    // invite reweighting ZTS's doctrine from a workday app — and an edge whose
+    // other end was filtered out fails validateMind().
+    expect(store).toMatch(/x === "sync" \|\| x === "shared"/);
+    expect(store).toMatch(/ids\.has\(e\.from\) && ids\.has\(e\.to\)/);
+  });
+
+  it("seeds lazily so an existing install needs no migration", () => {
+    expect(store).toMatch(/export function getMind\(\)/);
+    expect(store).toMatch(/if \(state\.mind\) return state\.mind;/);
+  });
+});

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useStore } from "../data/useStore.js";
+import MindPanel from "./MindPanel.jsx";
 import { commit, getState, undo, setProfile } from "../data/store.js";
 import { useVoice } from "../voice/VoiceProvider.jsx";
 import {
@@ -184,6 +185,9 @@ export default function MemoryPage() {
               { key: "knows", label: "Knows", sub: String(s.memory.length) },
               { key: "notes", label: "Notes", sub: String(notes.length) },
               { key: "ledger", label: "Activity", sub: String(s.ledger.length) },
+              // Memory is what SYNC knows; Mind is who it is. Neighbours, and it
+              // costs no room in a dock that is already at seven destinations.
+              { key: "mind", label: "Mind" },
             ]}
             value={tab}
             onChange={setTab}
@@ -306,6 +310,8 @@ export default function MemoryPage() {
                 </CellGroup>
               )
             )}
+
+            {tab === "mind" && <MindPanel />}
 
             {tab === "ledger" && (
               ledger.length === 0 ? (
