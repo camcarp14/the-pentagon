@@ -95,6 +95,33 @@ const AUTH_FORMS = [
 // paying for the fallback dance on every reconnect.
 let provenForm = null;
 
+// ─── Conversation-mode parameters ────────────────────────────────────────────
+// What turns a dictation stream into one that can take turns by itself.
+//
+// utterance_end_ms is the important one, and its absence was a real hole. On its
+// own, `endpointing` decides a turn ended by finding silence in the AUDIO — so
+// in a room with steady sound (a fan, a car, a kitchen) the silence never
+// arrives, `speech_final` is never sent, and a hands-free listener waits
+// forever. utterance_end_ms instead watches the gap between transcribed WORDS,
+// which noise cannot fill because noise produces no words. Deepgram's own
+// guidance is to run both and take whichever fires first: `speech_final` is the
+// fast path in a quiet room, UtteranceEnd is the one that still works in a loud
+// one. 1000ms is the documented floor — interim results only arrive about once a
+// second, so shorter gaps are not observable.
+//
+// vad_events gives SpeechStarted, used for the "you're being heard" affordance.
+// It is energy-based, so it is never trusted as a turn ENDING — only as a hint
+// that a turn began.
+//
+// no_delay is here because of smart_format, which is already on: smart format
+// holds results back while it waits to see whether a number or date sequence is
+// finished, and in conversation that hesitation is felt directly as lag.
+const CONVO_PARAMS = {
+  utterance_end_ms: "1000",
+  vad_events: "true",
+  no_delay: "true",
+};
+
 /**
  * Reject if a promise hasn't settled in time.
  *
@@ -144,7 +171,13 @@ async function mintToken() {
  * Same shape as createRecognizer() in recognizer.js, so VoiceProvider does not
  * care which one it got.
  */
-export function createDeepgramRecognizer({ onInterim, onCommit, onState, onStage, onError, getWake = () => "sync" }) {
+export function createDeepgramRecognizer({
+  onInterim, onCommit, onState, onStage, onError,
+  // Conversation mode only. Left undefined by the push-to-talk and ambient
+  // paths, which is what keeps those two byte-identical to before.
+  onTurnEnd, onSpeechStarted,
+  getWake = () => "sync",
+}) {
   let ctx = null;
   let stream = null;
   let node = null;
@@ -157,6 +190,10 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onStage
   let buffer = "";         // finalised text for the current utterance
   let armed = false;       // ambient only: the wake word has been heard
   let mode = "off";
+
+  let convo = false;       // hands-free conversation: turns end by themselves
+  let uplinkOn = true;     // false = keep capturing but stop sending (see uplink)
+  let keepAlive = 0;       // ticker id, only while the uplink is gated
 
   let connecting = false;  // a connect() is already in flight
   let attempt = 0;         // generation counter; teardown() bumps it too
@@ -189,6 +226,25 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onStage
     onCommit?.(said);
   }
 
+  /**
+   * Conversation mode: the user has stopped talking, hand the turn over.
+   *
+   * Called from BOTH end-of-turn signals, which is the whole point — one is fast
+   * and one is noise-proof, and in a quiet room both fire for the same pause.
+   * Draining the buffer is what makes that safe: whichever arrives first takes
+   * the text, and the second finds nothing and returns. Without that guard every
+   * turn in a quiet room would be submitted twice.
+   */
+  function endTurn() {
+    if (!convo) return;
+    const said = buffer.trim();
+    buffer = "";
+    armed = true;                       // conversation mode needs no wake word
+    onInterim?.("");
+    if (!said) return;
+    onTurnEnd?.(said);
+  }
+
   /** A finalised chunk from Deepgram — decide whether it belongs to us. */
   function absorb(text, speechFinal) {
     if (!text) return;
@@ -204,6 +260,17 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onStage
     }
 
     onInterim?.(buffer);
+
+    // Conversation mode takes the fast path here and leaves the rest to
+    // endTurn(), which is also reachable from UtteranceEnd. It must NOT call
+    // commit(): commit() tears the microphone down and returns to "off", which
+    // is right for one-shot push-to-talk and wrong for a conversation that has
+    // to keep listening.
+    if (convo) {
+      if (speechFinal) endTurn();
+      return;
+    }
+
     // speech_final is Deepgram's end-of-utterance signal, produced by its own
     // endpointing. It replaces the hand-rolled silence timer the Web Speech
     // path needed, and it is markedly better at not cutting off a pause for
@@ -245,8 +312,19 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onStage
     // Reads `socket` fresh on every frame, so the graph outliving any one
     // connection is fine — audio captured while there is no open socket is
     // simply dropped.
+    // `uplinkOn` is the entire echo defence, and it is one boolean because that
+    // is all it needs to be: while the assistant is audible we simply do not
+    // send. Deepgram never receives the reply, so transcribing its own voice is
+    // impossible by construction rather than by filtering.
+    //
+    // Note what is NOT done here. The microphone track stays live and is never
+    // stopped or disabled — on iOS, dropping the capture count can demote the
+    // audio session to AmbientSound, at which point the hardware ringer switch
+    // silences the assistant's replies. It would also kill the local level
+    // meter, which is the only thing that can hear an interruption while the
+    // uplink is shut. Gate the send; never the source.
     node.port.onmessage = (e) => {
-      if (socket?.readyState === WebSocket.OPEN) socket.send(e.data);
+      if (uplinkOn && socket?.readyState === WebSocket.OPEN) socket.send(e.data);
     };
     const source = ctx.createMediaStreamSource(stream);
     source.connect(node);
@@ -347,6 +425,12 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onStage
         // opted-out audio is retained only for as long as it takes to process
         // the request, which is the strongest retention answer on offer.
         mip_opt_out: "true",
+        // Conversation mode only. Kept off the push-to-talk handshake
+        // deliberately: an unrecognised parameter is refused at the upgrade and
+        // arrives here as a bare 1006 close, indistinguishable from an auth
+        // failure — so if any of these are wrong, the blast radius is hands-free
+        // mode and the path that finally works today is untouched.
+        ...(convo ? CONVO_PARAMS : null),
         ...(auth.params || {}),
       });
 
@@ -402,12 +486,29 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onStage
       refusals = 0;
       provenForm = ix;                  // this one works; stop trying the other
       setMode(ambient ? "ambient" : "capturing");
+      if (convo) setMode("conversing");
       onStage?.("live");
     };
 
     ws.onmessage = (e) => {
       let msg;
       try { msg = JSON.parse(e.data); } catch { return; }
+
+      // Energy-based, so it means "something is making noise", never "a turn
+      // ended". Used only to show that speech is being heard.
+      if (msg.type === "SpeechStarted") { onSpeechStarted?.(); return; }
+
+      // The noise-proof end-of-turn signal. It carries no transcript at all —
+      // whatever was said is in `buffer`, accumulated from the is_final results.
+      if (msg.type === "UtteranceEnd") {
+        // last_word_end of -1 means the result had already been finalised before
+        // the word-gap condition was met, so this is a duplicate of a
+        // speech_final we have handled. Submitting on it would double the turn.
+        if (msg.last_word_end === -1) return;
+        endTurn();
+        return;
+      }
+
       if (msg.type !== "Results") return;
       const alt = msg.channel?.alternatives?.[0];
       const text = alt?.transcript || "";
@@ -475,6 +576,10 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onStage
     // did to stop listening, an in-flight attempt can no longer come back and
     // reopen a microphone they closed, or overwrite a newer socket.
     attempt++;
+    convo = false;
+    uplinkOn = true;                    // the next session starts unmuted
+    clearInterval(keepAlive);
+    keepAlive = 0;
     closeSocket();
     try { if (node?.port) node.port.onmessage = null; node?.disconnect(); } catch { /* already gone */ }
     node = null;
@@ -505,6 +610,49 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onStage
       settle();
       teardown();
       setMode("off");
+    },
+
+    /**
+     * Hands-free conversation: stay open across turns, and let each turn end
+     * itself. Unlike capture(), a finished turn does not tear the microphone
+     * down — the ear stays live so the next thing said is already being heard.
+     */
+    converse() {
+      convo = true;
+      ambient = false;
+      armed = true;              // no wake word; everything said counts
+      wanted = true;
+      uplinkOn = true;
+      buffer = "";
+      setMode("starting");
+      connect();
+    },
+
+    /**
+     * Open or shut the uplink without touching the microphone.
+     *
+     * Shut while the assistant is audible, which is what makes it impossible for
+     * Deepgram to hear the reply and answer it as if it were the user. Capture
+     * keeps running the whole time, so the local level meter can still notice an
+     * interruption — that is the only ear available while this is closed.
+     *
+     * A gated socket goes quiet, and Deepgram hangs up on an idle one, so the
+     * KeepAlive ticker runs for exactly as long as the gate is shut. Sending
+     * silent audio instead would also work and would be worse: streaming
+     * transcription is billed by audio minute, so it would pay Deepgram to
+     * listen to nothing and spend the user's cellular data doing it.
+     */
+    uplink(on) {
+      uplinkOn = !!on;
+      clearInterval(keepAlive);
+      keepAlive = 0;
+      if (!uplinkOn) {
+        keepAlive = setInterval(() => {
+          if (socket?.readyState === WebSocket.OPEN) {
+            try { socket.send(JSON.stringify({ type: "KeepAlive" })); } catch { /* closing */ }
+          }
+        }, 4000);
+      }
     },
 
     /** Push-to-talk: everything heard counts, no wake word needed. */

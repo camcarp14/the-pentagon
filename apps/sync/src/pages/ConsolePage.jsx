@@ -183,6 +183,10 @@ export default function ConsolePage() {
     voice.phase === "listening" ? "Listening…" :
     voice.phase === "thinking" ? "Working on it" :
     voice.phase === "speaking" ? "" :
+    // In a conversation the ear is always open, so there is nothing to instruct
+    // — say what is true instead. "Go ahead" also answers the question someone
+    // actually has after tapping start, which is "can I just talk now?"
+    voice.handsFree ? "Go ahead — I'm listening" :
     s.settings.ambient ? `Say "${s.settings.wakeWord}" — or tap` : "Tap to talk";
 
   return (
@@ -214,10 +218,27 @@ export default function ConsolePage() {
           size={orbSize}
           state={orbState}
           level={voice.level}
-          onClick={voice.busy ? voice.stop : voice.talk}
+          // In a conversation the orb is the interrupt button: tapping it stops
+          // whatever is being said and hands the floor straight back, which is
+          // the same thing tapping it means everywhere else.
+          onClick={voice.handsFree ? voice.stop : (voice.busy ? voice.stop : voice.talk)}
           disabled={!voice.sttSupported && !voice.busy}
-          label={voice.busy ? "Stop" : "Talk to SYNC"}
+          label={voice.handsFree ? "Interrupt" : (voice.busy ? "Stop" : "Talk to SYNC")}
         />
+
+        {/* One control for the whole feature. Starting a conversation is a
+            deliberate act — it holds the microphone open and streams to a third
+            party until it is ended — so it gets a real button that says what it
+            does, rather than being buried in Settings. */}
+        <button
+          type="button"
+          className={voice.handsFree ? "convo-btn on" : "convo-btn"}
+          onClick={voice.toggleConversation}
+          disabled={!voice.sttSupported}
+        >
+          <span className="convo-dot" />
+          {voice.handsFree ? "End conversation" : "Start conversation"}
+        </button>
 
         {/* The hint is a button, not a label. It says "Tap to talk"; people
             tap it. For as long as it was a <span> that did nothing, aiming at

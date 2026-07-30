@@ -592,6 +592,34 @@
 }
 .sy-root .utterance .u-text { font-size: 19px; line-height: 1.35; font-weight: 500; letter-spacing: -0.016em; color: var(--ink); text-wrap: balance; }
 .sy-root .utterance .u-text.interim { color: var(--sub); }
+/* Start/end a hands-free conversation. Reads as a pill rather than an icon
+   because it is the one control in the app that changes what the microphone is
+   doing for minutes at a time, and that deserves a word rather than a glyph.
+   The dot goes live when a conversation is running — the same convention as a
+   recording indicator, which is exactly what it is. */
+.sy-root .convo-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-top: 2px; padding: 8px 15px;
+  font: inherit; font-size: 12.5px; font-weight: 500; letter-spacing: -0.005em;
+  color: var(--sub); background: var(--ink-a04); border: 1px solid var(--ink-a08);
+  border-radius: 999px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color var(--dur-1) ease, background var(--dur-1) ease, border-color var(--dur-1) ease;
+}
+.sy-root .convo-btn:disabled { opacity: 0.45; cursor: default; }
+.sy-root .convo-btn:active:not(:disabled) { background: var(--ink-a08); }
+.sy-root .convo-btn.on { color: var(--accent); border-color: var(--accent); background: transparent; }
+.sy-root .convo-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex: none;
+  background: var(--faint);
+  transition: background var(--dur-1) ease;
+}
+.sy-root .convo-btn.on .convo-dot { background: var(--accent); animation: convo-live 1.9s ease-in-out infinite; }
+@keyframes convo-live {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
 /* The hint is a real button, because it says "Tap to talk" and people tap it.
    It was inert label text for as long as it existed, so anyone aiming at the
    words rather than the orb above them got nothing back and reasonably

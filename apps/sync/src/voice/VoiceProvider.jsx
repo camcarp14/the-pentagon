@@ -6,9 +6,28 @@ import { createDeepgramRecognizer, supported as deepgramSupported } from "./deep
 // can — "this browser has no speech recognition" is the same message either way.
 const sttSupported = deepgramSupported || webSpeechSupported;
 import * as speaker from "./speaker.js";
+import { createAuraSpeaker } from "./aura.js";
 import { runTurn } from "../agent/runtime.js";
 import { getState, setSettings } from "../data/store.js";
 import { useStore } from "../data/useStore.js";
+
+// ─── Conversation-mode constants ─────────────────────────────────────────────
+// How long after playback actually ends before the uplink reopens. Room reverb
+// and audio scheduling both outlive the last sample, and anything still in the
+// air when Deepgram starts listening again gets transcribed as the user.
+const ECHO_TAIL_MS = 300;
+// How far above the measured noise floor counts as someone talking, and for how
+// long. The floor is tracked live because a car, a kitchen and a quiet office
+// are three different rooms. Too low and every reply gets chopped by a cough;
+// too high and interrupting takes a shout.
+const BARGE_MARGIN = 0.16;
+const BARGE_FLOOR_MIN = 0.11;
+const BARGE_MIN_MS = 240;
+// Speech is paused, not cancelled, on a candidate interruption. If no words
+// arrive by the time this elapses, it was a noise and playback resumes where it
+// left off. This is what turns "it keeps stopping for no reason" — the most
+// common complaint about voice assistants — into a brief hiccup.
+const BARGE_CONFIRM_MS = 1800;
 
 // ─── The loop ────────────────────────────────────────────────────────────────
 // Ear → model → mouth, and the state machine that keeps those three from
@@ -41,15 +60,74 @@ export function VoiceProvider({ children }) {
   settingsRef.current = settings;
 
   /* ── speaking ────────────────────────────────────────────────────────── */
+  const auraRef = useRef(null);
+  // Flipped false the first time Aura fails, so one bad reply degrades to the
+  // system voice for the rest of the session instead of failing every turn.
+  const auraOkRef = useRef(true);
+  const bargeRef = useRef({ floor: BARGE_FLOOR_MIN, hot: 0, pending: false, timer: 0 });
+
   const speak = useCallback((text) => {
     const s = settingsRef.current;
     if (!s.speak) return;
+    // Aura only in conversation mode, and only once the element has been
+    // unlocked by the tap that started it. Everywhere else the system voice is
+    // the right answer: it costs nothing, needs no network, and push-to-talk
+    // does not care about echo because it is not listening while it talks.
+    if (s.handsFree && auraOkRef.current && auraRef.current?.ready) {
+      auraRef.current.say(text);
+      return;
+    }
     speaker.say(text, { voiceURI: s.voiceURI, rate: s.rate, pitch: s.pitch });
   }, []);
 
+  // Aura's own start/end, and the uplink gate that hangs off them.
+  //
+  // The gate closes when audio actually becomes audible and opens a beat after
+  // it actually stops — not when the text was queued or when the reply was
+  // finished being written. Those are different moments, and using the wrong one
+  // is precisely how an assistant ends up transcribing its own voice and
+  // answering itself.
   useEffect(() => {
-    const offStart = speaker.onSpeechStart(() => setPhase("speaking"));
+    const a = createAuraSpeaker({
+      onStart: () => {
+        setPhase("speaking");
+        recRef.current?.uplink?.(false);
+      },
+      onEnd: () => {
+        const b = bargeRef.current;
+        clearTimeout(b.timer);
+        b.pending = false;
+        b.hot = 0;
+        setTimeout(() => {
+          // Only reopen if nothing started speaking again in the meantime.
+          if (!auraRef.current?.speaking()) recRef.current?.uplink?.(true);
+        }, ECHO_TAIL_MS);
+        setPhase(busyRef.current ? "thinking" : "idle");
+      },
+      onError: (e) => {
+        // Fall back to the system voice for the rest of the session, and say so
+        // once rather than on every sentence.
+        auraOkRef.current = false;
+        setMicError(`Couldn't use the natural voice — falling back to the system one. ${e?.message || ""}`.trim());
+      },
+      getVoice: () => settingsRef.current.auraVoice,
+    });
+    auraRef.current = a;
+    return () => { a.destroy(); auraRef.current = null; };
+  }, []);
+
+  useEffect(() => {
+    const offStart = speaker.onSpeechStart(() => {
+      setPhase("speaking");
+      // The system voice needs the same gate. On iOS it is worse than Aura for
+      // this — it plays on a separate audio session the page's echo canceller
+      // cannot see — so not gating would guarantee self-transcription.
+      recRef.current?.uplink?.(false);
+    });
     const offEnd = speaker.onSpeechEnd(() => {
+      setTimeout(() => {
+        if (!speaker.isSpeaking()) recRef.current?.uplink?.(true);
+      }, ECHO_TAIL_MS);
       // Only fall back to idle if no turn is still running — a long turn can
       // finish one sentence while the next tool call is still in flight.
       setPhase(busyRef.current ? "thinking" : "idle");
@@ -84,7 +162,7 @@ export function VoiceProvider({ children }) {
       // The failure is already rendered in the turn with a retry attached;
       // clear the orb back to idle so it doesn't sit red forever.
       setTimeout(() => setPhase((p) => (p === "error" ? "idle" : p)), 2600);
-    } else if (!speaker.isSpeaking()) {
+    } else if (!speaker.isSpeaking() && !auraRef.current?.speaking()) {
       setPhase("idle");
     }
     return res;
@@ -117,6 +195,21 @@ export function VoiceProvider({ children }) {
         speaker.shutUp();
         if (busyRef.current) abortRef.current?.abort();
         setTimeout(() => send(text), 0);
+      },
+      // Conversation mode: a turn ended on its own, so run it without waiting
+      // for anyone to tap anything. This is the whole feature in one callback —
+      // the recognizer stays open, so by the time the reply is spoken the ear is
+      // already listening for what comes next.
+      onTurnEnd: (text) => {
+        speaker.shutUp();
+        auraRef.current?.stop();
+        if (busyRef.current) abortRef.current?.abort();
+        setTimeout(() => send(text), 0);
+      },
+      onSpeechStarted: () => {
+        // Energy-based, so this is an affordance and nothing more: it says
+        // something is making noise, never that a turn has begun or ended.
+        setPhase((p) => (p === "idle" ? "listening" : p));
       },
       onStage: setStage,
       onState: (m) => {
@@ -165,7 +258,59 @@ export function VoiceProvider({ children }) {
   // Held only while the ear is actually open — wake-word listening, or the
   // length of one push-to-talk. An app you aren't talking to must not leave a
   // live-microphone indicator sitting in the browser chrome.
-  const earOpen = settings.ambient || mode === "capturing" || mode === "starting";
+  const earOpen = settings.ambient || mode === "capturing" || mode === "starting" || mode === "conversing";
+
+  /**
+   * Barge-in, measured locally.
+   *
+   * It has to be local. While SYNC is speaking the uplink is shut, so Deepgram
+   * hears nothing and cannot report that someone started talking — the analyser
+   * on our own microphone graph is the only ear still open. That is the whole
+   * reason the mic track is never stopped during a conversation.
+   *
+   * The threshold floats on a measured noise floor rather than sitting at a
+   * constant, because the residual of SYNC's own voice leaking back through the
+   * phone's speaker IS the floor here, and it differs by room, by volume and by
+   * whether the phone is on a table or in a hand.
+   */
+  const watchBargeIn = useCallback((v, now) => {
+    const aura = auraRef.current;
+    const b = bargeRef.current;
+    const audible = aura?.speaking() || speaker.isSpeaking();
+
+    if (!audible) {
+      // Track the floor only while nothing is playing, so the assistant's own
+      // voice never teaches the detector to ignore a real one.
+      b.floor = Math.min(b.floor * 0.995 + v * 0.005, 0.4);
+      b.hot = 0;
+      return;
+    }
+
+    const threshold = Math.max(b.floor + BARGE_MARGIN, BARGE_FLOOR_MIN);
+    if (v < threshold) { b.hot = 0; return; }
+    if (!b.hot) { b.hot = now; return; }
+    if (now - b.hot < BARGE_MIN_MS || b.pending) return;
+
+    // Candidate. Pause rather than cancel, and open the uplink so Deepgram can
+    // tell us within a couple of seconds whether that was a person or a door.
+    b.pending = true;
+    aura?.pause();
+    speaker.shutUp();
+    recRef.current?.uplink?.(true);
+    setPhase("listening");
+    clearTimeout(b.timer);
+    b.timer = setTimeout(() => {
+      // No words arrived, so it was noise. Pick the reply back up mid-sentence
+      // and re-close the gate.
+      b.pending = false;
+      b.hot = 0;
+      if (auraRef.current?.speaking()) {
+        recRef.current?.uplink?.(false);
+        auraRef.current.resume();
+        setPhase("speaking");
+      }
+    }, BARGE_CONFIRM_MS);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -194,10 +339,16 @@ export function VoiceProvider({ children }) {
       const m = meterRef.current;
       if (m) {
         const v = m.level();
-        if (Number.isFinite(v) && (now - lastPush >= PUSH_MS) && Math.abs(v - lastValue) >= EPSILON) {
-          lastPush = now;
-          lastValue = v;
-          setLevel(v);
+        if (Number.isFinite(v)) {
+          // Barge-in reads every frame, unthrottled — 250ms of sustained speech
+          // is the signal, so sampling it at 20Hz would be coarse enough to miss
+          // the start of a word. It touches no React state, so it is free.
+          if (settingsRef.current.handsFree) watchBargeIn(v, now);
+          if ((now - lastPush >= PUSH_MS) && Math.abs(v - lastValue) >= EPSILON) {
+            lastPush = now;
+            lastValue = v;
+            setLevel(v);
+          }
         }
       }
       raf = requestAnimationFrame(tick);
@@ -232,7 +383,7 @@ export function VoiceProvider({ children }) {
       meterRef.current?.close();
       meterRef.current = null;
     };
-  }, [earOpen]);
+  }, [earOpen, watchBargeIn]);
 
   /* ── manual controls ─────────────────────────────────────────────────── */
   const talk = useCallback(() => {
@@ -263,14 +414,56 @@ export function VoiceProvider({ children }) {
     setSettings({ ambient: !getState().settings.ambient });
   }, []);
 
+  /**
+   * Start or end a hands-free conversation.
+   *
+   * The unlock() call is the part that must not move. Safari will only play audio
+   * from an element that has been played once inside a user gesture, and a
+   * conversation plays its audio many turns later with no gesture in sight — so
+   * the element has to be primed here, synchronously, before any await. Do it
+   * after an await and every reply is silent, with nothing in the console to say
+   * why.
+   */
+  const toggleConversation = useCallback(() => {
+    const on = !getState().settings.handsFree;
+    if (on) {
+      auraRef.current?.unlock();
+      setMicError(null);
+      // Ambient wake-word listening and a live conversation are the same ear
+      // wanting two different things. The conversation wins.
+      setSettings({ handsFree: true, ambient: false, speak: true });
+    } else {
+      setSettings({ handsFree: false });
+    }
+  }, []);
+
+  // The conversation follows the setting, so the switch is the source of truth
+  // and the same code path runs whether it was flipped from the orb, the toolbar
+  // or Settings.
+  useEffect(() => {
+    const rec = recRef.current;
+    if (!rec?.supported || !rec.converse) return;
+    if (settings.handsFree) {
+      rec.converse();
+    } else {
+      auraRef.current?.stop();
+      speaker.shutUp();
+      clearTimeout(bargeRef.current.timer);
+      bargeRef.current.pending = false;
+      if (rec.mode() !== "off") rec.stop();
+    }
+  }, [settings.handsFree]);
+
   const value = useMemo(() => ({
     phase, mode, interim, level, stage,
     micError, clearMicError: () => setMicError(null),
     sttSupported, ttsSupported: speaker.supported,
     busy: busyRef.current || phase === "thinking",
-    send, stop, talk, holdStart, holdEnd, toggleAmbient, speak,
-    shutUp: speaker.shutUp,
-  }), [phase, mode, interim, level, stage, micError, send, stop, talk, holdStart, holdEnd, toggleAmbient, speak]);
+    handsFree: !!settings.handsFree,
+    send, stop, talk, holdStart, holdEnd, toggleAmbient, toggleConversation, speak,
+    shutUp: () => { speaker.shutUp(); auraRef.current?.stop(); },
+  }), [phase, mode, interim, level, stage, micError, settings.handsFree,
+      send, stop, talk, holdStart, holdEnd, toggleAmbient, toggleConversation, speak]);
 
   return <VoiceCtx.Provider value={value}>{children}</VoiceCtx.Provider>;
 }

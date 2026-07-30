@@ -28,6 +28,12 @@ export function emptyState() {
       model: "sonnet",
       speak: true,
       ambient: false,          // wake-word listening
+      // Hands-free conversation. Off by default, and never resumed on its own
+      // after a reload: it holds the microphone open continuously and streams
+      // everything it hears to a third party for as long as it runs. That is a
+      // state a person should have to choose each time, not inherit.
+      handsFree: false,
+      auraVoice: "aura-2-thalia-en",
       wakeWord: "sync",
       voiceURI: null,
       rate: 1.03,

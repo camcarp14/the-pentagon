@@ -408,6 +408,118 @@ describe("no latch can outlive the attempt that set it", () => {
   });
 });
 
+describe("conversation mode", () => {
+  const provider = readFileSync(join(here, "..", "VoiceProvider.jsx"), "utf8");
+  const aura = readFileSync(join(here, "..", "aura.js"), "utf8");
+
+  it("adds the conversational params only in conversation mode", () => {
+    // An unrecognised query parameter is refused at the upgrade and arrives as a
+    // bare 1006 close, which this client cannot tell from an auth failure. Adding
+    // them unconditionally would put the push-to-talk path — the one that took a
+    // full day to get working — behind three unproven parameters.
+    expect(clientSrc).toMatch(/\.\.\.\(convo \? CONVO_PARAMS : null\)/);
+    const p = clientSrc.slice(clientSrc.indexOf("const CONVO_PARAMS"), clientSrc.indexOf("const CONVO_PARAMS") + 300);
+    expect(p).toMatch(/utterance_end_ms: "1000"/);
+    expect(p).toMatch(/vad_events: "true"/);
+    expect(p).toMatch(/no_delay: "true"/);
+  });
+
+  it("ends a turn on either signal, and survives getting both", () => {
+    // In a quiet room speech_final and UtteranceEnd both fire for the same
+    // pause, so both call endTurn(). Draining the buffer is what makes that
+    // safe — whichever lands first takes the text and the second finds nothing.
+    // Without it every turn in a quiet room would be submitted twice.
+    const fn = clientSrc.slice(clientSrc.indexOf("function endTurn()"));
+    const body = fn.slice(0, fn.indexOf("\n  }"));
+    // Read the text out BEFORE draining, then drain unconditionally. Reversing
+    // those two lines still leaves the drain above the empty check, so ordering
+    // against `if (!said)` proves nothing — this has to compare the two
+    // statements that actually matter.
+    expect(body).toMatch(/const said = buffer\.trim\(\);/);
+    expect(body.indexOf("const said = buffer.trim();")).toBeLessThan(body.indexOf('buffer = ""'));
+    expect(body.indexOf('buffer = ""')).toBeLessThan(body.indexOf("if (!said) return;"));
+    expect(body).toMatch(/onTurnEnd\?\.\(said\)/);
+    // And the -1 sentinel is a duplicate of a speech_final already handled.
+    expect(clientSrc).toMatch(/last_word_end === -1/);
+  });
+
+  it("never commits in conversation mode", () => {
+    // commit() tears the microphone down and returns to "off" — correct for a
+    // one-shot push-to-talk, fatal for a conversation that must keep listening.
+    const a = clientSrc.slice(clientSrc.indexOf("function absorb("));
+    const body = a.slice(0, a.indexOf("\n  }"));
+    expect(body).toMatch(/if \(convo\) \{[\s\S]*?endTurn\(\);[\s\S]*?return;/);
+  });
+
+  it("gates the send, never the microphone", () => {
+    // Stopping or disabling the track drops the capture count, and on iOS that
+    // can demote the audio session to AmbientSound — at which point the physical
+    // ringer switch silences SYNC's replies. It would also kill the local level
+    // meter, the only ear available while the uplink is shut.
+    expect(clientSrc).toMatch(/if \(uplinkOn && socket\?\.readyState === WebSocket\.OPEN\) socket\.send/);
+    expect(clientSrc).not.toMatch(/\.enabled = false/);
+    const up = clientSrc.slice(clientSrc.indexOf("uplink(on)"));
+    expect(up.slice(0, 900)).toMatch(/KeepAlive/);
+  });
+
+  it("closes the gate on audible speech and reopens after a tail", () => {
+    // The gate must key off audio actually starting and stopping, not off text
+    // being queued. Those are different moments, and the wrong one is how an
+    // assistant transcribes itself and answers its own reply.
+    expect(provider).toMatch(/onStart: \(\) => \{[\s\S]{0,120}uplink\?\.\(false\)/);
+    expect(provider).toMatch(/ECHO_TAIL_MS/);
+    // The system voice needs the same treatment — on iOS it is the worse of the
+    // two for echo, not the better.
+    const sys = provider.slice(provider.indexOf("speaker.onSpeechStart"));
+    expect(sys.slice(0, 400)).toMatch(/uplink\?\.\(false\)/);
+  });
+
+  it("detects interruption locally, because Deepgram cannot hear it", () => {
+    // While gated, Deepgram receives nothing, so SpeechStarted cannot fire. The
+    // analyser on our own graph is the only signal left.
+    expect(provider).toMatch(/const watchBargeIn/);
+    expect(provider).toMatch(/b\.floor \* 0\.995/);      // floor tracked live
+    expect(provider).toMatch(/BARGE_MIN_MS/);
+  });
+
+  it("pauses on a candidate interruption rather than cancelling", () => {
+    // iOS ignores element.volume, so ducking is unavailable; pause keeps
+    // currentTime so a cough costs a hiccup instead of the rest of the reply.
+    expect(provider).toMatch(/aura\?\.pause\(\)/);
+    expect(provider).toMatch(/BARGE_CONFIRM_MS/);
+    const t = provider.slice(provider.indexOf("b.timer = setTimeout"));
+    expect(t.slice(0, 400)).toMatch(/resume\(\)/);
+  });
+
+  it("unlocks the audio element inside the tap, before any await", () => {
+    // Safari only plays from an element already played inside a gesture, and a
+    // conversation's audio starts many turns later. Unlock after an await and
+    // every reply is silent with nothing in the console to say why.
+    const t = provider.slice(provider.indexOf("const toggleConversation"));
+    const body = t.slice(0, t.indexOf("}, []);"));
+    expect(body).toMatch(/auraRef\.current\?\.unlock\(\)/);
+    expect(body).not.toMatch(/await/);
+    expect(aura).toMatch(/function unlock\(\)/);
+    // One element, reused. A fresh one per sentence would be locked again.
+    expect(aura).toMatch(/if \(el\) return el;/);
+  });
+
+  it("does not speak through the browser in conversation mode", () => {
+    // speechSynthesis on iOS runs in the UI process on its own audio session,
+    // so it is invisible to the page's echo canceller, and it is reported to
+    // mute a live getUserMedia track — which would end the conversation it is
+    // part of. It stays only as the fallback.
+    expect(provider).toMatch(/if \(s\.handsFree && auraOkRef\.current && auraRef\.current\?\.ready\)/);
+  });
+
+  it("never resumes a conversation on its own after a reload", () => {
+    // It holds the microphone open and streams continuously to a third party.
+    // That is a state a person chooses each time, not one they inherit.
+    const store = readFileSync(join(here, "..", "..", "data", "store.js"), "utf8");
+    expect(store).toMatch(/handsFree: false/);
+  });
+});
+
 describe("the orb runs exactly one animation loop", () => {
   const orb = readFileSync(join(here, "..", "VoiceOrb.jsx"), "utf8");
 
