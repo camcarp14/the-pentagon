@@ -166,14 +166,20 @@ export default function ConsolePage() {
     voice.phase === "speaking" ? "speaking" :
     voice.phase === "error" ? "error" : "idle";
 
-  // "Connecting…" is a state of its own on purpose. It covers opening the
-  // microphone, fetching a voice token and completing the WebSocket handshake —
-  // any of which can fail or simply hang. Folding all three into "Listening…"
-  // is what made a dead connection and a silent room indistinguishable, and
-  // sent an afternoon into debugging a microphone that was working.
+  // Opening the ear is three separate things, any of which can stall: the
+  // microphone, the voice token, the WebSocket handshake. Naming the one in
+  // progress is the difference between "it sticks on Connecting" and knowing
+  // which subsystem to look at — a distinction that cost several round trips
+  // when all three shared one word.
+  const STAGES = {
+    mic: "Opening the microphone…",
+    token: "Getting a voice token…",
+    socket: "Connecting to Deepgram…",
+  };
+
   const caption =
     voice.interim ? voice.interim :
-    voice.mode === "starting" ? "Connecting…" :
+    voice.mode === "starting" ? (STAGES[voice.stage] || "Connecting…") :
     voice.phase === "listening" ? "Listening…" :
     voice.phase === "thinking" ? "Working on it" :
     voice.phase === "speaking" ? "" :

@@ -28,6 +28,10 @@ export function VoiceProvider({ children }) {
   const [interim, setInterim] = useState("");
   const [level, setLevel] = useState(0);
   const [micError, setMicError] = useState(null);
+  // Which step of opening the ear we are on: mic | token | socket | live.
+  // Exists so "Connecting…" can say what it is doing — three quite different
+  // things can stall there and they were indistinguishable from the outside.
+  const [stage, setStage] = useState(null);
 
   const recRef = useRef(null);
   const meterRef = useRef(null);
@@ -114,8 +118,11 @@ export function VoiceProvider({ children }) {
         if (busyRef.current) abortRef.current?.abort();
         setTimeout(() => send(text), 0);
       },
+      onStage: setStage,
       onState: (m) => {
         setMode(m);
+        // Nothing is being opened any more; stop reporting a step.
+        if (m === "off" || m === "capturing" || m === "ambient") setStage(null);
         setPhase((p) => {
           // "starting" counts as listening for the orb's sake — the tap has to
           // produce motion immediately or it reads as ignored — but the
@@ -257,13 +264,13 @@ export function VoiceProvider({ children }) {
   }, []);
 
   const value = useMemo(() => ({
-    phase, mode, interim, level,
+    phase, mode, interim, level, stage,
     micError, clearMicError: () => setMicError(null),
     sttSupported, ttsSupported: speaker.supported,
     busy: busyRef.current || phase === "thinking",
     send, stop, talk, holdStart, holdEnd, toggleAmbient, speak,
     shutUp: speaker.shutUp,
-  }), [phase, mode, interim, level, micError, send, stop, talk, holdStart, holdEnd, toggleAmbient, speak]);
+  }), [phase, mode, interim, level, stage, micError, send, stop, talk, holdStart, holdEnd, toggleAmbient, speak]);
 
   return <VoiceCtx.Provider value={value}>{children}</VoiceCtx.Provider>;
 }

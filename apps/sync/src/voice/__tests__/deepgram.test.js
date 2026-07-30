@@ -251,7 +251,9 @@ describe("the tap can always move the machine", () => {
     // all happen after the tap and any of them can hang. Calling that
     // "Listening…" made a dead connection and a silent room identical.
     const page = readFileSync(join(here, "..", "..", "pages", "ConsolePage.jsx"), "utf8");
-    expect(page).toMatch(/voice\.mode === "starting" \? "Connecting…"/);
+    // The "starting" mode must drive the caption, whether it resolves to a
+    // named stage or the bare fallback.
+    expect(page).toMatch(/voice\.mode === "starting" \?[\s\S]{0,60}"Connecting…"/);
     expect(clientSrc).toMatch(/setMode\("starting"\)/);
     // ...and the promotion to a real listening state happens on the socket
     // opening, not on the tap.
@@ -309,6 +311,37 @@ describe("microphone lifetime", () => {
     const body = client.slice(client.indexOf("async function connect()"));
     expect(body.indexOf("ensureAudio()")).toBeGreaterThan(-1);
     expect(body.indexOf("ensureAudio()")).toBeLessThan(body.indexOf("mintToken()"));
+  });
+
+  it("bounds the handshake too, not just the two awaits", () => {
+    // The hole the other two timeouts left, and the one that produced "sticks
+    // on connecting": a refused socket fires onclose and a dropped one fires
+    // onerror, but a socket accepted and never upgraded fires NEITHER — it sits
+    // in CONNECTING with nothing downstream on a timer. Closing it ourselves
+    // converts that silence into an onclose, which is already handled.
+    const w = clientSrc.slice(clientSrc.indexOf("function wire("));
+    expect(w).toMatch(/const handshake = setTimeout\(\(\) => \{[\s\S]{0,200}ws\.close\(\)/);
+    // ...and it must be cancelled on both exits, or a later socket gets closed
+    // out from under itself.
+    const onopen = w.slice(w.indexOf("ws.onopen"), w.indexOf("ws.onmessage"));
+    const onclose = w.slice(w.indexOf("ws.onclose"));
+    expect(onopen).toContain("clearTimeout(handshake)");
+    expect(onclose).toContain("clearTimeout(handshake)");
+  });
+
+  it("names the stage it is on so a stall localises itself", () => {
+    // Three quite different subsystems share the word "Connecting…": the
+    // microphone, the token endpoint, the WebSocket. Reporting one word for all
+    // three cost a round trip per guess.
+    for (const s of ["mic", "token", "socket"]) {
+      expect(clientSrc).toContain(`onStage?.("${s}")`);
+    }
+    const page = readFileSync(join(here, "..", "..", "pages", "ConsolePage.jsx"), "utf8");
+    expect(page).toMatch(/STAGES\[voice\.stage\]/);
+    const provider = readFileSync(join(here, "..", "VoiceProvider.jsx"), "utf8");
+    expect(provider).toContain("onStage: setStage");
+    // The stage has to be in the memo deps or the caption never updates.
+    expect(provider).toMatch(/\}\), \[phase, mode, interim, level, stage,/);
   });
 
   it("bounds both waits so a hang cannot masquerade as Connecting…", () => {

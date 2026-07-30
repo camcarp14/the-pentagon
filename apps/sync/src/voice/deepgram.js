@@ -144,7 +144,7 @@ async function mintToken() {
  * Same shape as createRecognizer() in recognizer.js, so VoiceProvider does not
  * care which one it got.
  */
-export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError, getWake = () => "sync" }) {
+export function createDeepgramRecognizer({ onInterim, onCommit, onState, onStage, onError, getWake = () => "sync" }) {
   let ctx = null;
   let stream = null;
   let node = null;
@@ -313,11 +313,19 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
       // forever showing Connecting…" or, worse, a stranded latch. A rejection
       // is strictly better: it lands in the catch, says so, and the next tap
       // starts clean.
+      // Each stage announces itself. One undifferentiated "Connecting…" hid
+      // which of three quite different things was failing — the microphone, the
+      // token, or the handshake — and cost a round trip per guess. The caption
+      // now names the stage it is on, so a stall localises itself.
+      onStage?.("mic");
       await withTimeout(ensureAudio(), 15000, "The microphone didn't open in time. Tap to try again.");
+
+      onStage?.("token");
       const token = await withTimeout(mintToken(), 10000, "Couldn't reach the voice service. Tap to try again.");
 
       // Superseded while we were awaiting — a later tap, or a teardown.
       if (!wanted || gen !== attempt) return;
+      onStage?.("socket");
 
       const ix = provenForm ?? formIx;
       const auth = AUTH_FORMS[ix](token);
@@ -372,11 +380,29 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
   function wire(ws, ix, gen) {
     let opened = false;
 
+    // The handshake needs a deadline of its own, and this was the hole the
+    // other two timeouts left. A WebSocket that is refused fires onclose and a
+    // dropped one fires onerror, but a socket that is accepted and then never
+    // upgraded fires NEITHER — it simply sits in CONNECTING. Nothing downstream
+    // is on a timer, so mode stays "starting" and the caption reads
+    // "Connecting…" for as long as the app is open, with nothing to act on.
+    //
+    // Closing it ourselves turns that silence into an onclose, which drops into
+    // the same path as a refusal: try the next auth form, then report. Six
+    // seconds is well past a healthy handshake and well short of a person's
+    // patience.
+    const handshake = setTimeout(() => {
+      if (opened || socket !== ws) return;
+      try { ws.close(); } catch { /* already going */ }
+    }, 6000);
+
     ws.onopen = () => {
       opened = true;
+      clearTimeout(handshake);
       refusals = 0;
       provenForm = ix;                  // this one works; stop trying the other
       setMode(ambient ? "ambient" : "capturing");
+      onStage?.("live");
     };
 
     ws.onmessage = (e) => {
@@ -397,6 +423,7 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
     ws.onerror = () => {};
 
     ws.onclose = () => {
+      clearTimeout(handshake);
       // Superseded by a teardown or a newer attempt — not ours to react to.
       if (socket !== ws || gen !== attempt) return;
       socket = null;
@@ -419,7 +446,7 @@ export function createDeepgramRecognizer({ onInterim, onCommit, onState, onError
           setMode("off");
           onError?.({
             kind: "auth",
-            message: "Deepgram refused the voice connection. The token was issued but rejected at the handshake — if this persists, the DEEPGRAM_API_KEY may belong to a different project than the one being billed.",
+            message: `Deepgram wouldn't complete the connection. The voice token was issued, so the key and its permissions are fine — the handshake itself is being refused, in all ${AUTH_FORMS.length} of the ways Deepgram documents for a browser. Most likely the token is being rejected for the project, or something between here and api.deepgram.com is blocking WebSockets.`,
           });
           return;
         }
