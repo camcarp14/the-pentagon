@@ -1,5 +1,8 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { REGIONS } from "@cc/mind";
+// Extracted so the parser that crashed this tool can be unit-tested. See
+// color.js for what it was and why it is tolerant now.
+import { hueOf, lighten, rgba } from "./color.js";
 
 // ─── Provenance, stated plainly ──────────────────────────────────────────────
 // This is Clarify's MindCanvas (apps/clarify/src/features/dna/MindCanvas.jsx),
@@ -91,20 +94,6 @@ const nodeR = (w) => 9 + 16 * (typeof w === "number" ? w : 0.5);
 
 // Token → color math for the SVG defs — the one sanctioned spot where a theme
 // token is interpolated into computed color values (spec design rule #4).
-function chan(hex) {
-  const h = hex.replace("#", "");
-  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
-}
-function lighten(hex, amt) {
-  const [r, g, b] = chan(hex);
-  const L = (v) => Math.round(v + (255 - v) * amt);
-  return `rgb(${L(r)},${L(g)},${L(b)})`;
-}
-function rgba(hex, a) {
-  const [r, g, b] = chan(hex);
-  return `rgba(${r},${g},${b},${a})`;
-}
-
 // Region anchors — identity holds the center; the other five sit on a hex ring
 // (center + 5 = the hexagonal arrangement), mirroring the seed genome's layout
 // so physics and persisted positions agree on where each region "lives".
@@ -910,7 +899,7 @@ function MindCanvasImpl({
           {/* Glow orbs — center lightened region color → region color → transparent
               rim. Off-center focus gives each node a specular "lit sphere" read. */}
           {Object.keys(REGIONS).map((k) => {
-            const c = REGIONS[k].color;
+            const c = hueOf(k);
             return (
               <radialGradient key={k} id={`dnaGrad_${k}`} cx="38%" cy="35%" r="72%">
                 <stop offset="0%" stopColor={lighten(c, 0.55)} />
