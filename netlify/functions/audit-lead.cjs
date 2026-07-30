@@ -294,11 +294,29 @@ exports.handler = async (event) => {
   const results = { url, finalUrl: site.finalUrl || url, score, checks, insights, ran_at: new Date().toISOString() };
 
   // The lead is the product — write it even if the site itself was unreachable.
-  let leadId = null;
+  //
+  // return=minimal, and the id is minted here rather than read back. sbRest
+  // defaults to `Prefer: return=representation`, which makes PostgREST issue
+  // INSERT ... RETURNING — and RETURNING is subject to the table's SELECT
+  // policies. This function authenticates with the publishable key, so it acts
+  // as `anon`, and inbound_leads has no SELECT policy anon can satisfy (reads
+  // are operator-only, correctly). Postgres therefore aborted the WHOLE
+  // statement with 42501 and the row was never committed: the insert-only
+  // policy allowed the write and asking for the row back undid it. Verified
+  // against the live database — a plain INSERT as anon succeeds, the identical
+  // INSERT ... RETURNING fails 42501.
+  //
+  // The id is only needed to stamp audit_requests.lead_id, and anon holds
+  // INSERT on the id column, so supplying one keeps that link without ever
+  // reading a row back.
+  const leadId = crypto.randomUUID();
+  let leadSaved = false;
   try {
-    const lead = await sbRest(`/inbound_leads`, {
+    await sbRest(`/inbound_leads`, {
       method: "POST",
+      prefer: "return=minimal",
       body: {
+        id: leadId,
         name, business, website: url, email,
         service: "Free audit",
         details: `Free audit run — score ${score}/100. ${checks.filter((c) => c.status === "fail").map((c) => c.label).join(", ") || "no failing checks"}.`,
@@ -307,14 +325,21 @@ exports.handler = async (event) => {
         raw: { audit_score: score },
       },
     });
-    leadId = lead && lead[0] && lead[0].id;
+    leadSaved = true;
   } catch (err) {
-    console.error("audit lead insert failed:", err.message);
+    // A dropped lead is the one failure this endpoint cannot shrug off — it is
+    // the entire commercial output of the free audit. Still not fatal to the
+    // caller (they came for the report and the report is ready), but it must be
+    // loud in the logs rather than a swallowed line, and audit_requests below
+    // records that the lead did not land.
+    console.error("AUDIT LEAD LOST — inbound_leads insert failed:", err.message);
   }
   try {
     await sbRest(`/audit_requests`, {
       method: "POST", prefer: "return=minimal",
-      body: { email, website: url, name, business, status: site.ok ? "completed" : "failed", results, ip_hash: hash, lead_id: leadId },
+      // lead_id only when the lead actually committed — pointing it at a row
+      // that was never written would make a lost lead look filed.
+      body: { email, website: url, name, business, status: site.ok ? "completed" : "failed", results, ip_hash: hash, lead_id: leadSaved ? leadId : null },
     });
   } catch (err) {
     console.error("audit request insert failed:", err.message);

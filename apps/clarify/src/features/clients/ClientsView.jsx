@@ -489,11 +489,24 @@ export function ClientsView({ deepClientId = null, onNavigate }) {
   // Skip lives on the action queue, so it must PATCH action_queue. It used to
   // hit /findings with an action_queue id: PostgREST matched zero rows, returned
   // 200, and the item stayed pending forever with no way to clear it.
+  //
+  // 'rejected', not 'dismissed'. Moving the write to the right table inherited
+  // the wrong table's vocabulary: action_queue_status_check allows
+  // pending/approved/rejected/executing/executed/failed — 'dismissed' belongs to
+  // findings_status_check. Postgres answered 23514, PostgREST turned that into a
+  // 400, and because nothing inspected the response the row still vanished from
+  // the list optimistically and came back on the next load. That is the same
+  // never-clears bug wearing a more convincing disguise, so the response is
+  // checked before local state is touched.
   const dismissAction = async (id) => {
-    await fetch(`${SUPABASE_URL}/rest/v1/action_queue?id=eq.${id}`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/action_queue?id=eq.${id}`, {
       method: "PATCH", headers: { ...(await hdr()), "Prefer": "return=minimal" },
-      body: JSON.stringify({ status: "dismissed" }),
+      body: JSON.stringify({ status: "rejected" }),
     });
+    if (!res.ok) {
+      setLoadError("Couldn't skip that action: " + (await res.text().catch(() => `HTTP ${res.status}`)));
+      return;
+    }
     setActions(p => p.filter(a => a.id !== id));
   };
 
