@@ -30,6 +30,7 @@ const TOOLS = {
   looper: lazy(() => import("@app/looper")),
   business: lazy(() => import("@app/business")),
   sync: lazy(() => import("@app/sync")),
+  ideas: lazy(() => import("@app/ideas")),
 };
 
 // The shell-owned cross-tool management surface (Usage / Minds / Agents).

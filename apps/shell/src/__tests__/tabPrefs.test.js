@@ -16,12 +16,12 @@ describe("defaults", () => {
     expect(fresh().hidden).toEqual(["macro", "looper", "business"]);
   });
 
-  it("leaves ZTS, Clarify, Runway and SYNC visible, in APPS order", () => {
+  it("leaves ZTS, Clarify, Runway, SYNC and Ideas visible, in APPS order", () => {
     // SYNC ships visible rather than in DEFAULT_HIDDEN: it is the voice layer
     // the day actually runs through, and a hidden assistant is a dead one.
     // Four segments still clear the 375px budget that forced Business's short
     // form — the ellipsis risk starts at six.
-    expect(visibleTabs(null)).toEqual(["zts", "clarify", "runway", "sync"]);
+    expect(visibleTabs(null)).toEqual(["zts", "clarify", "runway", "sync", "ideas"]);
   });
 
   it("hides nothing that is not a real tool", () => {
@@ -110,7 +110,7 @@ describe("toggleTab", () => {
     // Order is preserved independently of visibility, so un-hiding is not a
     // second decision about where the tool goes.
     const p = toggleTab(fresh(), "macro");
-    expect(visibleTabs(p)).toEqual(["zts", "clarify", "runway", "macro", "sync"]);
+    expect(visibleTabs(p)).toEqual(["zts", "clarify", "runway", "macro", "sync", "ideas"]);
   });
 
   it("ignores an unknown id rather than inventing a tab", () => {
@@ -145,8 +145,8 @@ describe("moveTab", () => {
     // Otherwise re-showing a hidden tool would put it somewhere the operator
     // never placed it.
     const p = moveTab(fresh(), "runway", 1);      // runway swaps with hidden macro
-    expect(p.order).toEqual(["zts", "clarify", "macro", "runway", "looper", "business", "sync"]);
-    expect(visibleTabs(p)).toEqual(["zts", "clarify", "runway", "sync"]); // visible order unchanged
+    expect(p.order).toEqual(["zts", "clarify", "macro", "runway", "looper", "business", "sync", "ideas"]);
+    expect(visibleTabs(p)).toEqual(["zts", "clarify", "runway", "sync", "ideas"]); // visible order unchanged
   });
 
   it("carries hidden state through a reorder", () => {

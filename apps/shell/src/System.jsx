@@ -9,11 +9,11 @@
 // shows your real existing data); Supabase-backed cross-device logging + Runway
 // server usage are the fast-follow.
 // ═══════════════════════════════════════════════════════════════════════════
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { appMeta, APPS } from "@cc/design";
 import { visibleTabs, isHidden, canHide, toggleTab, moveTab, resetTabPrefs, DEFAULT_HIDDEN } from "./tabPrefs.js";
 import { AnimatedNumber, EmptyState, useIsMobile } from "@cc/ui";
-import { auth } from "@cc/supabase";
+import { auth, supabase } from "@cc/supabase";
 import Ops from "./Ops.jsx";
 
 // Which localStorage prefix each tool writes under (they run on one domain now).
@@ -41,6 +41,48 @@ const ago = (ts) => {
   return `${Math.floor(s / 86400)}d ago`;
 };
 
+// ─── server-side spend (Ideas) ────────────────────────────────────────────────
+// Every other tool logs its calls to localStorage from the browser that made
+// them. Ideas cannot: its spend happens in a scheduled GitHub Action with no
+// browser attached, and the run log is written straight to Postgres. So it is
+// pulled rather than read, and it is the first tool here whose numbers are
+// device-independent — the same figures on the phone as on the desktop.
+//
+// One row per pipeline run, and the pipeline caps its own history, so this is a
+// bounded read. A failure resolves to "not tracked" rather than throwing: a
+// cross-tool overview that dies because one tool's table is unreachable is
+// worse than one that says so.
+function useIdeasSpend(cutoff) {
+  const [state, setState] = useState({ loading: true, error: null, runs: [] });
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!supabase) { setState({ loading: false, error: "not configured", runs: [] }); return; }
+      const { data, error } = await supabase
+        .from("ideafeed_runs")
+        .select("ran_at,cost_usd,api_calls,input_tokens,output_tokens")
+        .order("ran_at", { ascending: false })
+        .limit(400);
+      if (!alive) return;
+      setState({ loading: false, error: error?.message || null, runs: data || [] });
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  return useMemo(() => {
+    const runs = state.runs.filter((r) => new Date(r.ran_at).getTime() >= cutoff);
+    const t = { cost: 0, inTok: 0, outTok: 0, calls: 0, runs: runs.length, last: state.runs[0]?.ran_at || null };
+    for (const r of runs) {
+      t.cost += Number(r.cost_usd) || 0;
+      t.inTok += Number(r.input_tokens) || 0;
+      t.outTok += Number(r.output_tokens) || 0;
+      t.calls += Number(r.api_calls) || 0;
+    }
+    return { ...t, loading: state.loading, error: state.error };
+  }, [state, cutoff]);
+}
+
 // ─── shared bits ──────────────────────────────────────────────────────────────
 const Card = ({ children, style }) => (
   <div style={{ background: P.surface, border: `1px solid ${P.line}`, borderRadius: 16, padding: 18, ...style }}>{children}</div>
@@ -64,7 +106,13 @@ const Stat = ({ label, children, sub }) => (
 // here — it is the only tool that spends unattended, so its running total needs
 // to sit next to the others rather than only inside Looper's own log.
 function Overview({ isMobile }) {
+  const ideas = useIdeasSpend(0); // Overview is all-time; Usage does the windowing
   const per = APPS.map((app) => {
+    if (app === "ideas") {
+      return ideas.error
+        ? { app, tracked: false }
+        : { app, tracked: true, cost: ideas.cost, tok: ideas.inTok + ideas.outTok, calls: ideas.calls, server: true };
+    }
     if (!USAGE_APPS.includes(app)) return { app, tracked: false };
     const log = readJSON(`${LS[app]}obs_log`, []);
     let cost = 0, tok = 0, calls = 0;
@@ -97,13 +145,21 @@ function Overview({ isMobile }) {
                   <div style={{ height: 6, borderRadius: 99, background: P.bg, overflow: "hidden", marginBottom: 8 }}>
                     <div style={{ height: "100%", width: `${(p.cost / maxCost) * 100}%`, background: appMeta(p.app).accent, borderRadius: 99, transition: "width .4s cubic-bezier(0.16,1,0.3,1)" }} />
                   </div>
-                  <div style={{ fontSize: 11.5, color: P.muted, display: "flex", gap: 14 }}>
+                  <div style={{ fontSize: 11.5, color: P.muted, display: "flex", gap: 14, flexWrap: "wrap" }}>
                     <span>{fmtN(p.tok)} tokens</span><span>{fmtN(p.calls)} calls</span>
+                    {/* Worth saying out loud: every other figure on this card
+                        came from this browser's own localStorage, so it is per
+                        device. This one didn't. */}
+                    {p.server && <span style={{ color: P.faint }}>server-logged</span>}
                   </div>
                 </>
               ) : (
                 <div style={{ fontSize: 11.5, color: P.faint, lineHeight: 1.5 }}>
-                  {p.app === "runway" ? "Runs its AI server-side — unified logging is the next step." : "Keyless market data — no Claude spend to log here."}
+                  {p.app === "runway"
+                    ? "Runs its AI server-side — unified logging is the next step."
+                    : p.app === "ideas"
+                      ? "Run log unreachable — spend is recorded in Postgres, not this browser."
+                      : "Keyless market data — no Claude spend to log here."}
                 </div>
               )}
             </div>
@@ -123,6 +179,10 @@ function Overview({ isMobile }) {
 function Usage({ isMobile }) {
   const [win, setWin] = useState("7d");
   const cutoff = win === "24h" ? Date.now() - 864e5 : win === "7d" ? Date.now() - 7 * 864e5 : 0;
+  // Ideas has no per-call rows to list — the pipeline reports one aggregate per
+  // run — so it contributes to the totals and the by-tool bars but not to the
+  // call log below, which stays a browser-local record of individual calls.
+  const ideas = useIdeasSpend(cutoff);
 
   const calls = useMemo(() => {
     const rows = [];
@@ -148,36 +208,43 @@ function Usage({ isMobile }) {
     return t;
   }, [calls]);
 
-  const maxApp = Math.max(0.0001, ...Object.values(agg.byApp));
+  const byApp = { ...agg.byApp };
+  if (!ideas.error && ideas.cost > 0) byApp.ideas = (byApp.ideas || 0) + ideas.cost;
+  const totalCost = agg.cost + (ideas.error ? 0 : ideas.cost);
+  const totalIn = agg.inTok + (ideas.error ? 0 : ideas.inTok);
+  const totalOut = agg.outTok + (ideas.error ? 0 : ideas.outTok);
+  const totalCalls = agg.calls + (ideas.error ? 0 : ideas.calls);
+  const spendApps = [...USAGE_APPS, ...(byApp.ideas ? ["ideas"] : [])];
+  const maxApp = Math.max(0.0001, ...Object.values(byApp));
 
   return (
     <div>
       <Header title="Usage" sub="AI tokens, cost & latency across every tool"
         right={<Segment value={win} onChange={setWin} options={[["24h", "24h"], ["7d", "7 days"], ["all", "All time"]]} />} />
 
-      {agg.calls === 0 ? (
+      {totalCalls === 0 ? (
         <EmptyState icon="chart" title="No AI calls logged in this window"
           sub="Generate a Short, draft outreach, or tailor a résumé and spend shows up here across all tools." />
       ) : (
         <>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
-            <Stat label="Total spend"><AnimatedNumber value={agg.cost} format={fmt$} /></Stat>
-            <Stat label="Tokens" sub={`${fmtN(agg.inTok)} in · ${fmtN(agg.outTok)} out`}><AnimatedNumber value={agg.inTok + agg.outTok} format={fmtN} /></Stat>
-            <Stat label="Calls"><AnimatedNumber value={agg.calls} format={fmtN} /></Stat>
+            <Stat label="Total spend"><AnimatedNumber value={totalCost} format={fmt$} /></Stat>
+            <Stat label="Tokens" sub={`${fmtN(totalIn)} in · ${fmtN(totalOut)} out`}><AnimatedNumber value={totalIn + totalOut} format={fmtN} /></Stat>
+            <Stat label="Calls"><AnimatedNumber value={totalCalls} format={fmtN} /></Stat>
             <Stat label="Avg latency" sub="per call">{agg.calls ? Math.round(agg.lat / agg.calls) : 0}<span style={{ fontSize: 14, color: P.muted }}>ms</span></Stat>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1.3fr", gap: 12, marginBottom: 14 }}>
             <Card>
               <SectionLabel>Spend by tool</SectionLabel>
-              {USAGE_APPS.map((app) => (
+              {spendApps.map((app) => (
                 <div key={app} style={{ marginBottom: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 5 }}>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 7, color: P.ink }}><Dot app={app} />{appMeta(app).brand}</span>
-                    <span style={{ color: P.muted, fontFamily: P.mono }}>{fmt$(agg.byApp[app] || 0)}</span>
+                    <span style={{ color: P.muted, fontFamily: P.mono }}>{fmt$(byApp[app] || 0)}</span>
                   </div>
                   <div style={{ height: 7, borderRadius: 99, background: P.surface2, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${((agg.byApp[app] || 0) / maxApp) * 100}%`, background: appMeta(app).accent, borderRadius: 99, transition: "width .4s cubic-bezier(0.16,1,0.3,1)" }} />
+                    <div style={{ height: "100%", width: `${((byApp[app] || 0) / maxApp) * 100}%`, background: appMeta(app).accent, borderRadius: 99, transition: "width .4s cubic-bezier(0.16,1,0.3,1)" }} />
                   </div>
                 </div>
               ))}

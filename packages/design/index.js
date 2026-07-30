@@ -141,6 +141,20 @@ const ORCHID = {
   accentInk: "#1E0733", focusRing: "0 0 0 3px rgba(195,107,255,0.34)",
 };
 
+// Lime — Ideas, the GitHub feed. Picked the same way Orchid was, by measuring
+// the gap rather than by taste. The seven taken accents hold 155/43/250/40/189/
+// 330/280 degrees and the four signals hold 155/40/0/215, which leaves 60-140
+// as the only wide arc untouched by any of them. ~85 sits in the middle of it:
+// 42 off brass, 70 off emerald, and clear of `warn` and `good`, so a lime dot
+// and a healthy-green one never get confused in the toggle. It also happens to
+// be the colour of a lit filament, which is what the tool is.
+const LIME = {
+  accent: "#A8DE4C", accentHi: "#C2ED75", accentDeep: "#6FA019",
+  accentGrad: "linear-gradient(135deg, #C2ED75 0%, #6FA019 100%)",
+  accentSoft: "rgba(168,222,76,0.14)", accentLine: "rgba(168,222,76,0.32)",
+  accentInk: "#12200A", focusRing: "0 0 0 3px rgba(168,222,76,0.34)",
+};
+
 const APP_DEF = {
   zts: { base: MIDNIGHT, ramp: EMERALD, label: "ZTS", brand: "Zero To Secure" },
   clarify: { base: MIDNIGHT, ramp: BRASS, label: "Clarify", brand: "Clarify Outreach" },
@@ -153,9 +167,10 @@ const APP_DEF = {
   // A deliberate three-letter form beats a truncated eight-letter one.
   business: { base: MIDNIGHT, ramp: MAGENTA, label: "Business", short: "Biz", brand: "AI Business" },
   sync: { base: MIDNIGHT, ramp: ORCHID, label: "SYNC", brand: "SYNC — the workday layer" },
+  ideas: { base: MIDNIGHT, ramp: LIME, label: "Ideas", brand: "Ideas — what showed up on GitHub" },
 };
 
-export const APPS = ["zts", "clarify", "runway", "macro", "looper", "business", "sync"];
+export const APPS = ["zts", "clarify", "runway", "macro", "looper", "business", "sync", "ideas"];
 export const appMeta = (app) => {
   const d = APP_DEF[app] || APP_DEF.zts;
   return { app, label: d.label, short: d.short || d.label, brand: d.brand, mode: d.base.mode, accent: d.ramp.accent };
