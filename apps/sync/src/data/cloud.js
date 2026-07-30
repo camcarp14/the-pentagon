@@ -16,7 +16,7 @@
 
 import { supabase, CONFIGURED, readableError, sync } from "../lib/supabase.js";
 import { auth } from "@cc/supabase";
-import { getState, set, subscribe, setRemoteUndoHandler } from "./store.js";
+import { getState, set, subscribe, setRemoteUndoHandler, scrubSessionOnly } from "./store.js";
 
 /* ── what travels ──────────────────────────────────────────────────────────── */
 const DOC_KEYS = [
@@ -133,8 +133,10 @@ export function applyDoc(doc) {
     const cur = getState();
     set({
       ...doc,
-      // Local key wins, always: it is device-scoped by design.
-      settings: { ...cur.settings, ...(doc.settings || {}), apiKey: cur.settings.apiKey },
+      // Local key wins, always: it is device-scoped by design. scrubSessionOnly
+      // keeps hands-free off: another device having the microphone open is not a
+      // reason for this one to open it too.
+      settings: scrubSessionOnly({ ...cur.settings, ...(doc.settings || {}), apiKey: cur.settings.apiKey }),
     });
   } finally {
     applying = false;

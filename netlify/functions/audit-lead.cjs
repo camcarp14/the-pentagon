@@ -10,14 +10,85 @@
 // per-IP rate limiting via the no-PII rate_events ledger, and the whole run
 // fits a synchronous function budget (~8s worst case).
 const crypto = require("crypto");
+const dns = require("dns").promises;
+const net = require("net");
 const { sbRest } = require("./_shared/supabaseRest.cjs");
 const { json, error, methodGuard } = require("./_shared/response.cjs");
 
 const RATE_LIMIT_PER_HOUR = 4;
 const FETCH_TIMEOUT_MS = 6000;
+// Redirects are followed by hand (see fetchSite) so every hop can be revalidated.
+const MAX_REDIRECTS = 4;
 
 const ipHash = (ip) => crypto.createHash("sha256").update("clarify-audit|" + (ip || "unknown")).digest("hex").slice(0, 32);
 
+// ─── SSRF containment ────────────────────────────────────────────────────────
+// This endpoint is deliberately anonymous (the email IS the product), and it
+// fetches a caller-supplied URL server-side. That combination is the classic
+// SSRF shape, so the guard has to hold against three separate bypasses — the
+// original string-prefix test on the submitted hostname stopped none of them:
+//
+//   1. REDIRECT. `redirect: "follow"` let attacker.com answer 302 with
+//      Location: http://169.254.169.254/. The guard had already passed on
+//      "attacker.com" and was never consulted again. Now redirects are followed
+//      manually and every hop is revalidated.
+//   2. DNS. A public name can resolve to a private address (127-0-0-1.nip.io),
+//      which no amount of string matching on the hostname will catch. Now the
+//      host is resolved and every returned address is checked.
+//   3. ALTERNATE LITERAL FORMS. "0x7f.0.0.1" is 127.0.0.1 and does not start
+//      with any blocked prefix. Checking resolved addresses rather than the
+//      text of the hostname makes the encoding irrelevant.
+//
+// Ports are pinned to 80/443 so the endpoint cannot be used to sweep internal
+// service ports, and the failure is always the same generic message so response
+// differences cannot be used to probe the network.
+
+function isBlockedIp(addr) {
+  const v = net.isIP(addr);
+  if (v === 4) {
+    const p = addr.split(".").map(Number);
+    if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true;
+    const [a, b] = p;
+    if (a === 0 || a === 127) return true;                        // this-network, loopback
+    if (a === 10) return true;                                    // private
+    if (a === 172 && b >= 16 && b <= 31) return true;             // private
+    if (a === 192 && b === 168) return true;                      // private
+    if (a === 169 && b === 254) return true;                      // link-local (cloud metadata)
+    if (a === 100 && b >= 64 && b <= 127) return true;            // CGNAT
+    if (a === 192 && b === 0) return true;                        // IETF protocol assignments
+    if (a === 198 && (b === 18 || b === 19)) return true;         // benchmarking
+    if (a >= 224) return true;                                    // multicast + reserved + broadcast
+    return false;
+  }
+  if (v === 6) {
+    const s = addr.toLowerCase().replace(/^\[|\]$/g, "");
+    if (s === "::1" || s === "::") return true;                   // loopback, unspecified
+    // IPv4-mapped (::ffff:127.0.0.1) must be judged on the embedded v4 address.
+    const mapped = s.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (mapped) return isBlockedIp(mapped[1]);
+    if (/^f[cd]/.test(s)) return true;                            // unique local fc00::/7
+    if (/^fe[89ab]/.test(s)) return true;                         // link-local fe80::/10
+    return false;
+  }
+  return true; // not an IP literal we understand — refuse
+}
+
+// Resolve the host and refuse if ANY answer is internal. All answers, not just
+// the first: a name with one public and one private A record would otherwise be
+// a coin flip that the attacker gets to re-flip.
+async function hostResolvesPublic(hostname) {
+  if (net.isIP(hostname)) return !isBlockedIp(hostname);
+  let answers;
+  try {
+    answers = await dns.lookup(hostname, { all: true });
+  } catch {
+    return false; // cannot resolve → cannot vouch for it
+  }
+  if (!answers.length) return false;
+  return answers.every((a) => !isBlockedIp(a.address));
+}
+
+// Syntactic checks only — cheap, and safe to run before touching DNS.
 function normalizeUrl(raw) {
   let u = String(raw || "").trim();
   if (!u) return null;
@@ -25,9 +96,11 @@ function normalizeUrl(raw) {
   try {
     const parsed = new URL(u);
     if (!/^https?:$/.test(parsed.protocol)) return null;
-    if (!parsed.hostname.includes(".")) return null;
-    // Refuse obvious internal targets — this function fetches the URL server-side.
-    if (/^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|0\.|169\.254\.|\[)/.test(parsed.hostname)) return null;
+    if (parsed.username || parsed.password) return null; // no credential smuggling
+    // Pin the port: an audit only ever needs the standard web ports, and leaving
+    // it open turns this into an internal port scanner.
+    if (parsed.port && parsed.port !== "80" && parsed.port !== "443") return null;
+    if (!parsed.hostname.includes(".") && !net.isIP(parsed.hostname)) return null;
     parsed.hash = "";
     return parsed.toString();
   } catch {
@@ -35,18 +108,44 @@ function normalizeUrl(raw) {
   }
 }
 
+// The full check: syntax, then resolution. Returns the normalized URL or null.
+async function safeUrl(raw) {
+  const u = normalizeUrl(raw);
+  if (!u) return null;
+  return (await hostResolvesPublic(new URL(u).hostname)) ? u : null;
+}
+
 async function fetchSite(url) {
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   const started = Date.now();
   try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      redirect: "follow",
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; ClarifyAuditBot/1.0; +https://the-pentagon.netlify.app/audit)" },
-    });
-    const html = (await res.text()).slice(0, 400_000);
-    return { ok: res.ok, status: res.status, finalUrl: res.url, html, ttfbMs: Date.now() - started, bytes: html.length };
+    let current = url;
+    for (let hop = 0; ; hop++) {
+      const res = await fetch(current, {
+        signal: controller.signal,
+        // Manual, so the guard runs again on the target of every redirect
+        // instead of once on the URL the caller happened to type.
+        redirect: "manual",
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; ClarifyAuditBot/1.0; +https://the-pentagon.netlify.app/audit)" },
+      });
+
+      const isRedirect = res.status >= 300 && res.status < 400 && res.headers.get("location");
+      if (!isRedirect) {
+        const html = (await res.text()).slice(0, 400_000);
+        return { ok: res.ok, status: res.status, finalUrl: current, html, ttfbMs: Date.now() - started, bytes: html.length };
+      }
+
+      if (hop >= MAX_REDIRECTS) {
+        return { ok: false, status: 0, error: "too many redirects", ttfbMs: Date.now() - started, html: "" };
+      }
+      // Relative Locations are legal, so resolve against the hop we are on.
+      const next = await safeUrl(new URL(res.headers.get("location"), current).toString());
+      if (!next) {
+        return { ok: false, status: 0, error: "unreachable", ttfbMs: Date.now() - started, html: "" };
+      }
+      current = next;
+    }
   } catch (err) {
     return { ok: false, status: 0, error: err.name === "AbortError" ? "timeout" : err.message, ttfbMs: Date.now() - started, html: "" };
   } finally {
@@ -84,13 +183,25 @@ function runChecks(site, url) {
   const hasMeta = /connect\.facebook\.net|fbq\(/i.test(html);
   add("meta_pixel", "Meta pixel", hasMeta ? "pass" : "warn", hasMeta ? "Meta pixel present" : "No Meta pixel — retargeting audiences aren't being built");
 
-  add("viewport", "Mobile-ready viewport", /<meta[^>]+name=["']viewport/i.test(html) ? "pass" : "fail",
-    /<meta[^>]+name=["']viewport/i.test(html) ? "Responsive viewport configured" : "No viewport meta — mobile visitors get a desktop page");
+  // The <meta> tags are extracted ONCE with a length-bounded pattern, then
+  // matched attribute-wise. The previous form chained two unbounded `[^>]+`
+  // runs (`<meta[^>]+name=...[^>]+content=...`), which is quadratic: on a
+  // 400KB page of attacker-controlled HTML with many `<meta` starts and no
+  // closing `>`, each start scans and backtracks the rest of the document.
+  // Since the page body here is fetched from a URL an anonymous caller chose,
+  // that is a free way to burn the whole function budget.
+  const metaTags = html.match(/<meta\b[^>]{0,600}>/gi) || [];
+  const metaWhere = (nameRe) => metaTags.find((t) => nameRe.test(t));
+  const contentOf = (tag) => (tag && tag.match(/content=["']([^"']*)/i) || [])[1];
 
-  const title = (html.match(/<title[^>]*>([^<]*)<\/title>/i) || [])[1]?.trim();
+  const hasViewport = !!metaWhere(/name=["']viewport/i);
+  add("viewport", "Mobile-ready viewport", hasViewport ? "pass" : "fail",
+    hasViewport ? "Responsive viewport configured" : "No viewport meta — mobile visitors get a desktop page");
+
+  const title = (html.match(/<title[^>]{0,200}>([^<]*)<\/title>/i) || [])[1]?.trim();
   add("title", "Page title", title ? (title.length > 8 ? "pass" : "warn") : "fail", title ? `"${title.slice(0, 80)}"` : "Missing <title>");
 
-  const desc = (html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)/i) || [])[1];
+  const desc = contentOf(metaWhere(/name=["']description["']/i));
   add("description", "Meta description", desc ? "pass" : "warn", desc ? `${desc.slice(0, 90)}…` : "Missing meta description — weak ad/organic snippets");
 
   const hasPhone = /(tel:|\(\d{3}\)\s?\d{3}[- ]?\d{4}|\d{3}[-.]\d{3}[-.]\d{4})/.test(html);
@@ -146,7 +257,7 @@ exports.handler = async (event) => {
   try { payload = JSON.parse(event.body || "{}"); } catch { return error(400, "Invalid JSON"); }
 
   const email = String(payload.email || "").trim().toLowerCase();
-  const url = normalizeUrl(payload.website);
+  const url = await safeUrl(payload.website);
   const name = String(payload.name || "").trim().slice(0, 120) || null;
   const business = String(payload.business || "").trim().slice(0, 160) || null;
 
@@ -163,8 +274,16 @@ exports.handler = async (event) => {
       return error(429, "That's a few audits in a row — give it an hour and try again.");
     }
     await sbRest(`/rate_events`, { method: "POST", prefer: "return=minimal", body: { ip_hash: hash, kind: "audit" } });
-  } catch {
-    // Rate table unavailable must not take the tool down.
+  } catch (err) {
+    // FAIL CLOSED. This used to swallow the error so "rate table unavailable
+    // must not take the tool down" — but this endpoint is anonymous and every
+    // request spends Anthropic credit in aiInsights(), so the rate limit is the
+    // only cost control there is. Swallowing its failure means an outage of the
+    // rate table silently converts an unauthenticated endpoint into an
+    // uncapped one. A lead form being briefly unavailable is recoverable; an
+    // unbounded bill is not.
+    console.error("audit rate-limit check failed, refusing:", err.message);
+    return error(503, "The audit tool is briefly unavailable — please try again in a few minutes.");
   }
 
   const site = await fetchSite(url);

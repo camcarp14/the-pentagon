@@ -446,7 +446,7 @@ export function ClientsView({ deepClientId = null, onNavigate }) {
     try {
       if (!userId) throw new Error("Couldn't confirm your account — try refreshing the page before adding a client.");
       const res = await fetch(`${SUPABASE_URL}/rest/v1/clients`, {
-        method: "POST", headers: { ...hdr(), "Prefer": "return=minimal" },
+        method: "POST", headers: { ...(await hdr()), "Prefer": "return=minimal" },
         body: JSON.stringify({ ...nc, user_id: userId, status: "active", monthly_budget: parseFloat(nc.monthly_budget) || null, cpa_target: parseFloat(nc.cpa_target) || null }),
       });
       if (!res.ok) {
@@ -463,7 +463,7 @@ export function ClientsView({ deepClientId = null, onNavigate }) {
 
   const approveAction = async (id) => {
     await fetch(`${SUPABASE_URL}/rest/v1/action_queue?id=eq.${id}`, {
-      method: "PATCH", headers: { ...hdr(), "Prefer": "return=minimal" },
+      method: "PATCH", headers: { ...(await hdr()), "Prefer": "return=minimal" },
       body: JSON.stringify({ status: "approved", approved_at: new Date().toISOString() }),
     });
     load();
@@ -474,9 +474,10 @@ export function ClientsView({ deepClientId = null, onNavigate }) {
     try {
       // Best-effort cleanup of dependent rows first, in case the DB doesn't
       // cascade-delete — harmless no-ops if it already does.
-      await fetch(`${SUPABASE_URL}/rest/v1/findings?client_id=eq.${c.id}`, { method: "DELETE", headers: { ...hdr(), "Prefer": "return=minimal" } }).catch(() => {});
-      await fetch(`${SUPABASE_URL}/rest/v1/action_queue?client_id=eq.${c.id}`, { method: "DELETE", headers: { ...hdr(), "Prefer": "return=minimal" } }).catch(() => {});
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/clients?id=eq.${c.id}`, { method: "DELETE", headers: { ...hdr(), "Prefer": "return=minimal" } });
+      const h = await hdr();
+      await fetch(`${SUPABASE_URL}/rest/v1/findings?client_id=eq.${c.id}`, { method: "DELETE", headers: { ...h, "Prefer": "return=minimal" } }).catch(() => {});
+      await fetch(`${SUPABASE_URL}/rest/v1/action_queue?client_id=eq.${c.id}`, { method: "DELETE", headers: { ...h, "Prefer": "return=minimal" } }).catch(() => {});
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/clients?id=eq.${c.id}`, { method: "DELETE", headers: { ...h, "Prefer": "return=minimal" } });
       if (!res.ok) throw new Error(await res.text().catch(() => `Delete failed (${res.status})`));
       setSelectedClient(null);
       await load();
@@ -487,7 +488,7 @@ export function ClientsView({ deepClientId = null, onNavigate }) {
 
   const dismissFinding = async (id) => {
     await fetch(`${SUPABASE_URL}/rest/v1/findings?id=eq.${id}`, {
-      method: "PATCH", headers: { ...hdr(), "Prefer": "return=minimal" },
+      method: "PATCH", headers: { ...(await hdr()), "Prefer": "return=minimal" },
       body: JSON.stringify({ status: "dismissed" }),
     });
     setFindings(p => p.filter(f => f.id !== id));

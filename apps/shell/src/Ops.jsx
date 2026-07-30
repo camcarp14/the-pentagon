@@ -151,9 +151,15 @@ export default function Ops({ isMobile }) {
         </div>
         {/* Deliberately NOT disabled when the state is unknown. Stopping is the
             safe direction, and the state where you least know what is running is
-            exactly the state where you most want the option. */}
+            exactly the state where you most want the option.
+
+            `armed` is false in BOTH the "off" and "unknown" states, so a plain
+            `!armed` made the button labelled "Force STOP" call setGlobal(true)
+            and ARM autonomy — the exact opposite of the sentence above, from the
+            one state where the operator least knows what is running. Resolve
+            against `state`, not the boolean: unknown always stops. */}
         <button
-          onClick={() => setGlobal(!armed)}
+          onClick={() => setGlobal(state === "unknown" ? false : !armed)}
           disabled={busy || !loaded}
           style={{
             flex: "none", minHeight: 44, padding: "0 20px", borderRadius: 11, cursor: busy ? "default" : "pointer",

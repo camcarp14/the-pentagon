@@ -66,6 +66,18 @@ export function emptyState() {
 }
 
 /* ── load / migrate ────────────────────────────────────────────────────────── */
+
+// Settings that must never survive a reload or arrive from another device,
+// however they were persisted. `handsFree` holds the microphone open and streams
+// everything it hears to a third party — the default's own comment says that is
+// "a state a person should have to choose each time, not inherit", but the state
+// object is persisted whole, so a `true` written by the last session was being
+// merged straight back over that default on boot. Both restore paths
+// (localStorage via migrate(), the cloud doc via data/cloud.js) run through this.
+export function scrubSessionOnly(settings = {}) {
+  return { ...settings, handsFree: false };
+}
+
 function migrate(raw) {
   const base = emptyState();
   if (!raw || typeof raw !== "object") return base;
@@ -73,7 +85,7 @@ function migrate(raw) {
   // by an older build is missing keys this build reads, and a shallow spread
   // would hand `undefined` to code that expects an array.
   const out = { ...base, ...raw, v: SCHEMA };
-  out.settings = { ...base.settings, ...(raw.settings || {}) };
+  out.settings = scrubSessionOnly({ ...base.settings, ...(raw.settings || {}) });
   out.profile = { ...base.profile, ...(raw.profile || {}) };
   out.usage = { ...base.usage, ...(raw.usage || {}) };
   for (const k of ["blocks", "tasks", "followups", "notes", "memory", "decisions", "drafts", "ledger", "turns", "history", "briefs"]) {
