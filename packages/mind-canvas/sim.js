@@ -247,6 +247,31 @@ export function zoomAtView(view, sx, sy, k2) {
  * DOM_DELTA_LINE (mode 1, deltas of ±3) produced a zoom factor indistinguishable
  * from no zoom at all — the wheel simply did nothing on that hardware.
  */
+/**
+ * Where a two-finger pinch should put the camera.
+ *
+ * Pure so the geometry is testable: the component only has to decide WHEN a
+ * pinch is happening, not what it means. Scale comes from the ratio of finger
+ * separation to the separation at the moment the second finger landed; the
+ * midpoint between the fingers is the fixed screen point, so the graph zooms
+ * around the gesture rather than around the viewport centre.
+ *
+ * Degenerate separations (both fingers on the same pixel) return the view
+ * unchanged rather than dividing by zero into a NaN transform.
+ */
+export function pinchView(view, start, now) {
+  if (!start || !now || !(start.dist > 0) || !(now.dist > 0)) return view;
+  const k = start.k * (now.dist / start.dist);
+  if (!Number.isFinite(k)) return view;
+  return zoomAtView(view, now.x, now.y, k);
+}
+
+/** Separation and midpoint of two screen points. */
+export function spanOf(a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  return { dist: Math.hypot(dx, dy), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+
 export const WHEEL_LINE_PX = 16, WHEEL_PAGE_PX = 400;
 export function wheelPixels(deltaY, deltaMode) {
   const d = Number.isFinite(deltaY) ? deltaY : 0;

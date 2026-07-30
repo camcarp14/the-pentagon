@@ -7,7 +7,7 @@
 import { describe, it, expect } from "vitest";
 import {
   ANCHORS, ANCHOR_ORDER, buildSim, tick, edgeD, fitView, zoomAtView, wheelPixels,
-  nodeR, RING_R, ZOOM_MIN, ZOOM_MAX, WHEEL_LINE_PX,
+  nodeR, RING_R, ZOOM_MIN, ZOOM_MAX, WHEEL_LINE_PX, pinchView, spanOf,
 } from "../sim.js";
 
 const seq = (vals) => { let i = 0; return () => vals[i++ % vals.length]; };
@@ -124,6 +124,50 @@ describe("wheelPixels normalises the delta", () => {
     expect(wheelPixels(1, 2)).toBeGreaterThan(100);
     expect(wheelPixels(undefined, 0)).toBe(0);
     expect(wheelPixels(NaN, 1)).toBe(0);
+  });
+});
+
+describe("pinch geometry", () => {
+  const V = { x: 0, y: 0, k: 1 };
+
+  it("scales by the ratio of finger separation", () => {
+    const start = { dist: 100, x: 400, y: 300, k: 1 };
+    expect(pinchView(V, start, { dist: 200, x: 400, y: 300 }).k).toBeCloseTo(2, 6);
+    expect(pinchView(V, start, { dist: 50, x: 400, y: 300 }).k).toBeCloseTo(0.5, 6);
+  });
+
+  it("zooms around the midpoint between the fingers, not the viewport", () => {
+    // The world point under the fingers must not move while they spread.
+    const start = { dist: 100, x: 200, y: 150, k: 1 };
+    const before = { x: (200 - V.x) / V.k, y: (150 - V.y) / V.k };
+    const next = pinchView(V, start, { dist: 180, x: 200, y: 150 });
+    const after = { x: (200 - next.x) / next.k, y: (150 - next.y) / next.k };
+    expect(after.x).toBeCloseTo(before.x, 6);
+    expect(after.y).toBeCloseTo(before.y, 6);
+  });
+
+  it("clamps to the same range as every other zoom path", () => {
+    expect(pinchView(V, { dist: 10, x: 0, y: 0, k: 1 }, { dist: 9999, x: 0, y: 0 }).k).toBe(ZOOM_MAX);
+    expect(pinchView(V, { dist: 9999, x: 0, y: 0, k: 1 }, { dist: 1, x: 0, y: 0 }).k).toBe(ZOOM_MIN);
+  });
+
+  it("returns the view untouched rather than NaN on a degenerate span", () => {
+    // Two fingers reported at the same pixel: dist 0, and dividing by it would
+    // put NaN straight into the transform, which blanks the graph silently.
+    for (const bad of [null, undefined, { dist: 0, x: 0, y: 0 }, { dist: NaN, x: 0, y: 0 }]) {
+      expect(pinchView(V, { dist: 100, x: 0, y: 0, k: 1 }, bad)).toBe(V);
+      expect(pinchView(V, bad, { dist: 100, x: 0, y: 0 })).toBe(V);
+    }
+    const out = pinchView(V, { dist: 100, x: 0, y: 0, k: 1 }, { dist: 120, x: 0, y: 0 });
+    expect(Number.isFinite(out.x) && Number.isFinite(out.y) && Number.isFinite(out.k)).toBe(true);
+  });
+
+  it("spanOf measures separation and midpoint", () => {
+    const s = spanOf({ x: 0, y: 0 }, { x: 6, y: 8 });
+    expect(s.dist).toBe(10);
+    expect(s.x).toBe(3);
+    expect(s.y).toBe(4);
+    expect(spanOf({ x: 5, y: 5 }, { x: 5, y: 5 }).dist).toBe(0);
   });
 });
 

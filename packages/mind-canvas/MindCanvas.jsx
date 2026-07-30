@@ -5,7 +5,7 @@ import { acquireStyle, paletteVars } from "./css.js";
 import {
   ZOOM_MIN, ZOOM_MAX, LABEL_ZOOM, ALPHA_SLEEP, REHEAT, BOW, STEP_MS,
   PARTICLES, SPECK_N, SPECK_BOUND, POOL_IDX, EMPTY_GENOME,
-  r1, nodeR, buildSim, tick, edgeD, fitView, zoomAtView, wheelPixels,
+  r1, nodeR, buildSim, tick, edgeD, fitView, zoomAtView, wheelPixels, pinchView, spanOf,
 } from "./sim.js";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -171,9 +171,10 @@ function MindCanvasImpl({
       glows: new Map(),                                  // nodeId → {start, dur, level}
       marked: [], hover: null,                           // hover-dim bookkeeping
       fireEls: [], fireT: 0,                             // reduced-motion static highlight
-      gesture: { mode: null, pointerId: null, id: null, from: null, drop: null, edge: null, startX: 0, startY: 0, vx0: 0, vy0: 0, moved: false },
+      pointers: new Map(), pinch: null,
+      gesture: { mode: null, pointerId: null, slop: 16, id: null, from: null, drop: null, edge: null, startX: 0, startY: 0, vx0: 0, vy0: 0, moved: false },
       paused: false,
-      raf: 0, toastT: 0,
+      raf: 0, toastT: 0, zoomPct: -1,
       userView: false,                                   // true after the first pan/zoom/drag — auto-fit stands down
       fitFn: null,                                       // latest fit() closure, for the loop (registered once at mount)
       // Ref-callback caches — one stable function per element, forever. A fresh
@@ -201,11 +202,28 @@ function MindCanvasImpl({
   const zoomTextRef = useRef(null);
 
   // Render-scope derivations (cheap, coarse-grained — never in the rAF loop).
-  const visSet = regionFilter
+  // Node label by id, for naming a synapse to a screen reader. Same Map
+  // reasoning as enabledOf.
+  const labelById = useMemo(() => {
+    const m = new Map();
+    for (let i = 0; i < g.nodes.length; i++) m.set(g.nodes[i].id, g.nodes[i].label || g.nodes[i].id);
+    return m;
+  }, [g]);
+  const labelOf = (id) => labelById.get(id) || id;
+
+  const visSet = useMemo(() => (regionFilter
     ? new Set(g.nodes.filter((n) => regionFilter.has(n.region)).map((n) => n.id))
-    : null;
-  const enabledOf = {};
-  for (let i = 0; i < g.nodes.length; i++) enabledOf[g.nodes[i].id] = g.nodes[i].enabled !== false;
+    : null), [g, regionFilter]);
+  // A Map, not a plain object. Node ids come from stored data, and a node
+  // called "constructor", "toString" or "__proto__" reads a value off
+  // Object.prototype instead of missing — so a silenced neuron with an unlucky
+  // id would render as awake. Memoized because both of these walked every node
+  // on every render, including renders caused by the toast.
+  const enabledOf = useMemo(() => {
+    const m = new Map();
+    for (let i = 0; i < g.nodes.length; i++) m.set(g.nodes[i].id, g.nodes[i].enabled !== false);
+    return m;
+  }, [g]);
 
   // ── View: pan/zoom applied imperatively; label visibility + HUD readout ride
   //    the same call so they can never drift out of sync. ─────────────────────
@@ -215,7 +233,15 @@ function MindCanvasImpl({
       w.setAttribute("transform", "translate(" + v.x + " " + v.y + ") scale(" + v.k + ")");
       w.classList.toggle("dna-zoomout", v.k < LABEL_ZOOM);
     }
-    if (zoomTextRef.current) zoomTextRef.current.textContent = Math.round(v.k * 100) + "%";
+    // Only when it actually changes. applyView runs per frame while the sim
+    // settles, and writing textContent invalidates layout inside a
+    // backdrop-filtered panel — a repaint of the blur, sixty times a second,
+    // to say "84%" sixty times.
+    const pct = Math.round(v.k * 100);
+    if (pct !== S.zoomPct && zoomTextRef.current) {
+      S.zoomPct = pct;
+      zoomTextRef.current.textContent = pct + "%";
+    }
   };
 
   const zoomAt = (sx, sy, k2) => {                       // zoom keeping (sx,sy) fixed on screen
@@ -277,19 +303,29 @@ function MindCanvasImpl({
   const writePositions = () => {
     const sim = S.sim;
     if (!sim) return;
+    // Dirty-checked against the last value WRITTEN, not the last value computed.
+    // The sim spends most of a settle moving nodes by less than a tenth of a
+    // pixel, which r1() rounds away — so the old code spent the whole tail of
+    // every settle handing the browser strings identical to the ones already on
+    // the element, for every node and both paths of every edge.
     const ns = sim.nodes;
     for (let i = 0; i < ns.length; i++) {
-      const el = S.nodeEls.get(ns[i].id);
-      if (el) el.setAttribute("transform", "translate(" + r1(ns[i].x) + " " + r1(ns[i].y) + ")");
+      const n = ns[i];
+      const el = S.nodeEls.get(n.id);
+      if (!el) continue;
+      const t = "translate(" + r1(n.x) + " " + r1(n.y) + ")";
+      if (t !== n._t) { n._t = t; el.setAttribute("transform", t); }
     }
     const es = sim.edges;
     for (let i = 0; i < es.length; i++) {
-      const rec = S.edgeEls.get(es[i].id);
-      if (rec && rec.vis) {
-        const d = edgeD(es[i]);
-        rec.vis.setAttribute("d", d);
-        if (rec.hit) rec.hit.setAttribute("d", d);
-      }
+      const e = es[i];
+      const rec = S.edgeEls.get(e.id);
+      if (!rec || !rec.vis) continue;
+      const d = edgeD(e);
+      if (d === e._d) continue;
+      e._d = d;
+      rec.vis.setAttribute("d", d);
+      if (rec.hit) rec.hit.setAttribute("d", d);
     }
     if (S.selEdge && S.selEdge.el) {
       const se = sim.edgeById.get(S.selEdge.id);
@@ -530,7 +566,28 @@ function MindCanvasImpl({
     }
   };
 
+  // Screen-space point relative to the svg, for pinch geometry.
+  const localPoint = (e) => {
+    const r = S.rect || (svgRef.current ? svgRef.current.getBoundingClientRect() : null);
+    return r ? { x: e.clientX - r.left, y: e.clientY - r.top } : { x: e.clientX, y: e.clientY };
+  };
+
   const onPointerDown = (e) => {
+    S.pointers.set(e.pointerId, localPoint(e));
+    // A second finger while panning starts a pinch rather than being dropped.
+    // Two-finger zoom is the gesture people reach for first on a phone, and the
+    // canvas sets touch-action:none, so the browser will not supply it — the
+    // only way to zoom was the 26px HUD buttons.
+    if (S.gesture.mode === "pan" && S.pointers.size === 2) {
+      const [a, b] = [...S.pointers.values()];
+      const span = spanOf(a, b);
+      if (span.dist > 0) {
+        S.pinch = { start: { ...span, k: S.view.k } };
+        S.gesture.mode = "pinch";
+        cancelLink();
+      }
+      return;
+    }
     if (e.button !== 0 || S.gesture.mode) return;
     const svg = svgRef.current, t = e.target;
     const closest = (sel) => (t.closest ? t.closest(sel) : null);
@@ -544,6 +601,7 @@ function MindCanvasImpl({
     // mid-motion, and left the node wherever it happened to be. On a phone
     // that is not an edge case; it is what a thumb resting on the screen does.
     gs.pointerId = e.pointerId;
+    gs.slop = e.pointerType === "mouse" ? 16 : 121;      // squared: 4px vs 11px
     gs.startX = e.clientX; gs.startY = e.clientY; gs.moved = false;
     try { svg.setPointerCapture(e.pointerId); } catch { /* capture is best-effort */ }
     if (nodeG && (e.shiftKey || portG)) {
@@ -568,9 +626,22 @@ function MindCanvasImpl({
 
   const onPointerMove = (e) => {
     const gs = S.gesture;
+    if (S.pointers.has(e.pointerId)) S.pointers.set(e.pointerId, localPoint(e));
+    if (gs.mode === "pinch") {
+      if (S.pointers.size < 2 || !S.pinch) return;
+      const [a, b] = [...S.pointers.values()];
+      const next = pinchView(S.view, S.pinch.start, spanOf(a, b));
+      S.view.x = next.x; S.view.y = next.y; S.view.k = next.k;
+      applyView();
+      return;
+    }
     if (!gs.mode || e.pointerId !== gs.pointerId) return;
     const dx = e.clientX - gs.startX, dy = e.clientY - gs.startY;
-    if (!gs.moved && dx * dx + dy * dy > 16) gs.moved = true;
+    // 4px is a mouse threshold. A thumb on glass wanders further than that
+    // during what the person intended as a tap, so on a phone the "select this
+    // neuron" gesture was landing as a drag that moved it and persisted the new
+    // position. Coarse pointers get 11px.
+    if (!gs.moved && dx * dx + dy * dy > gs.slop) gs.moved = true;
     if (gs.mode === "pan") {
       S.view.x = gs.vx0 + dx; S.view.y = gs.vy0 + dy;
       applyView();
@@ -588,6 +659,14 @@ function MindCanvasImpl({
 
   const onPointerUp = (e) => {
     const gs = S.gesture;
+    if (e) S.pointers.delete(e.pointerId);
+    if (gs.mode === "pinch") {
+      // Lifting either finger ends the pinch outright. Falling back to a pan on
+      // the remaining finger makes the graph lurch, because that finger has
+      // moved a long way since it went down.
+      if (S.pointers.size < 2) { gs.mode = null; gs.pointerId = null; S.pinch = null; if (svgRef.current) svgRef.current.classList.remove("dna-grabbing"); }
+      return;
+    }
     if (!gs.mode || (e && e.pointerId !== gs.pointerId)) return;
     if (svgRef.current) svgRef.current.classList.remove("dna-grabbing");
     if (gs.mode === "drag") {
@@ -611,6 +690,11 @@ function MindCanvasImpl({
 
   const onPointerCancel = (e) => {
     const gs = S.gesture;
+    if (e) S.pointers.delete(e.pointerId);
+    if (gs.mode === "pinch") {
+      if (S.pointers.size < 2) { gs.mode = null; gs.pointerId = null; S.pinch = null; if (svgRef.current) svgRef.current.classList.remove("dna-grabbing"); }
+      return;
+    }
     if (!gs.mode || (e && e.pointerId !== gs.pointerId)) return;
     if (gs.mode === "drag") {
       const sn = S.sim.byId.get(gs.id);
@@ -644,10 +728,16 @@ function MindCanvasImpl({
 
   const onSvgLeave = () => { if (!S.gesture.mode) setHover(null); };
 
-  const onSvgKeyDown = (e) => {                          // delegated, like hover — nodes are tabbable buttons
+  const onSvgKeyDown = (e) => {                          // delegated, like hover — nodes and synapses are tabbable buttons
     if (e.key !== "Enter" && e.key !== " ") return;
-    const nodeG = e.target.closest ? e.target.closest("[data-dna-node]") : null;
-    if (nodeG && onSelect) { e.preventDefault(); onSelect({ type: "node", id: nodeG.dataset.id }); }
+    if (!e.target.closest || !onSelect) return;
+    const nodeG = e.target.closest("[data-dna-node]");
+    if (nodeG) { e.preventDefault(); onSelect({ type: "node", id: nodeG.dataset.id }); return; }
+    // Synapses used to be selectable by pointer only — the one half of the
+    // graph a keyboard could never reach, and the half that carries the
+    // "outranks" relationships.
+    const edgeG = e.target.closest("[data-dna-edge]");
+    if (edgeG) { e.preventDefault(); onSelect({ type: "edge", id: edgeG.dataset.id }); }
   };
 
   const togglePhysics = () => {
@@ -674,7 +764,11 @@ function MindCanvasImpl({
     if (el) {
       S.nodeEls.set(id, el);
       const sn = S.sim.byId.get(id);
-      if (sn) el.setAttribute("transform", "translate(" + r1(sn.x) + " " + r1(sn.y) + ")");
+      if (sn) {
+        const t = "translate(" + r1(sn.x) + " " + r1(sn.y) + ")";
+        sn._t = t;                                       // keep writePositions' dirty check honest
+        el.setAttribute("transform", t);
+      }
     } else {
       S.nodeEls.delete(id);
     }
@@ -692,7 +786,7 @@ function MindCanvasImpl({
     rec[key] = el;
     if (el && key !== "g") {
       const se = S.sim.edgeById.get(id);
-      if (se) el.setAttribute("d", edgeD(se));
+      if (se) { se._d = edgeD(se); el.setAttribute("d", se._d); }
     }
   });
   const selEdgeRefCb = (id) => cached(S.refCbs.selEdge, id, () => (el) => {
@@ -871,12 +965,17 @@ function MindCanvasImpl({
             const w = typeof e.weight === "number" ? e.weight : 0.5;
             const inhib = e.polarity === -1;
             const sw = 0.8 + 2.6 * w;
-            const bothOn = enabledOf[e.from] !== false && enabledOf[e.to] !== false;
+            const bothOn = enabledOf.get(e.from) !== false && enabledOf.get(e.to) !== false;
             const op = (LOOK.edgeOpacityBase + LOOK.edgeOpacityWeight * w) * (bothOn ? 1 : LOOK.disabledOpacity);
             const hidden = visSet ? !(visSet.has(e.from) && visSet.has(e.to)) : false;
             const selE = selection && selection.type === "edge" && selection.id === e.id;
             return (
-              <g key={e.id} data-dna-edge="" data-id={e.id} ref={edgeRefCb(e.id, "g")} style={{ display: hidden ? "none" : undefined }}>
+              <g key={e.id} data-dna-edge="" data-id={e.id} ref={edgeRefCb(e.id, "g")}
+                tabIndex={hidden ? -1 : 0}
+                role="button"
+                aria-pressed={!!selE}
+                aria-label={`Synapse — ${labelOf(e.from)} ${inhib ? "outranks" : "reinforces"} ${labelOf(e.to)}, strength ${Math.round(w * 100)}%`}
+                style={{ display: hidden ? "none" : undefined }}>
                 {selE && (
                   <path ref={selEdgeRefCb(e.id)} fill="none" stroke={T.selectHi} strokeWidth={sw + 3.5} opacity="0.3" strokeLinecap="round" style={{ pointerEvents: "none" }} />
                 )}
@@ -922,6 +1021,7 @@ function MindCanvasImpl({
                 ref={nodeRefCb(n.id)}
                 tabIndex={0}
                 role="button"
+                aria-pressed={!!selN}
                 aria-label={`${n.label} — ${REGIONS[regKey].label}, weight ${Math.round((typeof n.weight === "number" ? n.weight : 0) * 100)}%${disabled ? ", silenced" : ""}`}
                 style={{
                   display: hidden ? "none" : undefined,
@@ -990,6 +1090,8 @@ function MindCanvasImpl({
           instead of running under whatever floats nearby. */}
       {toast && (
         <div
+          role="status"
+          aria-live="polite"
           style={{
             ...glass,
             position: "absolute", top: `${toastTop}px`, left: "50%", transform: "translateX(-50%)",
@@ -1010,7 +1112,11 @@ function MindCanvasImpl({
       <div
         style={{
           ...glass,
-          position: "absolute", right: "14px", bottom: "14px",
+          position: "absolute", right: "14px",
+          // Clears iOS Safari's bottom toolbar. The host's own --safe-bottom wins
+          // where it exists (the shell sets it to 0 on letterboxed installs where
+          // the reported inset is dead space); env() is the portable fallback.
+          bottom: "calc(14px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)))",
           display: "flex", alignItems: "center", gap: "2px",
           padding: "4px 6px", borderRadius: "999px",
         }}
