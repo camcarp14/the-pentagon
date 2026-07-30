@@ -171,7 +171,13 @@ export function VoiceProvider({ children }) {
   const stop = useCallback(() => {
     abortRef.current?.abort();
     speaker.shutUp();
-    recRef.current?.cancel();
+    // In a conversation the setting is what holds the ear open, so it has to be
+    // what closes it. Cancelling the recognizer alone tore the microphone down
+    // while `handsFree` stayed true: the effect below never re-ran, so the orb
+    // kept offering "Interrupt" over a dead ear and every further tap cancelled
+    // a recognizer that was already off. Let the setting drive the teardown.
+    if (getState().settings.handsFree) setSettings({ handsFree: false });
+    else recRef.current?.cancel();
     busyRef.current = false;
     setInterim("");
     setPhase("idle");
@@ -229,10 +235,12 @@ export function VoiceProvider({ children }) {
       onError: (e) => {
         setMicError(e.message);
         // Anything that isn't a passing network blip leaves the microphone dead
-        // until someone changes something, so the ambient switch must stop
-        // claiming SYNC is listening. `network` is the one kind that recovers
-        // on its own, so it alone leaves the setting where it was.
-        if (e.kind !== "network") setSettings({ ambient: false });
+        // until someone changes something, so the switches must stop claiming
+        // SYNC is listening — both of them: clearing `ambient` alone left a
+        // failed conversation showing "Go ahead — I'm listening" over an ear
+        // that had already been torn down. `network` is the one kind that
+        // recovers on its own, so it alone leaves the settings where they were.
+        if (e.kind !== "network") setSettings({ ambient: false, handsFree: false });
       },
       getWake: () => settingsRef.current.wakeWord || "sync",
     });
@@ -395,6 +403,16 @@ export function VoiceProvider({ children }) {
     // exactly as long as the connection is slow — which is precisely when
     // someone taps again.
     const m = rec.mode();
+    // A conversation has no tap-to-commit — the turn ends itself — so a tap is
+    // an interrupt and nothing more. Falling through to capture() here called
+    // setMode("starting") on a socket that had already opened, and nothing can
+    // promote it again once ws.onopen has fired: the caption sat on
+    // "Connecting…" while the conversation kept working underneath, and the
+    // next tap matched "starting", committed, and tore the whole thing down.
+    if (m === "conversing" || getState().settings.handsFree) {
+      auraRef.current?.stop();
+      return true;
+    }
     if (m === "capturing" || m === "starting") { rec.commitNow(); return true; }
     setMicError(null);
     rec.capture();

@@ -286,6 +286,19 @@ class ToolBoundary extends Component {
   }
 }
 
+// The shell does not route on the URL — but it does have to honour one deep
+// link: Runway's capture bookmarklet opens the site at `#runway/capture?url=…`.
+// Runway routes inside a MemoryRouter, which by design never reads the browser
+// URL, so the link is handed over in two halves — the shell picks the tool from
+// the leading segment here, and RunwayRoot turns the remainder into its opening
+// route. An unknown or hidden tool falls through to the normal first-visible
+// rule rather than stranding the user on a tab the toggle cannot reach.
+function initialTab(prefs) {
+  const visible = visibleTabs(prefs);
+  const id = (window.location.hash || "").replace(/^#\/?/, "").split(/[/?]/)[0];
+  return visible.includes(id) ? id : visible[0];
+}
+
 // ─── shell ────────────────────────────────────────────────────────────────────
 export default function Shell() {
   const session = useSession();
@@ -295,8 +308,9 @@ export default function Shell() {
   const [tabPrefs, setTabPrefs] = useState(loadTabPrefs);
   const tabs = visibleTabs(tabPrefs);
   // Open on the first visible tool rather than a hardcoded "zts", which would
-  // land on a tab the operator has hidden.
-  const [active, setActive] = useState(() => visibleTabs(loadTabPrefs())[0]);
+  // land on a tab the operator has hidden — unless the page was opened at a
+  // tool deep link (see initialTab).
+  const [active, setActive] = useState(() => initialTab(loadTabPrefs()));
   const [systemOpen, setSystemOpen] = useState(false);
 
   const pick = useCallback((a) => {

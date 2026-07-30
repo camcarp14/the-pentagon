@@ -464,6 +464,18 @@ export function removeEdge(genome, id) {
 // endpoints, self-loops, duplicate from→to synapses, and bad polarity. Entry
 // guards run first so garbage returns {ok:false} instead of throwing — loadGenome's
 // re-seed path and the view's import toast both depend on that.
+//
+// Skill execution fields are validated here too, because import is the ONLY path
+// that reaches them without the inspector: the worker puts node.model and
+// node.maxTokens straight into the Anthropic request body, and the inspector's
+// own allowlist/64..4000 clamp is UI-only, so a shared genome JSON could pin a
+// skill to any model id and any token budget. Bounds match the inspector exactly.
+// The text bound is deliberately generous — validateGenome also gates loadGenome,
+// where a false positive re-seeds and throws away the operator's real mind, so it
+// only catches a runaway payload, not a long hand-written directive.
+const ALLOWED_MODELS = [HAIKU, SONNET];
+const MAX_NODE_TEXT = 8000;
+
 export function validateGenome(g) {
   const errors = [];
   if (!g || typeof g !== "object") return { ok: false, errors: ["genome is not an object"] };
@@ -479,6 +491,9 @@ export function validateGenome(g) {
     if (!REGIONS[n.region]) errors.push(`node ${n.id}: unknown region "${n.region}"`);
     if (typeof n.weight !== "number" || !Number.isFinite(n.weight) || n.weight < 0 || n.weight > 1) errors.push(`node ${n.id}: weight out of 0..1`);
     if (typeof n.label !== "string" || !n.label) errors.push(`node ${n.id}: missing label`);
+    if (n.text !== undefined && (typeof n.text !== "string" || n.text.length > MAX_NODE_TEXT)) errors.push(`node ${n.id}: text must be a string under ${MAX_NODE_TEXT} chars`);
+    if (n.model !== undefined && !ALLOWED_MODELS.includes(n.model)) errors.push(`node ${n.id}: unknown model "${n.model}"`);
+    if (n.maxTokens !== undefined && (!Number.isInteger(n.maxTokens) || n.maxTokens < 64 || n.maxTokens > 4000)) errors.push(`node ${n.id}: maxTokens out of 64..4000`);
   });
   const eids = new Set();
   const pairs = new Set();

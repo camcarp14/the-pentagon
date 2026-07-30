@@ -59,7 +59,12 @@ export default function TradeCard({ derived, settings, position, plan }) {
   const sizing = d.action === 'ADD' ? derived.addSizing : plan?.size
   const canSize = quoteLive && sizing?.ok && plan?.stopPlan?.stop != null
 
-  const guardrails = (d.guardrails || []).filter((g) => !(quoteLive && /\bdata is (live|stale|dead)\b/i.test(g)))
+  // Anchored to MSTR. The old unanchored pattern also matched "BTC data is
+  // stale", and since advice.js only emits the MSTR rail when the quote is NOT
+  // live, a live quote meant this filter's ONLY possible effect was deleting the
+  // BTC feed warning — from shownRails and hiddenRails both, because it runs
+  // before the slice.
+  const guardrails = (d.guardrails || []).filter((g) => !(quoteLive && /^MSTR data is (live|stale|dead)\b/i.test(g)))
   const shownRails = guardrails.slice(0, 2)
   const hiddenRails = guardrails.slice(2)
 

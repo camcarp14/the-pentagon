@@ -67,6 +67,12 @@ export function validateTrade(body) {
   if (!Number.isFinite(exit) || exit <= 0) errors.push('exit must be a positive number')
   if (!Number.isInteger(shares) || shares <= 0) errors.push('shares must be a positive integer')
   if (!Number.isFinite(initialStop) || initialStop <= 0) errors.push('initialStop must be a positive number')
+  // Same invariant validatePosition enforces, and for the same reason: R is
+  // (exit - entry) / (entry - initialStop), so a stop at or above the entry
+  // makes R undefined. Such a trade used to be accepted and stored, then
+  // dropped from win rate, avg R, total R and the equity curve — a scoreboard
+  // silently computed over a different set of trades than the table below it.
+  else if (Number.isFinite(entry) && initialStop >= entry) errors.push('initialStop must be below entry')
   if (!['pullback', 'breakout', 'manual'].includes(kind)) errors.push('kind must be pullback/breakout/manual')
   if (typeof note !== 'string' || note.length > 500) errors.push('note must be a string ≤ 500 chars')
   if (errors.length) return err(errors)

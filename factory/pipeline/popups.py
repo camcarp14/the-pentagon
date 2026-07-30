@@ -6,8 +6,20 @@ validates the budget/zones and renders deterministic, on-brand graphics.
 """
 import json
 import math
+import re
 
 from . import llm, util
+
+
+# A pop-up id becomes a filename in work/overlays/ and then an ffmpeg input
+# path, so it is a filesystem sink fed by raw model output. Ids are ours to
+# assign, not the model's to choose: anything that is not a plain token gets
+# replaced rather than trusted.
+_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,32}")
+
+
+def _safe_id(value, fallback: str) -> str:
+    return str(value) if _ID_RE.fullmatch(str(value or "")) else fallback
 
 
 def plan(pdir, force: bool = False):
@@ -54,11 +66,19 @@ def validate(popups: list, duration: float, settings: dict) -> list:
     lo, hi = pc["caption_zone"]
     ok, last_end = [], -1.0
     for i, pu in enumerate(sorted(popups, key=lambda x: x.get("t_start", 0))):
-        pu.setdefault("id", f"p{i + 1}")
+        pu["id"] = _safe_id(pu.get("id"), f"p{i + 1}")
         t0 = max(1.5, float(pu.get("t_start", 0)))
         t1 = min(duration - 0.1, float(pu.get("t_end", t0 + pc["default_duration"])))
         if t1 - t0 < pc["min_duration"]:
             t1 = min(duration - 0.1, t0 + pc["min_duration"])
+            if t1 - t0 < pc["min_duration"]:
+                # Only t_end was clamped to the clip, never t_start, so a pop-up
+                # timed against a longer earlier cut survived inverted
+                # (t_start > t_end). ffmpeg's between() is then never true: the
+                # graphic never appears, yet it still spends a budget slot and
+                # still gets listed in the review doc as present.
+                print(f"  dropping {pu['id']}: no room before the end of the clip")
+                continue
         if t0 < last_end:            # no simultaneous pop-ups
             t0 = last_end + 0.1
             if t1 - t0 < pc["min_duration"]:
@@ -84,14 +104,14 @@ def render_overlays(pdir, popups: list, settings: dict):
         f.unlink()
     o = settings["output"]
     manifest = []
-    for pu in popups:
+    for i, pu in enumerate(popups):
         img = Image.new("RGBA", (o["width"], o["height"]), (0, 0, 0, 0))
         try:
             _draw(img, pu, settings)
         except Exception as e:
             print(f"  skipping {pu.get('id')}: {e}")
             continue
-        fn = f"{pu['id']}.png"
+        fn = f"{_safe_id(pu.get('id'), f'p{i + 1}')}.png"
         img.save(p["overlays"] / fn)
         manifest.append({"png": fn, "t0": pu["t_start"], "t1": pu["t_end"],
                          "id": pu["id"]})
@@ -172,9 +192,17 @@ def _draw(img, pu: dict, settings: dict):
         _arrow(d, (x1, y1), (x2, y2), (*accent, 255), 14)
 
     elif kind == "image":
-        asset = util.ROOT / settings["paths"]["graphics_dir"] / str(pu.get("asset", ""))
-        if not asset.exists():
-            raise FileNotFoundError(f"asset not found: {asset.name}")
+        # The asset name is free-form model output feeding a read whose result
+        # is burned into the published video. `graphics_dir / "../../secrets"`
+        # escapes, and an absolute value discards graphics_dir entirely
+        # (Path("/a/b") / "/tmp/x.png" is "/tmp/x.png"), so a private image
+        # could be composited into a Short. Only files that actually sit in
+        # graphics_dir are eligible.
+        gdir = (util.ROOT / settings["paths"]["graphics_dir"]).resolve()
+        asset = (gdir / str(pu.get("asset", ""))).resolve()
+        if asset.parent != gdir or not asset.is_file():
+            raise FileNotFoundError(
+                f"asset not in {settings['paths']['graphics_dir']}: {pu.get('asset', '')!r}")
         art = Image.open(asset).convert("RGBA")
         target_w = int(float(pu.get("w", 0.34)) * W)
         ratio = target_w / art.width

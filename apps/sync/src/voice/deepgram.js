@@ -122,6 +122,21 @@ const CONVO_PARAMS = {
   no_delay: "true",
 };
 
+// ─── Reconnect policy ────────────────────────────────────────────────────────
+// A close we did not ask for is worth reopening, but only so many times. The
+// two-strike `refusals` counter below covers handshakes that never opened, and
+// ws.onopen resets it — so a socket that DOES open and is then closed by the
+// server fell through to an unconditional retry with no counter and no backoff.
+// That is reachable without anything being broken: backgrounding the installed
+// app suspends the AudioContext, the worklet stops posting, and Deepgram hangs
+// up on the idle stream. Each reopen mints a fresh token and a fresh billed
+// session, and the loop ran for as long as the app stayed open with nothing
+// surfaced to the user.
+const REOPEN_MS = 400;          // first retry; doubles from there
+const REOPEN_MAX_MS = 8000;
+const REOPEN_LIMIT = 6;         // consecutive short-lived sessions before giving up
+const HEALTHY_MS = 20000;       // a session that lasted this long was not part of a loop
+
 /**
  * Reject if a promise hasn't settled in time.
  *
@@ -199,6 +214,8 @@ export function createDeepgramRecognizer({
   let attempt = 0;         // generation counter; teardown() bumps it too
   let formIx = 0;          // which AUTH_FORMS entry to try next
   let refusals = 0;        // consecutive handshakes that never opened
+  let reopens = 0;         // consecutive sessions that opened and then died young
+  let reopenTimer = 0;
 
   const setMode = (m) => { mode = m; onState?.(m); };
 
@@ -463,6 +480,7 @@ export function createDeepgramRecognizer({
    *  a single guarded sequence rather than a wall. */
   function wire(ws, ix, gen) {
     let opened = false;
+    let openedAt = 0;
 
     // The handshake needs a deadline of its own, and this was the hole the
     // other two timeouts left. A WebSocket that is refused fires onclose and a
@@ -482,6 +500,7 @@ export function createDeepgramRecognizer({
 
     ws.onopen = () => {
       opened = true;
+      openedAt = Date.now();
       clearTimeout(handshake);
       refusals = 0;
       provenForm = ix;                  // this one works; stop trying the other
@@ -556,7 +575,29 @@ export function createDeepgramRecognizer({
       // A close we didn't ask for, while still wanted, is worth reopening —
       // and because Deepgram only checks the credential at the handshake, a
       // reconnect needs a fresh token rather than the expired one.
-      setTimeout(() => { if (wanted && !socket) connect(); }, 400);
+      //
+      // Bounded, because `refusals` above never sees this path: it is reset by
+      // ws.onopen, so a session that opens, carries no audio and is hung up on
+      // used to reopen forever on a flat 400ms timer. A session that lived long
+      // enough to be a real one clears the count; a run of short-lived ones
+      // backs off and then stops with something the user can act on, rather
+      // than minting a token a cycle behind a UI that still says "listening".
+      if (opened && Date.now() - openedAt >= HEALTHY_MS) reopens = 0;
+      if (++reopens > REOPEN_LIMIT) {
+        wanted = false;
+        teardown();
+        setMode("off");
+        onError?.({
+          kind: "dropped",
+          message: "The connection to Deepgram kept dropping as fast as it was opened, so listening has stopped. Tap to start again.",
+        });
+        return;
+      }
+      clearTimeout(reopenTimer);
+      reopenTimer = setTimeout(
+        () => { if (wanted && !socket) connect(); },
+        Math.min(REOPEN_MS * 2 ** (reopens - 1), REOPEN_MAX_MS),
+      );
     };
   }
 
@@ -578,6 +619,11 @@ export function createDeepgramRecognizer({
     attempt++;
     convo = false;
     uplinkOn = true;                    // the next session starts unmuted
+    // A pending reopen belongs to the session being torn down, and the strike
+    // count with it: whatever comes next was asked for by a person.
+    clearTimeout(reopenTimer);
+    reopenTimer = 0;
+    reopens = 0;
     clearInterval(keepAlive);
     keepAlive = 0;
     closeSocket();

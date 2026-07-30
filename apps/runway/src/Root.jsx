@@ -8,7 +8,7 @@
 //     Runway's `body {}` / `input {}` rules can never bleed onto ZTS/Clarify.
 //   • Auth: Runway's supabase-js client reads the same VITE_SUPABASE_URL as the
 //     shell (the clarify project), so it shares the one session automatically.
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { MemoryRouter } from "react-router-dom";
 import appCss from "./styles/app.css?inline";
 import polishCss from "./styles/polish.css?inline";
@@ -63,6 +63,18 @@ const EMBED_OVERRIDES = `
 }
 `;
 
+// The capture bookmarklet opens the site at `<origin>/#runway/capture?url=…`.
+// The shell reads the `runway` segment to pick the tool; the rest is this
+// router's opening entry, because a MemoryRouter cannot read the browser URL
+// itself. Without this hand-off the bookmarklet dropped its payload on the
+// floor and Capture's ?url= auto-parse could never fire.
+function initialEntry() {
+  const h = (window.location.hash || "").replace(/^#\/?/, "");
+  if (!h.startsWith("runway")) return null;
+  const rest = h.slice("runway".length);
+  return rest.startsWith("/") ? rest : null;
+}
+
 export default function RunwayRoot() {
   useEffect(() => {
     const el = document.createElement("style");
@@ -71,8 +83,16 @@ export default function RunwayRoot() {
     document.head.appendChild(el);
     return () => el.remove();
   }, []);
+
+  const [entry] = useState(initialEntry);
+  useEffect(() => {
+    // Consume the deep link once. Left in the address bar it would re-run the
+    // (paid) posting parse on every reload of the tab.
+    if (entry) history.replaceState(null, "", window.location.pathname + window.location.search);
+  }, [entry]);
+
   return (
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[entry || "/"]}>
       <App />
     </MemoryRouter>
   );

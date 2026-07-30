@@ -53,16 +53,34 @@ Return ONLY valid JSON: {"body":"..."}`;
 // One engine pass over every active enrollment. Exported for tests/manual runs.
 // `cards` supplies prospect/contact context (already loaded by the app).
 export async function runEnginePass({ cards, toneMemory, log = () => {} }) {
-  const [sequences, steps, enrollments] = await Promise.all([
-    seqDb.getSequences().catch(() => []),
-    seqDb.getSteps().catch(() => []),
-    seqDb.getEnrollments(["active"]).catch(() => []),
-  ]);
+  // These fetches must NOT fall back to []. A failed sequence_steps read used to
+  // become an empty ladder, which reads as "cadence exhausted" for every active
+  // enrollment — one 5xx would mark the whole book 'completed' and nothing
+  // re-opens a completed enrollment. Same for the ledger: an empty messages list
+  // reads as "nothing sent yet" and re-drafts steps that already went out.
+  // A pass we couldn't ground in real data is a pass we don't run.
+  let sequences, steps, enrollments;
+  try {
+    [sequences, steps, enrollments] = await Promise.all([
+      seqDb.getSequences(),
+      seqDb.getSteps(),
+      seqDb.getEnrollments(["active"]),
+    ]);
+  } catch (err) {
+    log(`Engine pass skipped — couldn't load sequence state: ${err.message}`);
+    return { decisions: 0, drafted: 0, error: err.message };
+  }
   if (!enrollments || enrollments.length === 0) return { decisions: 0, drafted: 0 };
 
   const outreachIds = enrollments.map((e) => e.outreach_id);
-  const messages = await seqDb.getMessagesFor(outreachIds).catch(() => []);
-  const events = await seqDb.getEventsForMessages(messages).catch(() => []);
+  let messages, events;
+  try {
+    messages = await seqDb.getMessagesFor(outreachIds);
+    events = await seqDb.getEventsForMessages(messages);
+  } catch (err) {
+    log(`Engine pass skipped — couldn't load the message ledger: ${err.message}`);
+    return { decisions: 0, drafted: 0, error: err.message };
+  }
 
   const cardById = new Map((cards || []).map((c) => [c.id, c]));
   let drafted = 0, aiDrafts = 0, decisions = 0;
@@ -91,6 +109,15 @@ export async function runEnginePass({ cards, toneMemory, log = () => {} }) {
         await seqDb.updateEnrollment(enrollment.id, patch);
       } else if (decision.action === "draft") {
         const step = decision.step;
+        if (!card) {
+          // No card means no merge vars, so the row would land in the queue with
+          // literal {{business_name}} tags — and worse, it burns the one-draft-
+          // per-step slot that pendingForStep guards, so the correct draft can
+          // never replace it. The first pass fires while the board is still
+          // loading, so this is a wait, not an error.
+          log(`Skipped draft for ${enrollment.outreach_id} — prospect card not loaded`);
+          continue;
+        }
         let body = null;
         let personalized = false;
         // Budget counts actual AI calls — template-only drafts don't consume it.

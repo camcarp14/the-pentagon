@@ -197,7 +197,12 @@ function StarterPacks() {
 function BookmarkletCard() {
   const toast = useToast();
   const anchorRef = useRef(null);
-  const code = `javascript:void(window.open('${window.location.origin}/capture?url='+encodeURIComponent(location.href)))`;
+  // A HASH deep link, not a path. Runway is embed-only: the shell serves every
+  // path from one index.html and does no URL routing, so `/capture?url=…` just
+  // booted the shell on its default tab and threw the posting away. `#runway/…`
+  // is the form the shell selects the tool from and RunwayRoot feeds to its
+  // MemoryRouter (see apps/runway/src/Root.jsx).
+  const code = `javascript:void(window.open('${window.location.origin}/#runway/capture?url='+encodeURIComponent(location.href)))`;
   useEffect(() => { anchorRef.current?.setAttribute('href', code); }, [code]);
   return (
     <div className="card section bookmarklet">

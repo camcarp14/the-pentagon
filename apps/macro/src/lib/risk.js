@@ -20,7 +20,11 @@ export function sizePosition({ equity, riskPct, entry, stop, maxPositionPct = 30
     shares = Math.floor(maxUsd / entry)
     capped = true
   }
-  if (shares <= 0) return { ...bad('risk_too_small_for_one_share'), capped }
+  // Two different zeroes, and they point at opposite dials. If the cap is what
+  // took shares to zero, one share simply costs more than maxPositionPct of
+  // equity — telling that user to widen risk % sends them at the one setting
+  // that cannot help (it raises real dollar risk and still yields zero shares).
+  if (shares <= 0) return { ...bad(capped ? 'position_cap_below_one_share' : 'risk_too_small_for_one_share'), capped }
   const riskUsd = round2(shares * perShareRisk)
   return {
     ok: true,

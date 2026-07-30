@@ -65,9 +65,14 @@ def write_review(pdir, draft_path: str) -> str:
               "## Pop-ups (draft timeline)"]
     if popups.get("popups"):
         for pu in popups["popups"]:
-            desc = pu.get("text") or pu.get("asset") or pu.get("type")
+            # `type` is optional to the renderer (popups._draw defaults it), so
+            # a pop-up added by revise without one renders fine and then blew up
+            # here with KeyError — after render already wrote draft vN and
+            # bumped draft_version, leaving that draft with no REVIEW_vN.md.
+            kind = pu.get("type", "text")
+            desc = pu.get("text") or pu.get("asset") or kind
             lines.append(f"- `{pu['id']}` {pu['t_start']:.1f}-{pu['t_end']:.1f}s "
-                         f"[{pu['type']}] {desc} — {pu.get('intent', '')}")
+                         f"[{kind}] {desc} — {pu.get('intent', '')}")
     else:
         lines.append("- none")
 

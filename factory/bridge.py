@@ -22,7 +22,10 @@ Endpoints:
     GET  /projects                   -> [ { name, title, draft_version, approved_version,
                                             duration, has_final, has_review, package } ]
     GET  /projects/<name>/review     -> { markdown } (latest REVIEW_vN.md)
-    POST /projects/<name>/approve    -> { ok, approved_version }
+    POST /projects/<name>/approve    -> body: optional { version } — the draft
+                                        the caller actually reviewed; refused
+                                        with 409 if the project moved past it
+                                        -> { ok, approved_version }
     POST /briefs                     -> body: brief JSON from The Pentagon;
                                         writes briefs/<date>_<slug>.md (+.json)
                                         -> { ok, path, cli }
@@ -241,6 +244,16 @@ class Handler(BaseHTTPRequestHandler):
             v = state.get("draft_version", 0)
             if not v:
                 return self._send(409, {"ok": False, "error": "no draft to approve yet"})
+            # The client's project list is a 15s-old snapshot and its review
+            # modal holds an older one still, so "Approve draft v1" could land
+            # after a `revise` in a terminal bumped the project to v2 and
+            # approve a draft nobody watched — which then exports. When the
+            # caller tells us which draft it was looking at, hold it to that.
+            claimed = body.get("version")
+            if claimed is not None and claimed != v:
+                return self._send(409, {"ok": False, "draft_version": v,
+                                        "error": f"draft moved on to v{v} while you were "
+                                                 f"reviewing v{claimed} — reload and re-watch"})
             state["approved_version"] = v
             state_file.write_text(json.dumps(state, indent=2), encoding="utf-8")
             return self._send(200, {"ok": True, "approved_version": v})

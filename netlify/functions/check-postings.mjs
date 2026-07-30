@@ -67,14 +67,34 @@ async function apiRung(ats, deadlineAt) {
   return null; // 429/5xx/anything else — never mark expired on a rate limit
 }
 
+const REDIRECT_STATUSES = [301, 302, 303, 307, 308];
+const MAX_REDIRECTS = 5;
+
 async function htmlRung(url, deadlineAt) {
   let res, body;
+  // Redirects are followed BY HAND so the guard applies to every hop. With
+  // `redirect: 'follow'` the runtime walked straight out of fetchableJobUrl,
+  // which only ever saw the URL stored on the job: a posting on a public host
+  // that 302s to 169.254.169.254 or an RFC1918 address was fetched anyway.
+  let current = url;
   try {
-    res = await fetch(url, {
-      headers: { 'user-agent': UA, accept: 'text/html,application/xhtml+xml' },
-      redirect: 'follow',
-      signal: AbortSignal.timeout(clampTimeout(deadlineAt)),
-    });
+    for (let hop = 0; ; hop += 1) {
+      res = await fetch(current, {
+        headers: { 'user-agent': UA, accept: 'text/html,application/xhtml+xml' },
+        redirect: 'manual',
+        signal: AbortSignal.timeout(clampTimeout(deadlineAt)),
+      });
+      const location = REDIRECT_STATUSES.includes(res.status) ? res.headers.get('location') : null;
+      if (!location) break;
+      if (hop >= MAX_REDIRECTS) {
+        return { result: 'uncertain', code: 'too_many_redirects', reason: `more than ${MAX_REDIRECTS} redirects` };
+      }
+      const next = fetchableJobUrl(new URL(location, current).href);
+      if (!next) {
+        return { result: 'uncertain', code: 'unfetchable_redirect', reason: 'redirected to an address that is not a public http(s) host' };
+      }
+      current = next.href;
+    }
     body = await res.text();
   } catch (ex) {
     return { result: 'uncertain', code: 'fetch_failed', reason: String(ex.message || ex) };
@@ -82,7 +102,7 @@ async function htmlRung(url, deadlineAt) {
   return classifyLiveness({
     status: res.status,
     requestedUrl: url,
-    finalUrl: res.url || url,
+    finalUrl: current,
     bodyText: stripHtml(body), // MIN_CONTENT check must see stripped text, not raw HTML
   });
 }

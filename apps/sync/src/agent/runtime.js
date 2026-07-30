@@ -163,6 +163,13 @@ export async function runTurn({ text, onDelta, onSpeakable, onAct, signal }) {
 
       const results = [];
       for (const call of calls) {
+        // The signal used to be read once per step, before stream(). A batch of
+        // tool_use blocks runs after that check, and each Pentagon tool is a
+        // real network round trip — so a Stop, an Escape, or simply speaking in
+        // conversation mode landed mid-batch and every remaining tool still ran
+        // to completion. The turn was marked "Stopped" while the calendar write
+        // the user interrupted had already been filed.
+        if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
         if (isServerTool(call.name)) continue; // Anthropic already ran it
         const act = {
           id: id("a"),
@@ -208,6 +215,21 @@ export async function runTurn({ text, onDelta, onSpeakable, onAct, signal }) {
     if (e?.name === "AbortError") {
       flushSpeakable(true);
       patchTurn(turn.id, { status: "stopped", text: assembled.trim() });
+      // Aborting mid-batch throws out of the tool loop, which skips the
+      // `messages.push({ role: "user", content: results })` that answers the
+      // assistant turn we already pushed. That leaves tool_use blocks with no
+      // matching tool_result — a shape the API rejects outright, so persisting
+      // it would make the NEXT turn fail with a 400 rather than this one.
+      // trimHistory only repairs a leading orphaned tool_result, not a trailing
+      // orphaned tool_use, so drop it here. The visible text is already on the
+      // turn record; history only needs to stay well-formed.
+      while (messages.length) {
+        const last = messages[messages.length - 1];
+        const unanswered = last.role === "assistant" && Array.isArray(last.content)
+          && last.content.some((b) => b.type === "tool_use");
+        if (!unanswered) break;
+        messages.pop();
+      }
       setHistory(messages);
       return { turnId: turn.id, text: assembled.trim(), acts, stopped: true };
     }

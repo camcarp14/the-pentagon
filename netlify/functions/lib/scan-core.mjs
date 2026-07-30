@@ -16,11 +16,17 @@ const MAX_BOARDS_PER_SCAN = 12; // stay well inside the function timeout; client
 // db: a Supabase client (user-scoped or service-role); userId set explicitly
 // on every insert so both paths write identical rows.
 export async function scanBoards({ db, userId }) {
-  const [{ data: profile }, { data: boards, error: bErr }, { data: seenRows, error: sErr }] = await Promise.all([
-    db.from('target_profile').select('*').maybeSingle(),
+  // Scoped by user_id like its two siblings: the cron path uses the service-role
+  // client, which bypasses RLS, so an unscoped maybeSingle() would error on a
+  // second profile row and land in the keywordless path below.
+  const [{ data: profile, error: pErr }, { data: boards, error: bErr }, { data: seenRows, error: sErr }] = await Promise.all([
+    db.from('target_profile').select('*').eq('user_id', userId).maybeSingle(),
     db.from('watch_boards').select('*').eq('user_id', userId),
     db.from('seen_postings').select('provider, board, external_id, status, company, title, first_seen_at').eq('user_id', userId),
   ]);
+  // A discarded profile error read as "no keywords", and a keywordless pass used
+  // to burn every open posting to 'ignored' permanently. Fail the scan instead.
+  if (pErr) throw new Error(`target_profile read failed: ${pErr.message}`);
   if (bErr) throw new Error(`watch_boards read failed: ${bErr.message}`);
   if (sErr) throw new Error(`seen_postings read failed: ${sErr.message}`);
 
@@ -44,6 +50,12 @@ export async function scanBoards({ db, userId }) {
     queued_items: [], board_errors: [], keywords_missing: keywords.length === 0,
   };
   if (!boards?.length) return summary;
+
+  // With no keywords nothing can match, and every posting fetched would be
+  // written as status:'ignored' — a row the scan never re-evaluates, so the
+  // roles open on the day the cron first ran before the profile was filled in
+  // would never surface again. A scan that cannot match must consume nothing.
+  if (keywords.length === 0) return summary;
 
   // least-recently-scanned first (never-scanned lead), so repeated scans
   // round-robin across every board without one big timeout-prone pass

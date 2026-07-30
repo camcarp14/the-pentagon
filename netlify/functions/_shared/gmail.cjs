@@ -55,6 +55,14 @@ async function sendEmail({ to, subject, body, replyToMessageId, threadId }) {
   if (!to || !subject || !body) {
     throw new Error("GMAIL_MISSING_FIELDS: to, subject and body are all required");
   }
+  // Header values go into a \r\n-joined RFC822 block, so a CR or LF inside one
+  // does not escape a string — it starts a new header, or ends the header block
+  // and rewrites the body. `to` comes from third-party prospecting data, not
+  // from a validator, so it is checked here where the message is actually built
+  // rather than trusted from each call site.
+  if (/[\r\n]/.test(String(to)) || /[\r\n]/.test(String(replyToMessageId || ""))) {
+    throw new Error("GMAIL_HEADER_INJECTION: newline in a header value");
+  }
   const token = await accessToken();
 
   // Subject is base64'd because a non-ASCII character in a raw header is

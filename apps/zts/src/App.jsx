@@ -6,7 +6,7 @@ import { T, syne, mono } from "./theme.js";
 import EnginePanel from "./EnginePanel.jsx";
 import { FactoryPanel, sendBriefToFactory } from "./factory.jsx";
 import { DnaView } from "./dna/DnaView.jsx";
-import { DnaWorker } from "./dna/dnaWorker.js";
+import { DnaWorker, pickArticleFields } from "./dna/dnaWorker.js";
 import { estimateCost } from "@cc/ai";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -423,6 +423,11 @@ Respond ONLY with valid JSON, no preamble or markdown fences:
 // local → copies the HTML so you can paste into Shopify admin manually. Mirrors
 // the sendEmail/createMeeting graceful-degradation pattern.
 async function publishToShopify(article) {
+  // Sanitize the SAME way the review modal renders it. The operator approves a
+  // DOMPurify-sanitized preview; shipping the raw model HTML meant the approval
+  // gate audited a different document than the one that went live on the public
+  // storefront — any script/iframe/on* the model emitted was invisible in review.
+  const bodyHtml = DOMPurify.sanitize(article.article_html || "");
   const isDeployed = window.location.hostname !== "localhost";
   if (isDeployed) {
     // The function now requires a session (it publishes a live, public article
@@ -432,13 +437,13 @@ async function publishToShopify(article) {
     const res = await fetch("/.netlify/functions/shopify-publish", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}) },
-      body: JSON.stringify({ title: article.title_tag, body_html: article.article_html, summary: article.meta_description, tags: article.target_keyword, handle: article.slug }),
+      body: JSON.stringify({ title: article.title_tag, body_html: bodyHtml, summary: article.meta_description, tags: article.target_keyword, handle: article.slug }),
     });
     const data = await res.json();
     if (!data.success) throw new Error(data.error || "Shopify publish failed");
     return { method: "api", url: data.url || null };
   }
-  try { await navigator.clipboard.writeText(article.article_html || ""); } catch {}
+  try { await navigator.clipboard.writeText(bodyHtml); } catch {}
   return { method: "clipboard" };
 }
 
@@ -1189,7 +1194,11 @@ function AgentEngine({ creators, shorts, articles, onArticleDraft }) {
           const kw = kws.find(k => !covered.has(k.toLowerCase())) || null;
           const pkg = await generateArticle({ keyword: kw });
           if (pkg && onArticleDraft) {
-            onArticleDraft({ id: `a_${Date.now()}`, created_at: new Date().toISOString(), stage: "review", auto_drafted: true, keyword: kw, ...pkg });
+            // Trusted fields LAST, model fields whitelisted — spreading the reply
+            // over stage/auto_drafted let a "stage":"published" key in the JSON
+            // drop the draft straight into the Published column, past the review
+            // gate this cadence exists to feed.
+            onArticleDraft({ id: `a_${Date.now()}`, created_at: new Date().toISOString(), ...pickArticleFields(pkg), stage: "review", auto_drafted: true, keyword: kw });
             kb.add([{ agent: "seoCadence", type: "observation", signal: "info", text: `Drafted a new article for review: "${pkg.title_tag}" (${pkg.target_keyword}). Approve or reject it in the SEO tab.` }]);
           }
         }
@@ -1669,11 +1678,16 @@ export default function App({ embedded = false }) {
     // id/created_at out of habit from the old localStorage shape — strip them
     // so Supabase generates its own UUID/timestamp instead of rejecting a
     // non-UUID string in the id column.
+    // Returns whether the draft actually landed. The DNA worker awaits this: it
+    // used to fire-and-forget, so an RLS denial or a network blip was swallowed
+    // into the console.warn below while the work log still said "done" — and the
+    // worker's today-dedup then refused to retry that keyword until midnight.
     const { id: _id, created_at: _ca, ...fields } = a;
-    if (!supabase) { setArticles(prev => [{ id: `local_${Date.now()}`, created_at: new Date().toISOString(), ...fields }, ...prev]); return; }
+    if (!supabase) { setArticles(prev => [{ id: `local_${Date.now()}`, created_at: new Date().toISOString(), ...fields }, ...prev]); return true; }
     const { data, error: err } = await supabase.from("articles").insert(fields).select();
-    if (err) { console.warn("[addArticle] insert failed:", err.message); return; }
+    if (err) { console.warn("[addArticle] insert failed:", err.message); return false; }
     if (data?.[0]) setArticles(prev => [data[0], ...prev]);
+    return true;
   };
 
   const TABS = ["mission", "creators", "studio", "seo", "dna"];

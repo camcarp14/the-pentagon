@@ -117,10 +117,22 @@ export const handler = async () => {
     // drafted today, nothing awaiting review", which is the most permissive
     // reading of the two numbers whose whole job is to say STOP. On this engine
     // that means writing cold emails past the daily cap.
+    //
+    // COUNTED ON updated_at, NOT created_at. This engine does not insert when it
+    // drafts — it fills in a row Clarify created at PROSPECTING time (see the
+    // note below), so created_at is the day the prospect was found, not the day
+    // the draft was written. Counting it meant every prospect added before today
+    // scored zero, preparedToday stayed at 0 forever against an existing
+    // pipeline, and perDay never bound: twelve paid generations a day under a
+    // cap of one, with the run note reporting "0 today". The draft write is what
+    // sets updated_at and draft_subject, so that pair is what "drafted today"
+    // actually means.
     const dayStart = new Date(now); dayStart.setUTCHours(0, 0, 0, 0);
     const [todayRes, pendingRes] = await Promise.all([
       sb.from('outreach').select('id', { count: 'exact', head: true })
-        .in('status', OUTREACH_DRAFT_STATUSES).gte('created_at', dayStart.toISOString()),
+        .in('status', OUTREACH_DRAFT_STATUSES)
+        .not('draft_subject', 'is', null)
+        .gte('updated_at', dayStart.toISOString()),
       sb.from('outreach').select('id', { count: 'exact', head: true }).in('status', OUTREACH_DRAFT_STATUSES),
     ]);
     const countErr = todayRes.error || pendingRes.error;

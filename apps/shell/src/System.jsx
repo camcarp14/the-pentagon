@@ -19,6 +19,15 @@ import Ops from "./Ops.jsx";
 // Which localStorage prefix each tool writes under (they run on one domain now).
 const LS = { zts: "zts_", clarify: "sm_", looper: "lp_" };
 const USAGE_APPS = ["zts", "clarify", "looper"]; // Runway logs AI server-side; not yet unified
+// What to say on the card of a tool this screen cannot total. One line per app,
+// because "no spend to log" is only true of macro.
+const UNTRACKED_NOTE = {
+  runway: "Runs its AI server-side — unified logging is the next step.",
+  ideas: "Run log unreachable — spend is recorded in Postgres, not this browser.",
+  macro: "Keyless market data — no Claude spend to log here.",
+  sync: "Spends through the claude-stream proxy — not logged here yet.",
+  business: "Spend lives in the agent project's spend_ledger, not this browser.",
+};
 const REGION_LABELS = { identity: "Identity", principle: "Principles", knowledge: "Knowledge", signal: "Signals", skill: "Skills", goal: "Goals" };
 
 // ─── neutral "platform" palette (its own identity, not any one tool's) ───────
@@ -155,11 +164,14 @@ function Overview({ isMobile }) {
                 </>
               ) : (
                 <div style={{ fontSize: 11.5, color: P.faint, lineHeight: 1.5 }}>
-                  {p.app === "runway"
-                    ? "Runs its AI server-side — unified logging is the next step."
-                    : p.app === "ideas"
-                      ? "Run log unreachable — spend is recorded in Postgres, not this browser."
-                      : "Keyless market data — no Claude spend to log here."}
+                  {/* Keyed per app. A single fallback was written when macro was
+                      the only other untracked tool, so as SYNC and Business
+                      landed this card started telling the operator that two
+                      tools which demonstrably spend — sync through the
+                      claude-stream proxy, business against its spend_ledger —
+                      have no Claude spend at all, on the one screen built to
+                      total spend across tools. */}
+                  {UNTRACKED_NOTE[p.app] || "Not wired into the shared usage log yet."}
                 </div>
               )}
             </div>

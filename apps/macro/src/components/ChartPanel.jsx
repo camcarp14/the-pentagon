@@ -39,6 +39,10 @@ export default function ChartPanel({ derived, settings, position }) {
           <div className="empty"><div className="glyph">▦</div>No candle history from any source. Check Settings → Data sources.</div>
         ) : (
           <Chart
+            // Remount on a symbol switch: the chart only fits its content once
+            // per mount now, so reusing the instance across MSTR→BTC would show
+            // the new tape at the old symbol's range.
+            key={view}
             candles={candles}
             position={view === 'mstr' ? position : null}
             posDerived={view === 'mstr' ? derived.posDerived : null}
@@ -92,6 +96,18 @@ function fmtR(x) { return x == null ? '—' : `${x >= 0 ? '+' : ''}${round2(x)}R
 function Chart({ candles, position, posDerived, trades }) {
   const ref = useRef(null)
   const chartRef = useRef(null)
+  const didFit = useRef(false)
+
+  // App's `derived` memo lists `now` (a 10s tick) as a dependency, so while a
+  // position is open it hands us a brand-new `posDerived` object every 10
+  // seconds even though nothing in it changed. Depending on that identity re-ran
+  // the data effect on a timer — tearing down and rebuilding every series and
+  // refitting the time scale — so a zoom into the trail could not be held for
+  // more than one tick. Depend on the values actually drawn instead; trailSeries
+  // is compared by content because it too is a fresh array each tick.
+  const hasPos = !!posDerived
+  const { effStop = null, entryIdx = -1, trailSeries = null } = posDerived || {}
+  const trailKey = trailSeries ? `${trailSeries.length}:${trailSeries.join(',')}` : ''
 
   useEffect(() => {
     if (!ref.current) return
@@ -145,20 +161,20 @@ function Chart({ candles, position, posDerived, trades }) {
       series.push(line)
     }
 
-    if (position && posDerived) {
-      if (Number.isFinite(posDerived.effStop)) {
-        candleSeries.createPriceLine({ price: posDerived.effStop, color: C.warn, lineWidth: 2, lineStyle: LineStyle.Solid, title: 'stop' })
+    if (position && hasPos) {
+      if (Number.isFinite(effStop)) {
+        candleSeries.createPriceLine({ price: effStop, color: C.warn, lineWidth: 2, lineStyle: LineStyle.Solid, title: 'stop' })
       }
-      if (Number.isFinite(position.initialStop) && position.initialStop !== posDerived.effStop) {
+      if (Number.isFinite(position.initialStop) && position.initialStop !== effStop) {
         candleSeries.createPriceLine({ price: position.initialStop, color: C.crit, lineWidth: 1, lineStyle: LineStyle.Dashed, title: 'initial' })
       }
       if (Number.isFinite(position.avgEntry)) {
         candleSeries.createPriceLine({ price: position.avgEntry, color: C.ink3, lineWidth: 1, lineStyle: LineStyle.Dotted, title: 'entry' })
       }
       // trail path since entry
-      if (posDerived.trailSeries?.length && posDerived.entryIdx >= 0) {
+      if (trailSeries?.length && entryIdx >= 0) {
         const trail = chart.addLineSeries({ color: C.warn, lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
-        trail.setData(posDerived.trailSeries.map((v, i) => v == null ? null : ({ time: candles[posDerived.entryIdx + i].t, value: v })).filter(Boolean))
+        trail.setData(trailSeries.map((v, i) => v == null ? null : ({ time: candles[entryIdx + i].t, value: v })).filter(Boolean))
         series.push(trail)
       }
     }
@@ -176,8 +192,14 @@ function Chart({ candles, position, posDerived, trades }) {
     }
 
     chart._torqueSeries = series
-    chart.timeScale().fitContent()
-  }, [candles, position, posDerived, trades])
+    // Fit once, on the first tape we actually draw. After that the visible
+    // range belongs to the user — same rule the ResizeObserver applies with
+    // prevWidth === 0.
+    if (!didFit.current && candles.length) {
+      didFit.current = true
+      chart.timeScale().fitContent()
+    }
+  }, [candles, position, hasPos, effStop, entryIdx, trailKey, trades])
 
   return (
     <div className="chartbox">

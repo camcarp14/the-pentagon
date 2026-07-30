@@ -51,7 +51,12 @@ function BriefCard({ brief, kind, onWrite, busy }) {
   );
 }
 
-function DraftSheet({ draft, onClose }) {
+// Doubles as the reader for an archived brief, which is why `deletable` is a
+// prop rather than always true: remove() filters s.drafts by id, so on a brief
+// it matched nothing, changed nothing, and still closed the sheet, toasted
+// "Deleted" with an Undo, and filed a ledger entry for a deletion that never
+// happened. The brief was still in the Earlier list on the next visit.
+function DraftSheet({ draft, onClose, deletable = true }) {
   const toast = useToast();
   const [confirmEl, confirm] = useConfirm();
   const [copied, setCopied] = useState(false);
@@ -84,7 +89,7 @@ function DraftSheet({ draft, onClose }) {
         title={draft.title}
         footer={
           <>
-            <Button kind="danger" size="lg" onClick={remove}><IcTrash size={16} /></Button>
+            {deletable && <Button kind="danger" size="lg" onClick={remove}><IcTrash size={16} /></Button>}
             <Button kind="quiet" size="lg" style={{ flex: 1 }} onClick={onClose}>Close</Button>
             <Button kind="primary" size="lg" style={{ flex: 1 }} onClick={copy}>
               {copied ? <><IcCheck size={16} /> Copied</> : "Copy"}
@@ -208,7 +213,15 @@ export default function BriefPage() {
         </div>
       </div>
 
-      {open && <DraftSheet draft={open} onClose={() => setOpen(null)} />}
+      {/* Only offer Delete for something the drafts array actually holds — the
+          sheet also opens archived briefs, and its delete only knows drafts. */}
+      {open && (
+        <DraftSheet
+          draft={open}
+          deletable={s.drafts.some((d) => d.id === open.id)}
+          onClose={() => setOpen(null)}
+        />
+      )}
     </>
   );
 }

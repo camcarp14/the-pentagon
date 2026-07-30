@@ -19,6 +19,9 @@ export function store() {
   return getStore({ name: 'torque', consistency: 'strong' })
 }
 
+// Key prefix for the per-source health blobs — see recordStatus.
+const STATUS_PREFIX = 'source_status/'
+
 export function unauthorized() {
   return json({ error: 'unauthorized' }, 401)
 }
@@ -54,14 +57,16 @@ export function json(body, status = 200, extraHeaders = {}) {
   })
 }
 
+// The budget has to cover the BODY, not just the headers. The old form armed an
+// AbortController and cleared it in a `finally` around the fetch — but fetch
+// resolves as soon as the headers arrive, so the timer was disarmed before
+// getJson/getText read the body. An upstream that answered 200 instantly and
+// then trickled bytes ran unbounded, ate the whole ~10s invocation, and starved
+// the fallback chain the 3s per-attempt budget exists to leave room for.
+// AbortSignal.timeout stays armed until the body is finished, which is what the
+// rest of the repo's functions already use.
 export async function fetchWithTimeout(url, opts = {}, timeoutMs = 9000) {
-  const ctl = new AbortController()
-  const t = setTimeout(() => ctl.abort(new Error(`timeout after ${timeoutMs}ms`)), timeoutMs)
-  try {
-    return await fetch(url, { ...opts, signal: ctl.signal })
-  } finally {
-    clearTimeout(t)
-  }
+  return fetch(url, { ...opts, signal: AbortSignal.timeout(timeoutMs) })
 }
 
 /**
@@ -71,9 +76,15 @@ export async function fetchWithTimeout(url, opts = {}, timeoutMs = 9000) {
 export async function recordStatus(name, { ok, latencyMs, error = null, detail = null }) {
   try {
     const s = store()
-    const map = (await s.get('source_status', { type: 'json' })) || {}
-    const prev = map[name] || {}
-    map[name] = {
+    // ONE BLOB PER SOURCE, not one shared map. The cockpit mounts four sources
+    // at once, so four functions were reading the same document, each mutating
+    // its own key, and each writing the whole thing back. Strong consistency
+    // guarantees the read is current; it is not a compare-and-swap, so the last
+    // writer won and the other three sources' health silently disappeared —
+    // which is exactly the diagnostic /api/status exists to be trusted on.
+    const key = `${STATUS_PREFIX}${name}`
+    const prev = (await s.get(key, { type: 'json' })) || {}
+    await s.setJSON(key, {
       name,
       ok,
       at: Date.now(),
@@ -82,11 +93,22 @@ export async function recordStatus(name, { ok, latencyMs, error = null, detail =
       lastErrorAt: ok ? prev.lastErrorAt ?? null : Date.now(),
       lastSuccessAt: ok ? Date.now() : prev.lastSuccessAt ?? null,
       detail,
-    }
-    await s.setJSON('source_status', map)
+    })
   } catch {
     /* never let status bookkeeping break data delivery */
   }
+}
+
+/** Every source's latest health, keyed by source name. The per-source key
+ *  layout lives here so /api/status never has to know it. */
+export async function readStatusMap() {
+  const s = store()
+  const { blobs = [] } = await s.list({ prefix: STATUS_PREFIX })
+  const entries = await Promise.all(blobs.map(async (b) => {
+    const value = await s.get(b.key, { type: 'json' })
+    return value ? [b.key.slice(STATUS_PREFIX.length), value] : null
+  }))
+  return Object.fromEntries(entries.filter(Boolean))
 }
 
 /**

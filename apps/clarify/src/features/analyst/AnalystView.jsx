@@ -429,9 +429,10 @@ export function AnalystView() {
           uploads: Object.fromEntries(Object.entries(uploads).map(([k, v]) => [k, { name: v.name, headers: v.headers, rows: v.rows.slice(0, 200), totalRows: v.totalRows }])),
         };
         const existing = store.get("analyst_saves", []);
-        const updated = [save, ...existing].slice(0, 15);
-        localStorage.setItem("clarify_analyst_saves", JSON.stringify(updated));
-        setSavedAnalyses(updated);
+        // Must go through persistSaves: writing the legacy key directly left the
+        // sm_ key (which store.get reads first) stale, so every auto-save after
+        // the first was silently discarded on the next reload.
+        persistSaves([save, ...existing].slice(0, 15));
       }
     } catch (err) { setRawAnalysis(`Analysis failed: ${err.message}`); }
     setAnalyzing(false);

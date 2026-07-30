@@ -168,6 +168,7 @@ function stopLine(stop, distPct) {
 function sizingErrorText(code) {
   return {
     risk_too_small_for_one_share: 'risk budget too small for one whole share at this stop distance',
+    position_cap_below_one_share: 'one share costs more than the max position size allows',
     stop_not_below_entry: 'computed stop is not below the entry price',
     bad_input: 'sizing inputs incomplete',
   }[code] ?? (code || 'risk settings unavailable')

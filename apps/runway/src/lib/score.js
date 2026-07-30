@@ -43,6 +43,15 @@ export function scoreJob(job, profile) {
   }
   const b = [];
   const flags = new Set(flagIds(job.flags));
+  // vague_comp and excluded_industry are DERIVED below from the job's own
+  // fields, so they are decided fresh on every pass. Seeding them from the
+  // stored flags made them permanent: the scorer persists what it added, no UI
+  // can clear them (JobForm only toggles buzzword_heavy/unreasonable_requirements
+  // and re-extract re-unions the old set), and the next rescore read them back
+  // in. A job later edited to state $140k–$160k kept its "Vague comp" chip and
+  // its 3-point dock forever, ranked below its true fit on the board.
+  flags.delete('vague_comp');
+  flags.delete('excluded_industry');
 
   // 1) Title — 30. Any strong keyword hit in the title = 24; +3 per extra hit
   //    (cap 30). No title hit but a keyword in the description = 8.

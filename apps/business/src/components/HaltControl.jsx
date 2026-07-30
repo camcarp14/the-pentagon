@@ -70,6 +70,10 @@ export function deriveStatus(cfg, now = Date.now()) {
   // stated a finding it had not made. Over a slow link that is several seconds
   // of the status bar claiming the agent has no control row at all. A skeleton
   // and a verdict are exactly the two things B3 says must never be confused.
+  // These three no-row branches deliberately carry NO beatAge: there is no
+  // heartbeat reading to report, which is a different thing from having read
+  // one and found none. `null` means "read it, it has never beaten"; `undefined`
+  // means "not read yet", and the renderer draws nothing for it.
   if (cfg.status === "loading" && !cfg.row) {
     return { key: "loading", label: "CHECKING…", tone: "loading", detail: null };
   }
@@ -149,9 +153,11 @@ export function StatusAndHalt({ cfg, now }) {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             {tier && <Badge tone={cfg.row?.autonomy_tier >= 3 ? "stale" : "empty"} title={tier.detail}>T{cfg.row.autonomy_tier}</Badge>}
-            <span style={{ fontSize: 10.5, color: status.key === "silent" ? tone.fg : "var(--muted)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontWeight: status.key === "silent" ? 700 : 400 }}>
-              {status.beatAge === null ? "no heartbeat ever" : `heartbeat ${shortAge(status.beatAge)} ago`}
-            </span>
+            {status.beatAge !== undefined && (
+              <span style={{ fontSize: 10.5, color: status.key === "silent" ? tone.fg : "var(--muted)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontWeight: status.key === "silent" ? 700 : 400 }}>
+                {status.beatAge === null ? "no heartbeat ever" : `heartbeat ${shortAge(status.beatAge)} ago`}
+              </span>
+            )}
             {cfg.status === "error" && (
               <span style={{ fontSize: 10.5, color: "var(--bad)", fontWeight: 700, fontFamily: "var(--font-mono)" }}>
                 · offline{cfg.atMs ? ` · last confirmed ${shortAge(now - cfg.atMs)} ago` : ""}

@@ -55,12 +55,20 @@ export function composeBriefing({
 
   const latest = snaps.length ? snaps[snaps.length - 1] : null;
   const priorCandidates = snaps.filter((m) => m.atMs <= windowStartMs);
-  const baseline = priorCandidates.length
+  let baseline = priorCandidates.length
     ? priorCandidates[priorCandidates.length - 1]
     // No snapshot old enough: the oldest we have is the best baseline
     // available, but the window it covers is shorter than advertised — flagged
     // so the card can say so rather than implying six hours of coverage.
     : (snaps.length > 1 ? snaps[0] : null);
+
+  // When the metrics writer stops, EVERY snapshot we hold can predate the
+  // window — and then "the last one at or before the window start" is the
+  // latest row itself. Diffing a row against itself yields a 0 for every
+  // metric, and because priorCandidates was non-empty the card also suppressed
+  // its "baseline doesn't cover the window" note: a calm "nothing moved" for a
+  // window in which nothing was measured. No baseline is the honest answer.
+  if (baseline === latest) baseline = null;
 
   const deltas = ["objective", "mrr_usd", "customers", "trials", "conversion"]
     .map((key) => {
@@ -78,7 +86,7 @@ export function composeBriefing({
     })
     .filter(Boolean);
 
-  const baselineCoversWindow = priorCandidates.length > 0;
+  const baselineCoversWindow = baseline !== null && priorCandidates.length > 0;
 
   // ─── what it learned ───────────────────────────────────────────────────────
   const newLearnings = (learnings || [])

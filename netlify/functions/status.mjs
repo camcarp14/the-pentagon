@@ -1,7 +1,7 @@
 // First-deploy diagnostic: live-pings every upstream and reports the Blobs
 // health map. If a number on the cockpit looks wrong, this endpoint says
 // which upstream to blame — facts before theories.
-import { json, checkAuth, unauthorized, store, fetchWithTimeout } from '../shared/util.mjs'
+import { json, checkAuth, unauthorized, readStatusMap, fetchWithTimeout } from '../shared/util.mjs'
 
 const PROBES = [
   ['yahoo', 'https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1d&range=1d'],
@@ -28,7 +28,7 @@ export default async (req) => {
   let sourceStatus = null
   let blobs = { ok: true }
   try {
-    sourceStatus = (await store().get('source_status', { type: 'json' })) || {}
+    sourceStatus = await readStatusMap()
   } catch (e) {
     blobs = { ok: false, error: String(e?.message || e) }
   }

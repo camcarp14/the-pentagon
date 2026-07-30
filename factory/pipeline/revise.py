@@ -6,12 +6,57 @@ REVIEW doc. User cut adjustments persist in work/user_cuts.json so they
 survive later re-cuts.
 """
 import json
+import re
 
 from . import captions, cut, llm, package, popups, render, select, util
 
 
 RECUT_OPS = {"shift_window", "choose_candidate", "add_cut", "remove_cut"}
 POPUP_OPS = {"edit_popup", "remove_popup", "add_popup"}
+
+# The caption keys prompt 05 is allowed to touch, and what each must become.
+# What lands here is persisted into the project's overrides.yaml and deep-merged
+# on every later call, so one bad value poisons the project permanently: a
+# stringified "3" for group_max_words makes captions.group_words raise
+# TypeError comparing int >= str on every stage from then on, and a comma in a
+# font name shifts every field of the positional ASS Style row. English in the
+# prompt was the only thing holding this shut.
+CAPTION_STYLE_FIELDS = ("font_size", "y_pos", "highlight_color", "uppercase",
+                        "group_max_words")
+_HEX_COLOR = re.compile(r"#[0-9A-Fa-f]{6}")
+
+
+def _caption_field(key, value):
+    """Coerce one caption_style value, or raise so the caller can skip it."""
+    if key in ("font_size", "y_pos"):
+        num = float(value)          # whole numbers stay ints so overrides.yaml
+        return int(num) if num.is_integer() else num   # keeps reading like 110
+    if key == "group_max_words":
+        return max(1, int(value))
+    if key == "uppercase":
+        if isinstance(value, bool):
+            return value
+        if str(value).strip().lower() in ("true", "false"):
+            return str(value).strip().lower() == "true"
+        raise ValueError(value)
+    if not _HEX_COLOR.fullmatch(str(value)):
+        raise ValueError(value)
+    return str(value)
+
+
+def caption_style_fields(action: dict) -> dict:
+    out = {}
+    for k, v in action.items():
+        if k == "op":
+            continue
+        if k not in CAPTION_STYLE_FIELDS:
+            print(f"    (ignoring caption_style key '{k}': not in the vocabulary)")
+            continue
+        try:
+            out[k] = _caption_field(k, v)
+        except (TypeError, ValueError):
+            print(f"    (ignoring caption_style {k}={v!r}: wrong type)")
+    return out
 
 
 def revise(pdir, feedback: str):
@@ -98,9 +143,10 @@ def apply_actions(pdir, actions, edl, pops, pkg, settings) -> set:
                 dirty.add("cut")
 
         elif op == "caption_style":
-            fields = {k: v for k, v in a.items() if k != "op"}
-            util.save_override(pdir, {"captions": fields})
-            dirty.add("captions")
+            fields = caption_style_fields(a)
+            if fields:
+                util.save_override(pdir, {"captions": fields})
+                dirty.add("captions")
 
         elif op in ("edit_popup", "remove_popup", "add_popup"):
             lst = pops.setdefault("popups", [])

@@ -22,6 +22,7 @@ import { decide, usageInWindow, consecutiveFailures, MODE, TIER } from '@cc/ops'
 export { MODE, TIER };
 
 const WINDOW_MS = 3600_000;
+const AUDIT_ROW_LIMIT = 1000;
 
 /** Service-role client, or a named throw. Never a null that reads as "fine". */
 export function adminClient() {
@@ -50,21 +51,34 @@ export async function loadGuardState(sb, subsystem, now = Date.now()) {
   // and say so, rather than treating "absent" as "permitted".
   if (!globalRow) throw new Error("OPS_CONTROL_MISSING: no 'global' row — kill switch unreadable, refusing to act");
 
-  const { data: recent, error: aErr } = await sb
-    .from('ops_audit_log')
-    .select('at, cost_usd, status')
-    .eq('subsystem', subsystem)
-    .gte('at', new Date(now - WINDOW_MS).toISOString())
-    .order('at', { ascending: false })
-    .limit(1000);
-  if (aErr) throw new Error(`OPS_AUDIT_READ_FAILED: ${aErr.message}`);
-
   // Everything that SPENT counts against the caps. `prepared` is included and
   // must be: tier 2 is the drafting tier, so it is the most expensive path in
   // the system, and excluding it gave the single biggest spender no ceiling at
   // all. Only `blocked` is excluded — a refusal costs nothing and must not eat
   // the budget that would let a later legitimate action through.
-  const spent = (recent || []).filter((r) => r.status !== 'blocked');
+  //
+  // The exclusion is a WHERE clause, not a post-filter, because the row list is
+  // truncated: fetching newest-first and dropping blocked rows afterwards meant
+  // a run of refusals — which append at the head of that ordering — could push
+  // the spending rows past the LIMIT, and the caps would read back as 0 and
+  // re-permit a full hour's budget.
+  const { data: recent, error: aErr } = await sb
+    .from('ops_audit_log')
+    .select('at, cost_usd, status')
+    .eq('subsystem', subsystem)
+    .neq('status', 'blocked')
+    .gte('at', new Date(now - WINDOW_MS).toISOString())
+    .order('at', { ascending: false })
+    .limit(AUDIT_ROW_LIMIT);
+  if (aErr) throw new Error(`OPS_AUDIT_READ_FAILED: ${aErr.message}`);
+
+  // A full page means the window may extend past what was read, so the tally is
+  // a lower bound, not a total. A cap fed a lower bound is a cap that under-
+  // counts; refuse rather than act on it.
+  const spent = recent || [];
+  if (spent.length >= AUDIT_ROW_LIMIT) {
+    throw new Error(`OPS_AUDIT_WINDOW_TRUNCATED: more than ${AUDIT_ROW_LIMIT} spending rows in the last hour for ${subsystem} — usage unreadable, refusing to act`);
+  }
   const usage = usageInWindow(spent.map((r) => ({ at: r.at, costUsd: r.cost_usd })), now, WINDOW_MS);
 
   const { data: runs, error: rErr } = await sb

@@ -137,18 +137,28 @@ export const db = {
     }
     return deleted;
   },
-  async markSent(id, gmailMessageId, gmailThreadId, rfcMessageId) {
-    return sbFetch(`/outreach?id=eq.${id}`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        status: "sent",
-        sent_at: new Date().toISOString(),
-        gmail_message_id: gmailMessageId || null,
-        gmail_thread_id: gmailThreadId || null,
-        gmail_rfc_message_id: rfcMessageId || null,
-        next_follow_up_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-      }),
-    });
+  // `initial` marks the FIRST send on a thread. sent_at is the thread's origin
+  // timestamp — analytics (time-to-reply, weekly trend), the urgency pill and
+  // cadenceState all measure from it. Follow-ups and replies used to overwrite
+  // it, which made replied_at land before sent_at (negative reply times were
+  // filtered out of the median entirely) and restarted the follow-up ladder.
+  async markSent(id, gmailMessageId, gmailThreadId, rfcMessageId, { initial = true } = {}) {
+    const patch = {
+      status: "sent",
+      gmail_message_id: gmailMessageId || null,
+      gmail_thread_id: gmailThreadId || null,
+      gmail_rfc_message_id: rfcMessageId || null,
+    };
+    // Only sent_at is gated. next_follow_up_at is the OPPOSITE kind of value —
+    // a rolling clock that every send is supposed to push forward — and it has
+    // a live reader: sync.pentagon() counts `next_follow_up_at <= now()` as
+    // due_followups (20260729045140_create_sync_pentagon_reader.sql), which SYNC
+    // renders as "N follow-ups due". Freezing it at the first send would leave
+    // every thread ever sent permanently past-due, no matter how many follow-ups
+    // actually went out.
+    if (initial) patch.sent_at = new Date().toISOString();
+    patch.next_follow_up_at = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+    return sbFetch(`/outreach?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(patch) });
   },
   async getToneMemory() {
     return sbFetch(`/tone_memory?order=created_at.desc&limit=20`);

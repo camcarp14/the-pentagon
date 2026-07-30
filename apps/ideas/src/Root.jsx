@@ -304,7 +304,12 @@ export default function IdeasRoot() {
   const visible = useMemo(() => {
     if (!rows) return null;
     let list = tab === "saved" ? rows.filter((r) => saved.has(r.id)) : rows;
-    if (range > 0) list = list.filter((r) => (r.age_days ?? 0) <= range);
+    // The range is a DISCOVERY window — it narrows what the feed surfaces. It
+    // has no business hiding something you explicitly starred, and age_days is
+    // the repo's own age, not when you saved it: starring a six-month-old repo
+    // and switching to Saved emptied the list, so the screen read "Nothing saved
+    // yet" directly under a Saved counter showing 3.
+    if (range > 0 && tab !== "saved") list = list.filter((r) => (r.age_days ?? 0) <= range);
 
     const n = (v) => Number(v ?? 0);
     return [...list].sort((a, b) => {
@@ -355,7 +360,9 @@ export default function IdeasRoot() {
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
             <Segment value={sort} onChange={setSort} options={SORTS} />
-            <Segment value={range} onChange={setRange} options={RANGES} />
+            {/* Hidden on Saved, where the range no longer filters anything — a
+                control that visibly does nothing is worse than no control. */}
+            {tab !== "saved" && <Segment value={range} onChange={setRange} options={RANGES} />}
           </div>
 
           {run && (

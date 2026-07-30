@@ -144,6 +144,31 @@ function useLooper() {
   useEffect(() => save("journal", journal.slice(0, 60)), [journal]);
   useEffect(() => save("chat", chat.slice(-80)), [chat]);
 
+  // The cap was enforced against this tab's own React state only. Two Pentagon
+  // tabs on the same live mission each ran their own cadence, each paid the
+  // proxy, and each stopped at its OWN $1 — so the bill was N x a cap the UI
+  // presents as self-enforcing. They also clobbered each other's lp_run, and
+  // the last writer was usually the one with the LOWER spend, which reopened
+  // headroom on the next reload. Spend and iteration count are monotonic facts
+  // about the run, not about the tab: whichever number is higher is the true
+  // one, so adopt a sibling's as soon as it lands. The merge converges — an
+  // echo that changes nothing writes nothing.
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key !== K("run") || !e.newValue) return;
+      let other;
+      try { other = JSON.parse(e.newValue); } catch { return; }
+      setRun((r) => {
+        const spendUsd = Math.max(r.spendUsd, Number(other.spendUsd) || 0);
+        const iterations = Math.max(r.iterations, Number(other.iterations) || 0);
+        if (spendUsd === r.spendUsd && iterations === r.iterations) return r;
+        return { ...r, spendUsd, iterations };
+      });
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   // Everything the tick needs, read through a ref so the interval never closes
   // over stale state (the classic bug: a loop that keeps re-sending iteration 1).
   const live = useRef({ mission, run, journal, chat });
@@ -227,7 +252,12 @@ function useLooper() {
       }
 
       setJournal((prev) => [entry, ...prev].slice(0, 60));
-      if (pending.length) {
+      // Only a SUCCESSFUL iteration consumes the queued notes. Marking them
+      // delivered on a failed attempt dropped them from `pending` forever, so a
+      // note written during a transport failure never reached the model while
+      // the chat relabelled it from "You · queued" to "You". Re-sending a note
+      // the model already saw costs a line of prompt; losing one is invisible.
+      if (entry.ok && pending.length) {
         const ids = new Set(pending.map((p) => p.id));
         setChat((prev) => prev.map((x) => (ids.has(x.id) ? { ...x, delivered: true } : x)));
       }

@@ -109,7 +109,16 @@ export function AgentDataProvider({ children }) {
     if (inflight.current[key]) return;
     inflight.current[key] = true;
 
-    setSources((s) => ({ ...s, [key]: { ...s[key], status: s[key].fetchedAtMs ? s[key].status : "loading" } }));
+    // An in-flight retry must never erase a known failure. A source that has
+    // never succeeded still has `fetchedAtMs === null`, so the old form flipped
+    // "error" back to "loading" on every poll tick: during a total outage each
+    // panel oscillated between the red alarm and a neutral skeleton that is
+    // indistinguishable from first paint. freshness.js already treats
+    // error-with-no-successful-fetch as ERROR; this kept defeating it.
+    setSources((s) => ({
+      ...s,
+      [key]: { ...s[key], status: s[key].fetchedAtMs || s[key].status === "error" ? s[key].status : "loading" },
+    }));
 
     // A read with no deadline is the worst outage this tab can have, and it is
     // the one it used to ship with. A database that accepts the connection and

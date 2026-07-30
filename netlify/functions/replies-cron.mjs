@@ -31,10 +31,18 @@ const SUBSYSTEM = 'clarify.replies';
 const TRIGGER = 'netlify schedule */15';
 
 // Gmail is polled per thread, one request each, inside a 30-second budget.
-// Sixty threads is comfortably inside it and far beyond current volume; a
-// larger pipeline simply picks up the remainder on the next pass, because
-// threads with a reply stop being selected once recorded.
+// Sixty threads is comfortably inside it and far beyond current volume.
 const MAX_THREADS = 60;
+
+// The cap used to be a fixed prefix: the 60 oldest open threads, ordered by
+// sent_at. A thread only leaves that selection when a reply is recorded, and
+// most cold emails never get one — so past 60 unanswered sends the tail was
+// never polled at all, not "on the next pass", ever. The cap has to rotate.
+// Rotating on the clock rather than on a per-row checked-at column keeps this
+// to the function (a marker column would need a migration), and every 15-minute
+// slot advances the window by one batch, so the whole set is covered within
+// ceil(total / MAX_THREADS) passes.
+const SLOT_MS = 15 * 60_000;
 
 export const handler = async () => {
   const now = Date.now();
@@ -53,14 +61,25 @@ export const handler = async () => {
 
     // Threads we sent on and have not yet seen an answer to. Ordered oldest
     // first so a long pipeline cannot starve the earliest sends.
-    const { data: open, error: oErr } = await sb
+    const openQuery = (select, opts) => sb
       .from('outreach')
-      .select('id, gmail_thread_id, sent_at, contacts(email), prospects(business_name)')
+      .select(select, opts)
       .eq('status', 'sent')
       .not('gmail_thread_id', 'is', null)
-      .is('replied_at', null)
+      .is('replied_at', null);
+
+    const { count: openCount, error: cErr } = await openQuery('id', { count: 'exact', head: true });
+    if (cErr) throw new Error(`REPLIES_OPEN_COUNT_FAILED: ${cErr.message}`);
+
+    // Which slice of the open set this pass takes. One batch per 15-minute slot,
+    // wrapping — so a set larger than MAX_THREADS is polled round-robin instead
+    // of the oldest 60 being re-polled forever while the rest are never seen.
+    const batches = Math.max(1, Math.ceil((openCount || 0) / MAX_THREADS));
+    const offset = (Math.floor(now / SLOT_MS) % batches) * MAX_THREADS;
+
+    const { data: open, error: oErr } = await openQuery('id, gmail_thread_id, sent_at, contacts(email), prospects(business_name)')
       .order('sent_at', { ascending: true })
-      .limit(MAX_THREADS);
+      .range(offset, offset + MAX_THREADS - 1);
     if (oErr) throw new Error(`REPLIES_OPEN_READ_FAILED: ${oErr.message}`);
 
     const threads = (open || []).filter((r) => r.gmail_thread_id);

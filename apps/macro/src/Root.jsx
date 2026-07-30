@@ -30,14 +30,22 @@ export default function MacroRoot() {
 
   useEffect(() => {
     let off;
+    // `off` only exists after getSession() resolves, so a cleanup that fires
+    // while that await is still in flight — the shell unmounts one tool the
+    // moment you pick another — used to run with nothing to cancel, and the
+    // async body then registered a subscription no one could ever unsubscribe.
+    // Every quick tap through Macro left another live listener behind.
+    let cancelled = false;
     (async () => {
       const { data } = (await supabase?.auth.getSession()) || { data: {} };
+      if (cancelled) return;
       syncToken(data?.session);
       setReady(true);
       const { data: sub } = supabase?.auth.onAuthStateChange((_e, s) => syncToken(s)) || { data: null };
+      if (cancelled) { sub?.subscription?.unsubscribe(); return; }
       off = () => sub?.subscription?.unsubscribe();
     })();
-    return () => off?.();
+    return () => { cancelled = true; off?.(); };
   }, []);
 
   if (!ready) return null;

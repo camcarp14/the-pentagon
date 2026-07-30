@@ -173,6 +173,17 @@ describe('validateTrade', () => {
     expect(validateTrade({ ...base, exit: 210 }).ok).toBe(true);
   });
 
+  // Same invariant as validatePosition. A transposed stop made rMultiple
+  // undefined, so the trade rendered in the closed list but was excluded from
+  // win rate, avg R, total R and the equity curve.
+  it('refuses a stop at or above the entry', () => {
+    const r = validateTrade({ ...base, initialStop: 320 });
+    expect(r.ok).toBe(false);
+    expect(r.errors).toContain('initialStop must be below entry');
+    expect(validateTrade({ ...base, initialStop: 300 }).ok).toBe(false);
+    expect(validateTrade({ ...base, initialStop: 299.99 }).ok).toBe(true);
+  });
+
   it('constrains kind to the three the journal renders', () => {
     for (const kind of ['pullback', 'breakout', 'manual']) {
       expect(validateTrade({ ...base, kind }).ok).toBe(true);

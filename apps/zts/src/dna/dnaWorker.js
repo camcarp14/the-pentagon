@@ -56,10 +56,16 @@ const ANTHROPIC_API_KEY = import.meta.env.DEV ? (import.meta.env.VITE_ANTHROPIC_
 // costEstimate to obs exactly as App.jsx does. Sonnet id is the pinned "claude-
 // sonnet-4-6"; Haiku is "claude-haiku-4-5-20251001".
 
-// localStorage store, prefix `zts_` — copy of App.jsx lines 34-39.
+// localStorage store, prefix `zts_` — copy of App.jsx lines 34-39, except that
+// set() REPORTS failure instead of swallowing it. Every worker guard (the hourly
+// task cap, the cost cap, the today-dedup) is read back out of localStorage, so a
+// silently-dropped write doesn't degrade one lock — it blinds all three at once
+// and the daily-constant paid tasks re-fire every cadence tick. All eight Pentagon
+// tools share one origin's 5MB budget, and Safari private mode throws outright, so
+// this is a real state, not a theoretical one. Callers that back a guard check it.
 const sm = {
   get: (k) => { try { return JSON.parse(localStorage.getItem(`zts_${k}`)); } catch { return null; } },
-  set: (k, v) => { try { localStorage.setItem(`zts_${k}`, JSON.stringify(v)); } catch {} },
+  set: (k, v) => { try { localStorage.setItem(`zts_${k}`, JSON.stringify(v)); return true; } catch { return false; } },
   del: (k) => { try { localStorage.removeItem(`zts_${k}`); } catch {} },
   keys: (prefix) => { const out = []; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(`zts_${prefix}`)) out.push(k.replace(`zts_${prefix}`, "")); } return out; },
 };
@@ -67,7 +73,9 @@ const sm = {
 // Observability log — copy of App.jsx lines 42-46. callClaude logs here itself.
 const obs = {
   getAll: () => sm.get("obs_log") || [],
-  log: (entry) => { const e = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, ts: new Date().toISOString(), ...entry }; sm.set("obs_log", [e, ...(sm.get("obs_log") || [])].slice(0, 500)); },
+  // Returns whether the entry actually landed — the cost cap sums this log, so a
+  // dropped write means real spend the cap will never see.
+  log: (entry) => { const e = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, ts: new Date().toISOString(), ...entry }; return sm.set("obs_log", [e, ...(sm.get("obs_log") || [])].slice(0, 500)); },
   clear: () => sm.set("obs_log", []),
 };
 
@@ -208,9 +216,12 @@ export const worklog = {
   //         trace:{seeds,levels,...}, dedupKey, keyword?, creatorId?, draft?} —
   //         id/ts stamped here. dedupKey rides on every entry because
   //         proposeTasks' today-dedup reads it back off the log.
+  // Returns null when the write did not land. The worklog IS the hourly task cap
+  // and the today-dedup — an entry that never persisted means the task counts as
+  // never attempted, so the tick has to fail closed rather than trust `stamped`.
   add: (entry) => {
     const stamped = { ...stamp(), ...entry };
-    sm.set("dna_worklog", [stamped, ...worklog.all()].slice(0, 300));
+    if (!sm.set("dna_worklog", [stamped, ...worklog.all()].slice(0, 300))) return null;
     return stamped;
   },
   clear: () => sm.set("dna_worklog", []),
@@ -383,6 +394,13 @@ function learningLabel(text) {
   return (sp > 12 ? cut.slice(0, sp) : cut).replace(/[,;:.\s]+$/, "");
 }
 
+// The real creator pipeline stages (App.jsx's CREATOR_STAGES — the only values
+// CreatorsView's move() ever writes to status). The snapshot used to count a
+// "contacted" bucket that nothing sets, so it always read 0 while every creator
+// sitting in drafted or sent was counted nowhere — the brief told the model to go
+// prospect work that was already done, and the numbers didn't sum to the total.
+const CREATOR_STAGE_KEYS = ["prospected", "drafted", "sent", "replied", "collab"];
+
 // A compact, number-dense snapshot of the machine — the strategy brief's facts
 // block, so the model cites real state instead of inventing it (n_pr_review and
 // "cite the signal behind every claim" would like a word). Kept cheap for Haiku.
@@ -398,7 +416,7 @@ function buildSnapshot(creators, shorts, articles) {
   const daysDark = posted ? Math.floor((Date.now() - new Date(posted.posted_at).getTime()) / 86400000) : null;
   const arBy = (st) => ar.filter(a => a.stage === st).length;
   return [
-    `CREATORS: ${cs.length} total — ${cBy("prospected")} prospected, ${cBy("contacted")} contacted, ${cBy("replied")} replied, ${cBy("collab")} collab.${topProspect ? ` Top un-contacted: ${topProspect.c.channel_name} (${fmtSubs(topProspect.c.subscriber_count)} subs, ${topProspect.v.fitLabel}, ${topProspect.v.tier}).` : ""}`,
+    `CREATORS: ${cs.length} total — ${CREATOR_STAGE_KEYS.map(k => `${cBy(k)} ${k}`).join(", ")}.${topProspect ? ` Top un-contacted: ${topProspect.c.channel_name} (${fmtSubs(topProspect.c.subscriber_count)} subs, ${topProspect.v.fitLabel}, ${topProspect.v.tier}).` : ""}`,
     `SHORTS: ${sh.length} total — ${shBy("idea")} idea, ${shBy("script")} script, ${shBy("assets")} assets, ${shBy("ready")} ready, ${shBy("posted")} posted.${daysDark != null ? ` ${daysDark} day${daysDark !== 1 ? "s" : ""} since last posted.` : " None posted yet."}`,
     `ARTICLES: ${ar.length} total — ${arBy("idea")} idea, ${arBy("review")} in review, ${arBy("approved")} approved, ${arBy("published")} published.`,
   ].join("\n");
@@ -410,6 +428,22 @@ function parseJson(raw) {
   try { return JSON.parse(String(raw).replace(/```json|```/g, "").trim()); } catch { return null; }
 }
 
+// The article contract's fields — the ONLY keys a model reply may contribute to a
+// draft row. Spreading the parsed JSON over the trusted fields let a reply
+// carrying "stage":"published" land straight in the Published column (where
+// blockBack means it can never be stepped back for review) and let it clear
+// auto_drafted to hide the "Agent draft" badge; the genome text that shapes the
+// system prompt is user- and import-supplied, so that was steerable. Whitelisting
+// also keeps a stray model-invented key from failing the Supabase insert.
+export const ARTICLE_DRAFT_FIELDS = [
+  "target_keyword", "search_intent", "title_tag", "meta_description",
+  "slug", "outline", "article_html", "internal_links", "word_count",
+];
+export function pickArticleFields(pkg) {
+  const out = {};
+  ARTICLE_DRAFT_FIELDS.forEach(k => { if (pkg && pkg[k] !== undefined) out[k] = pkg[k]; });
+  return out;
+}
 
 // ─── executeTask — one task, end to end ──────────────────────────────────────
 // Emits the activation trace BEFORE doing the work (the canvas lights up as the
@@ -464,8 +498,17 @@ export async function executeTask(task, ctx) {
         if (!pkg || (!pkg.article_html && !pkg.title_tag)) return finish("failed", "Model returned an empty or unparseable article");
         // The ONLY external write in this file: a DRAFT into stage "review" — the
         // SEO approval queue. A human approves every publish. Never "published".
+        // The trusted fields go LAST so no model-supplied key can overwrite them.
+        // Awaited and checked: the save can fail (RLS, offline) and used to be
+        // swallowed into a console.warn while this returned "done" — and because
+        // today-dedup counts any logged attempt as spent, the keyword then sat out
+        // the rest of the day with no draft anywhere. Report the save, not the call.
         if (onArticleDraft) {
-          onArticleDraft({ id: `a_${Date.now()}`, created_at: new Date().toISOString(), stage: "review", auto_drafted: true, keyword: kw, ...pkg });
+          const saved = await onArticleDraft({
+            id: `a_${Date.now()}`, created_at: new Date().toISOString(),
+            ...pickArticleFields(pkg), stage: "review", auto_drafted: true, keyword: kw,
+          });
+          if (!saved) return finish("failed", "Draft generated but could not be saved to the review queue");
         }
         return finish("done", `"${pkg.title_tag || kw}" (${kw}) → SEO review queue`);
       }
@@ -577,9 +620,14 @@ export function DnaWorker({ creators, shorts, articles, onArticleDraft }) {
   useEffect(() => {
     let lastWork = 0;
     let busy = false; // re-entrancy latch — a slow task must not overlap the next pass
+    // Fail-closed latch. Every lock below is read back out of localStorage, so
+    // once writes start failing the caps freeze at their pre-failure values and
+    // the daily-constant kinds re-propose (and re-pay) on every tick. A guard
+    // whose write failed has to stop the worker, not wave it through.
+    let halted = false;
 
     const poll = setInterval(async () => {
-      if (busy) return;
+      if (busy || halted) return;
       const ctrl = wk.get();
       const shiftOn = ctrl.eveningShift.enabled && inShift(ctrl.eveningShift);
       if (!ctrl.running && !shiftOn) return;               // fully off — truly $0
@@ -634,7 +682,15 @@ export function DnaWorker({ creators, shorts, articles, onArticleDraft }) {
           // so one broken pass never kills the interval.
           entry = { ...task, status: "failed", detail: err?.message || "Unknown error", cost: 0, durationMs: 0, trace: { seeds: [], levels: {} } };
         }
-        worklog.add(entry);
+        if (!worklog.add(entry)) {
+          // Shed the tail and try once more — the worklog is the biggest thing
+          // ZTS holds in localStorage, so trimming usually gets the write in.
+          sm.set("dna_worklog", worklog.all().slice(0, 40));
+          if (!worklog.add(entry)) {
+            halted = true;
+            sm.set("dna_worker_halted", "Local storage is full — the worker stopped rather than repeat paid work it cannot record.");
+          }
+        }
       } catch {} finally {
         sm.del("dna_current_task");
         sm.set("dna_last_tick", now); // the worker's activity heartbeat (the dock reads it)

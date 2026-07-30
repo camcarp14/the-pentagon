@@ -78,12 +78,27 @@ export function createAuraSpeaker({ onStart, onEnd, onError, getVoice = () => un
     if (done) { heard.push(done.text); if (heard.length > 12) heard.shift(); }
     revoke(done);
     playing = null;
+    pump();
+  }
 
-    const next = queue.shift();
+  /**
+   * Play the head of the queue if it is ready.
+   *
+   * The head may be a slot whose audio is still being fetched — say() reserves
+   * its place in sentence order before awaiting — in which case we stall here
+   * and the fetch calls us back. Stalling is the point: playing whatever
+   * finished first is how a reply gets spoken out of order.
+   */
+  function pump() {
+    if (playing) return;
+    while (queue.length && queue[0].failed) queue.shift();
+    const next = queue[0];
     if (!next) {
       if (announced) { announced = false; onEnd?.(); }
       return;
     }
+    if (!next.url) return;              // still fetching; it will pump() itself
+    queue.shift();
     playing = next;
     const a = ensureEl();
     a.src = next.url;
@@ -132,14 +147,22 @@ export function createAuraSpeaker({ onStart, onEnd, onError, getVoice = () => un
       if (!said) return;
       const gen = generation;
       if (!announced) { announced = true; onStart?.(); }
+      // Take the queue slot NOW, before the await. say() is fire-and-forget and
+      // the runtime emits one sentence per completed sentence, so two are often
+      // in flight at once — and Deepgram's latency scales with length, so a long
+      // first sentence and a short second one resolve in the wrong order.
+      // Queueing on fetch completion spoke those two backwards.
+      const slot = { text: said, url: null };
+      queue.push(slot);
       try {
         const clip = await fetchClip(said, gen);
-        if (!clip || gen !== generation) { revoke(clip); return; }
-        queue.push(clip);
-        if (!playing) advance();
+        if (!clip || gen !== generation) { revoke(clip); slot.failed = true; return; }
+        slot.url = clip.url;
+        pump();
       } catch (e) {
         // One failure ends the spoken run rather than stalling it silently. The
         // caller falls back to the system voice.
+        slot.failed = true;
         if (gen !== generation) return;
         announced = false;
         onError?.(e);

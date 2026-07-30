@@ -30,13 +30,16 @@ export function env(...names) {
 // user-scoped Supabase client (RLS applies) — functions never hold a service
 // role key by design.
 export async function requireUser(event) {
-  const [url, anon, allowed] = env('VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'ALLOWED_EMAIL');
+  // Header first, env second. Reading env up here meant an anonymous caller on a
+  // deploy missing a variable got back RUNWAY_ENV_MISSING naming it — server
+  // configuration state answered before the request was even authenticated.
   const auth = event.headers.authorization || event.headers.Authorization || '';
   if (!auth.startsWith('Bearer ')) {
     const err = new Error('Missing Authorization bearer token');
     err.statusCode = 401;
     throw err;
   }
+  const [url, anon, allowed] = env('VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'ALLOWED_EMAIL');
   const token = auth.slice(7);
   const anonClient = createClient(url, anon, { auth: { persistSession: false } });
   const { data, error } = await anonClient.auth.getUser(token);

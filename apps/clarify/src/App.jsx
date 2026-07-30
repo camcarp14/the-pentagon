@@ -617,7 +617,7 @@ export default function App({ embedded = false }) {
     const card = cards.find((c) => c.id === id);
     const isFollowUp = !!card?.sent_at;
     const kind = sent.kind || (isFollowUp ? "followup" : "initial");
-    await db.markSent(id, messageId, threadId, rfcMessageId);
+    await db.markSent(id, messageId, threadId, rfcMessageId, { initial: !isFollowUp });
 
     // Ledger dual-write: the messages table is the thread's source of truth
     // for the sequence engine and analytics; legacy columns stay for the

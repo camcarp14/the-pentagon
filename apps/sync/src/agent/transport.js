@@ -24,12 +24,15 @@ export const MODELS = [
 
 export const modelId = (key) => (MODELS.find((m) => m.key === key) || MODELS[1]).id;
 
-// $ per million tokens. These drive the spend *estimate* on Settings only —
-// nothing in the app depends on them being exact. One place to correct.
+// $ per million tokens, keyed by the model KEY this file routes on. These drive
+// the spend *estimate* on Settings only — nothing in the app depends on them
+// being exact. They must still agree with packages/ai/pricing.js, the declared
+// single source of truth: Opus sat at 5/25 here against its 15/75 there, so a
+// user running SYNC on Opus was shown a third of what they had actually spent.
 export const RATES = {
   haiku: { in: 1, out: 5 },
   sonnet: { in: 3, out: 15 },
-  opus: { in: 5, out: 25 },
+  opus: { in: 15, out: 75 },
 };
 
 export function estimateCost(modelKey, inTok, outTok) {
@@ -280,38 +283,48 @@ export async function stream({
   const decoder = new TextDecoder();
   const buffer = { value: "" };
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer.value += decoder.decode(value, { stream: true });
-    for (const ev of parseSSE(buffer)) {
-      switch (ev.type) {
-        case "message_start":
-          usage = { ...usage, ...(ev.message?.usage || {}) };
-          break;
-        case "content_block_start":
-          asm.start(ev.index, ev.content_block);
-          if (ev.content_block?.type === "tool_use") onToolStart?.(ev.content_block.name);
-          if (ev.content_block?.type === "server_tool_use") onToolStart?.(ev.content_block.name || "web_search");
-          break;
-        case "content_block_delta": {
-          const chunk = asm.delta(ev.index, ev.delta || {});
-          if (chunk) { full += chunk; onText?.(chunk, full); }
-          break;
+  // The read loop has three exits that are not `done`: the `error` event below,
+  // an abort, and a throw out of onText. Each of those left the body locked with
+  // its reader still attached, so the connection was never released — cancelling
+  // in a finally is the only exit every one of them goes through.
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer.value += decoder.decode(value, { stream: true });
+      for (const ev of parseSSE(buffer)) {
+        switch (ev.type) {
+          case "message_start":
+            usage = { ...usage, ...(ev.message?.usage || {}) };
+            break;
+          case "content_block_start":
+            asm.start(ev.index, ev.content_block);
+            if (ev.content_block?.type === "tool_use") onToolStart?.(ev.content_block.name);
+            if (ev.content_block?.type === "server_tool_use") onToolStart?.(ev.content_block.name || "web_search");
+            break;
+          case "content_block_delta": {
+            const chunk = asm.delta(ev.index, ev.delta || {});
+            if (chunk) { full += chunk; onText?.(chunk, full); }
+            break;
+          }
+          case "content_block_stop":
+            asm.stop(ev.index);
+            break;
+          case "message_delta":
+            if (ev.delta?.stop_reason) stopReason = ev.delta.stop_reason;
+            if (ev.usage) usage = { ...usage, ...ev.usage };
+            break;
+          case "error":
+            throw new TransportError(ev.error?.message || "Stream error", classify(500, ev.error?.message || "", { viaProxy: !direct, errorType: ev.error?.type || "" }));
+          default:
+            break;
         }
-        case "content_block_stop":
-          asm.stop(ev.index);
-          break;
-        case "message_delta":
-          if (ev.delta?.stop_reason) stopReason = ev.delta.stop_reason;
-          if (ev.usage) usage = { ...usage, ...ev.usage };
-          break;
-        case "error":
-          throw new TransportError(ev.error?.message || "Stream error", classify(500, ev.error?.message || "", { viaProxy: !direct, errorType: ev.error?.type || "" }));
-        default:
-          break;
       }
     }
+  } finally {
+    // Not awaited, and its rejection is swallowed: this runs on the way out of
+    // a throw, and a failed cancel must not replace the error being reported.
+    try { reader.cancel()?.catch?.(() => {}); } catch { /* already released */ }
   }
 
   return { content: asm.content(), stopReason: stopReason || "end_turn", usage, malformedTools: asm.failures() };

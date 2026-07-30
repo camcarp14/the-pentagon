@@ -836,16 +836,22 @@ ${body}`} />
         onClose={() => setShowThread(false)}
         onSendReply={async (c, subject, body) => {
           setSendingReply(true);
-          const result = await sendEmail({
-            to: contact.email,
-            subject,
-            body: cleanBody(body),
-            replyToMessageId: card.reply_gmail_message_id || card.gmail_rfc_message_id,
-            threadId: card.gmail_thread_id,
-          });
-          await onMarkSent(card.id, result.messageId, result.threadId, result.rfcMessageId, { kind: "reply", subject, body: cleanBody(body) });
-          setShowThread(false);
-          setSendingReply(false);
+          // finally, not a trailing reset: ThreadModal catches the rejection and
+          // shows its own error, so without this the latch stayed true and the
+          // card's Send Reply button was stuck on "Sending…" until unmount.
+          try {
+            const result = await sendEmail({
+              to: contact.email,
+              subject,
+              body: cleanBody(body),
+              replyToMessageId: card.reply_gmail_message_id || card.gmail_rfc_message_id,
+              threadId: card.gmail_thread_id,
+            });
+            await onMarkSent(card.id, result.messageId, result.threadId, result.rfcMessageId, { kind: "reply", subject, body: cleanBody(body) });
+            setShowThread(false);
+          } finally {
+            setSendingReply(false);
+          }
         }}
       />
     )}

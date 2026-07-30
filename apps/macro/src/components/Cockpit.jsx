@@ -511,6 +511,7 @@ function EntryPlanner({ derived, settings, hasPosition }) {
 function sizingErrorCopy(code) {
   return {
     risk_too_small_for_one_share: 'Your risk budget doesn\'t buy one whole share at this stop distance — widen risk % or wait for a tighter setup.',
+    position_cap_below_one_share: 'One share costs more than your max position size allows — raise max position % or trade a smaller-priced instrument.',
     stop_not_below_entry: 'Computed stop is not below the entry price.',
     bad_input: 'Sizing inputs incomplete.',
   }[code] ?? code

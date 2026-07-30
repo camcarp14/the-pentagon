@@ -486,12 +486,15 @@ export function ClientsView({ deepClientId = null, onNavigate }) {
     }
   };
 
-  const dismissFinding = async (id) => {
-    await fetch(`${SUPABASE_URL}/rest/v1/findings?id=eq.${id}`, {
+  // Skip lives on the action queue, so it must PATCH action_queue. It used to
+  // hit /findings with an action_queue id: PostgREST matched zero rows, returned
+  // 200, and the item stayed pending forever with no way to clear it.
+  const dismissAction = async (id) => {
+    await fetch(`${SUPABASE_URL}/rest/v1/action_queue?id=eq.${id}`, {
       method: "PATCH", headers: { ...(await hdr()), "Prefer": "return=minimal" },
       body: JSON.stringify({ status: "dismissed" }),
     });
-    setFindings(p => p.filter(f => f.id !== id));
+    setActions(p => p.filter(a => a.id !== id));
   };
 
   const SEV = SEV_TOKENS;
@@ -630,7 +633,7 @@ export function ClientsView({ deepClientId = null, onNavigate }) {
                 {a.impact_estimate && <div style={{ fontSize: "10px", color: T.green, marginBottom: "8px" }}>→ {a.impact_estimate}</div>}
                 <div style={{ display: "flex", gap: "6px" }}>
                   <button onClick={() => approveAction(a.id)} style={{ flex: 1, padding: "6px", background: T.goldGrad, border: "none", borderRadius: "6px", color: T.textOnBrand, fontSize: "11px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay }}>Approve</button>
-                  <button onClick={() => dismissFinding(a.id)} style={{ padding: "6px 10px", background: "transparent", border: `1px solid ${T.line}`, borderRadius: "6px", color: T.faint, fontSize: "11px", cursor: "pointer" }}>Skip</button>
+                  <button onClick={() => dismissAction(a.id)} style={{ padding: "6px 10px", background: "transparent", border: `1px solid ${T.line}`, borderRadius: "6px", color: T.faint, fontSize: "11px", cursor: "pointer" }}>Skip</button>
                 </div>
               </div>
             ))}

@@ -26,7 +26,11 @@ async function wrapLinks(messageId, body) {
   // must wrap x.com/y and keep the period in the text (else the redirect 404s
   // and the sentence loses its full stop).
   const raw = [...new Set(body.match(/https?:\/\/[^\s)>\]"']+/g) || [])];
-  const urls = [...new Set(raw.map((u) => u.replace(/[.,;:!?]+$/, "")))];
+  // Longest first: the replacement is a plain substring swap, so wrapping
+  // "https://site.com" before "https://site.com/audit" would rewrite the prefix
+  // inside the deeper URL and ship "/r/<id>/audit" — a link that 404s because
+  // track-click reads the last path segment as the id.
+  const urls = [...new Set(raw.map((u) => u.replace(/[.,;:!?]+$/, "")))].sort((a, b) => b.length - a.length);
   let out = body;
   for (const url of urls) {
     if (!url || url.startsWith(`${PUBLIC_SITE_URL}/r/`)) continue; // already wrapped
@@ -63,20 +67,39 @@ function QueueItem({ msg, onDone }) {
         replyToMessageId: isThreaded ? (msg.outreach?.reply_gmail_message_id || msg.outreach?.gmail_rfc_message_id || msg.outreach?.gmail_message_id) : undefined,
         threadId: isThreaded ? msg.outreach?.gmail_thread_id : undefined,
       });
-      await seqDb.updateMessage(msg.id, {
-        status: "sent",
-        body: trackedBody,
-        approved_at: new Date().toISOString(),
-        sent_at: new Date().toISOString(),
-        gmail_message_id: res.messageId || null,
-        gmail_thread_id: res.threadId || msg.outreach?.gmail_thread_id || null,
-        gmail_rfc_message_id: res.rfcMessageId || null,
-      });
+      // The mail has LEFT. Everything below is bookkeeping, and a bookkeeping
+      // failure must never be reported as "Send failed" — that reads as "nothing
+      // went out", the operator presses Approve & Send again, and a real prospect
+      // gets the same email twice. So these writes carry their own handlers
+      // instead of falling through to the send catch.
+      try {
+        await seqDb.updateMessage(msg.id, {
+          status: "sent",
+          body: trackedBody,
+          approved_at: new Date().toISOString(),
+          sent_at: new Date().toISOString(),
+          gmail_message_id: res.messageId || null,
+          gmail_thread_id: res.threadId || msg.outreach?.gmail_thread_id || null,
+          gmail_rfc_message_id: res.rfcMessageId || null,
+        });
+      } catch (err) {
+        toast.push(`Sent to ${contact.email} — but recording it failed (${err.message}). Do NOT resend; the draft may still show as pending.`, { tone: "error" });
+        setBusy("");
+        return;
+      }
       // Legacy dual-write so the Kanban/urgency lenses stay truthful — for
       // replies too, matching the card-level send (replied → sent), so an
       // answered thread stops nagging in DailyPlays/ReplyTriage.
       if ((msg.kind === "followup" || msg.kind === "reply" || msg.kind === "initial") && msg.outreach_id) {
-        await db.markSent(msg.outreach_id, res.messageId, res.threadId, res.rfcMessageId).catch(() => {});
+        try {
+          // Only a first send owns outreach.sent_at; follow-ups and replies must
+          // leave the thread's origin timestamp alone.
+          await db.markSent(msg.outreach_id, res.messageId, res.threadId, res.rfcMessageId, { initial: msg.kind === "initial" });
+        } catch (err) {
+          // Swallowing this left the outreach row un-sent, so the card-level
+          // send button kept inviting a second delivery of the same message.
+          toast.push(`Sent, but the outreach card didn't update (${err.message}) — it may still look un-sent. Don't resend.`, { tone: "warning" });
+        }
       }
       // Keep the stored enrollment pointer truthful when a sequence step ships
       // (the engine also derives progression from the ledger, so this is

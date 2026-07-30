@@ -33,7 +33,14 @@ function useSource(path, intervalMs, onAuthFail) {
     setState((s) => ({ ...s, loading: true }))
     try {
       const data = await api(path)
-      setState({ data, error: null, fetchedAt: data?.meta?.fetchedAt ?? Date.now(), loading: false })
+      // Age against ONE clock. meta.fetchedAt is stamped by the function on the
+      // SERVER's clock, but freshness() subtracts it from the browser's — so a
+      // device whose clock runs a few minutes fast aged a just-arrived response
+      // instantly (btc's ceiling is 180s, so ~9 minutes of skew reads 'dead',
+      // nulls btcPrice and blocks every entry on "blind data") while a slow
+      // clock clamped a genuinely old feed to 'live'. Responses are no-store, so
+      // receipt time IS fetch time; meta.fetchedAt stays for display only.
+      setState({ data, error: null, fetchedAt: Date.now(), loading: false })
     } catch (e) {
       // A 401 must still clear `loading` and record an error. Returning early
       // left loading:true / error:null forever, and the cockpit's
