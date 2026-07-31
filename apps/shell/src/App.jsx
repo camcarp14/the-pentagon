@@ -49,7 +49,7 @@ const PLATFORM_VARS = {
   "--faint": "#66748A", "--border": "rgba(255,255,255,0.08)", "--accent": "#AAB6C6",
   "--accent-soft": "rgba(170,182,198,0.14)", "--accent-line": "rgba(170,182,198,0.32)",
   "--shadow-tab": "0 1px 2px rgba(0,0,0,0.5)",
-  "--font-display": "'Syne',system-ui", "--font-body": "'Inter',system-ui,sans-serif", "--font-mono": "'DM Mono',monospace",
+  "--font-display": "var(--font-body)", "--font-body": "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif", "--font-mono": "ui-monospace, 'SF Mono', Menlo, monospace",
 };
 
 // ─── hooks ────────────────────────────────────────────────────────────────────
@@ -110,7 +110,7 @@ function LoginScreen() {
       <form onSubmit={submit} style={{ width: "100%", maxWidth: 360, background: "#12151d", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 18, padding: "30px 26px", boxShadow: "0 24px 70px rgba(0,0,0,0.55)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 20 }}>
           <PentagonLogo size={26} />
-          <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", color: "#e9e7e0", fontFamily: "'Syne',system-ui" }}>The Pentagon</span>
+          <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", color: "#e9e7e0", fontFamily: "var(--font-body)" }}>The Pentagon</span>
         </div>
         <div style={{ fontSize: 12.5, color: "#9aa1ae", marginBottom: 18, lineHeight: 1.6 }}>One sign-in for ZTS, Clarify, and Runway.</div>
         <label style={{ fontSize: 11, color: "#9aa1ae", fontWeight: 600 }}>Email</label>
@@ -119,7 +119,7 @@ function LoginScreen() {
         <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ ...field, margin: "6px 0 4px" }} />
         {err && <div style={{ color: "#ff6f6f", fontSize: 12, marginTop: 10 }}>{err}</div>}
         {!isConfigured() && <div style={{ color: "#FFB224", fontSize: 11.5, marginTop: 10, lineHeight: 1.5 }}>Supabase isn't configured — set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.</div>}
-        <button type="submit" disabled={busy} style={{ width: "100%", marginTop: 18, padding: "11px", borderRadius: 9, border: "none", cursor: busy ? "default" : "pointer", background: "linear-gradient(135deg,#FFC155,#E09000)", color: "#1a1204", fontWeight: 800, fontSize: 13.5, fontFamily: "'Syne',system-ui", opacity: busy ? 0.7 : 1 }}>
+        <button type="submit" disabled={busy} style={{ width: "100%", marginTop: 18, padding: "11px", borderRadius: 9, border: "none", cursor: busy ? "default" : "pointer", background: "linear-gradient(135deg,#FFC155,#E09000)", color: "#1a1204", fontWeight: 800, fontSize: 13.5, opacity: busy ? 0.7 : 1 }}>
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>
@@ -134,10 +134,12 @@ function AppToggle({ active, onPick, compact, apps }) {
   // Measure the active button so the pill glides between tools instead of
   // teleporting. Beyond tool switch + the mobile/desktop flip, this must also
   // re-measure on resize (segments are flex-sized on mobile, so every width
-  // change moves them) and after the webfont loads — Syne arrives late, so a
-  // first-paint measurement captures fallback-font widths and would leave the
-  // pill mis-sized until the next switch. ZTS/Clarify already do the resize
-  // half; the font half fixes the wrong-on-first-load case they still have.
+  // change moves them). The fonts.ready re-measure is kept but no longer
+  // load-bearing: the shell used to render this in Syne, which arrives late, so
+  // a first-paint measurement captured fallback widths and left the pill
+  // mis-sized until the next switch. On the system stack the face is there at
+  // first paint. Kept because a user-installed font or a future display face
+  // would bring the problem straight back, and it costs one idle callback.
   useLayoutEffect(() => {
     const measure = () => {
       const el = refs.current[active];
@@ -211,7 +213,7 @@ function AppToggle({ active, onPick, compact, apps }) {
               ...(compact ? { flex: "1 1 0", minWidth: 0, overflow: "hidden" } : {}),
               border: "none", borderRadius: compact ? 9 : 8, cursor: "pointer", background: "transparent",
               color: on ? (compact ? m.accent : "var(--ink)") : "var(--faint)",
-              fontFamily: "'Syne',system-ui", fontSize: compact ? 9 : 11.5, fontWeight: 700,
+              fontSize: compact ? 9 : 11.5, fontWeight: 700,
               letterSpacing: compact ? "-0.01em" : "0.06em", textTransform: "uppercase", whiteSpace: "nowrap",
               transition: `color ${M.durBase} ${M.easeStd}`,
             }}>
@@ -239,7 +241,7 @@ function ComingSoon({ app }) {
         <div style={{ width: 52, height: 52, margin: "0 auto 16px", borderRadius: 14, background: "var(--accent-soft)", border: "1px solid var(--accent-line)", display: "grid", placeItems: "center", color: "var(--accent)" }}>
           <EmptyIcon kind="spark" size={22} />
         </div>
-        <div style={{ fontSize: 16, fontWeight: 800, fontFamily: "'Syne',system-ui", color: "var(--ink)", marginBottom: 8 }}>{m.brand}</div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: "var(--ink)", marginBottom: 8 }}>{m.brand}</div>
         <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.6 }}>
           Getting mounted into The Pentagon. The toggle, theme, and one-login are already wired — this tool comes online in the next build increment.
         </div>
@@ -268,7 +270,7 @@ class ToolBoundary extends Component {
     return (
       <div style={{ minHeight: "50vh", display: "grid", placeItems: "center", padding: 24 }}>
         <div style={{ textAlign: "center", maxWidth: 380 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, fontFamily: "'Syne',system-ui", color: "var(--ink)", marginBottom: 8 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: "var(--ink)", marginBottom: 8 }}>
             {stale ? "A new version shipped" : "This tool hit an error"}
           </div>
           <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.6, marginBottom: 16 }}>
@@ -279,7 +281,7 @@ class ToolBoundary extends Component {
           {!stale && <div style={{ fontSize: 11.5, color: "var(--faint)", fontFamily: "var(--font-mono)", marginBottom: 16, wordBreak: "break-word" }}>{String(err.message || err)}</div>}
           <button onClick={() => window.location.reload()} type="button" style={{
             background: "var(--accent-soft)", border: "1px solid var(--accent-line)", borderRadius: 9, color: "var(--ink)",
-            fontSize: 12.5, fontWeight: 700, fontFamily: "'Syne',system-ui", padding: "0 18px", minHeight: 44, cursor: "pointer",
+            fontSize: 12.5, fontWeight: 700, padding: "0 18px", minHeight: 44, cursor: "pointer",
           }}>Reload</button>
         </div>
       </div>
@@ -426,11 +428,16 @@ export default function Shell() {
 
   return (
     <div data-app={systemOpen ? "system" : active} data-palette={systemOpen ? "sync" : active} data-theme={systemOpen ? "dark" : m.mode} style={{ ...(systemOpen ? PLATFORM_VARS : cssVars(active)), minHeight: "100vh", background: "var(--bg)", color: "var(--ink)", fontFamily: "var(--font-body)", transition: `background ${M.durSlow} ${M.easeStd}` }}>
-      {/* Shell top bar — the ONE global chrome, themed to the active tool */}
-      <div style={{
+      {/* Shell top bar — the ONE global chrome, themed to the active tool.
+          data-kit goes HERE and not on the wrapper above. The wrapper contains
+          every tool, and @cc/ui's kit styles .btn/.card/.field/.sheet — names
+          eight apps already own and mean different things by. Opting the wrapper
+          in would restyle all of them at once; opting the bar in restyles the
+          chrome and nothing else. */}
+      <div data-kit style={{
         position: "sticky", top: 0, zIndex: 100,
         paddingTop: "env(safe-area-inset-top)",
-        borderBottom: "1px solid var(--border)",
+        borderBottom: "1px solid var(--line)",
         background: "color-mix(in srgb, var(--bg) 82%, transparent)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)",
       }}>
       {/* One row, still 52px: the switcher gets 44px-tall targets without
@@ -452,7 +459,10 @@ export default function Shell() {
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             <PentagonLogo size={isMobile ? 21 : 23} />
             {!isMobile && (
-              <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--ink)", fontFamily: "'Syne',system-ui", whiteSpace: "nowrap" }}>The Pentagon</span>
+              // SESSION: system stack, sentence case, hierarchy from size and
+              // weight rather than tracking. Uppercase survives in exactly one
+              // place in this language and a wordmark is not it.
+              <span className="t-head" style={{ color: "var(--ink)", whiteSpace: "nowrap" }}>The Pentagon</span>
             )}
           </span>
           <AppToggle active={active} onPick={pick} compact={isMobile} apps={tabs} />
@@ -464,19 +474,20 @@ export default function Shell() {
             title="System — usage, minds & agents across every tool"
             aria-label="System — usage, minds & agents across every tool"
             aria-pressed={systemOpen}
+            className={systemOpen ? "btn sm tinted" : "btn sm quiet"}
             style={{
-              display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-              background: systemOpen ? "var(--accent-soft)" : "none", border: "1px solid var(--border)", borderRadius: 7,
-              color: systemOpen ? "var(--ink)" : "var(--muted)", fontSize: 10.5,
-              padding: isMobile ? "0 11px" : "5px 10px",
-              minHeight: isMobile ? 44 : "auto", minWidth: isMobile ? 40 : "auto",
-              cursor: "pointer",
-              fontWeight: 700, fontFamily: "'Syne',system-ui", letterSpacing: "0.06em", textTransform: "uppercase",
+              // The kit owns colour, radius, weight, press physics and the focus
+              // ring. Only the mobile target floor is local, because that is a
+              // fact about this bar rather than about buttons.
+              minHeight: isMobile ? 44 : undefined, minWidth: isMobile ? 44 : undefined,
+              padding: isMobile ? "0 11px" : undefined,
             }}>
-            <span style={{ width: isMobile ? 8 : 6, height: isMobile ? 8 : 6, borderRadius: "50%", background: systemOpen ? "var(--ink)" : "var(--faint)" }} />{!isMobile && "System"}
+            <span aria-hidden style={{ width: isMobile ? 8 : 6, height: isMobile ? 8 : 6, borderRadius: "50%", background: systemOpen ? "var(--accent)" : "var(--faint)", flex: "none" }} />{!isMobile && "System"}
           </button>
           {!isMobile && (
-            <button onClick={() => auth.signOut()} style={{ background: "none", border: "1px solid var(--border)", borderRadius: 7, color: "var(--muted)", fontSize: 10, padding: "5px 10px", cursor: "pointer", fontWeight: 600, fontFamily: "'Syne',system-ui" }}>Sign out</button>
+            // Was 10px — under this language's 10.5px floor, which is stated as
+            // absolute. The kit's .btn.sm sits at the floor.
+            <button className="btn sm quiet" onClick={() => auth.signOut()}>Sign out</button>
           )}
         </div>
       </div>
