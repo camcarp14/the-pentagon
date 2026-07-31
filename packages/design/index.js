@@ -23,10 +23,17 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ─── Base: structural tokens shared by every tool, mode-independent ──────────
+// SYSTEM STACK ONLY. These three used to name Syne (display), Inter (body) and
+// DM Mono — webfonts the shell's index.html pulled off Google's CDN. DESIGN.md
+// §3 allows no decorative display face and specifies the system stack, and every
+// APP's token table was migrated to it. THIS ONE WAS NOT, and it is the shared
+// table, so any surface reading `fonts` from the design package went on asking
+// for Syne. The <link> is gone now, so a name left here would not even resolve.
+// Keys unchanged, so every T.fontDisplay / T.fontMono call site is a no-op diff.
 export const fonts = {
-  fontDisplay: "'Syne', system-ui",
-  fontBody: "'Inter', system-ui, sans-serif",
-  fontMono: "'DM Mono', monospace",
+  fontDisplay: 'var(--font-display, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif)',
+  fontBody: 'var(--font-body, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif)',
+  fontMono: 'var(--font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace)',
 };
 
 export const radii = { rSm: "8px", rMd: "10px", rLg: "14px", rPill: "999px" };

@@ -20,9 +20,17 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="apple-mobile-web-app-title" content="Pentagon" />
     <title>The Pentagon</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <!-- NO WEBFONT, deliberately. This used to pull Syne, Inter and DM Mono off
+         Google's CDN. The design language (DESIGN.md §3) allows no decorative
+         display face and specifies the system stack; every app's token table was
+         migrated, and the shell's chrome test asserts "Syne" never appears in
+         its source. This <link> was missed, so the retired faces kept arriving
+         and kept being applied by the two screens still naming them — System and
+         Ops drew every heading and number in Syne. That is what "old fonts, and
+         the spacing is huge" looked like on a phone: a wide geometric display
+         face at heading sizes, in a layout measured for the system stack.
+         Removing the link is half of it; the other half is that nothing names
+         those families any more. Do not add it back. -->
     <style>
       * { box-sizing: border-box; }
       /* Usable bottom inset for every tool's tab bar. The real value is the
@@ -33,7 +41,7 @@
          correct before the shell's effect runs. */
       :root { --safe-bottom: env(safe-area-inset-bottom, 0px); }
       html, body, #root { margin: 0; height: 100%; }
-      body { background: #0b0d12; font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+      body { background: #0b0d12; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
     </style>
   </head>
   <body>

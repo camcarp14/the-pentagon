@@ -141,7 +141,13 @@ function loadedInstall() {
     memory: [{ id: "m1", fact: "Prefers mornings for deep work.", kind: "fact", createdAt: T }],
     decisions: [{ id: "d1", text: "Dropped the second SKU.", why: "Margin", createdAt: T }],
     drafts: [{ id: "dr1", title: "Outreach — dental", kind: "email", body: "Hi there,\n\nQuick one.", createdAt: T }],
-    focus: { label: "Proposal", startedAt: T - 12 * 60000, mins: 50, blockId: "b1" },
+    // endsAt is NOT optional. start_focus (agent/tools.js:735) writes
+    // { id, label, mins, startedAt, endsAt, blockId }, and FocusBar counts down
+    // from endsAt. Omitting it made leftMs NaN, so this fixture rendered
+    // "NaN:NaN left" and strokeDasharray="NaN …" — and the test passed anyway,
+    // because it only asserted that the word "focusbar" appeared. A fixture that
+    // does not match the shape the app actually stores proves nothing.
+    focus: { id: "s1", label: "Proposal", startedAt: T - 12 * 60000, mins: 50, endsAt: T + 38 * 60000, blockId: "b1" },
     ledger: [
       { id: "l1", action: "add_task", title: "Added — Send the retainer proposal", detail: "Queue", at: T, undo: { tasks: [] }, undone: false, remote: null },
       { id: "l2", action: "plan_day", title: "Planned the day", detail: "3 blocks", at: T, undo: null, undone: true, remote: null },
@@ -415,10 +421,19 @@ describe("the loaded pages draw the data rather than the empty state", () => {
   it("the Day timeline draws its blocks, its states and the focus session", () => {
     const out = page(P.DayPage);
     expect(out).toContain("Deep work — proposal");
-    expect(out, "a done block is drawn as done").toContain("tl-block done");
-    expect(out, "a 25-minute block drops to one centred line").toContain("tl-block short");
+    // Match the class as a TOKEN, not as an adjacent pair. DayPage.jsx:298
+    // composes `tl-block[ done][ now][ short]`, and `now` is decided against the
+    // WALL CLOCK — so "tl-block short" as a substring is true only while the
+    // fixture's 2:00–2:25pm block is not the current one. This suite failed for
+    // 25 minutes a day, and passed the other 1,415.
+    expect(out, "a done block is drawn as done").toMatch(/class="tl-block[^"]*\bdone\b/);
+    expect(out, "a 25-minute block drops to one centred line").toMatch(/class="tl-block[^"]*\bshort\b/);
     expect(out, "the venture tone reaches the rail as data, not theme").toContain("--tone");
     expect(out, "a running focus session has its own bar").toContain("focusbar");
+    // The bar has to COUNT DOWN, not merely exist. Asserting only on the class
+    // let it render "NaN:NaN left" against a fixture missing endsAt.
+    expect(out, "the focus bar shows real time remaining").toMatch(/\d+:\d\d left/);
+    expect(out, "nothing in the day view renders NaN").not.toContain("NaN");
   });
 
   it("the Queue draws open tasks, overdue follow-ups and the tick", () => {

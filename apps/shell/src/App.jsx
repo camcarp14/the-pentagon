@@ -113,10 +113,13 @@ function LoginScreen() {
       <form onSubmit={submit} style={{ width: "100%", maxWidth: 360, background: "#12151d", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 18, padding: "30px 26px", boxShadow: "0 24px 70px rgba(0,0,0,0.55)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 20 }}>
           <PentagonLogo size={26} />
-          // Same treatment as the bar's wordmark: sentence case at the scale, no
-              // tracking theatrics, and a token instead of a hardcoded #e9e7e0 —
-              // this screen is meant to be the quietest in the app.
-              <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--ink)" }}>The Pentagon</span>
+          {/* Same treatment as the bar's wordmark: sentence case at the scale, no
+              tracking theatrics, and a token instead of a hardcoded #e9e7e0 —
+              this screen is meant to be the quietest in the app.
+              These braces are load-bearing: `//` is NOT a comment in JSX
+              children, it is text, and without them all three lines rendered
+              verbatim next to the logo on the live sign-in screen. */}
+          <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--ink)" }}>The Pentagon</span>
         </div>
         <div style={{ fontSize: 12.5, color: "#9aa1ae", marginBottom: 18, lineHeight: 1.6 }}>One sign-in for ZTS, Clarify, and Runway.</div>
         <label style={{ fontSize: 11, color: "#9aa1ae", fontWeight: 600 }}>Email</label>

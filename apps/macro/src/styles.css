@@ -78,7 +78,9 @@
 
   /* type */
   --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --mono: 'DM Mono', ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
+  /* DM Mono is retired (DESIGN.md §3) and the webfont link that loaded it is
+     gone, so naming it first just cost a failed lookup before the fallback. */
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
 
   /* radii, shadow */
   --r-sm: 8px; --r-md: 12px; --r-lg: 16px;

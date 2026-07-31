@@ -175,8 +175,20 @@ function useGlobalStyles() {
          and no ring, so the element never carries a border and a shadow at once.
          Scoped to .zts-card and not to .card: this sheet is injected into the
          document head and never removed, and every other tool's root carries
-         data-kit too — a bare `[data-kit] .card` rule here would follow the user
-         into Ideas and Business the moment they left ZTS. */
+         data-kit too — a bare "[data-kit] .card" rule here would follow the user
+         into Ideas and Business the moment they left ZTS.
+
+         NO BACKTICKS IN THIS COMMENT. It lives inside a template literal, so a
+         backtick ENDS the string and everything after it is parsed as
+         JavaScript. This comment once quoted that selector in backticks, which
+         closed the template and left the selector to evaluate as the subtraction
+         "data minus kit" — throwing "data is not defined" the instant the effect
+         ran, and taking the whole tool down behind the shell's error boundary.
+
+         Why nothing caught it: the result is still SYNTACTICALLY VALID, so the
+         build stayed green, and the expression lives inside a useEffect, which
+         renderToStaticMarkup never executes — so all 1,695 tests stayed green
+         too. Only a real browser reaches it. That is what smoke.mjs is for. */
       @media (hover: hover) and (pointer: fine) {
         [data-kit] .zts-card.pressable:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.45), 0 16px 40px rgba(0,0,0,0.35); }
       }

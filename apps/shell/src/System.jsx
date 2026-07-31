@@ -25,7 +25,10 @@ const REGION_LABELS = { identity: "Identity", principle: "Principles", knowledge
 const P = {
   bg: "#0A0E15", surface: "#131A24", surface2: "#0F151E", line: "rgba(255,255,255,0.08)",
   ink: "#E9EDF5", muted: "#93A1B5", faint: "#66748A",
-  display: "'Syne', system-ui", mono: "'DM Mono', monospace",
+  // System stack: the Syne/DM Mono webfonts are retired (DESIGN.md §3) and
+  // the <link> that loaded them is gone, so naming them here resolved to
+  // nothing and mismeasured every heading and number on this screen.
+  display: "var(--font-display)", mono: "var(--font-mono)",
 };
 
 const readJSON = (key, fallback) => {

@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "npm --workspace @app/shell run dev",
     "build": "npm --workspace @app/shell run build",
+    "smoke": "node scripts/smoke.mjs",
     "preview": "npm --workspace @app/shell run preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -27,6 +28,7 @@
     "vite": "^5.4.10"
   },
   "devDependencies": {
+    "playwright": "^1.62.1",
     "vitest": "^2.1.9"
   }
 }

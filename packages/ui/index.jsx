@@ -50,9 +50,9 @@ const U = {
   surface: "var(--surface, #FFFFFF)",
   subtle: "var(--subtle, #F8FAFC)",
   line: "var(--border, rgba(15,23,42,0.06))",
-  fontDisplay: "var(--font-display, 'Syne', system-ui)",
+  fontDisplay: 'var(--font-display, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif)',
   fontBody: "var(--font-body, 'Inter', system-ui, sans-serif)",
-  fontMono: "var(--font-mono, 'DM Mono', monospace)",
+  fontMono: 'var(--font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace)',
   shadowPopover: "var(--shadow-popover, 0 8px 24px rgba(15,23,42,0.1), 0 2px 8px rgba(15,23,42,0.06), 0 0 0 1px rgba(15,23,42,0.05))",
   shadowModal: "var(--shadow-modal, 0 32px 80px rgba(15,23,42,0.22), 0 8px 24px rgba(15,23,42,0.12))",
 };
