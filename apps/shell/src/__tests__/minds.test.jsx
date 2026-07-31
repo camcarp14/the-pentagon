@@ -13,7 +13,7 @@
 import { describe, it, expect } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import Minds, { patchNode } from "../Minds.jsx";
+import Minds, { patchNode, addNode, removeNode, REGIONS } from "../Minds.jsx";
 
 const G = () => ({
   version: 1,
@@ -97,6 +97,108 @@ describe("patchNode edits three fields and cannot reach a fourth", () => {
     expect(patchNode(g, "nope", { weight: 0.1 })).toBe(g);
     for (const bad of [null, undefined, {}, { nodes: [] }, { nodes: null }]) {
       expect(() => patchNode(bad, "a", { weight: 1 })).not.toThrow();
+    }
+  });
+});
+
+describe("addNode cannot produce a genome the owning app will reject", () => {
+  // Their node contract: unique non-empty string id, region from the six,
+  // finite weight in 0..1, non-empty label. Miss any one and the app does not
+  // error — it re-seeds, and the operator's whole graph is gone.
+  const valid = (g) => {
+    const ids = new Set();
+    for (const n of g.nodes) {
+      expect(typeof n.id === "string" && n.id.length > 0, `bad id ${n.id}`).toBe(true);
+      expect(ids.has(n.id), `duplicate id ${n.id}`).toBe(false);
+      ids.add(n.id);
+      expect(REGIONS, `bad region ${n.region}`).toContain(n.region);
+      expect(Number.isFinite(n.weight) && n.weight >= 0 && n.weight <= 1, `bad weight ${n.weight}`).toBe(true);
+      expect(typeof n.label === "string" && n.label.length > 0, `bad label`).toBe(true);
+    }
+    for (const e of g.edges || []) {
+      expect(ids.has(e.from), `dangling from ${e.from}`).toBe(true);
+      expect(ids.has(e.to), `dangling to ${e.to}`).toBe(true);
+    }
+  };
+
+  it("adds a valid node", () => {
+    const out = addNode(G(), { label: "Never book over lunch", text: "protect the hour", region: "principle" });
+    expect(out.nodes).toHaveLength(3);
+    valid(out);
+  });
+
+  it("stays valid for any input a text field can produce", () => {
+    for (const label of ["milk", "  spaced  ", "!!!", "Ünïcødé", "a".repeat(300), "constructor", "__proto__"]) {
+      const out = addNode(G(), { label, region: "skill" });
+      expect(() => valid(out)).not.toThrow();
+    }
+  });
+
+  it("refuses a node with no label rather than writing an invalid one", () => {
+    // Empty is refused because an empty label fails the validator. 0 is NOT in
+    // this list: it coerces to "0", which is a perfectly legal label, so
+    // refusing it would be this test inventing a rule the apps do not have.
+    for (const label of ["", "   ", null, undefined, "\t\n"]) {
+      const g = G();
+      expect(addNode(g, { label, region: "skill" }), String(label)).toBe(g);
+    }
+  });
+
+  it("accepts a label that merely looks falsy", () => {
+    const out = addNode(G(), { label: 0, region: "skill" });
+    expect(out.nodes).toHaveLength(3);
+    expect(out.nodes[2].label).toBe("0");
+    expect(() => valid(out)).not.toThrow();
+  });
+
+  it("forces an unknown region to a real one", () => {
+    for (const region of ["nonsense", "", null, undefined, 42]) {
+      const out = addNode(G(), { label: "x", region });
+      expect(REGIONS).toContain(out.nodes[2].region);
+    }
+  });
+
+  it("never collides an id, even on the same label twice", () => {
+    let g = G();
+    for (let i = 0; i < 5; i++) g = addNode(g, { label: "Same name", region: "goal" });
+    const ids = g.nodes.map((n) => n.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    valid(g);
+  });
+
+  it("does not mutate what it was given, and keeps the edges", () => {
+    const before = G();
+    const out = addNode(before, { label: "x", region: "goal" });
+    expect(before.nodes).toHaveLength(2);
+    expect(out.edges).toEqual(before.edges);
+  });
+});
+
+describe("removeNode cascades its synapses", () => {
+  it("removes the node AND every edge that touched it", () => {
+    // An edge pointing at a node that no longer exists is a "dangling" error in
+    // the same validator — so removing a node without its edges produces exactly
+    // the invalid genome that gets silently re-seeded.
+    const out = removeNode(G(), "b");
+    expect(out.nodes.map((n) => n.id)).toEqual(["a"]);
+    expect(out.edges).toEqual([]);
+  });
+
+  it("refuses a locked node", () => {
+    const g = G();                       // node "a" is locked
+    expect(removeNode(g, "a")).toBe(g);
+  });
+
+  it("refuses to empty a mind entirely", () => {
+    const one = { ...G(), nodes: [{ id: "solo", label: "L", region: "goal", weight: 0.5 }], edges: [] };
+    expect(removeNode(one, "solo")).toBe(one);
+  });
+
+  it("is a no-op for an unknown id or a broken genome", () => {
+    const g = G();
+    expect(removeNode(g, "ghost")).toBe(g);
+    for (const bad of [null, undefined, {}, { nodes: [] }]) {
+      expect(() => removeNode(bad, "a")).not.toThrow();
     }
   });
 });
