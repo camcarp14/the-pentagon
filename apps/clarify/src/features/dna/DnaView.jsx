@@ -42,7 +42,7 @@ const GLASS = {
 // and the glyph's slow rotation. App's global reduced-motion rule zeroes every
 // animation-duration, so the glyph goes still for free.
 const VIEW_CSS = `
-.dna-view { position: relative; overflow: hidden; height: calc(100vh - 52px); height: calc(100dvh - 52px); }
+.dna-view { position: relative; overflow: hidden; height: calc(100vh - var(--shell-bar, 52px)); height: calc(100dvh - var(--shell-bar, 52px)); }
 .dna-scroll-x { scrollbar-width: none; }
 .dna-scroll-x::-webkit-scrollbar { display: none; }
 .dna-logrow { transition: background 0.15s ease; }

@@ -224,7 +224,7 @@ function Centered({ children }) {
     // The gate screens render OUTSIDE the mounted tab root above, so they carry
     // their own data-kit — same scope, same rule: this app and nothing else.
     <div className="biz-root" data-kit style={{
-      minHeight: "calc(100vh - 52px)", display: "grid", placeItems: "center",
+      minHeight: "calc(100vh - var(--shell-bar, 52px))", display: "grid", placeItems: "center",
       padding: "24px 18px", background: "var(--bg)", color: "var(--ink)", fontFamily: "var(--font-body)",
     }}>
       {children}

@@ -67,12 +67,36 @@ describe("the chrome obeys the language", () => {
     expect(sizes.filter((n) => n < 10.5), "below the 10.5px floor").toEqual([]);
   });
 
-  it("gives the tool row a scrolling grammar, not a dividing one", () => {
+  it("shows every tool at once and never scrolls", () => {
+    // This used to assert the OPPOSITE — a scrolling pill row — on the reasoning
+    // that eight labels cannot divide a phone row at a legible size. That much
+    // is true horizontally (measured: ~345px of label against ~288px of row at
+    // 393px). The wrong conclusion was to scroll: a scrolled tool is an
+    // invisible tool, and seeing what is there is half the point of the bar.
+    // It wraps to a second row now.
     const toggle = code.slice(code.indexOf("function AppToggle"), code.indexOf("function ", code.indexOf("function AppToggle") + 10));
-    expect(toggle, "eight segments cannot divide a phone row").toContain("overflowX");
-    expect(toggle).toContain("scrollSnap");
-    // flex: "1 1 0" is the dividing behaviour this replaced.
-    expect(toggle).not.toContain('flex: "1 1 0"');
+    expect(toggle, "a scroller hides tools").not.toContain("overflowX");
+    expect(toggle, "a scroller hides tools").not.toContain("scrollSnap");
+    expect(toggle, "wraps rather than scrolling or dividing").toContain("auto-fit");
+    // auto-fit, not a fixed column count — hiding or adding a tool must reflow.
+    expect(toggle).not.toMatch(/gridTemplateColumns:\s*`?repeat\(\s*\d/);
+  });
+
+  it("shows each tool's whole name, never an abbreviation or a bare dot", () => {
+    const toggle = code.slice(code.indexOf("function AppToggle"), code.indexOf("function ", code.indexOf("function AppToggle") + 10));
+    // m.short is the abbreviated form ("Biz"); the row must render m.label.
+    expect(toggle, "the full label, not the short form").toContain("m.label");
+    expect(toggle).not.toContain("m.short");
+    // A label rendered only when there is room is a label that disappears.
+    expect(toggle).not.toMatch(/\{\s*!?compact\s*&&[^}]*m\.label/);
+  });
+
+  it("does not put uppercase or tracking on the tool labels", () => {
+    // §4.3 reserves uppercase for .t-label, and losing the caps is also ~10% of
+    // the width — most of what bought the second row its comfort.
+    const toggle = code.slice(code.indexOf("function AppToggle"), code.indexOf("function ", code.indexOf("function AppToggle") + 10));
+    expect(toggle).not.toContain("textTransform");
+    expect(toggle).not.toMatch(/letterSpacing:\s*"[\d.]+em"/);
   });
 
   it("never signals the active tool by colour alone", () => {
@@ -93,8 +117,13 @@ describe("the chrome obeys the language", () => {
     // EVERY wordmark, not the first one found. There are two — the bar and the
     // login screen — and the first pass only fixed the bar. A regex that stops
     // at the first match would have reported the other one clean.
+    // Three now: the bar renders one on desktop and one on mobile (they sit in
+    // different rows once the tool grid takes the full width), plus the login
+    // screen's. Asserted as ">= 2 and every one clean" rather than an exact
+    // count, so adding a surface cannot make this fail for the wrong reason —
+    // but the loop below still has to see all of them.
     const tags = [...code.matchAll(/<span([^>]*)>The Pentagon<\/span>/g)].map((m) => m[1]);
-    expect(tags.length, "expected the bar's wordmark and the login screen's").toBe(2);
+    expect(tags.length, "expected the bar's wordmarks and the login screen's").toBeGreaterThanOrEqual(2);
     for (const t of tags) {
       expect(t, `wordmark still uppercase: ${t.slice(0, 60)}`).not.toContain("textTransform");
       expect(t, "wordmark hardcodes a colour instead of a token").not.toMatch(/#[0-9a-fA-F]{6}/);
@@ -109,10 +138,40 @@ describe("the chrome obeys the language", () => {
   });
 });
 
-describe("the 52px contract the tools depend on", () => {
-  it("keeps the bar at 51 + 1", () => {
-    // Ten call sites across the tools hardcode calc(100vh - 52px) or top: 52px.
-    // Growing this by a pixel puts a permanent 1px overflow on every one.
-    expect(code).toMatch(/height:\s*51\b/);
+describe("the bar's height is published, not assumed", () => {
+  // This used to assert `height: 51` and explain that ten call sites across the
+  // tools hardcode calc(100vh - 52px), so growing the bar by a pixel would put a
+  // permanent 1px overflow on every one. True, and it made the bar unchangeable
+  // — which is why the tool row scrolled instead of wrapping. The height is
+  // measured and written to --shell-bar now, and those call sites read it.
+
+  it("measures the real height and publishes it as --shell-bar", () => {
+    expect(code, "the bar must be measured, not assumed").toContain("--shell-bar");
+    expect(code, "a ResizeObserver is what keeps it true as tools wrap").toContain("ResizeObserver");
+    // A fixed height would make the measurement a lie the moment the row wraps.
+    const bar = code.slice(code.indexOf("ref={barRef}"), code.indexOf("ref={barRef}") + 400);
+    expect(bar).not.toMatch(/\bheight:\s*\d/);
+    expect(bar).toMatch(/minHeight:\s*\d/);
+  });
+
+  it("leaves no tool assuming 52px", () => {
+    // The whole point: every dependent call site follows the variable. The
+    // fallback is kept because each tool's standalone dev entry has no shell bar.
+    const files = [
+      "apps/business/src/Root.jsx", "apps/clarify/src/App.jsx",
+      "apps/clarify/src/features/dna/DnaView.jsx", "apps/looper/src/styles.css",
+      "apps/macro/src/styles.css", "apps/runway/src/Root.jsx", "apps/shell/src/System.jsx",
+    ];
+    const offenders = [];
+    for (const f of files) {
+      const src = readFileSync(join(here, "..", "..", "..", "..", f), "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      // A bare 52px inside a viewport or sticky-offset calculation.
+      for (const m of src.matchAll(/(calc\([^)]*?|top:\s*)"?52px/g)) {
+        if (!m[0].includes("--shell-bar")) offenders.push(`${f}: ${m[0]}`);
+      }
+    }
+    expect(offenders, `\n${offenders.join("\n")}\n`).toEqual([]);
+    expect(files.length, "scan sanity — the dependent set should not shrink to nothing").toBeGreaterThanOrEqual(7);
   });
 });

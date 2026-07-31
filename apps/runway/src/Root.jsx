@@ -32,12 +32,12 @@ import App from "./App.jsx";
 // board (one stacked stage) under the DESKTOP top bar on iPad portrait.
 const EMBED_OVERRIDES = `
 @media (min-width: 768px) {
-  .shell { display: flex; flex-direction: column; min-height: calc(100vh - 52px); }
+  .shell { display: flex; flex-direction: column; min-height: calc(100vh - var(--shell-bar, 52px)); }
   /* one hairline OR one shadow, never both on the same element — the bar's
      separation is the border-bottom, and the drop shadow that used to sit on
      top of it has gone. */
   .rail {
-    position: sticky; top: 52px; height: 52px; width: 100%;
+    position: sticky; top: var(--shell-bar, 52px); height: 52px; width: 100%;
     flex-direction: row; align-items: center; gap: 6px;
     border-right: none; border-bottom: 1px solid rgba(255,255,255,0.055);
     background: rgba(11,15,26,0.78);

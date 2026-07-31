@@ -324,7 +324,7 @@ export default function App({ embedded = false }) {
       /* Standalone PWA (added to home screen): no browser chrome, so the
          header needs to clear the notch/status bar itself. */
       @media (display-mode: standalone) {
-        .co-nav { padding-top: env(safe-area-inset-top) !important; height: calc(52px + env(safe-area-inset-top)) !important; }
+        .co-nav { padding-top: env(safe-area-inset-top) !important; height: calc(var(--shell-bar, 52px) + env(safe-area-inset-top)) !important; }
       }
 
       @media (max-width: 1080px) {
@@ -859,7 +859,7 @@ export default function App({ embedded = false }) {
     // wrapper that holds every tool, and nothing here touches document.body.
     <div data-kit style={{ minHeight: "100vh", background: "transparent", color: T.ink, fontFamily: T.fontBody }}>
       {/* Nav — five tabs, one product */}
-      <div className="co-nav" style={{ borderBottom: `1px solid ${T.lineSoft}`, padding: "0 24px", height: "52px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: embedded ? "52px" : 0, background: "rgba(11,15,26,0.78)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", zIndex: 50 }}>
+      <div className="co-nav" style={{ borderBottom: `1px solid ${T.lineSoft}`, padding: "0 24px", height: "52px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: embedded ? "var(--shell-bar, 52px)" : 0, background: "rgba(11,15,26,0.78)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "18px", minWidth: 0 }}>
           {!embedded && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
@@ -934,7 +934,7 @@ export default function App({ embedded = false }) {
       <div className="co-viewwrap">
       {currentView === "inbound" ? <InboundView cards={cards} onNavigate={setCurrentView} onCardsChange={loadData} toneMemory={toneMemory} /> : currentView === "analyst" ? <AnalystView /> : currentView === "clients" ? <ClientsView deepClientId={routeSub} onNavigate={setCurrentView} /> : currentView === "mission" ? <MissionControl cards={cards} onNavigate={setCurrentView} inboundNew={inboundNew} /> : currentView === "calendar" ? <CalendarView cards={cards} onStatusChange={handleStatusChange} onDataChange={loadData} /> : currentView === "queue" ? <QueueView onNavigate={setCurrentView} /> : currentView === "sequences" ? <SequencesView /> : currentView === "analytics" ? <AnalyticsView cards={cards} /> : currentView === "dna" ? <DnaView cards={cards} toneMemory={toneMemory} /> : currentView === "settings" ? <SettingsView /> : null}
       </div>
-      {currentView === "outreach" && <div className="co-viewwrap" style={{ display: "flex", minHeight: "calc(100vh - 52px)" }}>
+      {currentView === "outreach" && <div className="co-viewwrap" style={{ display: "flex", minHeight: "calc(100vh - var(--shell-bar, 52px))" }}>
         <div style={{ flex: 1, padding: "24px 28px", overflow: "auto" }}>
 
           {/* Actions row — outreach's tools live with outreach, not in the global header */}

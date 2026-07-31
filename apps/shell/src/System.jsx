@@ -556,7 +556,7 @@ export default function System({ onExit, onOpenTool, tabPrefs, onTabPrefs }) {
     // data-kit opts this screen into the shared component sheet — without it the
     // .stattile/.card/.t-label classes below match nothing. Font stack comes from
     // the token now; it used to name 'Inter', a webfont that no longer loads.
-    <div data-kit style={{ minHeight: "calc(100vh - 52px)", background: P.bg, color: P.ink, fontFamily: "var(--font-body)" }}>
+    <div data-kit style={{ minHeight: "calc(100vh - var(--shell-bar, 52px))", background: P.bg, color: P.ink, fontFamily: "var(--font-body)" }}>
       <div style={{ maxWidth: 1080, margin: "0 auto", padding: isMobile ? "14px 12px 80px" : "22px 24px 60px" }}>
         {/* The row used to be tabs + buttons on ONE line with flex-wrap and
             `marginLeft: auto`, which on a phone pushed Sign out / Back onto a

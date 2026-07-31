@@ -67,20 +67,31 @@ function useSession() {
 // The Pentagon mark: a five-sided ring (the name) whose gradient sweeps through
 // all four tool accents — violet → emerald → brass → amber (cool to warm), one
 // glyph that says "four tools under one shell". Reads down to favicon size.
+// ONE MARK, ONE METAL. This used to sweep violet → emerald → brass → amber, one
+// stop per tool accent, with a violet glow behind it. Four hues and a glow is a
+// lot of noise for a 21px mark whose whole job is to sit still while eight tools
+// change colour underneath it — and it read as a toy rather than as a tool.
+//
+// It is Board Room's grammar now, because these are the same person's apps and
+// they belong on the same shelf: a thin ring with a solid mark centred inside,
+// in Board Room's own gold ramp (#E9CB7F → #D6B362 → #C29A45, sampled from its
+// icon rather than guessed) on a near-black plate. Board Room draws a circle
+// with a diamond; this draws a pentagon with a pentagon, which is the name.
+//
+// Deliberately NOT var(--accent): the accent is the ACTIVE TOOL's colour and it
+// changes on every switch. This is the shell's own identity and holds still.
 const PentagonLogo = ({ size = 22 }) => (
-  <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden="true" style={{ display: "block", flexShrink: 0, filter: "drop-shadow(0 0 6px rgba(139,124,255,0.28))" }}>
+  <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden="true" style={{ display: "block", flexShrink: 0 }}>
     <defs>
-      <linearGradient id="pentagon-grad" x1="4" y1="5" x2="28" y2="27" gradientUnits="userSpaceOnUse">
-        <stop offset="0" stopColor="#8B7CFF" />
-        <stop offset="0.38" stopColor="#3ECF8E" />
-        <stop offset="0.72" stopColor="#C9A557" />
-        <stop offset="1" stopColor="#FFB224" />
+      <linearGradient id="pentagon-gold" x1="9" y1="5.1" x2="23.7" y2="27.5" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stopColor="#E9CB7F" />
+        <stop offset="0.52" stopColor="#D6B362" />
+        <stop offset="1" stopColor="#C29A45" />
       </linearGradient>
     </defs>
-    <path
-      fillRule="evenodd" clipRule="evenodd" fill="url(#pentagon-grad)"
-      d="M16 5.25 L27.29 13.46 L22.98 26.74 L9.02 26.74 L4.71 13.46 Z M16 11.1 L21.74 15.27 L19.54 22.01 L12.46 22.01 L10.26 15.27 Z"
-    />
+    <path d="M 16 5.6 L 25.89 12.79 L 22.11 24.41 L 9.89 24.41 L 6.11 12.79 Z"
+      fill="none" stroke="url(#pentagon-gold)" strokeWidth="1.34" strokeLinejoin="round" />
+    <path d="M 16 11.68 L 20.11 14.67 L 18.54 19.49 L 13.46 19.49 L 11.89 14.67 Z" fill="url(#pentagon-gold)" />
   </svg>
 );
 
@@ -139,36 +150,14 @@ function LoginScreen() {
 // ─── the app toggle ───────────────────────────────────────────────────────────
 function AppToggle({ active, onPick, compact, apps }) {
   const refs = useRef({});
-  const [ind, setInd] = useState({ left: 0, width: 0, ready: false });
-  // Measure the active button so the pill glides between tools instead of
-  // teleporting. Beyond tool switch + the mobile/desktop flip, this must also
-  // re-measure on resize (segments are flex-sized on mobile, so every width
-  // change moves them). The fonts.ready re-measure is kept but no longer
-  // load-bearing: the shell used to render this in Syne, which arrives late, so
-  // a first-paint measurement captured fallback widths and left the pill
-  // mis-sized until the next switch. On the system stack the face is there at
-  // first paint. Kept because a user-installed font or a future display face
-  // would bring the problem straight back, and it costs one idle callback.
-  useLayoutEffect(() => {
-    const measure = () => {
-      const el = refs.current[active];
-      if (el) setInd({ left: el.offsetLeft, width: el.offsetWidth, ready: true });
-    };
-    measure();
-    // A scrolling row can put the active tool off-screen — after a keyboard
-    // shortcut, or when a hidden tool resolves the active one elsewhere. Bring
-    // it back without yanking the page.
-    const el = refs.current[active];
-    if (el && el.scrollIntoView) {
-      try { el.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" }); } catch { el.scrollIntoView(); }
-    }
-    window.addEventListener("resize", measure);
-    let alive = true;
-    document.fonts?.ready?.then(() => { if (alive) measure(); });
-    return () => { alive = false; window.removeEventListener("resize", measure); };
-    // `apps` is in the deps because hiding or reordering a tool changes every
-    // segment's offset — without it the pill stays parked over the old position.
-  }, [active, compact, apps]);
+  // The sliding indicator pill and everything it needed — a layout-effect
+  // measuring the active button, a resize listener because segments were
+  // flex-sized, a fonts.ready re-measure, and scrollIntoView to drag an
+  // off-screen active tool back — all lived here and none of it survives the
+  // move to a wrapping grid. There is no single row to slide along once tools
+  // wrap; a 2D glide between rows reads as a glitch rather than as motion; and
+  // nothing can be off-screen in a grid that shows everything. The active cell
+  // is drawn instead.
   return (
     <div
       // Deliberately NOT role="tablist": a real tablist owes arrow-key
@@ -179,30 +168,35 @@ function AppToggle({ active, onPick, compact, apps }) {
       aria-label="Switch tool"
       className="toolrow"
       style={{
-        // 2px inset on mobile, not 3: a 44px segment + 3px padding + 2 borders
-        // would be 52px inside a 51px row. At 2px the group is 50px and the
-        // segments keep their full 44px height.
-        position: "relative", gap: 2, padding: compact ? 2 : 3, borderRadius: compact ? 12 : 11,
+        // ── EVERY TOOL VISIBLE, NO SCROLL ───────────────────────────────────
+        //
+        // This was a horizontally scrolling pill row, on the reasoning that a
+        // segmented control is for four or fewer and eight will not fit a phone
+        // at a legible size. The second half of that is true — measured at
+        // 393px, eight full labels need ~345px against ~288px of usable row,
+        // even in sentence case with no dot and no tracking. The conclusion was
+        // wrong: the answer to "too many for one row" is more rows, not a
+        // scroller. A scrolled tool is an invisible tool, and half the point of
+        // the bar is seeing at a glance what is there.
+        //
+        // auto-fit rather than a fixed column count, so this holds for however
+        // many tools are visible — hide three in System and it reflows to one
+        // row on its own. The bar's height is measured and published as
+        // --shell-bar (see the header), so nothing downstream assumes 52px.
+        display: "grid",
+        // 70px is the widest cell that still fits FIVE columns on a 393px
+        // phone — "Business" is the long one, ~46px of label plus the dot and
+        // its gap. Five rather than four matters: at four, the default set of
+        // five tools stranded one tool alone on a second row with three empty
+        // cells beside it. At five they sit on one line and the full eight go
+        // 5 + 3.
+        gridTemplateColumns: `repeat(auto-fit, minmax(${compact ? 70 : 92}px, 1fr))`,
+        gap: 2, padding: compact ? 2 : 3, borderRadius: compact ? 12 : 11,
+        width: "100%", minWidth: 0,
         background: "color-mix(in srgb, var(--ink) 6%, transparent)",
-        // lineSoft, matching the pill groups inside ZTS/Clarify rather than the
-        // harder --border edge the shell used to draw.
         border: "1px solid rgba(255,255,255,0.055)",
-        ...(compact
-          // On a phone the toggle SCROLLS rather than dividing a fixed width
-          // between eight segments. The design language is explicit about this:
-          // a segmented control is for four or fewer, and five or more is a
-          // scrolling pill row. Dividing instead is what forced 9px labels,
-          // negative tracking, the dots off, a `short` form for Business, and
-          // ellipsis from 393px down — five separate concessions, all of them
-          // symptoms of using the wrong control for eight things.
-          ? { display: "flex", flex: "1 1 auto", minWidth: 0, overflowX: "auto", overflowY: "hidden",
-              scrollSnapType: "x proximity", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }
-          : { display: "inline-flex" }),
       }}
     >
-      {ind.ready && (
-        <div style={{ position: "absolute", top: compact ? 2 : 3, bottom: compact ? 2 : 3, left: ind.left, width: ind.width, background: "var(--surface-2, var(--surface))", borderRadius: compact ? 9 : 8, boxShadow: "var(--shadow-tab)", transition: `left ${M.durBase} ${M.easeSpring}, width ${M.durBase} ${M.easeSpring}` }} />
-      )}
       {apps.map((a) => {
         const m = appMeta(a);
         const on = a === active;
@@ -215,44 +209,28 @@ function AppToggle({ active, onPick, compact, apps }) {
             title={m.brand} aria-current={on ? "true" : undefined}
             style={{
               position: "relative", zIndex: 1,
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              // The dot is back on mobile. It cost 15px per segment when the row
-              // had a fixed width to divide; a scrolling row has room, and the
-              // dot is what stops the active tool being signalled by colour
-              // alone — which is a thing this language forbids.
-              gap: 7,
-              scrollSnapAlign: compact ? "center" : undefined,
-              // 1px inset, 9px, slightly negative tracking: SIX segments need
-              // every pixel, and the sixth cost the other five their headroom.
-              // Re-measured in Chromium at 430/393/390/375/360 after Business
-              // landed: at 3px/9.5px the labels needed 43-46px against 38-41px
-              // of segment and Clarify/Runway/Looper all ellipsised from 393px
-              // down. This recovers ~8px per segment. 360px and below still
-              // clips the longest labels — six words do not fit that width at a
-              // legible size, so they ellipsise rather than overlap (see the
-              // label span below), and Business carries a `short` form for
-              // exactly this reason.
-              padding: compact ? "0 13px" : "6px 14px",
-              minHeight: compact ? 44 : 32,
-              // flex: none — each segment takes the width its label needs, and
-              // the row scrolls. No ellipsis, no `short` form, no 360px cliff.
-              ...(compact ? { flex: "none" } : {}),
-              border: "none", borderRadius: compact ? 9 : 8, cursor: "pointer", background: "transparent",
-              color: on ? (compact ? m.accent : "var(--ink)") : "var(--faint)",
-              // 11.5 on both. 9px was under this language's 10.5px floor, and
-              // it only existed to make eight labels fit a width they never fit.
-              fontSize: 11.5, fontWeight: 700,
-              letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap",
-              transition: `color ${M.durBase} ${M.easeStd}`,
+              display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+              minWidth: 0, padding: "0 6px",
+              minHeight: compact ? 36 : 32,
+              border: "none", borderRadius: compact ? 9 : 8, cursor: "pointer",
+              // The active cell is drawn, not slid. A sliding thumb has to be
+              // measured against one row of segments; across a wrapping grid it
+              // would need to jump rows, and a 2D glide reads as a glitch.
+              background: on ? "var(--surface-2, var(--surface))" : "transparent",
+              boxShadow: on ? "var(--shadow-tab)" : "none",
+              color: on ? m.accent : "var(--faint)",
+              // Sentence case, not uppercase. §4.3 reserves uppercase for
+              // .t-label, and it is also ~10% narrower, which is most of what
+              // bought the second row its comfort.
+              fontSize: compact ? 11.5 : 12, fontWeight: on ? 600 : 500,
+              letterSpacing: 0, whiteSpace: "nowrap",
+              transition: `color ${M.durBase} ${M.easeStd}, background ${M.durBase} ${M.easeStd}`,
             }}>
-            <span aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: m.accent, boxShadow: on ? `0 0 8px ${m.accent}` : "none", flexShrink: 0 }} />
-            {/* The label needs its own block to truncate: `text-overflow` does
-                nothing on a flex container, so with the text as a direct child
-                of the button an over-wide label overflowed its segment and ran
-                into its neighbour instead of clipping. */}
-            {/* Full label on both. The `short` form existed because eight words
-                did not fit a divided phone row; a scrolling one fits them. */}
-            <span style={{ whiteSpace: "nowrap", display: "block" }}>{m.label}</span>
+            <span aria-hidden style={{ width: 7, height: 7, borderRadius: "50%", background: m.accent, boxShadow: on ? `0 0 8px ${m.accent}` : "none", flexShrink: 0 }} />
+            {/* The label gets its own block so it can ellipsise if a tool is
+                ever named something very long — text-overflow does nothing on a
+                flex container. At the current names nothing truncates. */}
+            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>{m.label}</span>
           </button>
         );
       })}
@@ -368,6 +346,35 @@ export default function Shell() {
     setSystemOpen(false);
   }, []);
 
+  // ── the bar's height, measured rather than assumed ──────────────────────────
+  //
+  // Ten call sites across six tools hardcoded `calc(100vh - 52px)` or
+  // `top: 52px`, which pinned this bar to one row forever: the comment here used
+  // to say that growing it to 53 would put a permanent 1px overflow on every one
+  // of them, and it was right. Now the real height is measured and written to
+  // --shell-bar on the root, and those call sites read `var(--shell-bar, 52px)`.
+  // The fallback keeps each tool's standalone dev entry — which has no shell bar
+  // at all — behaving exactly as it did.
+  //
+  // Measured rather than computed because the height depends on how many tools
+  // are visible, how they wrap, and the font: any arithmetic here would be a
+  // second source of truth that drifts. A ResizeObserver just watches it.
+  const barRef = useRef(null);
+  useLayoutEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const root = el.closest("[data-app]") || document.documentElement;
+    const publish = () => {
+      // +1 for the bar's own bottom border, which is on the wrapper, not here.
+      root.style.setProperty("--shell-bar", `${Math.round(el.getBoundingClientRect().height) + 1}px`);
+    };
+    publish();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isMobile, tabs, systemOpen]);
+
   // Preference changes come from System → Tabs, which is rendered by this same
   // component, so they arrive through here rather than through storage events.
   const applyTabPrefs = useCallback((next) => {
@@ -473,36 +480,48 @@ export default function Shell() {
         borderBottom: "1px solid var(--line)",
         background: "color-mix(in srgb, var(--bg) 82%, transparent)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)",
       }}>
-      {/* One row, still 52px: the switcher gets 44px-tall targets without
-          spending a second row of vertical chrome. On mobile the wordmark drops
-          and the labels run small and untracked, which keeps all FIVE tool
-          labels un-truncated with the System button still visible from 430px
-          down to 375px, the narrowest phone still shipping. Segments land at
-          56x44 on a 393px phone, against the 28x26 the old dots-only compact
-          mode gave. Below 375px the labels ellipsise; see AppToggle. */}
-      {/* 51 + the outer 1px borderBottom = the 52px the bar has always been. Ten
-          call sites across the four tools hardcode `calc(100vh - 52px)` or
-          `top: 52px`, so growing this to 53 would put a permanent 1px overflow
-          on every one of them. */}
-      <div style={{
-        height: 51, paddingLeft: isMobile ? 10 : 20, paddingRight: isMobile ? 10 : 20,
+      {/* TWO ROWS ON A PHONE, ONE ON A DESKTOP, NEVER A SCROLLER.
+          The bar used to be locked at exactly 51px + 1px border, because ten
+          call sites across six tools hardcode `calc(100vh - 52px)` or
+          `top: 52px`. That constant is now MEASURED and published as
+          --shell-bar (see the ref below), so the bar can be whatever height its
+          contents need and every one of those call sites follows it. */}
+      <div ref={barRef} style={{
+        minHeight: 51, paddingLeft: isMobile ? 10 : 20, paddingRight: isMobile ? 10 : 20,
+        paddingTop: isMobile ? 6 : 0, paddingBottom: isMobile ? 6 : 0,
         display: "flex", alignItems: "center", justifyContent: "space-between",
+        // On a phone the tool grid needs the full width to wrap into, so identity
+        // and System take their own line above it. On a desktop the whole thing
+        // still fits one line and splitting it there would just be noise.
+        flexDirection: isMobile ? "column" : "row", gap: isMobile ? 6 : 0,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, minWidth: 0, flex: isMobile ? 1 : "0 1 auto" }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            <PentagonLogo size={isMobile ? 21 : 23} />
-            {!isMobile && (
-              // SESSION: system stack, sentence case, hierarchy from size and
-              // weight rather than tracking. Uppercase survives in exactly one
-              // place in this language and a wordmark is not it.
+        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, minWidth: 0, width: isMobile ? "100%" : undefined, flex: isMobile ? "none" : "0 1 auto", order: isMobile ? 2 : 0 }}>
+          {!isMobile && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              <PentagonLogo size={23} />
+              {/* SESSION: system stack, sentence case, hierarchy from size and
+                  weight rather than tracking. Uppercase survives in exactly one
+                  place in this language and a wordmark is not it. */}
               <span className="t-head" style={{ color: "var(--ink)", whiteSpace: "nowrap" }}>The Pentagon</span>
-            )}
-          </span>
+            </span>
+          )}
           <AppToggle active={active} onPick={pick} compact={isMobile} apps={tabs} />
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, marginLeft: 8 }}>
-          {/* Icon-only on mobile: the four labelled tool segments need that ~43px
-              more than this button needs its word, and it keeps a 44px target. */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8, flexShrink: 0,
+          // On a phone this is the identity line: mark on the left, System on
+          // the right, with the tool grid on its own full-width row beneath.
+          width: isMobile ? "100%" : undefined, marginLeft: isMobile ? 0 : 8,
+          justifyContent: isMobile ? "space-between" : undefined, order: isMobile ? 1 : 0,
+        }}>
+          {isMobile && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              <PentagonLogo size={21} />
+              <span className="t-head" style={{ color: "var(--ink)", whiteSpace: "nowrap" }}>The Pentagon</span>
+            </span>
+          )}
+          {/* Icon-only on mobile: it keeps a 44px target without spending width
+              the tool grid below needs. */}
           <button onClick={() => setSystemOpen((o) => !o)} type="button"
             title="System — usage, minds & agents across every tool"
             aria-label="System — usage, minds & agents across every tool"

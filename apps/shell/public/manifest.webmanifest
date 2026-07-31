@@ -1,13 +1,15 @@
 {
   "name": "The Pentagon",
   "short_name": "Pentagon",
-  "description": "ZTS · Clarify · Runway · Macro — four tools, one shell.",
+  "description": "ZTS · Clarify · Runway · Macro · Looper · Business · SYNC · Ideas — eight tools, one shell.",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0B0F1A",
   "theme_color": "#0B0F1A",
   "icons": [
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/apple-touch-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+    { "src": "/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
