@@ -286,13 +286,22 @@ export default function App({ embedded = false }) {
          after the shell's kit import and wins for every tool on screen, not just
          Clarify. The shimmer copy was the sharpest edge: it was a
          background-position sweep, and it silently froze the kit's
-         transform-driven .sk::after skeleton loader everywhere. Only
-         Clarify-owned names live below. See DESIGN.md §6. */
-      @keyframes toastIn { from { opacity: 0; transform: translateX(18px) scale(0.97); } to { opacity: 1; transform: none; } }
-      @keyframes toastOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(18px) scale(0.97); } }
-      @keyframes toastShrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
-      @keyframes paletteIn { from { opacity: 0; transform: translateY(-6px) scale(0.98); } to { opacity: 1; transform: none; } }
-      @keyframes cardIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+         transform-driven .sk::after skeleton loader everywhere.
+
+         "Only Clarify-owned names live below" used to end that paragraph, and it
+         was false: toastIn, toastOut, toastShrink and paletteIn are
+         @cc/ui's (packages/ui/index.jsx injects them at import time; Toast and
+         CommandPalette consume them), and this sheet redefined all four with a
+         translateX(18px) throw against the kit's translateY(-8px). Clarify is
+         lazy() mounted inside a shell whose ToastProvider wraps everything, so
+         the copies landed last and stayed. Nothing in Clarify referenced any of
+         the four — the kit's own components were the only consumers — so they
+         are gone and the kit's motion is what Clarify gets. cardIn was
+         byte-identical to ZTS's and is promoted to packages/ui/components.css;
+         Clarify's call sites still say cardIn and are unchanged.
+         See DESIGN.md §6, and packages/ui/__tests__/keyframes.test.js, which now
+         derives the owned set from every sheet the packages ship rather than
+         from components.css alone — which is why the four were invisible to it. */
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
       }
@@ -921,8 +930,21 @@ export default function App({ embedded = false }) {
 
           {/* Actions row — outreach's tools live with outreach, not in the global header */}
           <div className="co-toolbar" style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap", alignItems: "center" }}>
-            {/* The kit's .field — one well, no outline, and a focus ring from
-                the kit rather than a border that only appears when focused. */}
+            {/* The kit's .field for the MATERIAL only — background, radius, no
+                outline, kit focus ring. The four inline overrides below
+                (minHeight 36, 7px/12px padding, 13px) are DELIBERATE and they
+                beat the kit: this row is the outreach toolbar, which collapses
+                into a single-line horizontal scroller on a phone
+                (`.co-toolbar` above), and it sits shoulder to shoulder with two
+                `selectBase` dropdowns at exactly this footprint. Taking the
+                kit's 44px floor and 15px type here would make the search box a
+                head taller than the selects beside it and double the height of
+                the scroller — the same reasoning theme.js's `selectBase` comment
+                gives for selects having no kit primitive at all. The iOS zoom
+                floor is not lost: `input, textarea, select { font-size: 16px
+                !important }` under `max-width: 860px` puts every input back over
+                16px on exactly the devices that need it. Change the four numbers
+                here and you must change `selectBase` in the same commit. */}
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}

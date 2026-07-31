@@ -148,14 +148,26 @@ function useGlobalStyles() {
          after the shell's kit import and wins for every tool on screen, not just
          ZTS. The shimmer copy was the sharpest edge: it was a background-position
          sweep, and it silently froze the kit's transform-driven .sk::after
-         skeleton loader everywhere. Only ZTS-owned names live below.
-         See DESIGN.md §6. */
+         skeleton loader everywhere.
+
+         The line that used to sit here — "Only ZTS-owned names live below" — was
+         false when it was written. toastIn, toastOut, toastShrink and
+         paletteIn belong to @cc/ui (packages/ui/index.jsx injects them at
+         import time and Toast/CommandPalette consume them), and this sheet
+         redefined all four with a translateX(18px) throw against the kit's
+         translateY(-8px). ZTS is lazy() mounted inside a shell whose
+         ToastProvider wraps everything, so the copies landed last and stayed:
+         once ZTS had been opened, EVERY tool's toasts slid in from the right for
+         the life of the page. Nothing in ZTS referenced any of the four — the
+         only consumers were the kit's own — so they are simply gone, and the
+         kit's motion is what ZTS gets. cardIn was byte-identical to Clarify's
+         and is promoted to packages/ui/components.css; ZTS's call sites still
+         say cardIn and are unchanged. slideup stays: it is ZTS's own, no
+         package defines it, and this app's sheets are its only definition.
+         See DESIGN.md §6, and packages/ui/__tests__/keyframes.test.js, which now
+         derives the owned set from every sheet the packages ship rather than
+         from components.css alone — which is why the four were invisible to it. */
       @keyframes slideup { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: none; } }
-      @keyframes toastIn { from { opacity: 0; transform: translateX(18px) scale(0.97); } to { opacity: 1; transform: none; } }
-      @keyframes toastOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(18px) scale(0.97); } }
-      @keyframes toastShrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
-      @keyframes paletteIn { from { opacity: 0; transform: translateY(-6px) scale(0.98); } to { opacity: 1; transform: none; } }
-      @keyframes cardIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
       html { overflow-x: hidden; }
       body { overflow-x: hidden; }
       /* A tappable card lifts on hover. Elevation ONLY: no transform, so it

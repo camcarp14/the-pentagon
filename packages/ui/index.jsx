@@ -66,6 +66,23 @@ const U = {
 // as a background-position sweep it did nothing to the kit's `.sk::after`,
 // which is a transform sweep starting at translateX(-100%): the kit's own
 // skeletons stopped animating in every app that imported @cc/ui.
+//
+// THIS IS THE KIT'S SECOND STYLESHEET, and the names below are as owned as the
+// ones in components.css. That was not obvious, and it cost: ZTS and Clarify
+// each redefined `toastIn`/`toastOut`/`toastShrink`/`paletteIn` in their own
+// injected sheets with a translateX(18px) throw instead of the translateY(-8px)
+// here. Both are lazy() mounted inside a ToastProvider that wraps the whole
+// shell, so their copies landed last and won for the life of the page — open
+// ZTS once and every tool's toasts slid in from the right. The guard could not
+// see it, because it derived the owned set from components.css alone. It now
+// derives from every sheet the packages ship, this one included, so a name here
+// is protected the moment it is added, with no list to update.
+//
+// `toastin`/`toastout` in components.css are NOT these. CSS keyframe idents are
+// case-sensitive, so `toastin` (the .toast class's spring, bottom-centre) and
+// `toastIn` (this module's JS-rendered Toast, top-right) are two distinct
+// animations that only read alike. Both are kit-owned; neither shadows the
+// other; do not "tidy" one into the other.
 const KEYFRAMES = `
 @keyframes ccShimmerBg { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
 @keyframes toastIn { from { opacity: 0; transform: translateY(-8px) scale(0.98); } to { opacity: 1; transform: none; } }

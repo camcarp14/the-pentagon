@@ -34,7 +34,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { ToastProvider } from "@cc/ui";
@@ -249,7 +249,25 @@ describe("every ZTS surface renders on the kit", () => {
     // still RENDERED above — a ReferenceError in it must still fail this file —
     // it is only exempt from the class rule. Delete this exemption, not the
     // surface, when the tab goes.
-    const KIT = /class="[^"]*\b(btn|seg-opt|cell|pill|switch|icon-btn|sheet-grab|dock-tab|stattile)\b/;
+    // Membership is by TOKEN, and it has to be — the `\b`-anchored regex this
+    // replaced matched a control name INSIDE a longer class. "stattile-label"
+    // satisfied `\bstattile\b`; "cell-chevron" satisfied `\bcell\b`;
+    // "switch-knob" satisfied `\bswitch\b`. The first two are pure TEXT classes
+    // — a type ramp and a chevron glyph, no target geometry, no press physics —
+    // so a hand-rolled <button> wearing either walked straight through the one
+    // assertion that exists to stop it. `hasClass` above carries a comment
+    // recording this exact bug being found and fixed, and the fix never reached
+    // here; this line is that fix, arriving late. Proved by mutation both ways:
+    // replacing Studio's primary <Btn> with <button className="stattile-label">
+    // and again with className="cell-chevron" left the suite green before, and
+    // reddens it now.
+    const CONTROL = ["btn", "seg-opt", "cell", "pill", "switch", "icon-btn", "sheet-grab", "dock-tab", "stattile"];
+    const onKit = (tag) => CONTROL.some((c) => hasClass(tag, c));
+    // …and the token check must actually be stricter than the boundary check it
+    // replaced, or it is the same hole with new spelling.
+    expect(onKit('<button class="stattile-label">'), "a text class still counts as a control surface").toBe(false);
+    expect(onKit('<button class="cell-chevron">'), "a text class still counts as a control surface").toBe(false);
+    expect(onKit('<button class="btn md primary">'), "a real control is no longer recognised").toBe(true);
     const EXEMPT = new Set(["DNA"]);
     const all = surfaces();
     let checked = 0;
@@ -257,7 +275,7 @@ describe("every ZTS surface renders on the kit", () => {
       if (EXEMPT.has(name)) continue;
       const buttons = out.match(/<button[^>]*>/g) || [];
       checked += buttons.length;
-      const bare = buttons.filter((b) => !KIT.test(b));
+      const bare = buttons.filter((b) => !onKit(b));
       expect(bare, `${name} has controls off the kit:\n${bare.join("\n")}`).toEqual([]);
     }
     expect(checked, "no buttons were scanned — the scan is broken").toBeGreaterThan(40);
@@ -419,10 +437,28 @@ describe("ZTS obeys the language", () => {
   it("puts no border and box-shadow on the same element", () => {
     // The Card, the top bar, the bottom bar, the engine panel, the sign-in card
     // and every floating panel in the DNA tab all carried a 1px line AND a
-    // shadow. Two scans, because the violation has two shapes here:
+    // shadow. FOUR scans, because the violation has four shapes here and the
+    // first two scans missed the two that a reviewer would actually reach for:
     //   1. an inline style object that sets both
     //   2. an element that wears the kit's .card (which IS a shadow) and then
     //      draws its own outline on top
+    //   3. a CALL SITE that hands a border to a component whose own root wears
+    //      a kit shadow class and forwards `...style` onto it. This is the
+    //      PRE-MIGRATION kanban card verbatim —
+    //        <Card hover onClick={…} style={{ padding: "12px 15px",
+    //                                         borderLeft: `3px solid ${stage.color}` }}>
+    //      the exact border-on-a-shadowed-.card the migration replaced with an
+    //      inset shadow. Scans 1 and 2 both slid off it: there is no boxShadow
+    //      token in that object for scan 1 to find, and the only tag with a
+    //      matching className is Card's OWN `<div … style={{ minWidth: 0,
+    //      ...style }}>`, which contains no 'border:'. The border is a prop, and
+    //      props were not being read.
+    //   4. a border reached through a NAME rather than written in place —
+    //        const PANEL_EDGE = { border: "1px solid rgba(255,255,255,0.085)" };
+    //        <div className="card pad-lg" style={{ ...PANEL_EDGE }}>
+    //      Scan 2 finds the tag and then tests text that says `...PANEL_EDGE`.
+    //      Both were verified GREEN against the previous version of this test
+    //      and RED against this one.
     const BORDER = /(^|[^-\w])border(Top|Bottom|Left|Right)?:(?!\s*(?:"none"|'none'|`none`|none\b))/;
     const objectAt = (src, start) => {
       let depth = 0;
@@ -452,8 +488,76 @@ describe("ZTS obeys the language", () => {
       }
       return src.slice(lt);
     };
+    const classTokens = (raw) => (raw ?? "").replace(/[`'"$]/g, " ");
+    const KIT_SHADOW = /(^|\s)(card|cellgroup|entrance-card|toast)($|\s)/;
+    const CLASSNAME = /className\s*=\s*(?:"([^"]*)"|\{`?([^}]*)`?\})/g;
 
-    let shadows = 0, carded = 0;
+    // ── value resolution ──────────────────────────────────────────────────
+    // A style that reads `{ ...PANEL_EDGE }` or `style={spanMobile}` says
+    // nothing to a text scan. `declValue` reads what the name was bound to —
+    // an object literal in full, anything else up to the end of its statement,
+    // so a ternary like `isMobile ? { gridColumn: "1 / -1" } : undefined`
+    // resolves too. Every `const NAME =` in the file is collected, module scope
+    // and function scope alike (`box`, `input` and `s` are all local), because
+    // a border does not care which scope it was written in.
+    const declValue = (src, name) => {
+      const re = new RegExp(`\\bconst\\s+${name}\\s*=\\s*`, "g");
+      const out = [];
+      for (const d of src.matchAll(re)) {
+        const at = d.index + d[0].length;
+        out.push(src[at] === "{" ? objectAt(src, at) : src.slice(at, src.indexOf("\n", at) + 1 || undefined));
+      }
+      return out;
+    };
+    let resolutions = 0;
+    const resolve = (src, text) => {
+      let out = text;
+      for (let pass = 0; pass < 3; pass++) {
+        const before = out;
+        out = out
+          .replace(/\.\.\.([A-Za-z_$][\w$]*)/g, (whole, id) => {
+            const vals = declValue(src, id);
+            if (!vals.length) return whole;
+            resolutions++;
+            return vals.map((v) => v.replace(/^\{|\}\s*;?\s*$/g, " ")).join(" , ");
+          })
+          .replace(/style\s*=\s*\{([A-Za-z_$][\w$]*)\}/g, (whole, id) => {
+            const vals = declValue(src, id);
+            if (!vals.length) return whole;
+            resolutions++;
+            return `style={{ ${vals.join(" , ")} }}`;
+          });
+        if (out === before) break;
+      }
+      return out;
+    };
+    // The resolver is the whole of scan 4, so it gets its own floor: if it ever
+    // silently degrades to a pass-through, this fails before the scans do.
+    const FIXSRC = 'const E = { border: "1px solid red" };';
+    const FIXTAG = '<div className="card" style={{ ...E }}>';
+    expect(BORDER.test(FIXTAG), "the fixture is not testing resolution").toBe(false);
+    expect(BORDER.test(resolve(FIXSRC, FIXTAG)), "the spread resolver no longer resolves").toBe(true);
+
+    // ── components that carry the kit's shadow to their call sites ─────────
+    // A component whose root element wears card/cellgroup/entrance-card/toast
+    // AND spreads its caller's `style` onto that same element has a shadow the
+    // caller can draw a border on top of from the outside. `Card` is exactly
+    // that. Derived from the source rather than hardcoded, so a second one
+    // (or a rename) is picked up without editing this list.
+    const forwarders = new Set();
+    for (const [, src] of FILES) {
+      for (const m of src.matchAll(CLASSNAME)) {
+        if (!KIT_SHADOW.test(classTokens(m[1] ?? m[2]))) continue;
+        const tag = openingTag(src, src.lastIndexOf("<", m.index));
+        if (!/\.\.\.(style|props)\b/.test(tag)) continue;
+        const decls = [...src.slice(0, m.index).matchAll(/(?:const|function)\s+([A-Z][\w$]*)/g)];
+        if (decls.length) forwarders.add(decls[decls.length - 1][1]);
+      }
+    }
+    expect([...forwarders], "no shadow-forwarding component was found — scan 3 is asserting nothing")
+      .toContain("Card");
+
+    let shadows = 0, carded = 0, callSites = 0;
     for (const [name, src] of FILES) {
       for (const m of src.matchAll(/boxShadow:\s*/g)) {
         shadows++;
@@ -462,20 +566,28 @@ describe("ZTS obeys the language", () => {
         for (let level = 0; level < 3 && open > -1; level++) {
           const obj = objectAt(src, open);
           if (/[<]|\breturn\b|=>/.test(obj)) break;
-          expect(BORDER.test(obj), `${name}: border + boxShadow on one element:\n${obj.slice(0, 260)}`).toBe(false);
+          expect(BORDER.test(resolve(src, obj)), `${name}: border + boxShadow on one element:\n${obj.slice(0, 260)}`).toBe(false);
           open = enclosing(src, open - 1);
         }
       }
-      for (const m of src.matchAll(/className\s*=\s*(?:"([^"]*)"|\{`?([^}]*)`?\})/g)) {
-        const text = (m[1] ?? m[2] ?? "").replace(/[`'"$]/g, " ");
-        if (!/(^|\s)(card|cellgroup|entrance-card|toast)($|\s)/.test(text)) continue;
+      for (const m of src.matchAll(CLASSNAME)) {
+        if (!KIT_SHADOW.test(classTokens(m[1] ?? m[2]))) continue;
         carded++;
-        const tag = openingTag(src, src.lastIndexOf("<", m.index));
+        const tag = resolve(src, openingTag(src, src.lastIndexOf("<", m.index)));
         expect(BORDER.test(tag), `${name}: this element wears the kit's shadow AND draws a border:\n${tag.slice(0, 300)}`).toBe(false);
+      }
+      for (const who of forwarders) {
+        for (const m of src.matchAll(new RegExp(`<${who}(?=[\\s/>])`, "g"))) {
+          callSites++;
+          const tag = resolve(src, openingTag(src, m.index));
+          expect(BORDER.test(tag), `${name}: <${who}> already carries the kit's shadow — this call site draws a border on it:\n${tag.slice(0, 300)}`).toBe(false);
+        }
       }
     }
     expect(shadows, "no boxShadow was found — the scan is broken").toBeGreaterThan(4);
     expect(carded, "no .card element was found — the scan is broken").toBeGreaterThanOrEqual(4);
+    expect(callSites, "no shadow-forwarding call site was scanned — scan 3 is broken").toBeGreaterThanOrEqual(9);
+    expect(resolutions, "nothing resolved through a name — scan 4 never ran on real source").toBeGreaterThanOrEqual(1);
   });
 
   it("uses no decorative face — the system stack only", () => {
@@ -522,6 +634,50 @@ describe("ZTS obeys the language", () => {
     for (const [name, src] of FILES) {
       expect(src, `${name} still hand-rolls uppercase`).not.toMatch(/textTransform:\s*"uppercase"/);
     }
+  });
+
+  it("declares every package it imports, including the kit", () => {
+    // Packaging, not paint — but it is the same argument as the rest of this
+    // file. main.jsx is the STANDALONE entry, and the whole point of its
+    // `import "@cc/ui/components.css"` is that ZTS stops needing the shell to
+    // have imported the kit first; ui.jsx pulls the runtime from "@cc/ui" for
+    // the same reason. Neither was in package.json. Both resolved anyway,
+    // through the root npm-workspace symlink — i.e. by borrowing the dependency
+    // from the shell's tree, which is precisely the coupling the CSS import was
+    // added to remove. apps/business, apps/ideas and apps/shell all declare it.
+    //
+    // Derived from the imports rather than pinned to one name, so the next
+    // undeclared package fails here too.
+    const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+      e.name === "__tests__" ? []
+        : e.isDirectory() ? walk(join(dir, e.name))
+        : /\.(jsx?|mjs)$/.test(e.name) ? [join(dir, e.name)] : []);
+    const files = walk(join(here, ".."));
+    const SPEC = /^\s*(?:import|export)\b[^;\n]*?\bfrom\s*"([^"]+)"|^\s*import\s+"([^"]+)"/gm;
+    const wanted = new Set();
+    for (const f of files) {
+      for (const m of readFileSync(f, "utf8").matchAll(SPEC)) {
+        const spec = m[1] ?? m[2];
+        if (/^[./]/.test(spec) || spec.startsWith("node:")) continue;
+        const parts = spec.split("/");
+        wanted.add(spec.startsWith("@") ? parts.slice(0, 2).join("/") : parts[0]);
+      }
+    }
+    // Scan sanity, two ways: the walk must have reached real files, and it must
+    // have reached the two that carry the kit import. A glob that silently
+    // stopped matching would otherwise leave an empty set trivially satisfied.
+    expect(files.length, "the source walk found nothing — the scan is broken").toBeGreaterThanOrEqual(8);
+    expect([...wanted], "the import scan no longer sees the kit — it is reading nothing")
+      .toContain("@cc/ui");
+    expect(wanted.size, "the import scan collapsed").toBeGreaterThanOrEqual(5);
+
+    const pkg = JSON.parse(read("../package.json"));
+    const declared = new Set([
+      ...Object.keys(pkg.dependencies || {}),
+      ...Object.keys(pkg.peerDependencies || {}),
+    ]);
+    const missing = [...wanted].filter((p) => !declared.has(p)).sort();
+    expect(missing, `apps/zts/package.json does not declare: ${missing.join(", ")}`).toEqual([]);
   });
 
   it("opts in on ZTS's own roots and never above them", () => {

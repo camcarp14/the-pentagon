@@ -6,8 +6,8 @@ Nine surfaces built at different times, in three different styling paradigms,
 with 2,680 inline `style={{ }}` objects between them. This document is the
 correction: one token layer, one kit, one motion system, eight palettes.
 
-**The system is installed. The surfaces have not moved onto it yet.** That order
-is deliberate — see §5.
+**The system is installed and all nine surfaces are on it.** The order they moved
+in, and what that order bought, is §5.
 
 ---
 
@@ -188,12 +188,32 @@ or Clarify mounted, kit skeleton loaders stopped animating **in every tool**.
 `packages/ui/index.jsx` shipped a third background-position `shimmer`, injected
 from JS at import time, which beat `components.css` unconditionally.
 
+**The kit is not one stylesheet.** The first pass at this rule said
+"`components.css` is the sole owner" and stopped there, which left the second
+one unguarded. `packages/ui/index.jsx` injects `ccShimmerBg, toastIn, toastOut,
+toastShrink, ccFadein, paletteIn` into `document.head` at import time and its own
+`Toast` and `CommandPalette` are the consumers; `packages/ui/polish.js` injects
+`ccPageIn, ccRise, ccShimmer`; `packages/mind-canvas/css.js` injects
+`ccMindFadein` from all three mind-bearing tools. ZTS and Clarify each redefined
+all four of the toast/palette names with a `translateX(18px) scale(0.97)` throw
+against the kit's `translateY(-8px) scale(0.98)`, from a `useEffect(…, [])` with
+no cleanup. Both are `lazy()` mounted inside the shell's `ToastProvider`, which
+wraps everything, so their copies landed last and stayed: **once ZTS or Clarify
+had been opened, every tool's toasts slid in from the right for the life of the
+page.** ZTS's sheet even carried a comment claiming "Only ZTS-owned names live
+below", which was false when it was written.
+
 **The rule:**
 
-1. `packages/ui/components.css` is the **sole owner** of the kit keyframe names —
-   today `pagein, slidel, slider, rise, shimmer, fadein, pulse, sheetup, breathe,
-   spin, shake, convene, sheetin, modalin, toastin, toastout`. The list is not
-   authoritative here; the file is.
+1. Every stylesheet a **package** ships owns its keyframe names, and only one
+   package file may own a given name. Today that is `packages/ui/components.css`
+   (`pagein, slidel, slider, rise, cardIn, shimmer, fadein, pulse, sheetup,
+   breathe, spin, shake, convene, sheetin, modalin, toastin, toastout`),
+   `packages/ui/index.jsx`, `packages/ui/polish.js` and
+   `packages/mind-canvas/css.js`. The list is not authoritative here; the files
+   are. A package sheet that is not `components.css` prefixes what it adds
+   (`cc…`, `ccMind…`) — `ccShimmerBg` used to be `shimmer`, and as a
+   background-position sweep it froze the kit's own `.sk::after` everywhere.
 2. An app that wants the kit's behaviour **references** the name and does not
    define it. No copy, however identical — an identical copy is a future
    divergence that nothing will catch.
@@ -205,13 +225,41 @@ from JS at import time, which beat `components.css` unconditionally.
 4. Prefer (2) over (3). A 1px or 0.05-opacity difference is not a reason to fork
    the motion system — §4.6 says motion is one physics, and this is where that
    stops being a slogan.
+5. **Two apps must not define the same name either.** They inject into the same
+   document, so whichever mounts last owns it for both, and rule 2's "identical
+   copy is a future divergence" is exactly this case. If both apps want the same
+   motion, promote the name to `components.css` — that is what `cardIn` did, and
+   the call sites in ZTS and Clarify did not change. Otherwise prefix per app.
+6. `@-webkit-keyframes` (and `-moz-`/`-o-`/`-ms-`) register into the **same**
+   global namespace. A prefixed shadow is a shadow. §7 makes iOS/WebKit
+   standalone a protected target, so this is where the problem comes back.
 
-`packages/ui/__tests__/keyframes.test.js` enforces it. It derives the owned names
-from `components.css` rather than hardcoding them, so the guard follows the kit,
-and it scans JS/JSX **template literals** as well as `.css` files, because the two
-worst offenders injected their CSS from a template string and a `.css`-only glob
-missed both entirely. It carries scan-sanity floors so a regex that quietly stops
-matching cannot pass green, and every assertion in it was mutation-tested.
+Two names that look like a violation and are not. `toastin`/`toastout` in
+`components.css` drive the `.toast` class (a bottom-centre spring); `toastIn`/
+`toastOut` in `index.jsx` drive the JS-rendered top-right `Toast`. Keyframe
+idents are **case-sensitive**, so these are four distinct animations, all
+kit-owned, none shadowing another. Do not tidy one into the other.
+
+`packages/ui/__tests__/keyframes.test.js` enforces all of it. It derives the
+owned set from **every file every package ships** rather than from
+`components.css` alone — which is the specific blindness that let the toast four
+and the whole of `packages/mind-canvas` through — and it walks **every app
+directory**, not just `apps/*/src`, because `apps/sync/tools/scope-css.mjs` and
+the standalone `index.html` documents ship too. It scans JS/JSX/MJS **template
+literals** as well as `.css` files, because four of the injected sheets are
+template strings and a `.css`-only glob sees none of them. It counts
+vendor-prefixed at-rules. It checks that every `animation:` a package sheet names
+resolves to a keyframe some package defines, so a rename cannot silently orphan a
+call site. It carries scan-sanity floors beside every derived set so a regex that
+quietly stops matching cannot pass green, and every assertion in it was
+mutation-tested — the mutation reintroduced, watched fail, and reverted.
+
+One duplicate survives, registered rather than hidden: `dnaGlyph`, in
+`apps/zts/src/dna/DnaView.jsx` and `apps/clarify/src/features/dna/DnaView.jsx`.
+Both DNA tabs are being retired in favour of the shell's Minds screen (see §5,
+"Still outstanding"), so there is no long-term home to promote it to. The guard
+pins it: it re-reads both bodies and fails the moment they stop matching, which
+is the divergence rule 5 exists to prevent.
 
 ## 7. Untouchable
 

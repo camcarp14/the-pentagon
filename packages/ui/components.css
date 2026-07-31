@@ -50,6 +50,16 @@
 @keyframes slider { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
 [data-kit] .stagger > * { animation: rise var(--dur-3) var(--ease-out) both; animation-delay: calc(var(--i, 0) * 30ms); }
 @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+/* `cardIn` is `rise` with a 6px throw, applied inline with a per-index
+   animation-delay instead of through .stagger. ZTS and Clarify each declared it,
+   byte-identically, in their own injected sheets — the exact case DESIGN.md §6
+   rule 2 names: two definitions of one global name in one document, no consumer
+   able to say which it got, and nothing to catch the day one of them changed.
+   Both apps wanted the same motion, so the name is promoted here and both copies
+   are gone. Their call sites (apps/zts/src/factory.jsx, apps/zts/src/App.jsx,
+   apps/clarify/src/App.jsx, apps/clarify/src/features/queue/QueueView.jsx) still
+   say `cardIn` and are untouched — the definition just has one home now. */
+@keyframes cardIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 [data-kit] .stagger > *:nth-child(1) { --i: 0 } [data-kit] .stagger > *:nth-child(2) { --i: 1 }
 [data-kit] .stagger > *:nth-child(3) { --i: 2 } [data-kit] .stagger > *:nth-child(4) { --i: 3 }
 [data-kit] .stagger > *:nth-child(5) { --i: 4 } [data-kit] .stagger > *:nth-child(n+6) { --i: 5 }

@@ -504,9 +504,40 @@ describe("SYNC obeys the language", () => {
     // The mind inspector's "locked" chip and its weight band each rolled their
     // own text-transform at 9.5px. Nothing in the sheet sets one now; the two
     // that need caps wear the kit's class.
+    //
+    // This was `expect(css).not.toMatch(/text-transform:\s*uppercase/)` and
+    // three realistic reintroductions walked straight through it:
+    // `text-transform : uppercase` (a space before the colon, which CSS
+    // accepts), `text-transform:UPPERCASE` (no /i), and — worst — an inline
+    // `style={{ textTransform: "uppercase" }}` on any page, because it never
+    // looked at JSX at all and an inline style beats every rule in the sheet.
+    // The border-and-shadow guard below has scanned inline styles all along,
+    // so that was an inconsistency as well as a hole.
+    //
+    // The declaration is parsed rather than pattern-matched in
+    // __tests__/cascade.test.js, which resolves this app's sheet AND the kit's;
+    // what stays here is the text-level floor and the two call sites.
     const css = src("styles.css");
-    expect(css).not.toMatch(/text-transform:\s*uppercase/);
-    expect(src("pages", "MindPage.jsx")).toContain('className="t-label neuron-lock"');
+    expect(css, "a space before the colon is still a declaration")
+      .not.toMatch(/text-transform\s*:\s*(?!none|inherit|initial|unset)/i);
+    // Scan sanity: the class this language routes caps through must still be
+    // reachable, or "no uppercase anywhere" is a statement about a dead sheet.
+    const kitCss = readFileSync(join(SRC, "..", "..", "..", "packages", "ui", "components.css"), "utf8");
+    expect(kitCss, "the kit still owns the one uppercase in the language")
+      .toMatch(/\[data-kit\]\s*\.t-label\s*\{[^}]*text-transform:\s*uppercase/);
+    // Both mind chips wear it — the sheet's comment says so of both, and only
+    // one of the two call sites had been updated.
+    const mind = src("pages", "MindPage.jsx");
+    expect(mind).toContain('className="t-label neuron-lock"');
+    expect(mind).toContain('className="t-label neuron-band"');
+    // …and no inline style reaches caps behind the sheet's back.
+    const inline = [];
+    for (const file of sourceFiles()) {
+      const source = stripComments(readFileSync(file, "utf8"));
+      for (const text of inlineStyleObjects(source))
+        if (/textTransform\s*:\s*[^,}]*uppercase/i.test(text)) inline.push(`${rel(file)} → ${text.replace(/\s+/g, " ").slice(0, 120)}`);
+    }
+    expect(inline, `inline textTransform: uppercase:\n${inline.join("\n")}`).toEqual([]);
   });
 
   it("puts no border and shadow on the same element — the sheet", () => {
@@ -524,6 +555,15 @@ describe("SYNC obeys the language", () => {
     // replacement, not resting elevation — see the comment above
     // `.sy-root :where(:focus-visible)` in styles.css, which records that this
     // was reviewed and declined twice.
+    //
+    // This still reads SYNC's sheet ALONE, and that is now only half the
+    // guard: since .sy-root grew `data-kit`, half the declarations on these
+    // elements come from packages/ui/components.css, and
+    // `.sy-root .card { border }` next to `[data-kit] .card { box-shadow }`
+    // assembles the anti-pattern one declaration per sheet with this test
+    // green. The cross-sheet half lives in __tests__/cascade.test.js, which
+    // merges by ELEMENT rather than by selector text — two strings, one
+    // element — and both halves have to stay.
     const css = src("styles.css");
     const rules = cssRules(css);
     expect(rules.length, "the sheet has rules to check").toBeGreaterThan(150);

@@ -7,6 +7,44 @@ import { budgetMidpoint, createCardFromInbound, draftInboundReply, inboundBiz, i
 import { sm } from "../../lib/store.js";
 import { db, normEmail, sbAuth, sbFetch, currentAccessToken } from "../../lib/supabase.js";
 
+// .t-label is the only uppercase in this language; the chip is the same run
+// of capitals it always was, now at the kit's 12px instead of 10.
+const chip = (bg, color, text) => <span className="t-label" style={{ padding: "3px 9px", borderRadius: T.rPill, background: bg, color }}>{text}</span>;
+const statusChip = (l) => l.card ? chip(`${T.green}1A`, T.green, l.card.status === "replied" ? "replied" : l.card.status === "meeting" ? "meeting" : "in pipeline")
+  : l.status === "new" ? chip(`${T.blue}1A`, T.blue, "new")
+  : l.status === "archived" ? chip("rgba(255,255,255,0.06)", T.faint, "archived")
+  : chip(`${T.amber}1A`, T.amber, "reviewed");
+
+// One row of the inbound list. Exported and lifted out of InboundView's map for
+// the same reason QueueItem and ChainLocationRow are their own components: this
+// row is only ever on screen once `leads` has come back from an async sbFetch,
+// and renderToStaticMarkup does not run effects — so a cold paint of #/inbound
+// is the loading skeleton and NOTHING in this file's markup is reachable
+// through it. Rendered directly, it is.
+export function InboundLeadRow({ lead, selected, showPreview, onSelect, onDelete }) {
+  // .card.pressable — the outline stays an OUTLINE (not a border), so
+  // the selected row still has the kit's shadow and no drawn edge.
+  return (
+    <div onClick={() => onSelect(lead)} className="card pressable" style={{ padding: "14px 16px", background: selected ? `linear-gradient(rgba(255,255,255,0.05), rgba(255,255,255,0.05)), ${T.surface}` : undefined, outline: selected ? `2px solid ${T.gold}` : "none", position: "relative" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+        <span className="t-head" style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
+          {lead.status === "new" && <span aria-hidden="true" title="Unread" style={{ width: "6px", height: "6px", borderRadius: "50%", background: T.pink, flexShrink: 0 }} />}
+          {inboundBiz(lead)}
+        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {statusChip(lead)}
+          <button onClick={(e) => { e.stopPropagation(); onDelete(lead); }} title="Delete lead" aria-label="Delete lead"
+            type="button" className="co-icon-btn icon-btn">🗑</button>
+        </div>
+      </div>
+      <div className="t-cap" style={{ marginTop: "3px" }}>
+        {[inboundPerson(lead), inboundBudget(lead) && `${inboundBudget(lead)} / mo`, timeAgo(lead.created_at)].filter(Boolean).join(" · ")}
+      </div>
+      {showPreview && inboundMessage(lead) && <div className="t-foot" style={{ marginTop: "8px" }}>{inboundMessage(lead).slice(0, 140)}</div>}
+    </div>
+  );
+}
+
 // ─── Inbound — native view. One lens over inbound_leads + their pipeline cards. ─
 // The old separate InboundLeads.jsx is replaced: same table, same statuses, but the
 // conversation now lives HERE — form message, your reply, their reply, next reply —
@@ -153,14 +191,6 @@ export function InboundView({ cards, onNavigate, onCardsChange, toneMemory }) {
     setBusy("");
   };
 
-  // .t-label is the only uppercase in this language; the chip is the same run
-  // of capitals it always was, now at the kit's 12px instead of 10.
-  const chip = (bg, color, text) => <span className="t-label" style={{ padding: "3px 9px", borderRadius: T.rPill, background: bg, color }}>{text}</span>;
-  const statusChip = (l) => l.card ? chip(`${T.green}1A`, T.green, l.card.status === "replied" ? "replied" : l.card.status === "meeting" ? "meeting" : "in pipeline")
-    : l.status === "new" ? chip(`${T.blue}1A`, T.blue, "new")
-    : l.status === "archived" ? chip("rgba(255,255,255,0.06)", T.faint, "archived")
-    : chip(`${T.amber}1A`, T.amber, "reviewed");
-
   const Bubble = ({ who, when, color, subjectLine, bg = T.subtle, children }) => (
     <div style={{ background: bg, borderRadius: "12px", padding: "12px 14px", borderLeft: `3px solid ${color}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", marginBottom: "6px" }}>
@@ -201,25 +231,8 @@ export function InboundView({ cards, onNavigate, onCardsChange, toneMemory }) {
             <EmptyState icon="inbox" title={`No ${filter === "active" ? "active" : filter} leads`} sub="Inquiries from the Clarify Paid Search site will show up here as they come in." />
           )}
           {shown.map(l => (
-            // .card.pressable — the outline stays an OUTLINE (not a border), so
-            // the selected row still has the kit's shadow and no drawn edge.
-            <div key={l.id} onClick={() => selectLead(l)} className="card pressable" style={{ padding: "14px 16px", background: sel?.id === l.id ? `linear-gradient(rgba(255,255,255,0.05), rgba(255,255,255,0.05)), ${T.surface}` : undefined, outline: sel?.id === l.id ? `2px solid ${T.gold}` : "none", position: "relative" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
-                <span className="t-head" style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
-                  {l.status === "new" && <span aria-hidden="true" title="Unread" style={{ width: "6px", height: "6px", borderRadius: "50%", background: T.pink, flexShrink: 0 }} />}
-                  {inboundBiz(l)}
-                </span>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  {statusChip(l)}
-                  <button onClick={(e) => { e.stopPropagation(); deleteLead(l); }} title="Delete lead" aria-label="Delete lead"
-                    type="button" className="co-icon-btn icon-btn">🗑</button>
-                </div>
-              </div>
-              <div className="t-cap" style={{ marginTop: "3px" }}>
-                {[inboundPerson(l), inboundBudget(l) && `${inboundBudget(l)} / mo`, timeAgo(l.created_at)].filter(Boolean).join(" · ")}
-              </div>
-              {!sel && inboundMessage(l) && <div className="t-foot" style={{ marginTop: "8px" }}>{inboundMessage(l).slice(0, 140)}</div>}
-            </div>
+            <InboundLeadRow key={l.id} lead={l} selected={sel?.id === l.id} showPreview={!sel}
+              onSelect={selectLead} onDelete={deleteLead} />
           ))}
         </div>
 

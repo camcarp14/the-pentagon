@@ -9,7 +9,11 @@ import { generateDraft, generateFollowUpDraft } from "../../lib/prospecting.js";
 import { sm } from "../../lib/store.js";
 import { db } from "../../lib/supabase.js";
 
-function ThreadModal({ card, onClose, onSendReply, toneMemory }) {
+// Exported so the render test can mount it: it is opened by component state
+// (`showThread`) on a card that already has a reply, which no cold paint of any
+// route produces — and an unmounted component's body is never executed, so
+// nothing in it can fail a test.
+export function ThreadModal({ card, onClose, onSendReply, toneMemory }) {
   const [replyBody, setReplyBody] = useState(cleanReplyBody(card.reply_draft || ""));
   const [replySubject, setReplySubject] = useState(card.reply_draft_subject || `Re: ${card.draft_subject || ""}`);
   const [sending, setSending] = useState(false);

@@ -796,7 +796,14 @@ export function AnalystView() {
                   {queueVisible && (
                     <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                       {localQueue.map((item) => (
-                        <div key={item.id} className="card" style={{ padding: "12px 14px", opacity: item.status === "skipped" ? 0.45 : 1, transition: "opacity 0.2s, border-color 0.2s" }}>
+                        // `border-color` used to be in this transition list, left
+                        // over from when the row drew its own outline. The row is
+                        // the kit's .card now and has no border to ease, so the
+                        // declaration animated nothing. Opacity is the only thing
+                        // that still moves (skipped rows fade); the state itself is
+                        // spelled out — '✓ Approved' and the impact chip — so
+                        // nothing was lost by dropping the dead half.
+                        <div key={item.id} className="card" style={{ padding: "12px 14px", opacity: item.status === "skipped" ? 0.45 : 1, transition: "opacity 0.2s" }}>
                           <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
                             <div style={{ flex: 1 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>

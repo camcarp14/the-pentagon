@@ -15,7 +15,11 @@ const GATE_OPTIONS = Object.entries(GATE_LABELS).map(([value, label]) => {
   return { value, label: dormant ? `${label} (acts as "If no reply" until opens are tracked)` : label };
 });
 
-function StepEditor({ step, index, count, onChange, onDelete, onMove }) {
+// StepEditor and SequenceCard are exported so the render test can mount them.
+// SequencesView holds `sequences` at null until an async seqDb.getSequences()
+// lands, and renderToStaticMarkup does not run effects — so a cold paint of
+// #/sequences is the skeleton and neither of these bodies ever executes.
+export function StepEditor({ step, index, count, onChange, onDelete, onMove }) {
   const set = (patch) => onChange({ ...step, ...patch });
   return (
     <div style={{ background: T.subtle, border: "none", borderRadius: "12px", padding: "12px 14px", display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -55,7 +59,7 @@ function StepEditor({ step, index, count, onChange, onDelete, onMove }) {
   );
 }
 
-function SequenceCard({ seq, steps, enrolledCount, onSave, onDelete }) {
+export function SequenceCard({ seq, steps, enrolledCount, onSave, onDelete }) {
   const toast = useToast();
   const [draft, setDraft] = useState({ ...seq });
   const [stepDrafts, setStepDrafts] = useState(steps);

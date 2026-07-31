@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@cc/design": "*",
+    "@cc/ui": "*",
     "@supabase/supabase-js": "^2.45.0",
     "dompurify": "^3.4.11",
     "@cc/ai": "*",

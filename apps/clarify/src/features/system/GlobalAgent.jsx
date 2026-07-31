@@ -5,6 +5,66 @@ import { GLOBAL_AGENT_PROMPT } from "../../lib/prompts.js";
 import { sm } from "../../lib/store.js";
 import { fetchPortfolioCounts } from "../../lib/supabase.js";
 
+// The assistant's open panel. Exported and lifted out of GlobalAgent for the
+// same reason QueueItem and InboundLeadRow are their own components: `open`
+// starts false and only a click flips it, so a cold render of ANY route paints
+// the closed "Ask Clarify" button and reaches none of this file's kit surfaces
+// — the composer .field, the .t-call title, the .t-foot primer. Rendered
+// directly, it reaches all three.
+export function AgentPanel({ messages, input, sending, endRef, onInput, onSend, onClear, onClose }) {
+  return (
+    // Border dropped: shadowModal already lifts this off the canvas, and a
+    // border plus a shadow on one element is the thing the language forbids.
+    <div className="co-agent-panel" style={{ width: "380px", height: "520px", maxWidth: "calc(100vw - 24px)", background: T.surface, borderRadius: "16px", boxShadow: T.shadowModal, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ padding: "14px 16px", borderBottom: `1px solid ${T.lineInk}`, display: "flex", alignItems: "center", justifyContent: "space-between", background: T.surface }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <span style={{ color: T.gold, fontSize: "13px" }}>✦</span>
+          <span className="t-call" style={{ fontWeight: 600 }}>Clarify Assistant</span>
+        </div>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          {messages.length > 0 && <button onClick={onClear} type="button" title="Clear conversation memory" className="btn sm plain" style={{ color: T.faint }}>Clear</button>}
+          <button onClick={onClose} type="button" aria-label="Close assistant" className="icon-btn">×</button>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "10px" }}>
+        {messages.length === 0 && (
+          <div style={{ textAlign: "center", padding: "40px 16px", color: T.muted }}>
+            <div style={{ fontSize: "22px", marginBottom: "10px" }}>✦</div>
+            <div className="t-foot" style={{ lineHeight: 1.6 }}>Ask about outreach pipeline status, client findings, or what to prioritize today. I read live state from across the app before answering.</div>
+          </div>
+        )}
+        {messages.map((m, i) => (
+          <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
+            <div style={{ maxWidth: "82%", padding: "9px 13px", background: m.role === "user" ? T.goldSoft : T.subtle, border: "none", borderRadius: m.role === "user" ? "12px 12px 3px 12px" : "12px 12px 12px 3px", fontSize: "13px", color: T.ink, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+              {m.content}
+            </div>
+          </div>
+        ))}
+        {sending && (
+          <div style={{ display: "flex" }}>
+            <div style={{ padding: "10px 14px", background: T.subtle, border: "none", borderRadius: "12px 12px 12px 3px" }}>
+              {/* The kit's three-dot convening indicator. */}
+              <span className="convene" aria-label="Thinking"><span className="cd" /><span className="cd" /><span className="cd" /></span>
+            </div>
+          </div>
+        )}
+        <div ref={endRef} />
+      </div>
+
+      <div style={{ padding: "12px 14px", borderTop: `1px solid ${T.lineInk}`, display: "flex", gap: "8px" }}>
+        <input value={input} onChange={e => onInput(e.target.value)} onKeyDown={e => e.key === "Enter" && !e.shiftKey && onSend()}
+          placeholder="Ask anything across Outreach, Analyst, Clients…"
+          aria-label="Ask the Clarify assistant" className="field" style={{ flex: 1, width: "auto", minHeight: 38, padding: "9px 12px", fontSize: "13.5px" }} />
+        <button onClick={onSend} type="button" disabled={!input.trim() || sending} className="btn sm primary">
+          Send
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
 // ─── Global Agent ──────────────────────────────────────────────────────────────
 // Persistent across tabs. Remembers conversation via sessionMemory (survives
 // reloads). Rebuilds a fresh context block from real state on every message —
@@ -81,54 +141,8 @@ Local action queues with pending items: ${pendingByClient.length ? pendingByClie
         </button>
       )}
       {open && (
-        // Border dropped: shadowModal already lifts this off the canvas, and a
-        // border plus a shadow on one element is the thing the language forbids.
-        <div className="co-agent-panel" style={{ width: "380px", height: "520px", maxWidth: "calc(100vw - 24px)", background: T.surface, borderRadius: "16px", boxShadow: T.shadowModal, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <div style={{ padding: "14px 16px", borderBottom: `1px solid ${T.lineInk}`, display: "flex", alignItems: "center", justifyContent: "space-between", background: T.surface }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ color: T.gold, fontSize: "13px" }}>✦</span>
-              <span className="t-call" style={{ fontWeight: 600 }}>Clarify Assistant</span>
-            </div>
-            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-              {messages.length > 0 && <button onClick={clearMemory} type="button" title="Clear conversation memory" className="btn sm plain" style={{ color: T.faint }}>Clear</button>}
-              <button onClick={() => setOpen(false)} type="button" aria-label="Close assistant" className="icon-btn">×</button>
-            </div>
-          </div>
-
-          <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "10px" }}>
-            {messages.length === 0 && (
-              <div style={{ textAlign: "center", padding: "40px 16px", color: T.muted }}>
-                <div style={{ fontSize: "22px", marginBottom: "10px" }}>✦</div>
-                <div className="t-foot" style={{ lineHeight: 1.6 }}>Ask about outreach pipeline status, client findings, or what to prioritize today. I read live state from across the app before answering.</div>
-              </div>
-            )}
-            {messages.map((m, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
-                <div style={{ maxWidth: "82%", padding: "9px 13px", background: m.role === "user" ? T.goldSoft : T.subtle, border: "none", borderRadius: m.role === "user" ? "12px 12px 3px 12px" : "12px 12px 12px 3px", fontSize: "13px", color: T.ink, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
-                  {m.content}
-                </div>
-              </div>
-            ))}
-            {sending && (
-              <div style={{ display: "flex" }}>
-                <div style={{ padding: "10px 14px", background: T.subtle, border: "none", borderRadius: "12px 12px 12px 3px" }}>
-                  {/* The kit's three-dot convening indicator. */}
-                  <span className="convene" aria-label="Thinking"><span className="cd" /><span className="cd" /><span className="cd" /></span>
-                </div>
-              </div>
-            )}
-            <div ref={endRef} />
-          </div>
-
-          <div style={{ padding: "12px 14px", borderTop: `1px solid ${T.lineInk}`, display: "flex", gap: "8px" }}>
-            <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && !e.shiftKey && send()}
-              placeholder="Ask anything across Outreach, Analyst, Clients…"
-              aria-label="Ask the Clarify assistant" className="field" style={{ flex: 1, width: "auto", minHeight: 38, padding: "9px 12px", fontSize: "13.5px" }} />
-            <button onClick={send} type="button" disabled={!input.trim() || sending} className="btn sm primary">
-              Send
-            </button>
-          </div>
-        </div>
+        <AgentPanel messages={messages} input={input} sending={sending} endRef={endRef}
+          onInput={setInput} onSend={send} onClear={clearMemory} onClose={() => setOpen(false)} />
       )}
     </div>
   );

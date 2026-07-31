@@ -202,7 +202,12 @@ export default function MindPage({ setPage }) {
             <div>
               <div className="t-label" style={{ marginBottom: 6 }}>
                 Weight · {node.weight.toFixed(2)}
-                <span className="neuron-band">{band(node.weight)}</span>
+                {/* .t-label, like the lock chip above: the sheet stripped this
+                    band's own size/weight/tracking/caps when the type scale
+                    became the kit's, and without the class it fell back to
+                    inheriting from the .t-label wrapper — same size as its own
+                    label and a weight lighter. */}
+                <span className="t-label neuron-band">{band(node.weight)}</span>
               </div>
               <input
                 type="range" min="0.05" max="1" step="0.05"

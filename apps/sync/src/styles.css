@@ -161,6 +161,13 @@
    .t-mono is the one class with no kit answer: SYNC columns durations, token
    counts and clock times in a true monospace, which the kit does not carry. */
 .sy-root .t-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+/* The two display sizes balance their line breaks. The kit declares no
+   text-wrap at all, so this is an addition rather than a restatement — and it
+   was dropped on the way onto the kit, which is why "Good morning, Cameron"
+   went back to breaking one word onto its own line at the top of every page.
+   Only the two display sizes: `balance` is capped at a handful of lines by
+   every engine that implements it, so it does nothing useful on body copy. */
+.sy-root .t-ltitle, .sy-root .t-title1 { text-wrap: balance; }
 
 /* ── press physics — every touch acknowledged inside 100ms ─────────────────── */
 /* The press scale itself, .press and .hoverable are the kit's. Two rules stay.
@@ -270,6 +277,15 @@
    pages bleed to the edge of the glass; SYNC's rows sit inside .content-max,
    which already has that padding, so the row would be indented twice. */
 .sy-root .pillrow { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 10px; scrollbar-width: none; -ms-overflow-style: none; }
+/* The hover tint below is SYNC's; the fade into it has to be too. The kit's
+   .pill transitions `transform` and nothing else, so with only the tint declared
+   a filter pill hard-cuts between two greys instead of settling over 140ms —
+   the same hole that was found and closed for .side-item and .icon-btn in this
+   same migration, and missed here.
+   `transform` is repeated on purpose: `transition` is a shorthand, so naming
+   only background and colour would REPLACE the kit's press physics rather than
+   add to it, and §4.6 says the press is one physics for the whole estate. */
+.sy-root .pill { transition: background var(--dur-1) ease, color var(--dur-1) ease, transform var(--dur-1) var(--ease-out); }
 @media (hover: hover) { .sy-root .pill:not(.active):hover { background: var(--ink-a10); color: var(--ink); } }
 
 /* Fields. `resize` is the load-bearing one: every TextArea in SYNC lives in a
@@ -299,8 +315,12 @@
    by exactly that bar, and the raw inset is the letterbox bug --safe-bottom
    exists to avoid. `position: static` is declared rather than left off: the
    kit sets sticky, and a property this rule does not name is a property the
-   kit still wins. */
-.sy-root .sidebar {
+   kit still wins.
+   [data-kit] is on the selector for the same reason it is on the sheet and the
+   dock tab: the kit's own .sidebar pads with raw env(safe-area-inset-*), and at
+   (0,2,0) the winner would be whichever sheet the browser parsed last. One
+   extra attribute takes the question off the table. */
+.sy-root[data-kit] .sidebar {
   width: 232px; flex: none;
   border-right: 0.5px solid var(--line);
   padding: 16px 10px calc(14px + var(--safe-bottom, 0px));
@@ -379,12 +399,15 @@
    84px + env(safe-area-inset-bottom), which on this app would sit it behind
    the tab bar on a notched phone and float it off the glass on a letterboxed
    one. .tmsg is SYNC's — a toast reports one line and truncates, it never
-   grows into a paragraph over the composer. */
-.sy-root .toasts {
+   grows into a paragraph over the composer.
+   [data-kit] on both rules, and they have to move together: specificity does
+   not care about @media, so lifting only the base rule to (0,3,0) would make it
+   outrank the desktop override and park the stack 92px up on a laptop. */
+.sy-root[data-kit] .toasts {
   bottom: calc(92px + var(--safe-bottom, 0px));
   max-width: 460px;
 }
-@media (min-width: 761px) { .sy-root .toasts { bottom: 24px; } }
+@media (min-width: 761px) { .sy-root[data-kit] .toasts { bottom: 24px; } }
 .sy-root .toast { max-width: 100%; }
 .sy-root .toast .tmsg { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -703,6 +726,12 @@
    container clips the TOP of it and makes the start unscrollable — which is how
    the Start button ended up unreachable on a phone. margin:auto centres when
    there is room and yields when there isn't.
+   That protection is only half of it, and the other half was missing from the
+   day the kit landed until it was put back below: the kit's .entrance also
+   declares `justify-content: center`, and margin:auto does NOT beat that when
+   free space is negative — auto margins resolve to 0 there and justify-content
+   applies. The competing declaration lives on .sy-root[data-kit] .entrance at
+   the bottom of this sheet, next to the rest of the kit overrides.
    `min-height: 0` is load-bearing now that the kit is switched on: the kit's
    .entrance is a standalone login screen and is min-height:100dvh. Inside
    SYNC's column — which has already subtracted the shell's 52px bar — a
@@ -942,7 +971,36 @@
    attribute takes the question off the table. */
 .sy-root[data-kit] .dock-tab { padding: 8px 0 calc(8px + var(--safe-bottom, 0px)); }
 .sy-root .composer { padding-bottom: 12px; }
-.sy-root[data-kit] .entrance { height: 100%; min-height: 0; padding-top: 18px; padding-bottom: calc(18px + var(--safe-bottom, 0px)); }
+/* Four declarations, and every one of them is a kit override rather than a
+   restatement — see the ONBOARDING block above for the whole argument.
+
+   `justify-content: flex-start` is the one that was missing and it is the
+   reason the Start button became unreachable on a phone a second time. The
+   kit's `[data-kit] .entrance` is a standalone login screen: it declares
+   `align-items: center; justify-content: center`. SYNC's `.entrance` names
+   height/min-height/overflow-y/display/flex-direction/padding and named NEITHER
+   of those, so both arrived from the kit at (0,2,0) unopposed.
+   `.entrance-card { margin: auto }` is not a defence against that: per flexbox,
+   auto margins only absorb POSITIVE free space — when the card is taller than
+   the column they resolve to 0 and `justify-content` takes over, centring an
+   overflowing child so its TOP is clipped above the scroll origin. The Start
+   button is the card's last element, and the top of the card is where the
+   scroll would have to begin. flex-start plus `margin: auto` is the pair that
+   works in both directions: centred when there is room, top-aligned and fully
+   scrollable when there is not.
+
+   `align-items: center` is deliberately NOT restated: in a column the cross
+   axis is horizontal, so the kit's value only centres a 480px card in a wider
+   column, which is what this screen wants and cannot clip anything.
+
+   Written as .sy-root[data-kit], one notch above [data-kit], for the same
+   reason the sheet and the dock tab are: at (0,2,0) these would tie with the
+   kit and the winner would be whichever sheet the browser parsed last. */
+.sy-root[data-kit] .entrance {
+  height: 100%; min-height: 0;
+  justify-content: flex-start;
+  padding-top: 18px; padding-bottom: calc(18px + var(--safe-bottom, 0px));
+}
 
 /* ── the portal layer ───────────────────────────────────────────────────────
    Sheets, toasts and the command palette are portaled to <body>, which is
