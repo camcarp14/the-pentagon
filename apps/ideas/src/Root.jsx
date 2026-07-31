@@ -107,6 +107,50 @@ const Stat = ({ label, children, sub }) => (
   </div>
 );
 
+/* ── what the feed shows, and in what order ────────────────────────────────────
+ *
+ * Pure and exported so the filters can be tested. Both of the bugs below shipped
+ * because this lived inside a useMemo where nothing could reach it.
+ *
+ * @param {object[]} rows   candidates as they come back from the pipeline table
+ * @param {{tab: string, sort: string, range: number, saved: Set<string>}} opts
+ */
+export function selectVisible(rows, { tab, sort, range, saved }) {
+  let list = tab === "saved" ? rows.filter((r) => saved.has(r.id)) : rows;
+
+  // A BOUNDED WINDOW MUST EXCLUDE UNKNOWN AGES. This was `(r.age_days ?? 0) <= range`,
+  // which read a missing age as ZERO — i.e. brand new — so every row the pipeline
+  // failed to date passed every window, including 7d. A filter that silently
+  // keeps what it cannot measure is not a filter.
+  // Null and "" must be rejected BEFORE Number() sees them: Number(null) is 0
+  // and Number("") is 0, both of which pass Number.isFinite — so the obvious
+  // one-liner reintroduces the exact "unknown age reads as brand new" defect
+  // this is here to remove. (It did, on the first run; the test caught it.)
+  const age = (r) => {
+    const v = r?.age_days;
+    if (v === null || v === undefined || v === "") return null;
+    const num = Number(v);
+    return Number.isFinite(num) ? num : null;
+  };
+  if (range > 0) list = list.filter((r) => age(r) != null && age(r) <= range);
+
+  const n = (v) => Number(v ?? 0);
+  return [...list].sort((a, b) => {
+    if (sort === "popping") return n(b.star_velocity) - n(a.star_velocity);
+    if (sort === "stars") return n(b.stars) - n(a.stars);
+    // NEWEST MEANS THE YOUNGEST REPO — the number the card actually prints
+    // ("17d old"). This used to sort by first_seen, i.e. when the scan happened
+    // to find it. Defensible for a feed, except one scan stamps every row it
+    // adds with the SAME timestamp, so the comparison fell straight through to
+    // the score tiebreak and "Newest" put a 17-day-old repo above an 11-day-old
+    // one. The label and the visible number now agree; "what just arrived" is
+    // already answered by the Newest batch tile. Undated rows sort last.
+    const [x, y] = [age(a), age(b)];
+    if (x !== y) return (x ?? Infinity) - (y ?? Infinity);
+    return new Date(b.first_seen) - new Date(a.first_seen) || n(b.score) - n(a.score);
+  });
+}
+
 // One control grammar for all three rows, so tab / sort / range never read as
 // three different kinds of switch.
 function Segment({ value, onChange, options, style }) {
@@ -122,6 +166,10 @@ function Segment({ value, onChange, options, style }) {
             aria-selected={on}
             onClick={() => onChange(key)}
             className={on ? "seg-opt active" : "seg-opt"}
+            // The kit's .seg-opt ships 4px of horizontal padding, which is right
+            // for a two-option switch and far too tight for these: side by side
+            // in one row the labels closed up into "NewestPoppingStars".
+            style={{ padding: "0 10px", minHeight: 36 }}
           >
             {label}
           </button>
@@ -162,8 +210,18 @@ function IdeaCard({ item, saved, onSave }) {
         </button>
       </div>
 
+      {/* Clamped to three lines. These hooks are scraped repo descriptions and
+          run to five or six lines, which pushed the meta row — language, stars,
+          age, the things you actually scan by — a full screen apart between
+          cards. The title links out; the full text is one tap away. */}
       {item.hook && (
-        <p style={{ margin: "8px 0 0", fontSize: 13, lineHeight: 1.55, color: T.muted }}>{item.hook}</p>
+        <p
+          title={item.hook}
+          style={{
+            margin: "7px 0 0", fontSize: 13, lineHeight: 1.5, color: T.muted,
+            display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden",
+          }}
+        >{item.hook}</p>
       )}
 
       <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginTop: 10, fontSize: 11, color: T.faint, fontFamily: T.fontMono }}>
@@ -299,21 +357,10 @@ export default function IdeasRoot() {
 
   useEffect(() => { setShown(PAGE); }, [tab, sort, range]);
 
-  const visible = useMemo(() => {
-    if (!rows) return null;
-    let list = tab === "saved" ? rows.filter((r) => saved.has(r.id)) : rows;
-    if (range > 0) list = list.filter((r) => (r.age_days ?? 0) <= range);
-
-    const n = (v) => Number(v ?? 0);
-    return [...list].sort((a, b) => {
-      if (sort === "popping") return n(b.star_velocity) - n(a.star_velocity);
-      if (sort === "stars") return n(b.stars) - n(a.stars);
-      // Newest means when it turned up HERE, not when the repo was created —
-      // this is a feed. Score breaks the tie because one scan stamps every row
-      // it adds with the same timestamp, so the tiebreak orders the whole batch.
-      return new Date(b.first_seen) - new Date(a.first_seen) || n(b.score) - n(a.score);
-    });
-  }, [rows, tab, sort, range, saved]);
+  const visible = useMemo(
+    () => (rows ? selectVisible(rows, { tab, sort, range, saved }) : null),
+    [rows, tab, sort, range, saved],
+  );
 
   const newestBatch = useMemo(() => {
     if (!rows?.length) return 0;
@@ -346,15 +393,25 @@ export default function IdeasRoot() {
 
       {!err && tab !== "skills" && (
         <>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+          {/* An even 3-up grid, and no `sub`. "scanned 4h ago" hung under the
+              middle tile, wrapped to two lines at this width and — because flex
+              children stretch — made all three tiles twice as tall for one line
+              of text that the scan line directly below already carries verbatim
+              ("Last scan 4h ago · 510 scanned · …"). Three numbers were taking a
+              third of the screen above the actual feed. */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 12 }}>
             <Stat label="In the feed">{loading ? "—" : <AnimatedNumber value={rows.length} format={(v) => Math.round(v).toLocaleString()} />}</Stat>
-            <Stat label="Newest batch" sub={run ? `scanned ${ago(run.ran_at)}` : undefined}>
+            <Stat label="Newest batch">
               {loading ? "—" : <AnimatedNumber value={newestBatch} format={(v) => Math.round(v).toLocaleString()} />}
             </Stat>
             <Stat label="Saved">{<AnimatedNumber value={saved.size} format={(v) => Math.round(v).toLocaleString()} />}</Stat>
           </div>
 
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+          {/* One per row. Sharing a row meant each segment sized to its content
+              on a 393px screen, so seven options fought over the width and read
+              as run-on text. Full width is also how the tab segment above
+              already behaves, so the three now read as one grammar. */}
+          <div style={{ display: "grid", gap: 8, marginBottom: 14 }}>
             <Segment value={sort} onChange={setSort} options={SORTS} />
             <Segment value={range} onChange={setRange} options={RANGES} />
           </div>
