@@ -12,7 +12,10 @@
 // quote, and past dead the payload is dropped on the floor before anything reads
 // it. Every number on this tab is derived from that payload, so keeping it would
 // mean printing yesterday's tape under a red chip — and the whole point of the
-// chip is that nobody reads it twice.
+// chip is that nobody reads it twice. That means EVERY read: `rows`, `season`,
+// `trending`, the cache age AND `screened`, which is the one that carries the
+// prices into the detail pane. The gate has to be applied where the payload is
+// unpacked, once, or the next read added below is the next one to escape it.
 //
 // FRESHNESS IS MEASURED FROM `asOf`, NOT FROM meta.fetchedAt. alt-scan serves a
 // 90-second Blobs cache and a stale-fallback beyond it, so `meta.fetchedAt` is
@@ -95,10 +98,18 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
     return { payload, season, rows, byId, trending: payload?.trending ?? null }
   }, [scan.data])
 
-  // Past `dead` the payload is not read at all — see the header.
+  // Past `dead` the payload is not read at all — see the header. EVERY read of
+  // `market` goes through this gate, including the one that reaches the detail
+  // pane: `screened` shipped ungated while its four siblings were gated, and a
+  // dead scan therefore drew an empty board and a "stand down" headline over a
+  // full set of remembered prices — score 96, entry $5.88, a stop, an
+  // invalidation and a sized position, all from a payload the freshness ladder
+  // had already refused. The board's copy and the detail's numbers came from the
+  // same object; only one of them was allowed to say so.
   const live = freshScan.state !== 'dead' && !!market.payload
   const rows = live ? market.rows : []
   const season = live ? market.season : null
+  const screened = live && sel ? market.byId.get(sel.id) ?? null : null
   const trendingChecked = live && Array.isArray(market.trending)
   const trendingRank = trendingChecked && sel
     ? market.trending.find((t) => t?.id === sel.id)?.rank ?? null
@@ -111,11 +122,30 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
   const [savingId, setSavingId] = useState(null)
   useEffect(() => { if (serverIds) setLocalIds(serverIds) }, [serverIds])
 
+  /* ONE WRITE IN FLIGHT AT A TIME. `alt-watchlist` PUTs the WHOLE array and the
+   * function is last-write-wins on it, so two stars a moment apart raced: the
+   * second request was built from the same `prev` the first had, and whichever
+   * response landed last decided the list. The star that lost was still lit, and
+   * its toast had already said it saved — the sentinel would then never watch
+   * that coin. Disabling only the row being saved (`savingId === r.id`) did not
+   * prevent it, because the second tap was a DIFFERENT row.
+   *
+   * A ref, not state: it is read and written inside the same async turn as the
+   * request, and a state update would not be visible to a second toggle fired
+   * before the re-render. */
+  const inFlight = useRef(false)
+
   const ids = localIds ?? serverIds ?? []
   const watched = useMemo(() => new Set(ids.map((e) => e.id)), [ids])
 
   const toggleWatch = useCallback(async (row) => {
     if (!row?.id || !row?.symbol) return
+    if (inFlight.current) {
+      // Named, not silent. A star that does nothing reads as a broken button,
+      // and the wait is one request long.
+      toast('One watchlist save at a time — the last one is still in flight', { err: true })
+      return
+    }
     const prev = localIds ?? serverIds ?? []
     const on = prev.some((e) => e.id === row.id)
     // 60 is the sentinel's budget, enforced server-side. Catching it here means
@@ -130,6 +160,7 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
 
     setLocalIds(next)          // optimistic: the star lights immediately
     setSavingId(row.id)
+    inFlight.current = true
     try {
       // Only the five keys the validator allows, and `addedAt` is deliberately
       // NOT sent: the server owns "when did I star this", and re-sending it on
@@ -147,6 +178,7 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
       const detail = e?.body?.errors?.[0] || e?.message || 'the request failed'
       toast(`Watchlist not saved — ${detail}`, { err: true })
     } finally {
+      inFlight.current = false
       setSavingId(null)
     }
   }, [localIds, serverIds, toast])
@@ -185,15 +217,26 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
             fresh={freshScan}
             sourceDetail={market.payload?.sourceDetail ?? null}
             degraded={live ? market.payload?.degraded : null}
-            cached={!!market.payload?.cached}
-            cacheAgeSec={market.payload?.cacheAgeSec ?? null}
+            // Gated with the rest of the payload, not beside it. Ungated, a dead
+            // scan rendered "cached 4000s" — a real number about a payload
+            // nothing else on the card is allowed to quote — with the reasons it
+            // was degraded suppressed. The age of a payload we refuse to read is
+            // not a fact about the market; `FreshChip` already says how old the
+            // scan is, and it says it from `asOf`.
+            cached={live && !!market.payload?.cached}
+            cacheAgeSec={live ? market.payload?.cacheAgeSec ?? null : null}
             onReload={scan.reload}
           />
           <section className="card pad-md alt-boardcard">
-            <div className="ttl t-label">
-              Board
-              <span className="dr-state">ranked by how likely a move is starting, not by how much it already moved</span>
-            </div>
+            <div className="ttl t-label">Board</div>
+            {/* Under the title, not in `.dr-state`. That class is a nowrap state
+                word for the right-hand end of a title bar; a sentence in it is
+                361px of min-content, which on a phone is what set this whole
+                pane's grid track — 393px of card in a 328px column — and, with
+                the track fixed, what got ellipsised mid-clause. */}
+            <p className="sub t-foot alt-boardnote">
+              Ranked by how likely a move is starting, not by how much it already moved.
+            </p>
             {live ? (
               <AltBoard
                 rows={rows}
@@ -225,7 +268,7 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
               error={coin.error}
               onRetry={() => loadCoin(sel)}
               onBack={() => setSel(null)}
-              screened={market.byId.get(sel.id) ?? null}
+              screened={screened}
               season={season}
               settings={settings}
               freshScan={freshScan}
@@ -234,7 +277,10 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
               trendingRank={trendingRank}
               trendingChecked={trendingChecked}
               starred={watched.has(sel.id)}
-              saving={savingId === sel.id}
+              // Any write in flight, not just this coin's — the whole-array PUT
+              // is last-write-wins, so a second star from the detail pane races
+              // one started on the board. Same lock, both surfaces.
+              saving={savingId != null}
               onToggleWatch={toggleWatch}
             />
           ) : (

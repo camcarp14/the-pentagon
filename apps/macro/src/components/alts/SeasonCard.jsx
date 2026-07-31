@@ -17,6 +17,15 @@
 // FROM the score — so the two can never disagree, and mapping the six phases
 // onto the four bands the stylesheet already owns keeps this file from inventing
 // a fifth palette.
+//
+// THE DENOMINATOR IS NOT A DISCLOSURE. season.js renormalises out of the points
+// that had an input and ships `measured: { earned, of }` so this card can name
+// what the number rests on. That line sits under the score, always, in the
+// reading order — not inside "how this scores". A reader who opens the working
+// is already sceptical; the one the honesty rule exists for is the one who reads
+// "64 / 100" and sizes a position off it. `MeasuredScore` below is exported and
+// the crowd card uses the same component, so a partial score is never stated two
+// different ways on one screen.
 import React, { useState } from 'react'
 import { Expand, FreshChip, Num } from '../primitives.jsx'
 
@@ -94,6 +103,8 @@ export default function SeasonCard({
         {Array.from({ length: 10 }, (_, i) => <span key={i} className={i < pips ? 'on' : ''} />)}
       </div>
 
+      <MeasuredScore score={season.score} measured={season.measured} parts={season.parts} />
+
       {/* BREADTH IS THE ANSWER, the rest are tilts — so it gets bars and they get
           tiles. "How many alts beat BTC" is the only rotation measure computable
           from data we actually have, and it carries 60 of the 100 points. */}
@@ -103,13 +114,25 @@ export default function SeasonCard({
       </div>
 
       <div className="stats stats-2up alt-stats">
+        {/* THREE NUMBERS, THREE NAMES — and the tile prints the one it means.
+            `spanDays` is the calendar distance the change was measured across;
+            `samples` is how many readings fall inside it; `days` is how much
+            history exists at all. This tile used to render a SAMPLE COUNT as a
+            day count ("-1.20pts / 9d"), so after a cron gap it claimed a nine-day
+            move for one measured across twenty-seven. Two subs rather than one
+            run-on: `.tile-sub` is a single nowrap line and this is two facts. */}
         <div className="stattile">
           <div className="stattile-label">BTC dominance</div>
           <div className="stattile-value num">{dom.pct == null ? '—' : `${dom.pct.toFixed(1)}%`}</div>
           <div className="tile-sub">
+            {dom.trend === 'unknown' ? 'trend unknown' : `${dom.trend} ${signed(dom.changePctPts, 2)} pts`}
+          </div>
+          <div className="tile-sub">
             {dom.trend === 'unknown'
-              ? `trend unknown · ${dom.days ?? 0}d stored`
-              : `${dom.trend}${dom.changePctPts30d == null ? '' : ` ${signed(dom.changePctPts30d, 2)}pts / ${dom.windowDays}d`}`}
+              ? `${dom.days ?? 0} day${dom.days === 1 ? '' : 's'} stored`
+              : dom.spanDays == null
+                ? `${dom.samples} readings, span unknown`
+                : `over ${dom.spanDays}d · ${dom.samples} readings`}
           </div>
         </div>
         <div className="stattile">
@@ -149,11 +172,25 @@ export default function SeasonCard({
                     <span className="tc-mk">{p.label}</span>
                     {/* No pos/neg ink here, unlike the cockpit's version: every
                         part of this score is additive out of its own max, so
-                        colouring them all green would say "good" about a
-                        midpoint the file explicitly calls no-evidence. */}
-                    <span className="tc-mp num">{p.points} / {p.max}</span>
+                        colouring them all green would say "good" about a part
+                        the file explicitly calls no-evidence.
+                        An unmeasured part says so in words. `{p.points} / {p.max}`
+                        rendered a null as nothing at all — " / 20" — which reads
+                        as a zero that was scored. */}
+                    <span className="tc-mp num">
+                      {p.points == null ? `not measured · ${p.max} unused` : `${p.points} / ${p.max}`}
+                    </span>
                   </div>
                 ))}
+                {/* The parts sum to `earned` out of `of`, and THEN it is
+                    renormalised. Printing only the renormalised score here would
+                    leave a column of numbers that does not add up to the total
+                    beside it — which is the one thing this table exists to let a
+                    reader check by eye. */}
+                <div className="tc-mrow total">
+                  <span className="tc-mk">measured points</span>
+                  <span className="tc-mp num">{season.measured?.earned ?? '—'} / {season.measured?.of ?? '—'}</span>
+                </div>
                 <div className="tc-mrow total">
                   <span className="tc-mk">alt season</span>
                   <span className="tc-mp num">{season.score == null ? '—' : `${season.score} / 100`}</span>
@@ -173,6 +210,56 @@ export default function SeasonCard({
         </>
       )}
     </section>
+  )
+}
+
+/**
+ * THE HONEST DENOMINATOR, wherever a renormalised score is printed.
+ *
+ * season.js and sentiment.js both drop an unmeasured component from the
+ * numerator AND the denominator and rescale what is left to 100. That is the
+ * right arithmetic — an input we could not read is not evidence in either
+ * direction — but it means "64 / 100" can rest on two inputs out of five, and
+ * the ONLY place that shows is this line. It is deliberately not inside a
+ * disclosure: the reader who opens "how this scores" is already sceptical; this
+ * rule exists for the one who reads the big numeral and sizes off it.
+ *
+ * The unscored parts are named from their own labels, which both libs write as
+ * plain English with the reason in them ("fear & greed unavailable"), so this
+ * component never has to keep a second copy of what the components are called.
+ *
+ * Under half coverage the line takes `--warn`: below that season.js refuses to
+ * name a phase at all, so the number is standing on its own.
+ */
+export function MeasuredScore({ score, measured, parts = [], max = 100 }) {
+  const of = Number.isFinite(measured?.of) ? measured.of : null
+  const earned = Number.isFinite(measured?.earned) ? measured.earned : null
+  if (score == null || of == null || earned == null || of <= 0) return null
+
+  if (of >= max) {
+    return (
+      <div className="alt-cover" data-testid="measured-score">
+        <p>Every input was measured — <span className="num">{earned}</span> points earned out of <span className="num">{max}</span>, nothing dropped.</p>
+      </div>
+    )
+  }
+  // The labels are printed as their own list rather than run into the sentence:
+  // both libs already write them as clauses ("no funding rate — not scored"),
+  // and folding two of those into one line produces a sentence with three
+  // em-dashes and no subject.
+  const missing = parts.filter((p) => p?.points == null).map((p) => p?.label).filter(Boolean)
+  return (
+    <div className={`alt-cover${of < max / 2 ? ' thin' : ''}`} data-testid="measured-score">
+      <p>
+        <span className="num">{score} / {max}</span> is <span className="num">{earned}</span> of the{' '}
+        <span className="num">{of}</span> points that had an input, rescaled to 100 — the other{' '}
+        <span className="num">{max - of}</span> are in neither half of the fraction
+        {missing.length ? ':' : '.'}
+      </p>
+      {missing.length > 0 && (
+        <ul className="factlist">{missing.map((m, i) => <li key={i}>{m}</li>)}</ul>
+      )}
+    </div>
   )
 }
 

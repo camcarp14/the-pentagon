@@ -16,6 +16,9 @@
 //      one that matters most had no rung at all.
 import { describe, it, expect } from 'vitest'
 import { altDirective } from '../directive.js'
+// The real regime read, so the 'unknown' phase this file now handles is the one
+// season.js actually emits rather than a string a test invented.
+import { seasonRead } from '../season.js'
 // Imported only to pin the level definition against the shared one. directive.js
 // itself imports nothing, on purpose — see the note at the top of that file.
 import { highestHigh } from '../../ta.js'
@@ -304,6 +307,72 @@ describe('ENTER', () => {
     expect(d.headline).toMatch(/broke out into a BTC only tape/)
     expect(d.reasons.join(' ')).toMatch(/Breakouts in this regime fail more often than they run/)
     expect(d.guardrails.join(' ')).toMatch(/alt risk is fighting the tape today/)
+  })
+
+  // THE THREE-WAY SPLIT ON THE REGIME, pinned end-to-end through the real
+  // seasonRead rather than a hand-written phase string — the integration seam
+  // between the two files, and the one that drifted.
+  //
+  // season.js gained a 'unknown' phase for coverage below half. hostileSeason()
+  // only knows 'risk_off' and 'btc_only', so an unmeasured regime read as
+  // FRIENDLY at this gate and bought at full size. It must be neither: a
+  // downgrade, not a veto.
+  describe('an unmeasured regime is neither a green light nor a block', () => {
+    // The day-one state: the cron has never run, so there is no dominance
+    // history; no ETH row; fear & greed failed. Only the 7d breadth window
+    // resolves — 35 of the 100 points — and the score it produces is HIGH.
+    const dayOne = () => {
+      const rows = [
+        { id: 'bitcoin', symbol: 'BTC', name: 'Bitcoin', rank: 1, price: 6e4, mcap: 1.2e12, chg7d: 3, chg30d: null },
+        ...Array.from({ length: 60 }, (_, i) => ({
+          id: `c${i}`, symbol: `C${i}`, name: `C${i}`, rank: i + 2, price: 1, mcap: 5e8,
+          chg7d: i < 45 ? 20 : -5, chg30d: null,
+        })),
+      ]
+      return seasonRead({ universe: rows, btcRow: rows[0], ethRow: null, global: null, fearGreed: null, trending: null, domHistory: null, now: NOW })
+    }
+
+    it('produces a high score under a refused phase — the shape that walked the gate', () => {
+      const s = dayOne()
+      expect(s.phase).toBe('unknown')
+      expect(s.score).toBeGreaterThan(70)      // 74/100 off breadth alone
+      expect(s.coverage).toBeLessThan(0.5)
+    })
+
+    it('downgrades a live break to a half-size STARTER instead of ENTER', () => {
+      const d = altDirective(ready({ season: dayOne() }))
+      expect(d.action).toBe('STARTER')
+      expect(d.reasons.join(' ')).toMatch(/the regime was not measured — only 35 of its 100 points had an input/)
+      // and it says so on the card whatever rung is reached
+      expect(d.guardrails.join(' ')).toMatch(/the regime was not measured/)
+    })
+
+    it('does not block ENTER once the same regime is actually measured', () => {
+      // Same call, same everything, with a regime that came back whole. If the
+      // unmeasured case had been given hostileSeason's veto, ENTER would be
+      // unreachable for the first week of every deploy's life.
+      expect(altDirective(ready()).action).toBe('ENTER')
+    })
+
+    it('keeps the hostile veto stronger than the unmeasured downgrade', () => {
+      expect(altDirective(ready({ season: HOSTILE })).action).toBe('WATCH')
+    })
+
+    it('treats no season read at all the same as an unmeasured one', () => {
+      const d = altDirective(ready({ season: null }))
+      expect(d.action).toBe('STARTER')
+      expect(d.reasons.join(' ')).toMatch(/no rotation read came back at all/)
+    })
+
+    // The NO_READ flavour: breadth could not be counted, so the score is null.
+    it('handles the score-null flavour without printing a null into the copy', () => {
+      const blind = seasonRead({ universe: null, btcRow: null, now: NOW })
+      expect(blind.phase).toBe('unknown')
+      expect(blind.score).toBeNull()
+      const d = altDirective(ready({ season: blind }))
+      expect(d.action).toBe('STARTER')
+      expect(`${d.headline} ${d.reasons.join(' ')} ${d.guardrails.join(' ')}`).not.toMatch(/null|NaN|undefined/)
+    })
   })
 
   it('stands down when the position cannot be sized, and names the blocker', () => {

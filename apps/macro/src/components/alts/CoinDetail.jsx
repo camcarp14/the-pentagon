@@ -17,11 +17,29 @@
 // when the clock ticks — `now` comes from the response's own `asOf`, which is
 // also the honest time to age a base rate against.
 //
+// WHICH MEANS THE MEMO MAY NOT DEPEND ON A FRESHNESS OBJECT. `freshness()`
+// returns a fresh object literal on every call, and the panel calls it on every
+// render of App's ten-second `setNow` tick — so holding `freshScan`/`freshCoin`
+// in this memo's dependency list invalidated it on the clock and re-ran
+// `precedentRead` over 730 candles, `atr`, `swings`, `signalChecklist` and
+// `altDirective` to produce identical output. Measured over 31 idle seconds at
+// 1440: 45ms of script with a coin selected against 22ms for the board alone and
+// 0ms with the clock frozen — on a phone, several times that, for nothing.
+// `directive.js` reads exactly one field off each feed (`feedStates` takes
+// `.state` and nothing else), so the memo depends on those two strings and
+// rebuilds the shape inside. The objects themselves still reach `FreshChip`,
+// which is what the age in seconds is actually for.
+//
 // LOADING IS SKELETONS AND EVERY ERROR HAS A RETRY (DESIGN.md §4.7). A spinner
 // on this pane would be the wrong shape twice: it says "wait" without saying
 // what is coming, and the pane is two seconds of network away on a phone.
 import React, { useMemo, useState } from 'react'
 import { SkPage, Expand, FreshChip } from '../primitives.jsx'
+// One renderer for both renormalised scores, imported for the same reason the
+// formatters below come from AltBoard: the season card and the crowd card state
+// the same kind of arithmetic, and two spellings of "this rests on 55 of 100
+// points" on one screen is how one of them quietly stops being true.
+import { MeasuredScore } from './SeasonCard.jsx'
 import { atr, swings } from '../../lib/ta.js'
 import { precedentRead } from '../../lib/alts/precedent.js'
 import { crowdRead } from '../../lib/alts/sentiment.js'
@@ -68,6 +86,12 @@ export default function CoinDetail({
   // the ATR and the derivative samples were measured at, and re-aging them every
   // ten seconds would recompute 700 candles to change nothing.
   const now = Number.isFinite(payload?.asOf) ? payload.asOf : null
+
+  // The two strings the heavy read actually consumes. Absent reads as dead,
+  // which is `feedStates`' own default and the safe one: no feed is not a fresh
+  // feed.
+  const scanState = freshScan?.state ?? 'dead'
+  const coinState = freshCoin?.state ?? 'dead'
 
   const read = useMemo(() => {
     if (!screened) return null
@@ -138,12 +162,12 @@ export default function CoinDetail({
     const plan = { stop, size, defaults }
     const directive = altDirective({
       screened, season, precedent, crowd, phase, plan, position: null, candles,
-      freshness: { scan: freshScan, coin: freshCoin },
+      freshness: { scan: { state: scanState }, coin: { state: coinState } },
       candleQuality: quality, now,
     })
 
     return { candles, quality, precedent, crowd, phase, checklist, defaults, plan, stop, stopMode, size, directive, atrNow, price }
-  }, [payload, screened, season, settings, freshScan, freshCoin, fearGreed, trendingRank, trendingChecked, now])
+  }, [payload, screened, season, settings, scanState, coinState, fearGreed, trendingRank, trendingChecked, now])
 
   const head = (
     <div className="alt-dhead">
@@ -199,17 +223,25 @@ export default function CoinDetail({
     )
   }
 
+  // NO ROW, NO NUMBERS. Every price, level and size on this pane is derived from
+  // the board row, so without one the pane says why and stops — it does not fall
+  // back to the last row it saw. The two causes get different copy because they
+  // have different next steps: a dead scan is a refresh, a dropped coin is not.
   if (!screened) {
+    const deadScan = freshScan?.state === 'dead'
     return (
       <div className="alt-detail" data-testid="coin-detail">
         {head}
         <section className="card pad-md">
           <div className="empty">
             <div className="glyph" aria-hidden>◎</div>
-            <div className="empty-title">No board row for {sym || 'this coin'}</div>
+            <div className="empty-title">
+              {deadScan ? `No live scan to price ${sym || 'this coin'} from` : `No board row for ${sym || 'this coin'}`}
+            </div>
             <div className="empty-sub">
-              It is not in the current scan — it may have dropped out of the top 250, or the scan may have aged out.
-              Go back to the board and hit Refresh.
+              {deadScan
+                ? `The market scan is older than the freshness ladder allows, so every number on this pane — the entry, the stop, the invalidation, the size — would be a remembered one. Go back to the board and hit Refresh; ${sym || 'this coin'} comes back with it.`
+                : 'It is not in the current scan — it may have dropped out of the top 250, or the scan may have aged out. Go back to the board and hit Refresh.'}
             </div>
           </div>
         </section>
@@ -502,6 +534,16 @@ function CrowdCard({ read, sym }) {
           {c?.state ?? 'unknown'}{c?.score == null ? '' : ` · ${c.score}/100`} · {c?.contrarian ?? 'neutral'}
         </span>
       </div>
+
+      {/* `${c.score}/100` on its own is the claim sentiment.js explicitly does
+          not make: the score is rescaled out of the points that had an input, so
+          a coin with a trending rank and nothing else reads "euphoric · 100/100"
+          off 20 of the 100 points, and a coin the list simply did not include
+          reads "ignored · 0/100" off the same 20 — which is the tailwind copy
+          the directive quotes. `measured: { earned, of }` exists to name that
+          denominator; this is where it gets named, in the same words the season
+          card uses for the same arithmetic. */}
+      <MeasuredScore score={c?.score ?? null} measured={c?.measured} parts={c?.parts ?? []} />
 
       {c?.contrarian === 'headwind' && (
         <div className="guardrail">

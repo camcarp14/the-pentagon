@@ -764,6 +764,15 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
    and the browser back gesture never fights a scrim. */
 .alt-panes { display: grid; gap: 12px; align-items: start; }
 .alt-pane-board { display: grid; gap: 12px; align-content: start; min-width: 0; }
+/* min-width: 0 on the CHILDREN as well, for the reason `.grid > *` carries it at
+   :222 and `.alt-detail-grid > *` at :976. Without it a card's min-content sets
+   this pane's only track and the card bursts out of it: measured 813px of card
+   in a 613px track at 1180-1920 (286px over at 1020), which painted the board's
+   Score column, Band pill and star under the detail pane and left `.tbl-wrap`
+   with nothing to scroll at any width. On a phone the same rule was 393px of
+   card in a 358px column at 390 — 49px of sideways page scroll at 360, 19 at
+   390, 61 at 768, with the season card's Refresh sliced off the right edge. */
+.alt-pane-board > * { min-width: 0; }
 .alt-pane-detail { display: none; min-width: 0; }
 .alt-panes.picked .alt-pane-board { display: none; }
 .alt-panes.picked .alt-pane-detail { display: block; }
@@ -802,9 +811,30 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .alt-note { margin-top: 10px; line-height: 1.55; }
 .alt-lead { margin: 0 0 10px; }
 
+/* THE DENOMINATOR, BESIDE THE SCORE AND NOT BEHIND A DISCLOSURE. Both season.js
+   and sentiment.js renormalise out of the points that had an input and ship
+   `measured: { earned, of }` so this line can exist; a score resting on two of
+   five inputs has to say so where the score is read, because the reader who
+   opens "how this scores" is not the reader who acts on the number. Ink is
+   `--ink-2`, not `--ink-3`: it is a qualifier on the headline figure, not a
+   footnote. */
+.alt-cover { margin: 8px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--ink-2); text-wrap: pretty; }
+.alt-cover p { margin: 0; }
+.alt-cover .num { font-family: var(--mono); font-weight: 600; }
+.alt-cover .factlist { margin-top: 3px; }
+/* Under half coverage season.js refuses to name a phase at all, so at that point
+   the number is standing on its own and the line says so in --warn. */
+.alt-cover.thin { color: var(--warn); }
+
 /* ---- board controls ---- */
 .alt-controls { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 12px; }
 .alt-fld { margin-bottom: 0; min-width: 0; }
+/* The one-line explanation of what the ranking means, WRAPPED. It used to ride
+   `.dr-state`, which is a nowrap state word for the right-hand end of a card
+   title: at 360-414 its 361px of min-content was what set the board pane's whole
+   track (393px of card in a 328px column) and, once the pane stopped bursting,
+   what got ellipsised away mid-sentence. A sentence is not a state. */
+.alt-boardnote { margin: -4px 0 12px; line-height: 1.5; }
 .alt-boardfoot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
 .alt-boardfoot .tiny { margin-right: auto; }
 
@@ -816,7 +846,15 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
    and silently grows a third row of orphans. */
 .alt-board { display: grid; gap: 1px; background: var(--border); border-radius: var(--r-md); overflow: hidden; }
 .alt-head { display: none; }
-.alt-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px; background: var(--card-2); min-width: 0; }
+/* minmax(min-content, 1fr), not minmax(0, 1fr): the row is the only element that
+   knows how wide the table's fixed columns actually are, and a 0 minimum threw
+   that away. `.alt-board` is `overflow: hidden` for its radius, so the row's
+   columns were squeezed and then CLIPPED by it instead of overflowing into
+   `.tbl-wrap` — measured at 768: 781px of columns inside a 704px board, and the
+   wrap's scrollWidth equal to its clientWidth, i.e. the scroller had nothing to
+   scroll. With a min-content minimum the row's real width reaches the board,
+   and `.alt-board { min-width: min-content }` below carries it to the wrap. */
+.alt-row { display: grid; grid-template-columns: minmax(min-content, 1fr) 44px; background: var(--card-2); min-width: 0; }
 .alt-row.on { box-shadow: inset 3px 0 0 var(--accent); }
 .alt-row-main {
   display: grid; min-width: 0; width: 100%; text-align: left;
@@ -829,7 +867,12 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
   grid-template-areas:
     "score coin price c24"
     "score band  spark c7";
-  gap: 3px 9px; align-items: center;
+  /* 8px, not 9: three column gaps plus the 44px star plus two auto tracks left
+     the coin 49px at 360 once the pane stopped bursting — and 49px is the symbol
+     with 9px of name behind it. The pixels came from here and from the phone
+     sparkline below; the name reads at 360 again (Pepe 27px of 27, Turbo 22 of
+     30) without the layout bug that used to be paying for it. */
+  gap: 3px 8px; align-items: center;
   transition: background var(--dur-1) ease;
 }
 .alt-row-main:hover { background: rgba(255, 255, 255, 0.03); }
@@ -844,7 +887,10 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .c-turn { grid-area: turn; text-align: right; color: var(--ink-2); }
 .c-spark { grid-area: spark; overflow: visible; display: flex; align-items: center; }
 .c-score { grid-area: score; font-family: var(--mono); font-size: 17px; font-weight: 500; color: var(--ink-2); align-self: center; }
-.c-band { grid-area: band; display: flex; align-items: center; gap: 4px; }
+/* Wraps rather than clips: a row can carry the pill AND both flags, and at 768
+   that was 95px of content in a 74px cell with `par` cut in half — the two marks
+   that say the row is not tradeable were the ones being trimmed. */
+.c-band { grid-area: band; display: flex; align-items: center; flex-wrap: wrap; gap: 3px 4px; }
 /* Phone: rank, the 30-day return, RS and turnover live in the detail pane, one
    tap away. They must be display:none rather than merely left out of the
    template — an item whose named area is absent falls back to auto-placement
@@ -881,6 +927,16 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .alt-flag.warn { color: var(--warn); background: rgba(212, 147, 11, 0.14); }
 .alt-flag.bad { color: var(--crit); background: rgba(225, 29, 72, 0.13); }
 
+/* …and what those two three-letter marks MEAN, printed under the board rather
+   than hidden in a `title`. A title attribute does not exist on touch, and the
+   phone is where this board is read; a legend that only a mouse can reach is the
+   same as no legend on the platform the abbreviation is worst on. It renders
+   only when a flagged row is actually on screen, so the ink is spent on the
+   rows that earned it. */
+.alt-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 10px; }
+.alt-legend-row { margin: 0; display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.alt-legend-t { font-size: 11.5px; color: var(--ink-3); line-height: 1.45; text-wrap: pretty; }
+
 /* The star is a SIBLING of the row button, never a child: a button inside a
    button is invalid, and its click would bubble into "open this coin" — you
    would star a row and be thrown into the detail pane every time. */
@@ -889,12 +945,24 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
   display: grid; place-items: center; color: var(--ink-3); font-size: 15px;
   transition: color var(--dur-1) ease, transform var(--dur-1) var(--ease-out);
 }
-.alt-star.on { color: var(--accent); }
-.alt-star:disabled { opacity: 0.45; cursor: progress; }
+/* A lit star is NOT the accent. DESIGN.md §4.4 spends the accent on the active
+   tab, the primary action and the selected state, and "spent rarely" is the
+   whole of the rule — a 20-coin watchlist put 20 gold stars on one phone screen
+   and the one genuinely selected row (`.alt-row.on`, the accent's legitimate
+   use here) had to compete with all of them. The membership marker is carried by
+   the GLYPH — ☆ becomes ★ — so nothing is signalled by colour alone and the
+   contrast against an unstarred row is a filled shape, not a hue. */
+.alt-star.on { color: var(--ink); }
+/* Locked (some other row is mid-write) reads differently from saving (this row
+   is the one in flight): both are unusable, only one is waiting on itself. */
+.alt-star:disabled { opacity: 0.6; cursor: not-allowed; }
+.alt-star.saving:disabled { opacity: 0.45; cursor: progress; }
 .alt-star:active:not(:disabled) { transform: scale(0.9); }
 
-/* ---- the sparkline ---- */
-.alt-spark { display: block; width: 84px; height: 20px; color: var(--ink-3); }
+/* ---- the sparkline ----
+   62 on a phone, not 84: the shape is a direction cue and it sat in the same
+   auto track as the price, so those 22px came straight out of the coin name. */
+.alt-spark { display: block; width: 62px; height: 20px; color: var(--ink-3); }
 .alt-spark.dir-up { color: var(--up); }
 .alt-spark.dir-down { color: var(--down); }
 .alt-spark-none { color: var(--ink-3); font-size: 12px; }
@@ -971,10 +1039,27 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 
   /* The eleven-column shape. It is wider than a 620px pane on purpose — the
      board is a dense instrument and `.tbl-wrap` is the one place in this app
-     allowed to scroll sideways. */
-  .alt-board { min-width: 700px; }
+     allowed to scroll sideways.
+     min-content, not a typed 700px: 700 was a SECOND COPY of the column budget
+     below and it had stopped matching it — those eleven tracks plus gaps plus
+     the star measured 781px, so the board sat inside its own content and
+     `.alt-board`'s overflow:hidden clipped the 77px difference at 768 instead of
+     handing it to the wrap, which is why the wrap never scrolled at any width.
+     Written this way the floor is derived from the tracks (831px on the budget
+     below), so re-budgeting a column cannot leave a stale number behind. */
+  .alt-board { min-width: min-content; }
+  /* THE BUDGET. Every fixed track is its widest measured content plus a hair:
+     rank 19, price 73, the three returns 50, RS's header 58, turnover's 47,
+     score's header 34, the sparkline 60. What is left over goes to the coin,
+     which used to sit at a 70px floor at EVERY width from 768 to 1920 — the ten
+     fixed tracks already exceed the pane, so its 1.2fr never grew and names
+     clipped to 2-4 characters (Dogecoin 26px of 49, Avalanche 30 of 54), worse
+     on a 1440 desktop than on a 390 phone. A 148px floor is a symbol plus ~13
+     characters of name; longer names still ellipsise, which is honest, and the
+     50px the rebudget adds to the table is 50px of `.tbl-wrap` scroll, which is
+     what that scroller is for. */
   .alt-head, .alt-row-main {
-    grid-template-columns: 24px minmax(70px, 1.2fr) 78px 56px 56px 56px 60px 60px 68px 40px 74px;
+    grid-template-columns: 22px minmax(148px, 1.4fr) 76px 54px 54px 54px 58px 50px 62px 38px 76px;
     grid-template-areas: "rank coin price c24 c7 c30 rs turn spark score band";
     gap: 0 8px;
   }
@@ -989,7 +1074,9 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
   .c-rank, .c-rs, .c-turn, .c-30 { display: block; }
   .c-rank { text-align: right; }
   .c-score { font-size: 14px; align-self: auto; }
-  .alt-spark { width: 66px; height: 18px; }
+  /* 60, inside a 62px track: the shape is a direction cue, and the 6px it gives
+     back went to the coin column, where the characters are. */
+  .alt-spark { width: 60px; height: 18px; }
   /* the header sparkline is a read, not a table cell — it keeps its own size */
   .alt-ident-spark .alt-spark { width: 104px; height: 26px; }
 }
@@ -999,7 +1086,11 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
    column, so this does not fight the container — the board simply gets the
    larger share and scrolls its own table inside `.tbl-wrap`. */
 @media (min-width: 1020px) {
-  .alt-panes { grid-template-columns: minmax(0, 1.08fr) minmax(340px, 0.92fr); }
+  /* 1.18 / 0.82, not 1.08 / 0.92: the board is eleven columns and the detail is
+     a reading pane, so the 57px this moves left is worth more there. Measured in
+     the 1180px shell column: board 670, detail 466 — the detail is still well
+     clear of its 330px floor and its cards are already 2-up below. */
+  .alt-panes { grid-template-columns: minmax(0, 1.18fr) minmax(330px, 0.82fr); }
   .alt-pane-detail, .alt-panes.picked .alt-pane-detail { display: block; }
   .alt-panes.picked .alt-pane-board { display: grid; }
   .alt-pane-detail {
@@ -1010,8 +1101,13 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
     overflow-y: auto;
     overscroll-behavior: contain;
   }
-  /* The back control belongs to the phone: on desktop the board never left. */
-  .alt-back { display: none; }
+  /* The back control belongs to the phone: on desktop the board never left.
+     The `[data-kit]` twin is not decoration — `[data-kit] .btn` is (0,2,0) and
+     sets `display: inline-flex`, so the bare class here (0,1,0) lost and the
+     control rendered at 1020 and up: measured 81×34 at x=771 at 1440, sitting on
+     top of the board's "Show" filter. Same failure as `.nav button:active` at
+     :214, same fix, and DESIGN.md §5 is the reason both are written twice. */
+  .alt-back, [data-kit] .alt-back { display: none; }
   /* Four stat tiles across a ~400px pane is four unreadable columns, and
      attention-beside-crowding stops being side-by-side at that width. The
      season card, in the wider left pane, keeps its 4-up. */

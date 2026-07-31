@@ -13,27 +13,46 @@
 // `stale: true` rather than 502-ing. A 502 blanks the board; stale-and-labelled
 // lets the freshness ladder age the numbers out on screen, which is the honest
 // version of the same information.
-import { sourceHandler, store } from '../shared/util.mjs'
-import { altUniverse, altGlobal, fearGreed, trendingCoins, cacheGet, cachePut, cacheEnvelope, isDominanceRow } from '../shared/alts.mjs'
+import { sourceHandler, store, SOURCE_ERROR } from '../shared/util.mjs'
+import { altUniverse, altGlobal, fearGreed, trendingCoins, cacheGet, cachePut, cacheEnvelope, cacheIsFresh, isDominanceRow } from '../shared/alts.mjs'
 
 const CACHE_KEY = 'alt_scan_cache'
 const DOM_HISTORY_KEY = 'alt_dom_history'
 const TTL_SEC = 90
 
-export default sourceHandler('alt_scan', async () => {
+// Everything upstream has to be FINISHED by this many ms after the request
+// arrived, leaving the rest of Netlify's ~10s synchronous budget for the Blobs
+// round-trips and the response. The clock starts at arrival rather than at the
+// first fetch because the auth check and the cache read are spent out of the
+// same ten seconds — see attemptBudget in alts.mjs for why a chain of honoured
+// per-attempt timeouts is not the same thing as a budget.
+const DEADLINE_MS = 7500
+
+export default async (req, context) => {
+  const deadlineAt = Date.now() + DEADLINE_MS
+  return sourceHandler('alt_scan', () => served(deadlineAt))(req, context)
+}
+
+async function served(deadlineAt) {
   const s = store()
   const cached = await cacheGet(s, CACHE_KEY)
-  if (cached && cached.ageSec < TTL_SEC) return cacheEnvelope(cached, { ttlSec: TTL_SEC })
+  if (cacheIsFresh(cached, TTL_SEC)) return cacheEnvelope(cached, { ttlSec: TTL_SEC })
 
   try {
-    const payload = await scan(s)
+    const payload = await scan(s, deadlineAt)
     await cachePut(s, CACHE_KEY, payload, payload.asOf)
     return { ...payload, cached: false, stale: false, cacheAgeSec: 0 }
   } catch (err) {
     if (!cached) throw err
-    return cacheEnvelope(cached, { ttlSec: TTL_SEC, refetchError: String(err?.message || err) })
+    const refetchError = String(err?.message || err)
+    // Serving stale is a success for the SCREEN and a failure for the SOURCE,
+    // and /api/status is about the source. Without this marker the return
+    // records `ok: true, lastSuccessAt: now` and the status page reports
+    // alt_scan green — with a detail string copied off the cached payload —
+    // while CoinGecko has been down for an hour. See SOURCE_ERROR in util.mjs.
+    return { ...cacheEnvelope(cached, { ttlSec: TTL_SEC, refetchError }), [SOURCE_ERROR]: refetchError }
   }
-})
+}
 
 /**
  * EXACTLY FOUR UPSTREAM CALLS, and this count is a contract, not an accident.
@@ -43,12 +62,12 @@ export default sourceHandler('alt_scan', async () => {
  * 5 minutes) or in the sentinel — not in a fifth call here. The Blobs read at
  * the bottom is local storage, not an upstream, and does not count.
  */
-async function scan(s) {
+async function scan(s, deadlineAt) {
   const [uni, glob, fng, trend] = await Promise.allSettled([
-    altUniverse(),
-    altGlobal(),
-    fearGreed(),
-    trendingCoins(),
+    altUniverse(250, { deadlineAt }),
+    altGlobal({ deadlineAt }),
+    fearGreed({ deadlineAt }),
+    trendingCoins({ deadlineAt }),
   ])
 
   // The universe is the one hard requirement: without market caps there is no

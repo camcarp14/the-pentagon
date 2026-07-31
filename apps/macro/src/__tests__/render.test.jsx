@@ -24,9 +24,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import App from "../App.jsx";
 import AltsPanel from "../components/alts/AltsPanel.jsx";
 import CoinDetail from "../components/alts/CoinDetail.jsx";
+import SeasonCard from "../components/alts/SeasonCard.jsx";
 import { sparkPoints, sparkDirection } from "../components/alts/sparkline.jsx";
-import { screenCoin } from "../lib/alts/screen.js";
+import { screenCoin, screenUniverse } from "../lib/alts/screen.js";
 import { seasonRead } from "../lib/alts/season.js";
+import { freshness } from "../lib/freshness.js";
 
 const warnings = [];
 let realWarn, realErr;
@@ -256,13 +258,54 @@ describe("The Alts tab renders against a real payload shape", () => {
     expect(panel()).toContain("trend unknown");
   });
 
-  it("shows no prices at all once the scan is dead", () => {
+  it("shows no prices at all once the scan is dead, with no coin picked", () => {
     // The freshness ladder, not the error, decides. A 3× max-age-old payload is
     // dead, and a dead scan may not render a remembered price under a red chip.
+    //
+    // THIS CASE COVERS HALF THE RULE. It exercises the panel with `sel === null`,
+    // which is the state where four of the five reads of the payload are the
+    // only ones on screen. The path that carries the PRICES — the board row
+    // handed to the detail pane — is only reachable with a coin picked, and it
+    // is the one that shipped ungated; it is the case below.
     const out = panel({ scan: src({ ...SCAN_PAYLOAD, asOf: NOW - 4000_000 }, { fetchedAt: NOW - 4000_000 }) });
     expect(out).toContain("No live market scan");
     expect(out).not.toContain("$96,400");
     expect(out).toContain(">Retry<");
+  });
+
+  it("shows no prices at all once the scan is dead, with a coin picked", () => {
+    // The selection lives in the panel's own state and no static render can set
+    // it, so this reproduces the panel's gate exactly — the freshness ladder over
+    // the payload's `asOf`, then the board row looked up through it — and renders
+    // the detail pane with what that gate yields. `screened` is the prop the
+    // directive's entry, trigger, stop, invalidation and position size are all
+    // measured from, so if it survives a dead scan, every one of those is a
+    // remembered number under a red chip.
+    const asOf = NOW - 4000_000;
+    const fresh = freshness(asOf, "alt_scan", NOW);
+    expect(fresh.state, "the fixture must actually be dead").toBe("dead");
+
+    const season = seasonRead({
+      universe: UNIVERSE, btcRow: UNIVERSE[0], ethRow: UNIVERSE[1],
+      global: SCAN_PAYLOAD.global, fearGreed: SCAN_PAYLOAD.fearGreed,
+      trending: SCAN_PAYLOAD.trending, domHistory: null, now: asOf,
+    });
+    const byId = new Map(screenUniverse(UNIVERSE, { btcRow: UNIVERSE[0], ethRow: UNIVERSE[1], season, now: asOf })
+      .map((r) => [r.id, r]));
+    expect(byId.get("solana")?.price, "the payload really does still hold the price").toBe(184.22);
+
+    const live = fresh.state !== "dead";
+    const out = detail({
+      screened: live ? byId.get("solana") : null,
+      season: live ? season : null,
+      freshScan: fresh,
+      fearGreed: null, trendingChecked: false, trendingRank: null,
+    });
+
+    expect(out, "a dead scan may not print a remembered price").not.toMatch(/\$[\d.,]/);
+    expect(out, "…nor a remembered score").not.toMatch(/coin-directive/);
+    expect(out).toContain("No live scan to price SOL from");
+    expect(out).toContain("Refresh");
   });
 
   it("gives a failed scan an error row with a retry, without losing the board", () => {
@@ -295,6 +338,86 @@ describe("The Alts tab renders against a real payload shape", () => {
   it("says a coin has no perp instead of scoring it neutral", () => {
     const out = detail({ payload: { ...COIN_PAYLOAD, derivs: null } });
     expect(out).toContain("No listed perpetual");
+  });
+
+  it("names the denominator wherever a rescaled score is printed, not behind a disclosure", () => {
+    // Both libs drop an unmeasured component from the numerator AND the
+    // denominator and rescale to 100, which is the honest arithmetic — and which
+    // means "0/100" and "100/100" can each rest on one input out of seven. The
+    // cards print what the score rests on beside the score.
+    //
+    // A coin with no perp is the measured case: sentiment.js scores it out of the
+    // 55 attention points and says so.
+    const noPerp = detail({ payload: { ...COIN_PAYLOAD, derivs: null } });
+    expect(noPerp).toContain('data-testid="measured-score"');
+    expect(noPerp).toMatch(/points that had an input/);
+    expect(noPerp, "the missing half must be named, not just counted")
+      .toMatch(/no listed perp/);
+    // …and it is in the card body, not inside the collapsed <Expand>. The
+    // disclosure renders after the two-column attention/crowding block, so the
+    // coverage line must come before it.
+    expect(noPerp.indexOf('data-testid="measured-score"'))
+      .toBeLessThan(noPerp.indexOf("show the crowd read"));
+
+    // The season card is the same rule on the same shape: day one of the cron
+    // has no dominance history, so 20 of its 100 points have no input.
+    const board = panel();
+    expect(board).toContain('data-testid="measured-score"');
+    expect(board).toMatch(/points that had an input/);
+    expect(board.indexOf('data-testid="measured-score"'),
+      "the season card's coverage line must precede 'how this scores'")
+      .toBeLessThan(board.indexOf("how this scores"));
+  });
+
+  // THE THIN-COVERAGE CASE, which is the one the new fields exist for and the
+  // one nothing else here renders. Below half coverage season.js stops naming a
+  // phase — `phase: 'unknown'`, label "Not enough measured" — while still
+  // reporting a real, and often HIGH, score. Every one of the new fields is
+  // load-bearing on this path at once: the band class the card maps the phase
+  // to, the `.thin` warning treatment on the coverage line, and the "not
+  // measured" wording that replaced rendering a null `points` as " / 20".
+  it("renders a regime whose phase was refused for thin coverage", () => {
+    // Day one, and only the 7d breadth window resolved: no 30d returns, no ETH
+    // row, no dominance history, no fear & greed. 35 of the 100 points.
+    const rows = [
+      { id: "bitcoin", symbol: "BTC", name: "Bitcoin", rank: 1, price: 6e4, mcap: 1.2e12, chg7d: 3, chg30d: null },
+      ...Array.from({ length: 60 }, (_, i) => ({
+        id: `c${i}`, symbol: `C${i}`, name: `C${i}`, rank: i + 2, price: 1, mcap: 5e8,
+        chg7d: i < 45 ? 20 : -5, chg30d: null,
+      })),
+    ];
+    const season = seasonRead({ universe: rows, btcRow: rows[0], ethRow: null, global: null, fearGreed: null, domHistory: null, now: NOW });
+    expect(season.phase).toBe("unknown");
+    expect(season.score).toBeGreaterThan(70);   // a high number under a refused label
+    expect(season.coverage).toBeLessThan(0.5);
+
+    const html = renderToStaticMarkup(createElement(SeasonCard, { season }));
+    // The phase maps to a band the stylesheet actually owns.
+    expect(html).toContain("tc-head band-unknown");
+    // Under half coverage the denominator line takes the warning treatment.
+    expect(html).toMatch(/class="alt-cover thin"/);
+    expect(html).toContain("Not enough measured");
+    // An unmeasured part says so in words. `{p.points} / {p.max}` rendered a
+    // null as " / 25", which reads as a zero that was scored.
+    expect(html).toMatch(/not measured · 25 unused/);
+    expect(html).not.toMatch(/>\s*\/ 25</);
+    // and nothing anywhere leaked a null through a template literal.
+    expect(html).not.toMatch(/undefined|NaN/);
+  });
+
+  it("prints a sample count and a calendar span as two different things", () => {
+    // `windowDays: window.length` was a SAMPLE COUNT rendered as "-1.20pts / 9d",
+    // so after a cron gap the card claimed a nine-day move for one measured
+    // across up to thirty. The tile now names the span and the readings apart.
+    // Nine readings, one every third day: 24 calendar days of span. The old
+    // field would have called this "9d".
+    const domHistory = Array.from({ length: 9 }, (_, i) => ({
+      d: new Date(NOW - (27 - i * 3) * DAY).toISOString().slice(0, 10),
+      btcDom: 56 - i * 0.4, ethDom: 12, totalMcap: 3.4e12,
+    }));
+    const out = panel({ scan: src({ ...SCAN_PAYLOAD, domHistory }) });
+    expect(out).toMatch(/over 24d · 9 readings/);
+    expect(out, "a reading count may not wear a day's clothes").not.toMatch(/ 9d/);
   });
 
   it("will not report a coin as unwatched when the trending feed never answered", () => {
@@ -642,6 +765,101 @@ describe("Macro obeys the language", () => {
       expect(b, `an empty state with no next step:\n${b}`).toMatch(/className="empty-sub"/);
     }
     expect(jsx.match(/empty-sub/g).length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("gives every grid's children a min-width floor of 0", () => {
+    // The bug this pins twice over: a card sized to its own min-content sets its
+    // track and bursts out of it, and the pane is not a scroll container, so the
+    // overflow lands on the page (49px of sideways scroll at 360) or under the
+    // neighbouring pane (813px of card in a 613px track at 1440, painting over
+    // the Score column, the Band pill and every row's star). `min-width: 0` on
+    // the CONTAINER does nothing about it — the automatic minimum size belongs
+    // to the items.
+    for (const grid of [".grid", ".alt-pane-board", ".alt-detail-grid"]) {
+      expect(css, `${grid} > * needs min-width: 0`)
+        .toMatch(new RegExp(`\\${grid} > \\*\\s*\\{[^}]*min-width:\\s*0`));
+    }
+  });
+
+  it("derives the board's minimum width from its own columns", () => {
+    // A typed floor is a second copy of the column budget, and it stopped
+    // matching: 700px against 831px of actual tracks, with `.alt-board`'s
+    // overflow:hidden clipping the difference instead of handing it to
+    // `.tbl-wrap`, which therefore never scrolled at any width.
+    expect(css).toMatch(/\.alt-board\s*\{\s*min-width:\s*min-content/);
+    expect(css, "the row must carry a min-content minimum or the board cannot see its own width")
+      .toMatch(/\.alt-row\s*\{[^}]*grid-template-columns:\s*minmax\(min-content,\s*1fr\)/);
+    // …and the identity column may not go back to a floor that fits four
+    // characters: 70px pinned Dogecoin to 26px of its 49 at every width from
+    // 768 to 1920.
+    const budget = /\.alt-head,\s*\.alt-row-main\s*\{\s*grid-template-columns:([^;]+);/.exec(css);
+    expect(budget, "the desktop column budget must be findable").toBeTruthy();
+    const coinFloor = Number(/minmax\((\d+)px/.exec(budget[1])?.[1]);
+    expect(coinFloor, "the coin column's floor").toBeGreaterThanOrEqual(140);
+  });
+
+  it("writes the [data-kit] twin for every rule the kit out-specifies", () => {
+    // `[data-kit] .btn` is (0,2,0) and sets display: inline-flex, so a bare
+    // `.alt-back { display: none }` (0,1,0) lost and the phone's back control
+    // rendered at 1020 and up — measured 81×34 at x=771 at 1440, on top of the
+    // board's filter select. DESIGN.md §5 is this failure; `.nav button:active`
+    // at :212 is the other one in this sheet.
+    expect(css).toMatch(/\.alt-back,\s*\[data-kit\] \.alt-back\s*\{\s*display:\s*none/);
+    expect(css).toMatch(/\.nav button:active,\s*\[data-kit\] \.nav button:active/);
+  });
+
+  it("keeps the watchlist star out of the accent budget", () => {
+    // DESIGN.md §4.4: one accent, spent rarely. A 20-coin watchlist put 20 gold
+    // stars on one phone screen and the genuinely selected row — the accent's
+    // legitimate use here — competed with all of them. The membership marker is
+    // the glyph, ☆ against ★, so nothing is signalled by colour alone.
+    expect(css).not.toMatch(/\.alt-star\.on\s*\{\s*color:\s*var\(--accent\)/);
+    expect(css, "the selected row keeps the accent").toMatch(/\.alt-row\.on\s*\{[^}]*var\(--accent\)/);
+    expect(jsx).toMatch(/starred \? '★' : '☆'/);
+  });
+
+  it("gates every read of the scan payload behind the freshness ladder", () => {
+    // Four of the five reads were gated on `live`; the fifth was `screened`, the
+    // one carrying the price, the score and the four levels into the detail pane.
+    // The rendered proof is above — this is the assertion that the gate stays
+    // where the payload is unpacked, so the next read added does not have to
+    // remember to repeat it.
+    const src = stripComments(read("components/alts/AltsPanel.jsx"));
+    expect(src).toMatch(/const screened = live && sel \?/);
+    expect(src, "the detail pane must not read the scan payload directly")
+      .not.toMatch(/screened=\{market\./);
+    expect(src, "the cache age is a fact about a payload a dead scan may not quote")
+      .toMatch(/cached=\{live &&/);
+  });
+
+  it("keys the coin detail's heavy read on the payload, not on the clock", () => {
+    // `freshness()` returns a new object literal per call and the panel calls it
+    // on App's ten-second tick, so holding one in this memo's dependency list
+    // re-ran precedentRead over 730 candles, atr, swings, signalChecklist and
+    // altDirective every ten seconds to produce identical output — measured 45ms
+    // of script over 31 idle seconds against 0 with the clock frozen. Only the
+    // two state strings may be depended on; directive.js reads nothing else off
+    // them.
+    const src = stripComments(read("components/alts/CoinDetail.jsx"));
+    const deps = /\}, \[([^\]]*)\]\)/.exec(src);
+    expect(deps, "the read memo's dependency list must be findable").toBeTruthy();
+    expect(deps[1]).toContain("scanState");
+    expect(deps[1]).toContain("coinState");
+    expect(deps[1], "a freshness OBJECT in the deps is a per-tick recompute")
+      .not.toMatch(/freshScan|freshCoin/);
+  });
+
+  it("explains the board's two flags somewhere touch can read them", () => {
+    // `par` and `thin` are the two marks that decide whether a row is tradeable
+    // at all, and their only explanation was a `title` attribute, which does not
+    // exist on a phone — which is the platform the abbreviation is worst on.
+    const board = stripComments(read("components/alts/AltBoard.jsx"));
+    expect(board).toMatch(/alt-legend/);
+    expect(board, "the legend must quote what the flag measured").toMatch(/\+40% in 24h/);
+    expect(board).toMatch(/\$250k of 24h volume/);
+    // and a screen reader, which cannot expand an abbreviation either
+    expect(board).toMatch(/Flagged parabolic:/);
+    expect(board).toMatch(/Flagged thin:/);
   });
 
   it("did not touch a single storage key or endpoint path", () => {

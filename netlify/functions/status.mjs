@@ -9,6 +9,15 @@ const PROBES = [
   ['binance', 'https://api.binance.com/api/v3/ping'],
   ['coinbase', 'https://api.coinbase.com/v2/prices/BTC-USD/spot'],
   ['coingecko', 'https://api.coingecko.com/api/v3/ping'],
+  // The Alts tab's other two hosts. Without them this endpoint could not answer
+  // "which upstream to blame" for two of the feeds it is asked about: a dark
+  // fear & greed gauge and a coin whose funding, open interest and positioning
+  // are all missing looked identical to a CoinGecko problem, which is the one
+  // host that was probed. fapi.binance.com is a SEPARATE host from api.binance
+  // .com and fails separately — it is the one that answers 451 from a
+  // datacenter IP while spot keeps working.
+  ['alternative.me', 'https://api.alternative.me/fng/?limit=1'],
+  ['binance-futures', 'https://fapi.binance.com/fapi/v1/ping'],
 ]
 
 export default async (req) => {

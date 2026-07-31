@@ -17,7 +17,7 @@
 // units before anything compares it to a CoinGecko price, or the whole level
 // stack — entry, stop, targets — is silently 1000× wrong and still looks
 // plausible on its own axis. See applyMultiplier and altCandles.
-import { fetchWithTimeout } from './util.mjs'
+import { checkAuth } from './util.mjs'
 import { parseBinanceKlines } from './sources.mjs'
 
 // Re-exported so alt-* callers have one import for the alt data layer, and so
@@ -37,18 +37,49 @@ const BINANCE_FAPI = 'https://fapi.binance.com'
 // Same 3s per-attempt budget and the same reason for it: Netlify kills a
 // synchronous function at ~10s, so one slow upstream must not eat the whole
 // budget the fallbacks exist to use.
+//
+// The abort covers the BODY read too, which util.mjs's fetchWithTimeout does not
+// — it clears its timer the moment the headers land. That difference matters
+// exactly here: the markets payload is 250 rows carrying 168 sparkline points
+// each, over a megabyte, and a stream that stalls halfway through it is an
+// unbounded wait in the middle of a budget the stale-cache fallback is counting
+// on. A timeout that only covers the handshake is not a timeout.
 async function getJson(url, opts = {}, timeoutMs = 3000) {
-  const res = await fetchWithTimeout(url, { ...opts, headers: { ...UA, ...(opts.headers || {}) } }, timeoutMs)
-  if (!res.ok) throw new Error(`HTTP ${res.status} from ${new URL(url).host}`)
-  return res.json()
+  const ctl = new AbortController()
+  const t = setTimeout(() => ctl.abort(new Error(`timeout after ${timeoutMs}ms`)), timeoutMs)
+  try {
+    const res = await fetch(url, { ...opts, headers: { ...UA, ...(opts.headers || {}) }, signal: ctl.signal })
+    if (!res.ok) throw new Error(`HTTP ${res.status} from ${new URL(url).host}`)
+    return await res.json()
+  } finally {
+    clearTimeout(t)
+  }
 }
 
-// Number-or-null. Upstream sends numbers, numeric strings and nulls in the same
-// field depending on the coin, and `Number(null)` is 0 — a coin with unknown
-// FDV would otherwise render as "$0 fully diluted", which reads as a fact.
+/**
+ * Number-or-null. Upstream sends numbers, numeric strings and nulls in the same
+ * field depending on the coin, and `Number(null)` is 0 — a coin with unknown
+ * FDV would otherwise render as "$0 fully diluted", which reads as a fact.
+ *
+ * THE EMPTY STRING IS THE ONE THAT BITES. `Number('')` and `Number(' ')` are
+ * both 0, and every "throw rather than record a bad number" guard in this file
+ * is written as `if (fin(x) == null) throw` — so a field that arrived as `""`
+ * sailed through all of them as a measured zero. The damage is not symmetric
+ * across the parsers: an empty `market_cap_percentage.btc` became a 0% BTC
+ * dominance that alt-watch wrote into `alt_dom_history`, where it is
+ * indistinguishable from a measurement forever (see parseCoinGeckoGlobal — the
+ * free tier has no history endpoint to rebuild that series from), and a 30-day
+ * window containing one of them reported a fabricated 57-point collapse.
+ * A blank field is an ABSENT measurement, and absent is null.
+ */
 function fin(v) {
-  const n = typeof v === 'string' ? Number(v) : v
-  return Number.isFinite(n) ? n : null
+  if (typeof v === 'string') {
+    const t = v.trim()
+    if (!t) return null
+    const n = Number(t)
+    return Number.isFinite(n) ? n : null
+  }
+  return Number.isFinite(v) ? v : null
 }
 
 function str(v) {
@@ -349,6 +380,46 @@ export function applyMultiplier(candles, mult) {
   }))
 }
 
+/* ================= the request's time budget ================= */
+
+// Below this an attempt cannot succeed and can only burn the time the fallback
+// needed: a cold TLS handshake out to a CoinGecko or Binance edge is a few
+// hundred milliseconds before the first byte of an answer. `null` from
+// attemptBudget means "skip this hop and say so", never "try it with 40ms".
+export const MIN_ATTEMPT_MS = 750
+
+/**
+ * ONE WALL CLOCK FOR A WHOLE CHAIN, not one stopwatch per attempt.
+ *
+ * Per-attempt timeouts bound each hop and nothing else, so a chain adds up: the
+ * candle chain is Binance plain (3s) → Binance 1000× (3s) → CoinGecko (5s), and
+ * three hops that each honour their own timeout still take 11 seconds. Netlify
+ * kills a synchronous function at ~10s, and a platform kill is not an exception
+ * — no catch block runs, so the stale-cache fallback that exists precisely so
+ * this endpoint degrades instead of 502-ing never executes. The client gets the
+ * bare platform 502 the contract says must not happen, from the one code path
+ * written to prevent it.
+ *
+ * So callers pass `deadlineAt`, an absolute epoch-ms instant measured from when
+ * the REQUEST arrived — not from when the first fetch starts, because the auth
+ * round-trip and the Blobs read are spent out of the same ten seconds.
+ *
+ * `deadlineAt: null` means no deadline and every attempt gets its full budget,
+ * which is the pre-existing behaviour every other caller still relies on.
+ */
+export function attemptBudget(perAttemptMs, deadlineAt, minMs = MIN_ATTEMPT_MS, now = Date.now()) {
+  const at = fin(deadlineAt)
+  if (at == null) return perAttemptMs
+  const ms = Math.min(perAttemptMs, Math.floor(at - now))
+  return ms >= minMs ? ms : null
+}
+
+// The line every skipped hop reports. Named rather than inlined so a reader
+// grepping a degraded string lands on the budget rule that produced it.
+function outOfBudget(what) {
+  return `${what}: skipped — the request's time budget was spent before this hop could be tried`
+}
+
 /* ================= fetchers with fallback chains ================= */
 
 /**
@@ -358,7 +429,7 @@ export function applyMultiplier(candles, mult) {
  * screener silently ranking by 24h volume while the header still says "market
  * cap" is a different tool wearing this one's label.
  */
-export async function altUniverse(limit = 250) {
+export async function altUniverse(limit = 250, { deadlineAt = null } = {}) {
   // CoinGecko caps per_page at 250 and silently truncates above it; clamping
   // here means the caller's `limit` and the row count it gets back agree.
   const perPage = Math.max(1, Math.min(250, Math.floor(fin(limit) ?? 250) || 250))
@@ -368,24 +439,32 @@ export async function altUniverse(limit = 250) {
   // well over a megabyte, and it does not land in 3s from a cold function. The
   // four alt-scan calls run in PARALLEL, so the slowest one sets the wall clock
   // and there is still room inside Netlify's ~10s synchronous budget.
-  const universe = parseCoinGeckoMarkets(await getJson(url, {}, 6000))
+  const ms = attemptBudget(6000, deadlineAt)
+  if (ms == null) throw new Error(outOfBudget('coingecko markets'))
+  const universe = parseCoinGeckoMarkets(await getJson(url, {}, ms))
   if (!universe.length) throw new Error('coingecko markets: no usable rows')
   return { universe, sourceDetail: 'coingecko' }
 }
 
 /** Market-wide dominance + total cap. One call, no fallback (see the parser). */
-export async function altGlobal() {
-  return { ...parseCoinGeckoGlobal(await getJson(`${CG}/global`)), sourceDetail: 'coingecko' }
+export async function altGlobal({ deadlineAt = null } = {}) {
+  const ms = attemptBudget(3000, deadlineAt)
+  if (ms == null) throw new Error(outOfBudget('coingecko global'))
+  return { ...parseCoinGeckoGlobal(await getJson(`${CG}/global`, {}, ms)), sourceDetail: 'coingecko' }
 }
 
 /** The crypto fear & greed index. A different host, so it survives a CoinGecko 429. */
-export async function fearGreed() {
-  return { ...parseFearGreed(await getJson('https://api.alternative.me/fng/?limit=1')), sourceDetail: 'alternative.me' }
+export async function fearGreed({ deadlineAt = null } = {}) {
+  const ms = attemptBudget(3000, deadlineAt)
+  if (ms == null) throw new Error(outOfBudget('alternative.me fear & greed'))
+  return { ...parseFearGreed(await getJson('https://api.alternative.me/fng/?limit=1', {}, ms)), sourceDetail: 'alternative.me' }
 }
 
 /** CoinGecko's trending list — attention, not price. Always optional to callers. */
-export async function trendingCoins() {
-  return { trending: parseTrending(await getJson(`${CG}/search/trending`)), sourceDetail: 'coingecko' }
+export async function trendingCoins({ deadlineAt = null } = {}) {
+  const ms = attemptBudget(3000, deadlineAt)
+  if (ms == null) throw new Error(outOfBudget('coingecko trending'))
+  return { trending: parseTrending(await getJson(`${CG}/search/trending`, {}, ms)), sourceDetail: 'coingecko' }
 }
 
 /**
@@ -397,15 +476,23 @@ export async function trendingCoins() {
  * starts with 1000 — 1000SATS is a real listing — would otherwise have its
  * prices divided by 1000 a second time, and the resulting chart is internally
  * consistent, so nothing downstream can notice.
+ *
+ * This is the chain the deadline was written for: three hops at 3s + 3s + 5s is
+ * 11 seconds against a ~10s platform kill. Every hop is now clipped to what is
+ * left of the request's budget, and a hop with nothing left is skipped WITH A
+ * REASON rather than started and killed — the caller's stale-cache fallback
+ * needs to be reachable, and it is only reachable if this returns or throws.
  */
-export async function altCandles(symbol, id) {
+export async function altCandles(symbol, id, { deadlineAt = null } = {}) {
   const errors = []
   const candidates = binanceSymbolCandidates(symbol)
   for (let i = 0; i < candidates.length; i++) {
     const sym = candidates[i]
     const priceMultiplier = i === 0 ? 1 : 1000
+    const ms = attemptBudget(3000, deadlineAt)
+    if (ms == null) { errors.push(outOfBudget(sym)); continue }
     try {
-      const raw = await getJson(`${BINANCE}/api/v3/klines?symbol=${sym}&interval=1d&limit=730`)
+      const raw = await getJson(`${BINANCE}/api/v3/klines?symbol=${sym}&interval=1d&limit=730`, {}, ms)
       const candles = parseBinanceKlines(raw)
       if (!candles.length) throw new Error(`binance ${sym}: zero candles`)
       return {
@@ -420,8 +507,10 @@ export async function altCandles(symbol, id) {
     }
   }
   if (!id) throw new Error(`alt candles: no binance pair for ${str(symbol) || '(blank)'} and no coingecko id to fall back to — ${errors.join(' | ')}`)
+  const cgMs = attemptBudget(5000, deadlineAt)
+  if (cgMs == null) throw new Error(`alt candles: ${outOfBudget('coingecko market_chart')} — ${errors.join(' | ')}`)
   const { candles, quality } = parseCoinGeckoMarketChart(
-    await getJson(`${CG}/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=365`, {}, 5000)
+    await getJson(`${CG}/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=365`, {}, cgMs)
   )
   return {
     candles,
@@ -440,31 +529,53 @@ export async function altCandles(symbol, id) {
  * every micro-cap detail view look broken. The premiumIndex probe doubles as
  * the existence check — if neither candidate symbol answers, there is no perp
  * and we stop, rather than firing three more requests that cannot succeed.
+ *
+ * BUT `null` IS A CLAIM, NOT AN ABSENCE OF ONE. alt-coin.mjs renders it as
+ * "SOL has no listed Binance perpetual — funding, open interest and positioning
+ * are unavailable" and sentiment.js as "…and none has been assumed"; both are
+ * sentences a reader will believe. A 429, a timeout or a datacenter-IP geo-block
+ * is not evidence that a coin has no futures market, so only a DEFINITIVE
+ * refusal from Binance may become that sentence. Anything else throws, and the
+ * caller's allSettled turns it into "derivatives: <reason>" in `degraded` —
+ * which is what the other two failure paths in this file already do.
  */
-export async function altDerivs(symbol) {
+export async function altDerivs(symbol, { deadlineAt = null } = {}) {
   const candidates = binanceSymbolCandidates(symbol)
+  if (!candidates.length) throw new Error('binance futures: no symbol to probe for a listed perpetual')
   let perp = null
   let funding = null
   const errors = []
   for (let i = 0; i < candidates.length; i++) {
+    const ms = attemptBudget(3000, deadlineAt)
+    if (ms == null) { errors.push(outOfBudget(candidates[i])); continue }
     try {
-      funding = parseBinancePremiumIndex(await getJson(`${BINANCE_FAPI}/fapi/v1/premiumIndex?symbol=${candidates[i]}`))
+      funding = parseBinancePremiumIndex(await getJson(`${BINANCE_FAPI}/fapi/v1/premiumIndex?symbol=${candidates[i]}`, {}, ms))
       perp = { symbol: candidates[i], priceMultiplier: i === 0 ? 1 : 1000 }
       break
     } catch (e) {
       errors.push(`${candidates[i]}: ${e.message}`)
     }
   }
-  if (!perp) return null
+  if (!perp) {
+    if (errors.every(notListed)) return null
+    throw new Error(`binance futures: could not establish whether ${str(symbol).toUpperCase()} has a listed perpetual — ${errors.join(' | ')}`)
+  }
 
   // allSettled, not all: open interest and the two long/short series are three
   // independent nice-to-haves, and one of them 429-ing must not delete the
   // funding rate we already have in hand.
-  const [oi, retail, top] = await Promise.allSettled([
-    getJson(`${BINANCE_FAPI}/futures/data/openInterestHist?symbol=${perp.symbol}&period=1d&limit=30`).then(parseBinanceOpenInterestHist),
-    getJson(`${BINANCE_FAPI}/futures/data/globalLongShortAccountRatio?symbol=${perp.symbol}&period=1d&limit=30`).then(parseBinanceLongShort),
-    getJson(`${BINANCE_FAPI}/futures/data/topLongShortPositionRatio?symbol=${perp.symbol}&period=1d&limit=30`).then(parseBinanceLongShort),
-  ])
+  const extrasMs = attemptBudget(3000, deadlineAt)
+  const [oi, retail, top] = extrasMs == null
+    // Out of budget after the funding probe. Shaped as rejections so they take
+    // the same `settled` path and land in `degraded` saying why — a null series
+    // with no reason attached is the bug at the top of this function, one level
+    // down.
+    ? [0, 1, 2].map(() => ({ status: 'rejected', reason: new Error(outOfBudget('the remaining futures series')) }))
+    : await Promise.allSettled([
+      getJson(`${BINANCE_FAPI}/futures/data/openInterestHist?symbol=${perp.symbol}&period=1d&limit=30`, {}, extrasMs).then(parseBinanceOpenInterestHist),
+      getJson(`${BINANCE_FAPI}/futures/data/globalLongShortAccountRatio?symbol=${perp.symbol}&period=1d&limit=30`, {}, extrasMs).then(parseBinanceLongShort),
+      getJson(`${BINANCE_FAPI}/futures/data/topLongShortPositionRatio?symbol=${perp.symbol}&period=1d&limit=30`, {}, extrasMs).then(parseBinanceLongShort),
+    ])
   const degraded = []
   const settled = (res, name) => {
     if (res.status === 'fulfilled' && res.value?.length) return res.value
@@ -488,11 +599,28 @@ export async function altDerivs(symbol) {
   }
 }
 
+/**
+ * Is this failure Binance ANSWERING "that symbol is not listed", or is it
+ * Binance not answering?
+ *
+ * The futures API replies 400 (`code -1121, "Invalid symbol."`) for a pair it
+ * does not list, and that is the only response that licenses the sentence "this
+ * coin has no perp". A 429 is a quota bump, a 451 is the geo-block a datacenter
+ * IP collects, a 5xx is theirs and a timeout is nobody's — none of them are
+ * evidence about the coin. Matched against the message getJson throws so the
+ * status classification lives in exactly one place.
+ */
+function notListed(message) {
+  return /HTTP (?:400|404) from /.test(String(message || ''))
+}
+
 /** Categories + community stats for one coin. Optional to every caller. */
-export async function altCoinMeta(id) {
+export async function altCoinMeta(id, { deadlineAt = null } = {}) {
   const url = `${CG}/coins/${encodeURIComponent(id)}`
     + '?localization=false&tickers=false&market_data=false&community_data=true&developer_data=false&sparkline=false'
-  return { ...parseCoinGeckoCoin(await getJson(url, {}, 4000)), sourceDetail: 'coingecko' }
+  const ms = attemptBudget(4000, deadlineAt)
+  if (ms == null) throw new Error(outOfBudget('coingecko coin metadata'))
+  return { ...parseCoinGeckoCoin(await getJson(url, {}, ms)), sourceDetail: 'coingecko' }
 }
 
 /* ================= dominance history (accumulated, not fetched) ================= */
@@ -568,15 +696,35 @@ export async function cachePut(s, key, payload, at = Date.now()) {
 }
 
 /**
+ * THE ONE FRESHNESS COMPARISON. Both callers gate their refetch on it and
+ * cacheEnvelope labels from it, so the two answers cannot disagree.
+ *
+ * They used to. The envelope rounded the age before comparing it to the TTL
+ * while the callers compared the raw float, so for the half-second at the top of
+ * every window — a measured 89.5s against a 90s TTL — alt-scan took the
+ * no-refetch path and then labelled the result `stale: true` with
+ * "refetch failed: unknown error" appended to `degraded`. Nothing had failed;
+ * nothing had even been attempted. SeasonCard renders that string.
+ */
+export function cacheIsFresh(cached, ttlSec) {
+  const ageSec = fin(cached?.ageSec)
+  if (ageSec == null) return false
+  return ageSec < (fin(ttlSec) ?? 0)
+}
+
+/**
  * Wrap a cached payload for delivery. Pure, so the labelling is fixture-tested.
  * A payload past its TTL is still served — an expired board beats a 502 that
  * blanks the screen — but it is served with `stale: true`, an age, and a line
  * appended to `degraded` so the reason shows up on the screen and not just in
  * a field nobody rendered.
+ *
+ * The age is rounded for DISPLAY only, after the staleness decision has already
+ * been made on the raw value — see cacheIsFresh for what rounding first cost.
  */
 export function cacheEnvelope(cached, { ttlSec = 0, refetchError = null } = {}) {
+  const stale = !cacheIsFresh(cached, ttlSec)
   const ageSec = Math.max(0, Math.round(fin(cached?.ageSec) ?? 0))
-  const stale = ageSec >= (fin(ttlSec) ?? 0)
   const payload = { ...(cached?.payload || {}) }
   if (stale) {
     payload.degraded = [
@@ -585,4 +733,88 @@ export function cacheEnvelope(cached, { ttlSec = 0, refetchError = null } = {}) 
     ]
   }
   return { ...payload, cached: true, stale, cacheAgeSec: ageSec }
+}
+
+/* ================= who may spend the sentinel's quota ================= */
+
+// The scheduled sentinel's cron period, and the width of one admission slot.
+// MUST match `[functions."alt-watch"] schedule = "0 */2 * * *"` in netlify.toml.
+// 2h divides 24h and the epoch begins at a UTC midnight, so `floor(now / SLOT)`
+// puts every slot boundary exactly on an even UTC hour — the same instants the
+// cron fires at. That alignment is the whole mechanism; see altWatchGate.
+export const ALT_WATCH_SLOT_MS = 2 * 3600 * 1000
+export const ALT_WATCH_GATE_KEY = 'alt_watch_gate'
+
+/**
+ * MAY THIS REQUEST RUN THE SENTINEL PASS?
+ *
+ * /api/alt-watch is a public path (netlify.toml maps /api/* straight through)
+ * that spends two CoinGecko calls per hit against a keyless tier of roughly
+ * 10-30 calls/min. Left open, anyone who can reach the deploy holds that quota
+ * in 429 and pins the entire Alts tab on its stale cache — defeating, from
+ * outside the code, the four-calls-per-pass discipline alt-scan.mjs enforces
+ * inside it. watch-snapshot.mjs runs open for the same structural reason (the
+ * scheduler cannot carry a token) and gets away with it because its upstreams
+ * are not the constrained quota. Here they are, so this goes further.
+ *
+ * Two ways in, and neither is a secret in the request:
+ *
+ *   1. A VALID OPERATOR TOKEN. Unlimited, and it never consumes a slot — the
+ *      operator must not be able to lock the cron out of its own schedule.
+ *
+ *   2. A POST, at most once per cron slot. Netlify invokes a scheduled function
+ *      with a POST (carrying `{ next_run }`); a browser, a crawler and a bare
+ *      `curl` all send GET, so the method alone turns away every casual hit.
+ *      Deliberately NOT a `next_run` body check: if Netlify ever changes that
+ *      payload, a body-shaped gate would silently lock out the cron, and a day
+ *      the cron does not run is a day of dominance history nothing can rebuild.
+ *      A weak marker plus a hard rate limit is the safer pair of the two.
+ *
+ * THE SLOT IS WHY THE WEAK MARKER IS ENOUGH. Admission is one unauthenticated
+ * pass per 2-hour slot, and the cron fires at the TOP of each slot — so a
+ * forged POST can only ever consume a slot the scheduler has already used, and
+ * the worst case for an attacker hammering this endpoint is the same two
+ * CoinGecko calls every two hours the schedule already spends. A per-request or
+ * "N minutes since the last pass" limiter would not have that property: it
+ * could sit in front of the cron's own fire and starve the dominance series,
+ * which is a far worse outcome than the quota it was protecting.
+ *
+ * Blobs failures FAIL OPEN. The lock protects a quota; the dominance row it
+ * would block is irreplaceable. A Blobs outage costing us the pre-existing
+ * behaviour for its duration is the cheaper of the two mistakes.
+ */
+export async function altWatchGate(req, s, now = Date.now()) {
+  const authed = await checkAuth(req)
+  if (authed) return { allowed: true, authed: true, scheduled: false, slot: null, reason: null }
+
+  const method = str(req?.method).toUpperCase()
+  if (method !== 'POST') {
+    return {
+      allowed: false,
+      authed: false,
+      scheduled: false,
+      slot: null,
+      reason: `alt-watch runs on its schedule or for a signed-in operator; a bare ${method || 'GET'} spends CoinGecko quota the Alts tab needs`,
+    }
+  }
+
+  const slot = Math.floor(now / ALT_WATCH_SLOT_MS)
+  try {
+    const prev = await s.get(ALT_WATCH_GATE_KEY, { type: 'json' })
+    if (prev?.slot === slot) {
+      return {
+        allowed: false,
+        authed: false,
+        scheduled: true,
+        slot,
+        reason: 'this cron slot has already had its pass — one unauthenticated pass per slot is the whole quota budget',
+      }
+    }
+    // Claimed BEFORE the expensive work, so a burst of requests cannot all read
+    // an unclaimed slot and then each spend the quota it was meant to ration.
+    await s.setJSON(ALT_WATCH_GATE_KEY, { slot, at: now })
+  } catch {
+    /* see the fail-open note above */
+  }
+  return { allowed: true, authed: false, scheduled: true, slot, reason: null }
 }

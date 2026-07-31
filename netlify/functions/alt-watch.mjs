@@ -20,8 +20,8 @@
 // Modelled on watch-snapshot.mjs, including the rule that matters most here:
 // it must NEVER throw. A scheduled function that 500s writes no dominance row,
 // and a hole in that series is permanent.
-import { json, store, sendTelegram, telegramConfigured, checkAuth } from '../shared/util.mjs'
-import { altGlobal, altUniverse, mergeDominanceSample, isDominanceRow } from '../shared/alts.mjs'
+import { json, store, sendTelegram, telegramConfigured } from '../shared/util.mjs'
+import { altGlobal, altUniverse, mergeDominanceSample, isDominanceRow, altWatchGate } from '../shared/alts.mjs'
 import { seasonRead } from '../../apps/macro/src/lib/alts/season.js'
 import { screenUniverse } from '../../apps/macro/src/lib/alts/screen.js'
 import { altDirective } from '../../apps/macro/src/lib/alts/directive.js'
@@ -71,12 +71,25 @@ export const ACTIONABLE = new Set(['AVOID', 'STALK'])
 
 export default async (req) => {
   try {
-    // Same posture as watch-snapshot: the scheduler cannot carry a token, so
-    // the pass always runs — its side effects are append-only and dedupe-capped
-    // — while the detailed response body is gated on a real token check.
-    const authed = await checkAuth(req)
+    // WHO MAY SPEND THE QUOTA. This used to be watch-snapshot's posture — the
+    // scheduler cannot carry a token, so the pass always ran and only the
+    // response BODY was gated on the token. That works there because its
+    // upstreams are not the constrained resource. Here they are: /api/* is
+    // mapped straight through in netlify.toml, and every hit spends two
+    // CoinGecko calls against a keyless tier of roughly 10-30/min, so anyone who
+    // could reach the deploy could hold that quota in 429 and pin the whole Alts
+    // tab on its stale cache.
+    //
+    // altWatchGate admits a signed-in operator without limit, or one POST per
+    // 2-hour cron slot — see its header in alts.mjs for why a slot rather than a
+    // rate limit (a limiter can sit in front of the cron's own fire and starve
+    // the dominance series, and a missed day of that series is permanent).
+    // Blobs failures fail open there, for the same reason.
     const s = store()
     const now = Date.now()
+    const gate = await altWatchGate(req, s, now)
+    if (!gate.allowed) return json({ ok: true, skipped: gate.reason })
+    const authed = gate.authed
 
     // ONE global call, feeding both jobs. The dominance row and the season read
     // want the same numbers, and this function runs 12 times a day against the
@@ -91,7 +104,7 @@ export default async (req) => {
 
     // The history the season read wants is the one this pass just wrote, so it
     // is handed straight over rather than read back out of Blobs.
-    const dom = await recordDominance(s, global, now)
+    const dom = await recordDominance(s, global, now, gate.scheduled)
     const watch = await scanWatchlist(s, global, dom.rows, now)
 
     const summary = { ok: true, dominance: dom.summary, watchlist: watch.summary }
@@ -115,12 +128,28 @@ export default async (req) => {
  * every "N days of history" claim built on top of it, and season.js gates its
  * dominance trend on exactly that count.
  */
-async function recordDominance(s, global, now) {
+async function recordDominance(s, global, now, scheduled = true) {
   if (!global) return { summary: { appended: false, reason: 'no global read this pass — nothing to record' }, rows: null }
   try {
     const day = new Date(now).toISOString().slice(0, 10)
     const rows = await s.get(DOM_KEY, { type: 'json' })
     const had = (Array.isArray(rows) ? rows : []).some((r) => r?.d === day)
+
+    // AN OFF-SCHEDULE RUN DOES NOT RESTAMP A DAY THAT ALREADY HAS A ROW.
+    // mergeDominanceSample is last-write-wins per calendar day, which is what
+    // lets today's row track live dominance as the day goes on — but the value
+    // of the series depends on every COMPLETED day settling at the same hour
+    // (see its header: that is what makes "-2.1 points in 30 days" a comparison
+    // rather than a coincidence). The cron's last pass of a UTC day is 22:00; an
+    // operator opening this endpoint at 23:40 would settle that one day at 23:40
+    // and skew every window that spans it.
+    // Both halves matter: `had` alone would also block the rescue case, so a day
+    // the cron missed ENTIRELY can still be written by hand — that is a hole in
+    // the series being filled, not a settled row being moved.
+    if (had && !scheduled) {
+      return { summary: { appended: false, reason: `today's row is already recorded and this is an off-schedule run — not restamping it at a different hour`, day }, rows: Array.isArray(rows) ? rows : null }
+    }
+
     const merged = mergeDominanceSample(rows, {
       d: day,
       btcDom: round(global.btcDominancePct, 3),
@@ -274,6 +303,11 @@ export function transitionOf(prev, curr) {
   // running would otherwise fire an alert about a move that happened before you
   // were watching.
   if (!prev) return { fired: false, why: [] }
+  // Same rule as alertLine's: this is exported and this file never throws. A
+  // missing `curr` is "nothing was measured this pass", which is not a
+  // transition — and reading `.band` off it was a throw inside the one function
+  // whose whole job is to decide whether to wake someone up.
+  if (!curr || typeof curr !== 'object') return { fired: false, why: [] }
   const why = []
   if (prev.band !== curr.band) why.push(`${prev.band} → ${curr.band}`)
   if (prev.triggerAbove === false && curr.triggerAbove === true) why.push('trigger fired')
@@ -326,15 +360,25 @@ export function alertLine(entry, row, why, curr, directive) {
   // Nothing in this file is allowed to throw — a 500 here writes no dominance
   // row, and a hole in that series is permanent. So the arguments are normalised
   // rather than trusted, even though the only caller builds them itself.
+  //
+  // ALL FIVE, not the last two. `why` and `curr` were normalised here while
+  // `entry` and `row` were still dereferenced directly, so this threw on a null
+  // either side of them. The live call site cannot produce that — `entries` is
+  // filtered to objects with a string id and `row` is guarded before this runs —
+  // but the normalising is the point: this is an EXPORTED formatter, its own
+  // header promises it, and "the only caller builds them itself" is a property
+  // of today's caller rather than of this function.
   const changes = Array.isArray(why) ? why.filter(Boolean) : []
   const state = curr && typeof curr === 'object' ? curr : {}
+  const e = entry && typeof entry === 'object' ? entry : {}
+  const row_ = row && typeof row === 'object' ? row : {}
   const bits = [
-    `${row.symbol || entry.symbol || entry.id} ${changes.length ? changes.join(', ') : state.band ?? 'unknown'}`,
+    `${row_.symbol || e.symbol || e.id || 'unknown coin'} ${changes.length ? changes.join(', ') : state.band ?? 'unknown'}`,
     state.action && state.action !== 'unknown' ? state.action : null,
-    pct('24h', row.chg24h),
-    pct('7d', row.chg7d),
-    turnover(row.turnover),
-    Number.isFinite(row.score) ? `score ${Math.round(row.score)}` : null,
+    pct('24h', row_.chg24h),
+    pct('7d', row_.chg7d),
+    turnover(row_.turnover),
+    Number.isFinite(row_.score) ? `score ${Math.round(row_.score)}` : null,
   ].filter(Boolean)
   const lines = [`• ${bits.join(' · ')}`]
   // The level that moved, with the basis attached. Named because the sparkline

@@ -7,8 +7,14 @@
 // and wrong for one frame after every resize), a duplicate row for screen
 // readers, and — the reason this rule exists in the first place — two places to
 // fix the next column that renders the wrong number. Four columns that do not
-// earn a phone's width (30d, RS, turnover, the band word) are `display: none`
-// under 768px and live in the detail pane, which is one tap away.
+// earn a phone's width — RANK, 30d, RS and turnover — are `display: none` under
+// 768px (`.c-rank, .c-rs, .c-turn, .c-30` in styles.css) and live in the detail
+// pane, one tap away. The BAND
+// stays: it is the state word the score is inked from, and it carries the `par`
+// and `thin` flags, which are the two marks that decide whether a row is
+// tradeable at all. This comment named the wrong four for a while — it claimed
+// the band was dropped and never mentioned rank — which is how those two flags
+// reached the phone with nothing on that screen explaining them.
 //
 // THE ROW IS A BUTTON, THE STAR IS ITS SIBLING. A button cannot legally contain
 // a button, and nesting them makes the star's click bubble into "open this
@@ -199,12 +205,22 @@ export default function AltBoard({
                   selected={r.id === selectedId}
                   starred={!!watched?.has(r.id)}
                   saving={savingId === r.id}
+                  // EVERY star locks while ANY star is saving, not just the one
+                  // being saved. `/api/alt-watchlist` PUTs the whole array and
+                  // is last-write-wins on it, so two stars a moment apart both
+                  // send a list built from the same starting point and the
+                  // second one can be dropped by the first's response — after
+                  // its toast has said it saved. Locking only the saving row
+                  // left exactly the case that races open: the next tap is on a
+                  // DIFFERENT row.
+                  locked={savingId != null}
                   onSelect={onSelect}
                   onToggleWatch={onToggleWatch}
                 />
               ))}
             </div>
           </div>
+          <FlagLegend rows={visible} />
           <div className="alt-boardfoot">
             <span className="tiny t-cap">
               {visible.length} of {shown.length} ranked{shown.length !== rows.length ? ` (${rows.length} in the scan)` : ''}
@@ -223,10 +239,53 @@ export default function AltBoard({
 
 const TIERS = new Set(['major', 'mid', 'small', 'micro'])
 
-function BoardRow({ r, selected, starred, saving, onSelect, onToggleWatch }) {
+/**
+ * What `par` and `thin` mean, in the document, on every platform.
+ *
+ * They were explained by a `title` attribute alone, which does not exist on
+ * touch — and the phone is where a three-letter abbreviation needs the most
+ * help. These are the two flags this file calls "the reason a top-of-board score
+ * is not an invitation", so an unreadable mark is the score being read without
+ * its caveat. The thresholds are screen.js's own (PARABOLIC_24H, PARABOLIC_7D,
+ * THIN_VOL_USD) and are quoted here so the legend says what the flag measured,
+ * not just that something was flagged.
+ *
+ * Rendered only when a flagged row is actually on screen: a legend for marks
+ * nobody can see is ink spent on nothing (DESIGN.md §4.1).
+ */
+function FlagLegend({ rows }) {
+  const par = rows.some((r) => r.flags?.parabolic)
+  const thin = rows.some((r) => r.flags?.thinLiquidity)
+  if (!par && !thin) return null
+  return (
+    <div className="alt-legend">
+      {par && (
+        <p className="alt-legend-row">
+          <span className="alt-flag warn">par</span>
+          <span className="alt-legend-t">already parabolic — over +40% in 24h or +100% in 7d. A chase, not an entry.</span>
+        </p>
+      )}
+      {thin && (
+        <p className="alt-legend-row">
+          <span className="alt-flag bad">thin</span>
+          <span className="alt-legend-t">under $250k of 24h volume — you can get in and not out.</span>
+        </p>
+      )}
+    </div>
+  )
+}
+
+function BoardRow({ r, selected, starred, saving, locked, onSelect, onToggleWatch }) {
+  // The two flags are read out in full rather than as "par"/"thin": a screen
+  // reader gets no legend, and an abbreviation is exactly what it cannot expand.
+  const caveats = [
+    r.flags?.parabolic ? 'Flagged parabolic: already over +40% in 24h or +100% in 7d, so this is a chase, not an entry.' : '',
+    r.flags?.thinLiquidity ? 'Flagged thin: under $250k of 24h volume, so you can get in and not out.' : '',
+  ].filter(Boolean).join(' ')
   const summary =
     `${r.symbol}, ${r.name}. Rank ${r.rank ?? 'unknown'}. Score ${r.score} of 100, band ${r.band}. ` +
-    `Price ${fmtAltPx(r.price)}, 24h ${pctText(r.chg24h)}, 7d ${pctText(r.chg7d)}, 30d ${pctText(r.chg30d)}.`
+    `Price ${fmtAltPx(r.price)}, 24h ${pctText(r.chg24h)}, 7d ${pctText(r.chg7d)}, 30d ${pctText(r.chg30d)}.` +
+    (caveats ? ` ${caveats}` : '')
 
   return (
     <div className={`alt-row band-${r.band}${selected ? ' on' : ''}`}>
@@ -256,16 +315,19 @@ function BoardRow({ r, selected, starred, saving, onSelect, onToggleWatch }) {
           <span className={`alt-band b-${r.band}`}>{r.band}</span>
           {/* The two flags that change whether the row is tradeable at all get a
               mark on the board rather than waiting for the detail pane — they
-              are the reason a top-of-board score is not an invitation. */}
+              are the reason a top-of-board score is not an invitation. What they
+              MEAN is printed under the board by <FlagLegend>; `title` is kept
+              for the pointer, but it is not the explanation, because it does not
+              exist on touch. */}
           {r.flags?.parabolic && <span className="alt-flag warn" title="already parabolic — this is a chase, not an entry">par</span>}
           {r.flags?.thinLiquidity && <span className="alt-flag bad" title="under $250k of 24h volume — you can get in and not out">thin</span>}
         </span>
       </button>
       <button
         type="button"
-        className={`alt-star${starred ? ' on' : ''}`}
+        className={`alt-star${starred ? ' on' : ''}${saving ? ' saving' : ''}`}
         onClick={() => onToggleWatch?.(r)}
-        disabled={saving}
+        disabled={saving || locked}
         aria-pressed={starred}
         aria-label={starred ? `Remove ${r.symbol} from the watchlist` : `Add ${r.symbol} to the watchlist`}
         title={starred ? 'On your watchlist — the sentinel screens it every two hours' : 'Add to the watchlist'}

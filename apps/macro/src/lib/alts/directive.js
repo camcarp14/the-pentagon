@@ -99,6 +99,11 @@ export function altDirective(raw = {}) {
   if (size?.capped === 'liquidity') guardrails.push(`size is capped by LIQUIDITY, not by risk: ${money(size.notional)} is ${size.advPct}% of a day's volume`)
   if (screened?.flags?.newListing) guardrails.push('no 30-day history — every longer-window read on this row is absent, not zero')
   if (hostileSeason(season)) guardrails.push(`the regime is ${season.label} (${season.score}/100) — alt risk is fighting the tape today`)
+  // `else if`: a hostile regime is a measured verdict and outranks the note that
+  // it might not have been measured. They are mutually exclusive by construction
+  // anyway (a phase only exists above the coverage floor), but stating the
+  // precedence here keeps a future third season state from printing both.
+  else if (unmeasuredSeason(season)) guardrails.push(seasonUnmeasuredText(season))
 
   const out = (action, headline, reasons, severity) => ({
     action, headline, reasons: reasons.filter(Boolean), guardrails, severity, levels,
@@ -260,6 +265,9 @@ export function altDirective(raw = {}) {
     // and it earns a downgrade rather than a veto because it is a judgement over
     // several other reads and not a measurement of its own.
     if (LATE_PHASES.has(phase?.id)) missing.push(`the cycle read says ${String(phase.label ?? phase.id).toLowerCase()} — this is a break late in a move, not the start of one`)
+    // An unmeasured regime is a missing piece of EVIDENCE, not a hostile tape —
+    // see unmeasuredSeason() for why this is a downgrade and not a veto.
+    if (unmeasuredSeason(season)) missing.push(seasonUnmeasuredText(season))
 
     if (missing.length === 0) {
       return out('ENTER', `Buy ${units(size.units)} ${sym} — the break is live and it has a precedent.`, [
@@ -538,6 +546,63 @@ function detectQuality(candles) {
 
 function hostileSeason(season) {
   return season?.phase === 'risk_off' || season?.phase === 'btc_only'
+}
+
+/**
+ * THE REGIME WAS NOT MEASURED — which is a third state, not a synonym for either
+ * of the two above, and the ladder has to say which of them it is treated as.
+ *
+ * season.js reports `phase: 'unknown'` in two cases: it could not count breadth
+ * at all (`NO_READ`, score null), or it counted some of the regime and fewer
+ * than half of the 100 points had an input (`THIN`) — which is the day-one state
+ * of a fresh deploy, because the dominance trend needs seven days of history the
+ * alt-watch cron has not accumulated yet. In the THIN case the score is still
+ * real arithmetic over the part that was measured, and it can be a HIGH number:
+ * 74/100 off the 7-day breadth count alone, with the label reading "Not enough
+ * measured".
+ *
+ * That is the shape that walked straight through the gate. `hostileSeason` is
+ * false for 'unknown', so at the ENTER rung an unmeasured regime was
+ * indistinguishable from a measured `majors_rotating` — reproduced on day one
+ * with no dominance history, no ETH row and a failed fear & greed call: a
+ * full-size ENTER whose own reason line read "regime Not enough measured
+ * (74/100)". An absent input was being scored as a friendly tape, which is the
+ * exact failure season.js was rewritten one file over to stop committing.
+ *
+ * So it is deliberately NEITHER:
+ *   - NOT a green light. It joins the `missing` list at the ENTER gate, so the
+ *     break downgrades to the half-size STARTER with the reason printed on the
+ *     card, and a guardrail names it on every other rung.
+ *   - NOT a permanent block. Vetoing on it the way `hostileSeason` vetoes would
+ *     make ENTER unreachable for the first week of every deploy's life, and for
+ *     any scan where fear & greed happens to 404 — and it would hand a feed
+ *     outage the same veto a measured `risk_off` tape gets, which is the mirror
+ *     of the original bug: treating an unread gauge as evidence.
+ * This is the treatment LATE_PHASES already gets, for the same stated reason —
+ * a downgrade is what you apply when the input is a judgement or an absence
+ * rather than a measurement.
+ *
+ * ARM IS LEFT ALONE, DELIBERATELY. `armable` still only excludes a HOSTILE
+ * regime, so an unmeasured one still arms. ARM takes no risk today — it names
+ * the level and says do not front-run it — and blocking it would be the
+ * permanent block this whole note rejects, on the one rung whose entire job is
+ * to wait. It carries the guardrail like every other rung, which is this file's
+ * stated division of labour: a guardrail never changes the action, it makes the
+ * action legible. The one loose end is that ARM quotes the full sized plan while
+ * the trigger firing on that same unmeasured regime will come back STARTER at
+ * half of it — the guardrail is what tells the reader that, and it is on the
+ * card before the trigger ever fires.
+ */
+function unmeasuredSeason(season) {
+  return !season || season.phase === 'unknown' || season.score == null
+}
+
+function seasonUnmeasuredText(season) {
+  const of = Number.isFinite(season?.measured?.of) && season.measured.of > 0 ? season.measured.of : null
+  return `the regime was not measured — ${of == null
+    ? 'no rotation read came back at all'
+    : `only ${of} of its 100 points had an input, too little to name a phase off`
+  }, so this setup has a tape behind it that nobody has read`
 }
 
 /* ══ copy helpers ═══════════════════════════════════════════════════════════ */
