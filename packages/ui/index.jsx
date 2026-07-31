@@ -58,8 +58,16 @@ const U = {
 };
 
 // ─── Keyframes — injected once, so any tool gets them without wiring ─────────
+// This block is appended to document.head at import time, which puts it AFTER
+// the bundled components.css however the bundler orders the sheets. Keyframe
+// names are document-global, so anything here named after a components.css
+// keyframe replaces it for every tool on screen — components.css is the sole
+// owner of those names (DESIGN.md §6). `ccShimmerBg` used to be `shimmer`, and
+// as a background-position sweep it did nothing to the kit's `.sk::after`,
+// which is a transform sweep starting at translateX(-100%): the kit's own
+// skeletons stopped animating in every app that imported @cc/ui.
 const KEYFRAMES = `
-@keyframes shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+@keyframes ccShimmerBg { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
 @keyframes toastIn { from { opacity: 0; transform: translateY(-8px) scale(0.98); } to { opacity: 1; transform: none; } }
 @keyframes toastOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-8px) scale(0.98); } }
 @keyframes toastShrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
@@ -109,7 +117,7 @@ export function AnimatedNumber({ value, format, duration = 700, style }) {
 const shimmerStyle = (extra) => ({
   background: "linear-gradient(90deg, var(--border, rgba(15,23,42,0.05)) 25%, var(--border-strong, rgba(15,23,42,0.1)) 37%, var(--border, rgba(15,23,42,0.05)) 63%)",
   backgroundSize: "400% 100%",
-  animation: "shimmer 1.6s ease-in-out infinite",
+  animation: "ccShimmerBg 1.6s ease-in-out infinite",
   ...extra,
 });
 

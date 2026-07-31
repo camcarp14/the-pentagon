@@ -26,8 +26,13 @@ export function LeadJourney({ card, hasInbound = null, isClient = null }) {
         <Fragment key={s.label}>
           {i > 0 && <span style={{ width: "14px", height: "1px", background: i <= lastOn ? T.gold : T.line }} />}
           <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-            <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: s.on ? T.gold : "transparent", border: `1.5px solid ${s.on ? T.gold : T.faint}`, boxShadow: i === lastOn && s.on ? `0 0 0 3px ${T.gold}2E` : "none" }} />
-            <span style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", fontFamily: T.fontDisplay, color: s.on ? T.inkDeep : T.faint }}>{s.label}</span>
+            {/* Ring and halo are both shadows now — this dot had a 1.5px border
+                AND a halo shadow, which is the pairing the language forbids. */}
+            <span className="dotstatus" style={{ background: s.on ? T.gold : "transparent", boxShadow: `inset 0 0 0 1.5px ${s.on ? T.gold : T.faint}${i === lastOn && s.on ? `, 0 0 0 3px ${T.gold}2E` : ""}` }} />
+            {/* Six of these sit on one line inside a 340px panel, so this is
+                .t-cap rather than .t-label: sentence case at 11.5px, above the
+                floor, and uppercase stays reserved for .t-label. */}
+            <span className="t-cap" style={{ color: s.on ? T.inkDeep : T.faint }}>{s.label}</span>
           </span>
         </Fragment>
       ))}

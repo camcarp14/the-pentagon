@@ -88,41 +88,62 @@ async function callClaude({ system, messages, model = "claude-haiku-4-5-20251001
 //    Every value reads on the #0B0F1A canvas / dark glass. The compiled-mind
 //    "gold/brass" highlight family maps to ZTS's emerald accent so the DNA view
 //    carries the same identity as the rest of the app. `muted` is the text
-//    floor; `faint` is decoration only. ────────────────────────────────────────
+//    floor; `faint` is decoration only.
+//
+//    ON THE SHARED TOKENS NOW. This table used to re-type the midnight palette
+//    as thirty literal hexes — a second copy of @cc/design that could drift from
+//    the one the shell stamps on the mount wrapper. Every value that means
+//    "theme" is a token; the region colours are NOT here (they live in dna.js
+//    and are domain data — the region IS the colour that @cc/mind-canvas draws).
+//    ────────────────────────────────────────────────────────────────────────
 const T = {
-  ink: "#E9EDF5", inkDeep: "#F7F9FC", muted: "#94A1B5", faint: "#66738A",
-  surface: "#141B2C", subtle: "#0F1626", raised: "#1B2438",
-  line: "rgba(255,255,255,0.085)", lineSoft: "rgba(255,255,255,0.055)", lineInk: "rgba(255,255,255,0.07)",
-  green: "#3ECF8E", greenHi: "#5EE0A8", red: "#F87171", blue: "#6EA8FE", violet: "#A78BFA", amber: "#F5B84D",
+  ink: "var(--ink)", inkDeep: "var(--ink)", muted: "var(--sub)", faint: "var(--faint)",
+  surface: "var(--surface)", subtle: "var(--surface-2)", raised: "var(--surface-2)",
+  line: "var(--line)", lineSoft: "var(--line)", lineInk: "var(--line)",
+  green: "var(--green)", greenHi: "var(--accent-hi)", red: "var(--red)", blue: "var(--blue)", violet: "var(--purple)", amber: "var(--amber)",
+  // An 8% red wash, as a LADDER TOKEN rather than a hex-alpha suffix. This used
+  // to be written `${T.red}14` at the one call site below, which was valid only
+  // while T.red was a literal hex; once it became var(--red) the concatenation
+  // emitted `var(--red)14` — invalid at computed-value time, so `background`
+  // fell back to transparent and the selected ⛔ Tempers half lost its fill.
+  // Nothing failed loudly: bad CSS is discarded silently. Never concatenate an
+  // alpha suffix onto a token; take the step off the ladder (tokens.css §ladders).
+  redSoft: "var(--red-a08)",
   // Accent family — ZTS emerald; the compiled-mind highlight (was brass on light).
-  gold: "#3ECF8E", goldSoft: "rgba(62,207,142,0.12)", goldLine: "rgba(62,207,142,0.30)",
-  goldGrad: "linear-gradient(135deg, #5EE0A8 0%, #0E9F6E 100%)", inkBrand: "#9BE3C0", textOnBrand: "#052B1C",
-  focusRing: "rgba(62,207,142,0.34)", glowBrass: "0 0 24px rgba(62,207,142,0.20)",
-  // Dark Card shadow (glass uses the app's cardShadow), plus modal lift.
-  cardShadow: "0 1px 2px rgba(0,0,0,0.5), 0 8px 30px rgba(0,0,0,0.4)",
-  shadowPopover: "0 10px 30px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.45)",
-  shadowModal: "0 24px 70px rgba(0,0,0,0.65), 0 8px 24px rgba(0,0,0,0.5)",
-  rPill: "999px", rLg: "16px", rMd: "12px", rSm: "9px",
-  fontDisplay: "'Syne', system-ui", fontMono: "'DM Mono', monospace", fontBody: "'Inter', system-ui, sans-serif",
+  gold: "var(--accent)", goldSoft: "var(--accent-a12)", goldLine: "var(--accent-a32)",
+  goldGrad: "var(--accent-grad, linear-gradient(135deg, #5EE0A8 0%, #0E9F6E 100%))", inkBrand: "var(--accent-hi)", textOnBrand: "var(--on-accent, #052B1C)",
+  focusRing: "var(--focus-ring)", glowBrass: "var(--glow-brass, 0 0 24px rgba(62,207,142,0.20))",
+  cardShadow: "var(--shadow-card)",
+  shadowPopover: "var(--shadow-float)",
+  shadowModal: "var(--shadow-deep)",
+  rPill: "999px", rLg: "var(--r-card, 16px)", rMd: "var(--r-well, 12px)", rSm: "var(--r-ctl, 9px)",
+  fontDisplay: "var(--font-display)", fontMono: "var(--font-mono)", fontBody: "var(--font-body)",
 };
-
 // Glass recipe for every floating panel — spec'd once so the whole overlay layer
 // reads as one material (dark glass on the midnight canvas): the app's Card.
+// NO BORDER. It carried a hairline AND a two-part shadow, which is the pair the
+// language forbids; the kit's own glass surfaces (.toast, .sheet) separate with a
+// shadow and no outline, and that is what these panels do now. The call sites
+// that used to draw a SECOND border on top of GLASS tint their background instead.
 const GLASS = {
-  background: "rgba(20,27,44,0.88)",
+  background: "var(--glass-raised, rgba(20,27,44,0.88))",
   backdropFilter: "blur(18px)",
   WebkitBackdropFilter: "blur(18px)",
-  border: `1px solid ${T.lineSoft}`,
-  boxShadow: T.cardShadow,
+  boxShadow: "var(--shadow-float)",
   borderRadius: T.rLg,
 };
 
 // Field/eyebrow label + input base styles (App.jsx keeps its theme.js-equivalents
 // module-local; re-declared here for the ported inspector/dock chrome).
-const sectionLabel = { fontSize: "10px", fontWeight: 700, color: T.faint, textTransform: "uppercase", letterSpacing: "0.12em", fontFamily: T.fontDisplay };
+//
+// Both eyebrow recipes were hand-rolled uppercase micro-type — 10px, weight 700,
+// tracked, in a decorative face. That is exactly the kit's .t-label, which is
+// also the ONLY place uppercase is allowed to exist, so these objects now carry
+// spacing only and every call site wears the class.
+const sectionLabel = {};
 const inputBase = { width: "100%", background: T.surface, border: `1px solid ${T.line}`, borderRadius: T.rSm, color: T.ink, outline: "none", fontFamily: T.fontBody };
 const selectBase = { ...inputBase, cursor: "pointer" };
-const rowLabel = { fontSize: "9.5px", fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: T.fontDisplay, marginBottom: "6px" };
+const rowLabel = { marginBottom: "6px" };
 const xBtn = { background: "none", border: "none", color: T.faint, fontSize: "18px", cursor: "pointer", lineHeight: 1, padding: "0 2px" };
 
 // The six ZTS worker skills the dock can arm — keys match the worker's taskTypes
@@ -183,9 +204,9 @@ const VIEW_CSS = `
 .dna-view { position: relative; overflow: hidden; height: calc(100vh - 52px); height: calc(100dvh - 52px); }
 .dna-scroll-x { scrollbar-width: none; }
 .dna-scroll-x::-webkit-scrollbar { display: none; }
-.dna-logrow { transition: background 0.15s ease; }
-.dna-logrow:hover { background: rgba(255,255,255,0.04); }
-.dna-menuitem:hover { background: rgba(255,255,255,0.05); }
+.dna-logrow { transition: background var(--dur-1, 0.15s) ease; }
+.dna-logrow:hover { background: var(--ink-a04); }
+.dna-menuitem:hover { background: var(--ink-a05); }
 .dna-view input[type="range"] { cursor: pointer; }
 @keyframes dnaGlyph { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(180deg); } }
 @media (max-width: 680px) {
@@ -202,18 +223,22 @@ const VIEW_CSS = `
 function Pill({ label, value, brass, title }) {
   return (
     <span title={title} style={{ ...GLASS, borderRadius: T.rPill, padding: "4px 11px", display: "inline-flex", alignItems: "baseline", gap: "6px", pointerEvents: "auto" }}>
-      <span style={{ fontSize: "8.5px", fontWeight: 700, color: T.faint, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: T.fontDisplay }}>{label}</span>
+      <span className="t-label">{label}</span>
       <span style={{ fontSize: "11.5px", fontFamily: T.fontMono, color: brass ? T.gold : T.ink, fontWeight: brass ? 700 : 500 }}>{value}</span>
     </span>
   );
 }
 
+// The kit's switch — iOS proportions, --green when on, and a real <button> so it
+// is reachable from a keyboard (it was a <div onClick> with a switch role and no
+// way to focus or activate it).
 function Switch({ on, onClick, disabled, title }) {
   return (
-    <div onClick={disabled ? undefined : onClick} title={title} role="switch" aria-checked={!!on}
-      style={{ width: "34px", height: "20px", borderRadius: "12px", background: on ? T.green : "rgba(255,255,255,0.14)", position: "relative", flexShrink: 0, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.45 : 1, transition: `background ${M.durFast} ${M.easeStd}` }}>
-      <div style={{ position: "absolute", top: "2px", left: on ? "16px" : "2px", width: "16px", height: "16px", borderRadius: "50%", background: "#FFFFFF", transition: `left ${M.durFast} ${M.easeStd}`, boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }} />
-    </div>
+    <button type="button" onClick={disabled ? undefined : onClick} title={title} role="switch" aria-checked={!!on} disabled={disabled}
+      className={on ? "switch small on" : "switch small"}
+      style={{ opacity: disabled ? 0.45 : 1, cursor: disabled ? "not-allowed" : "pointer" }}>
+      <span className="switch-knob" />
+    </button>
   );
 }
 
@@ -241,10 +266,11 @@ function ModalSheet({ mobile, onClose, width = 560, side, children }) {
   const right = side === "right" && !mobile;
   return (
     <div onClick={onClose}
-      style={{ position: "fixed", inset: 0, background: "rgba(11,18,32,0.5)", zIndex: 320, display: "flex", alignItems: mobile ? "flex-end" : right ? "stretch" : "center", justifyContent: right ? "flex-end" : "center", padding: mobile || right ? 0 : "20px", animation: `${mobile ? "slideup" : "fadein"} 0.18s ease both` }}>
+      className="sheet-scrim"
+      style={{ zIndex: 320, display: "flex", alignItems: mobile ? "flex-end" : right ? "stretch" : "center", justifyContent: right ? "flex-end" : "center", padding: mobile || right ? 0 : "20px", animation: `${mobile ? "slideup" : "fadein"} 0.18s ease both` }}>
       <div onClick={(e) => e.stopPropagation()}
-        style={{ background: T.surface, border: `1px solid ${T.lineInk}`, borderRadius: mobile ? "20px 20px 0 0" : right ? "16px 0 0 16px" : "18px", width: mobile ? "100%" : `${width}px`, maxWidth: mobile ? "100%" : "94vw", maxHeight: mobile ? "90vh" : right ? "100vh" : "88vh", height: right ? "100%" : "auto", display: "flex", flexDirection: "column", boxShadow: T.shadowModal, overflow: "hidden" }}>
-        {mobile && <div style={{ width: "36px", height: "4px", borderRadius: "3px", background: "rgba(255,255,255,0.18)", margin: "10px auto -2px", flexShrink: 0 }} />}
+        style={{ background: T.surface, borderRadius: mobile ? "20px 20px 0 0" : right ? "16px 0 0 16px" : "18px", width: mobile ? "100%" : `${width}px`, maxWidth: mobile ? "100%" : "94vw", maxHeight: mobile ? "90vh" : right ? "100vh" : "88vh", height: right ? "100%" : "auto", display: "flex", flexDirection: "column", boxShadow: T.shadowModal, overflow: "hidden" }}>
+        {mobile && <div className="sheet-grab" style={{ flexShrink: 0 }} />}
         {children}
       </div>
     </div>
@@ -276,20 +302,24 @@ function NodeInspector({ genome, node, apply, onSelect, onDeleted }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "13px" }}>
       <div>
-        <div style={rowLabel}>Label</div>
+        <div className="t-label" style={rowLabel}>Label</div>
         <input value={label} maxLength={28} onChange={(e) => setLabel(e.target.value)} onBlur={commitLabel} onKeyDown={(e) => e.key === "Enter" && e.target.blur()}
           style={{ ...inputBase, padding: "8px 11px", fontSize: "12.5px", fontWeight: 600, fontFamily: T.fontDisplay }} />
       </div>
 
       <div>
-        <div style={rowLabel}>Region</div>
+        <div className="t-label" style={rowLabel}>Region</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
           {Object.entries(REGIONS).map(([k, r]) => {
             const on = k === node.region;
             return (
-              <button key={k} title={r.desc} onClick={() => !on && apply(updateNode(genome, node.id, { region: k }))}
-                style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "4px 9px", borderRadius: T.rPill, cursor: "pointer", fontSize: "10px", fontWeight: 700, fontFamily: T.fontDisplay, background: on ? `${r.color}1F` : "transparent", border: `1px solid ${on ? `${r.color}66` : T.line}`, color: on ? r.color : T.muted }}>
-                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: r.color }} />{r.label}
+              // The kit's .pill, tinted with the region's own domain colour. The
+              // selected one is marked with aria-pressed and a heavier weight, so
+              // it is not the tint alone that says which region this node is in.
+              <button type="button" key={k} className="pill" title={r.desc} aria-pressed={on}
+                onClick={() => !on && apply(updateNode(genome, node.id, { region: k }))}
+                style={on ? { background: `${r.color}1F`, color: r.color, fontWeight: 700, height: 28, padding: "0 11px" } : { height: 28, padding: "0 11px" }}>
+                <span className="dotstatus" style={{ background: r.color }} />{r.label}
               </button>
             );
           })}
@@ -297,14 +327,14 @@ function NodeInspector({ genome, node, apply, onSelect, onDeleted }) {
       </div>
 
       <div>
-        <div style={{ ...rowLabel, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <div className="t-label" style={{ ...rowLabel, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
           <span>Weight</span>
           <span style={{ fontFamily: T.fontMono, fontSize: "12px", color: T.gold, letterSpacing: 0, textTransform: "none" }}>{liveW}%</span>
         </div>
-        <input type="range" min={0} max={100} value={liveW} onChange={(e) => setW(Number(e.target.value))} onPointerUp={commitW} onKeyUp={commitW} onBlur={commitW}
-          style={{ width: "100%", accentColor: T.gold, display: "block" }} />
+        <input className="scoreSlider" aria-label="Node weight" type="range" min={0} max={100} value={liveW} onChange={(e) => setW(Number(e.target.value))} onPointerUp={commitW} onKeyUp={commitW} onBlur={commitW}
+          style={{ display: "block", "--slider-color": "var(--accent)", "--slider-fill": `${liveW}%` }} />
         {/* Instructional copy reads in T.muted — the AA floor. T.faint is decoration only. */}
-        <div style={{ fontSize: "9px", color: T.muted, marginTop: "4px" }}>
+        <div style={{ fontSize: "10.5px", color: T.muted, marginTop: "4px" }}>
           {liveW >= 75 ? "Compiles as PRIMARY — a command" : liveW >= 40 ? "Compiles as a standing line" : "Compiles as a minor consideration"}
         </div>
       </div>
@@ -312,14 +342,14 @@ function NodeInspector({ genome, node, apply, onSelect, onDeleted }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: "12px", fontWeight: 600, color: T.ink }}>Awake</div>
-          <div style={{ fontSize: "9.5px", color: T.muted }}>{node.enabled !== false ? "Compiling into the mind" : "Silenced — omitted from the prompt"}</div>
+          <div style={{ fontSize: "10.5px", color: T.muted }}>{node.enabled !== false ? "Compiling into the mind" : "Silenced — omitted from the prompt"}</div>
         </div>
         <Switch on={node.enabled !== false} disabled={node.locked} title={node.locked ? "Locked — governance nodes cannot be silenced" : undefined}
           onClick={() => apply(updateNode(genome, node.id, { enabled: node.enabled === false }))} />
       </div>
 
       <div>
-        <div style={rowLabel}>Directive</div>
+        <div className="t-label" style={rowLabel}>Directive</div>
         <AutoTextarea value={text} onChange={(e) => setText(e.target.value)} onBlur={commitText} placeholder="What this node tells the mind…" />
       </div>
 
@@ -328,18 +358,18 @@ function NodeInspector({ genome, node, apply, onSelect, onDeleted }) {
           never touch compileGenome, so tuning them never perturbs the mind hash. */}
       {isSkill && (
         <div style={{ display: "flex", flexDirection: "column", gap: "11px", padding: "11px", background: T.subtle, borderRadius: T.rMd, border: `1px solid ${T.lineSoft}` }}>
-          <div style={{ fontSize: "9px", fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: T.fontDisplay }}>How this skill runs</div>
+          <div className="t-label">How this skill runs</div>
           <div>
-            <div style={rowLabel}>Model</div>
+            <div className="t-label" style={rowLabel}>Model</div>
             <select value={node.model || HAIKU} onChange={(e) => apply(updateNode(genome, node.id, { model: e.target.value }))}
               style={{ ...selectBase, padding: "7px 10px", fontSize: "11.5px" }}>
               {MODELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </div>
           <div>
-            <div style={{ ...rowLabel, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <div className="t-label" style={{ ...rowLabel, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
               <span>Max tokens</span>
-              <span style={{ fontFamily: T.fontMono, fontSize: "9.5px", color: T.faint, letterSpacing: 0, textTransform: "none" }}>output ceiling</span>
+              <span style={{ fontFamily: T.fontMono, fontSize: "10.5px", color: T.faint, letterSpacing: 0, textTransform: "none" }}>output ceiling</span>
             </div>
             <input type="number" min={64} max={4000} step={32} value={mt} onChange={(e) => setMt(e.target.value)} onBlur={commitMt} onKeyDown={(e) => e.key === "Enter" && e.target.blur()}
               style={{ ...inputBase, padding: "7px 10px", fontSize: "11.5px", fontFamily: T.fontMono }} />
@@ -348,9 +378,9 @@ function NodeInspector({ genome, node, apply, onSelect, onDeleted }) {
       )}
 
       <div>
-        <div style={{ ...rowLabel, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <div className="t-label" style={{ ...rowLabel, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
           <span>Synapses</span>
-          <span style={{ fontFamily: T.fontMono, fontSize: "10px", color: T.faint, letterSpacing: 0 }}>{conns.length}</span>
+          <span style={{ fontFamily: T.fontMono, fontSize: "10.5px", color: T.faint, letterSpacing: 0 }}>{conns.length}</span>
         </div>
         {conns.length === 0 ? (
           <div style={{ fontSize: "10.5px", color: T.muted, lineHeight: 1.5 }}>No synapses yet — ⇧-drag from this node on the canvas, or wire one below.</div>
@@ -362,12 +392,12 @@ function NodeInspector({ genome, node, apply, onSelect, onDeleted }) {
               const other = genome.nodes.find((n) => n.id === otherId);
               return (
                 <div key={e.id} style={{ display: "flex", alignItems: "center", gap: "7px", padding: "6px 9px", background: T.subtle, borderRadius: "8px" }}>
-                  <span title={e.polarity === -1 ? "Tempers" : "Excites"} style={{ fontSize: "10px", flexShrink: 0 }}>{e.polarity === -1 ? "⛔" : "⚡"}</span>
+                  <span title={e.polarity === -1 ? "Tempers" : "Excites"} style={{ fontSize: "10.5px", flexShrink: 0 }}>{e.polarity === -1 ? "⛔" : "⚡"}</span>
                   <button onClick={() => onSelect({ type: "edge", id: e.id })} title="Inspect this synapse"
                     style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", cursor: "pointer", color: T.ink, fontSize: "11px", padding: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {out ? "→ " : "← "}{other ? other.label : otherId}
                   </button>
-                  <span style={{ fontFamily: T.fontMono, fontSize: "10px", color: T.muted, flexShrink: 0 }}>{(e.weight || 0).toFixed(2)}</span>
+                  <span style={{ fontFamily: T.fontMono, fontSize: "10.5px", color: T.muted, flexShrink: 0 }}>{(e.weight || 0).toFixed(2)}</span>
                   <button onClick={() => apply(removeEdge(genome, e.id))} title="Cut synapse" style={{ ...xBtn, fontSize: "12px", flexShrink: 0 }}>✕</button>
                 </div>
               );
@@ -394,13 +424,12 @@ function NodeInspector({ genome, node, apply, onSelect, onDeleted }) {
           <span>🔒</span><span>Core doctrine — cannot be removed or silenced. Weight is still yours to tune.</span>
         </div>
       ) : (
-        <button onClick={() => { apply(removeNode(genome, node.id)); onDeleted(); }}
-          style={{ width: "100%", padding: "9px", background: `${T.red}14`, border: `1px solid ${T.red}40`, borderRadius: "9px", color: T.red, fontSize: "11px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay }}>
+        <button type="button" className="btn sm danger full" onClick={() => { apply(removeNode(genome, node.id)); onDeleted(); }}>
           Delete node
         </button>
       )}
 
-      <div style={{ fontSize: "9px", color: T.faint, fontFamily: T.fontMono }}>{node.source || "user"} · {node.id}</div>
+      <div style={{ fontSize: "10.5px", color: T.faint, fontFamily: T.fontMono }}>{node.source || "user"} · {node.id}</div>
     </div>
   );
 }
@@ -430,37 +459,36 @@ function EdgeInspector({ genome, edge, apply, onSelect, onDeleted }) {
       </div>
 
       <div>
-        <div style={{ ...rowLabel, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <div className="t-label" style={{ ...rowLabel, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
           <span>Weight</span>
           <span style={{ fontFamily: T.fontMono, fontSize: "12px", color: T.gold, letterSpacing: 0, textTransform: "none" }}>{liveW}%</span>
         </div>
-        <input type="range" min={0} max={100} value={liveW} onChange={(e) => setW(Number(e.target.value))} onPointerUp={commitW} onKeyUp={commitW} onBlur={commitW}
-          style={{ width: "100%", accentColor: T.gold, display: "block" }} />
+        <input className="scoreSlider" aria-label="Synapse weight" type="range" min={0} max={100} value={liveW} onChange={(e) => setW(Number(e.target.value))} onPointerUp={commitW} onKeyUp={commitW} onBlur={commitW}
+          style={{ display: "block", "--slider-color": "var(--accent)", "--slider-fill": `${liveW}%` }} />
       </div>
 
       <div>
-        <div style={rowLabel}>Polarity</div>
+        <div className="t-label" style={rowLabel}>Polarity</div>
         <div style={{ display: "flex", border: `1px solid ${T.line}`, borderRadius: "9px", overflow: "hidden" }}>
           <button onClick={() => inhib && apply(updateEdge(genome, edge.id, { polarity: 1 }))}
             style={{ flex: 1, padding: "8px", background: !inhib ? T.goldSoft : "transparent", border: "none", cursor: "pointer", color: !inhib ? T.gold : T.muted, fontSize: "11px", fontWeight: 700, fontFamily: T.fontDisplay }}>
             ⚡ Excites
           </button>
           <button onClick={() => !inhib && apply(updateEdge(genome, edge.id, { polarity: -1 }))}
-            style={{ flex: 1, padding: "8px", background: inhib ? `${T.red}14` : "transparent", border: "none", borderLeft: `1px solid ${T.line}`, cursor: "pointer", color: inhib ? T.red : T.muted, fontSize: "11px", fontWeight: 700, fontFamily: T.fontDisplay }}>
+            style={{ flex: 1, padding: "8px", background: inhib ? T.redSoft : "transparent", border: "none", borderLeft: `1px solid ${T.line}`, cursor: "pointer", color: inhib ? T.red : T.muted, fontSize: "11px", fontWeight: 700, fontFamily: T.fontDisplay }}>
             ⛔ Tempers
           </button>
         </div>
-        <div style={{ fontSize: "9px", color: T.muted, marginTop: "5px", lineHeight: 1.5 }}>
+        <div style={{ fontSize: "10.5px", color: T.muted, marginTop: "5px", lineHeight: 1.5 }}>
           Tempers compiles into an INTERNAL TENSIONS line — when they conflict, the source node wins.
         </div>
       </div>
 
-      <button onClick={() => { apply(removeEdge(genome, edge.id)); onDeleted(); }}
-        style={{ width: "100%", padding: "9px", background: `${T.red}14`, border: `1px solid ${T.red}40`, borderRadius: "9px", color: T.red, fontSize: "11px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay }}>
+      <button type="button" className="btn sm danger full" onClick={() => { apply(removeEdge(genome, edge.id)); onDeleted(); }}>
         Cut synapse
       </button>
 
-      <div style={{ fontSize: "9px", color: T.faint, fontFamily: T.fontMono }}>{edge.id}</div>
+      <div style={{ fontSize: "10.5px", color: T.faint, fontFamily: T.fontMono }}>{edge.id}</div>
     </div>
   );
 }
@@ -480,7 +508,7 @@ function DockBody({ ctrl, log, tasksToday, bump, replay, toast }) {
         <span style={{ fontSize: "11.5px", fontWeight: 600, color: T.ink, flexShrink: 0 }}>Evening shift</span>
         <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", opacity: shift.enabled ? 1 : 0.45 }}>
           <input type="time" value={shift.start} disabled={!shift.enabled} onChange={(e) => { wk.set({ eveningShift: { ...shift, start: e.target.value } }); bump(); }} style={timeStyle} />
-          <span style={{ fontSize: "10px", color: T.faint }}>→</span>
+          <span style={{ fontSize: "10.5px", color: T.faint }}>→</span>
           <input type="time" value={shift.end} disabled={!shift.enabled} onChange={(e) => { wk.set({ eveningShift: { ...shift, end: e.target.value } }); bump(); }} style={timeStyle} />
         </span>
       </div>
@@ -492,9 +520,12 @@ function DockBody({ ctrl, log, tasksToday, bump, replay, toast }) {
         {TASK_TYPES.map(([k, label]) => {
           const on = ctrl.taskTypes[k] !== false;
           return (
-            <button key={k} onClick={() => { wk.set({ taskTypes: { ...ctrl.taskTypes, [k]: !on } }); bump(); }}
-              style={{ padding: "4px 10px", borderRadius: T.rPill, cursor: "pointer", fontSize: "10px", fontWeight: 700, fontFamily: T.fontDisplay, background: on ? T.goldSoft : "transparent", border: `1px solid ${on ? T.goldLine : T.line}`, color: on ? T.gold : T.faint }}>
-              {label}
+            // Armed skills read as armed without the tint: aria-pressed, a ✓ and
+            // the heavier weight all say it too.
+            <button type="button" key={k} className="pill" aria-pressed={on}
+              onClick={() => { wk.set({ taskTypes: { ...ctrl.taskTypes, [k]: !on } }); bump(); }}
+              style={on ? { background: T.goldSoft, color: T.gold, fontWeight: 700, height: 28, padding: "0 11px" } : { height: 28, padding: "0 11px" }}>
+              {on ? "✓ " : ""}{label}
             </button>
           );
         })}
@@ -515,15 +546,15 @@ function DockBody({ ctrl, log, tasksToday, bump, replay, toast }) {
       </div>
 
       {/* Must-read honesty note — T.muted for AA contrast, not decorative faint. */}
-      <div style={{ fontSize: "10px", color: T.muted, lineHeight: 1.5 }}>
+      <div style={{ fontSize: "10.5px", color: T.muted, lineHeight: 1.5 }}>
         Runs while ZTS is open in a tab. Drafts land in your review queues — the worker never publishes.
       </div>
 
       {/* Work log — hover an entry and the canvas replays its activation trace. */}
       <div style={{ borderTop: `1px solid ${T.lineSoft}`, paddingTop: "10px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "7px" }}>
-          <span style={{ ...sectionLabel, fontSize: "9px" }}>Work log</span>
-          <span style={{ fontFamily: T.fontMono, fontSize: "10px", color: T.faint }}>{tasksToday} task{tasksToday !== 1 ? "s" : ""} today</span>
+          <span className="t-label" style={sectionLabel}>Work log</span>
+          <span style={{ fontFamily: T.fontMono, fontSize: "10.5px", color: T.faint }}>{tasksToday} task{tasksToday !== 1 ? "s" : ""} today</span>
         </div>
         {log.length === 0 ? (
           <div style={{ fontSize: "11px", color: T.muted, padding: "10px 0", lineHeight: 1.5 }}>
@@ -538,19 +569,19 @@ function DockBody({ ctrl, log, tasksToday, bump, replay, toast }) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: "11px", color: e.status === "failed" ? T.red : T.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.title}</div>
                   {e.status === "failed" && e.detail ? (
-                    <div style={{ fontSize: "9px", color: T.faint, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.detail}</div>
+                    <div style={{ fontSize: "10.5px", color: T.faint, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.detail}</div>
                   ) : null}
                 </div>
-                <span style={{ fontSize: "8.5px", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", fontFamily: T.fontDisplay, color: T.muted, background: "rgba(255,255,255,0.06)", borderRadius: T.rPill, padding: "1px 7px", flexShrink: 0 }}>{e.kind}</span>
-                <span style={{ fontFamily: T.fontMono, fontSize: "9.5px", color: T.faint, flexShrink: 0 }}>{hhmm(e.ts)}</span>
-                {e.cost > 0 && <span style={{ fontFamily: T.fontMono, fontSize: "9.5px", color: T.amber, flexShrink: 0 }}>${e.cost.toFixed(3)}</span>}
+                <span className="t-label" style={{ background: "var(--ink-a06)", borderRadius: T.rPill, padding: "2px 8px", flexShrink: 0 }}>{e.kind}</span>
+                <span style={{ fontFamily: T.fontMono, fontSize: "10.5px", color: T.faint, flexShrink: 0 }}>{hhmm(e.ts)}</span>
+                {e.cost > 0 && <span style={{ fontFamily: T.fontMono, fontSize: "10.5px", color: T.amber, flexShrink: 0 }}>${e.cost.toFixed(3)}</span>}
               </div>
             ))}
           </div>
         )}
         {log.length > 0 && (
           <button onClick={() => { try { worklog.clear(); } catch { /* store may not expose clear */ } bump(); toast.push("Work log cleared."); }}
-            style={{ marginTop: "6px", background: "none", border: "none", color: T.faint, fontSize: "10px", cursor: "pointer", fontWeight: 600, padding: 0 }}>
+            style={{ marginTop: "6px", background: "none", border: "none", color: T.faint, fontSize: "10.5px", cursor: "pointer", fontWeight: 600, padding: 0 }}>
             Clear log
           </button>
         )}
@@ -831,7 +862,7 @@ export function DnaView({ creators, shorts, articles, onArticleDraft }) { // esl
         style={{ width: "100%", display: "flex", alignItems: "center", gap: "8px", padding: "5px 7px", borderRadius: "8px", border: "none", background: "transparent", cursor: "pointer", opacity: active ? 1 : 0.38, transition: `opacity ${M.durBase} ${M.easeStd}` }}>
         <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: r.color, boxShadow: `0 0 6px ${r.color}66`, flexShrink: 0 }} />
         <span style={{ flex: 1, textAlign: "left", fontSize: "11px", fontWeight: 600, color: T.ink, fontFamily: T.fontDisplay }}>{r.label}</span>
-        <span style={{ fontSize: "10px", fontFamily: T.fontMono, color: T.faint }}>{stats.byRegion[k] || 0}</span>
+        <span style={{ fontSize: "10.5px", fontFamily: T.fontMono, color: T.faint }}>{stats.byRegion[k] || 0}</span>
       </button>
     );
   };
@@ -850,7 +881,7 @@ export function DnaView({ creators, shorts, articles, onArticleDraft }) { // esl
   const suggestTray = pending.length > 0 && (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", pointerEvents: "none" }}>
       <button onClick={() => setTrayOpen(!trayOpen)}
-        style={{ ...GLASS, pointerEvents: "auto", borderRadius: T.rPill, border: `1px solid ${T.goldLine}`, padding: "6px 15px", color: T.inkBrand, fontFamily: T.fontDisplay, fontSize: "11px", fontWeight: 700, cursor: "pointer", boxShadow: `${T.shadowPopover}, ${T.glowBrass}`, whiteSpace: "nowrap" }}>
+        style={{ ...GLASS, pointerEvents: "auto", borderRadius: T.rPill, background: T.goldSoft, padding: "7px 15px", color: T.inkBrand, fontFamily: T.fontDisplay, fontSize: "11px", fontWeight: 700, cursor: "pointer", boxShadow: `${T.shadowPopover}, ${T.glowBrass}`, whiteSpace: "nowrap" }}>
         🧠 The mind wants to grow — {pending.length} proposed {trayOpen ? "▴" : "▾"}
       </button>
       {trayOpen && (
@@ -859,18 +890,17 @@ export function DnaView({ creators, shorts, articles, onArticleDraft }) { // esl
             <div key={s.id} style={{ padding: "10px 12px", borderRadius: "10px", background: T.subtle, marginBottom: "8px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
                 <span style={{ fontSize: "12px", fontWeight: 700, color: T.ink, fontFamily: T.fontDisplay }}>{s.label}</span>
-                <span style={{ fontSize: "9px", fontWeight: 700, fontFamily: T.fontDisplay, color: (REGIONS[s.region] || REGIONS.knowledge).color, background: `${(REGIONS[s.region] || REGIONS.knowledge).color}14`, padding: "2px 8px", borderRadius: T.rPill, flexShrink: 0 }}>
+                <span style={{ fontSize: "10.5px", fontWeight: 700, fontFamily: T.fontDisplay, color: (REGIONS[s.region] || REGIONS.knowledge).color, background: `${(REGIONS[s.region] || REGIONS.knowledge).color}14`, padding: "2px 8px", borderRadius: T.rPill, flexShrink: 0 }}>
                   {(REGIONS[s.region] || REGIONS.knowledge).label}
                 </span>
               </div>
               <div style={{ fontSize: "11px", color: T.muted, lineHeight: 1.55, margin: "5px 0 9px" }}>{s.text}</div>
               <div style={{ display: "flex", gap: "6px" }}>
-                <button onClick={() => acceptSuggestion(s)}
-                  style={{ padding: "5px 12px", background: `${T.green}14`, border: `1px solid ${T.green}40`, borderRadius: "8px", color: T.green, fontSize: "10.5px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay }}>
+                <button type="button" className="btn sm" onClick={() => acceptSuggestion(s)}
+                  style={{ background: "var(--green-a06, rgba(62,207,142,0.10))", color: T.green }}>
                   Accept — grow it
                 </button>
-                <button onClick={() => dismissSuggestion(s)}
-                  style={{ padding: "5px 12px", background: "transparent", border: `1px solid ${T.line}`, borderRadius: "8px", color: T.muted, fontSize: "10.5px", fontWeight: 600, cursor: "pointer" }}>
+                <button type="button" className="btn sm quiet" onClick={() => dismissSuggestion(s)}>
                   Dismiss
                 </button>
               </div>
@@ -898,7 +928,7 @@ export function DnaView({ creators, shorts, articles, onArticleDraft }) { // esl
   const dockStatus = (
     <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ fontSize: "12px", fontWeight: 800, color: T.ink, fontFamily: T.fontDisplay, letterSpacing: "0.02em" }}>Worker</div>
-      <div style={{ fontSize: "10px", color: workerActive ? T.green : T.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+      <div style={{ fontSize: "10.5px", color: workerActive ? T.green : T.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
         <span style={{ color: statusDot }}>{statusGlyph}</span> {statusText}
       </div>
     </div>
@@ -939,8 +969,8 @@ export function DnaView({ creators, shorts, articles, onArticleDraft }) { // esl
           <div style={{ display: "flex", alignItems: "center", gap: "11px", pointerEvents: "auto" }}>
             <span aria-hidden style={{ display: "inline-flex", fontSize: "21px", lineHeight: 1, color: T.green, textShadow: "0 0 14px rgba(14,159,110,0.4)", animation: "dnaGlyph 9s ease-in-out infinite" }}>⌬</span>
             <div>
-              <div style={{ fontSize: "16px", fontWeight: 800, color: T.inkDeep, fontFamily: T.fontDisplay, letterSpacing: "0.01em" }}>ZTS DNA</div>
-              <div className="dna-sub" style={{ fontSize: "11px", color: T.muted, marginTop: "1px" }}>The living mind behind the machine — every node compiles into how it thinks.</div>
+              <h1 className="t-head" style={{ margin: 0 }}>ZTS DNA</h1>
+              <p className="dna-sub t-cap" style={{ margin: "1px 0 0" }}>The living mind behind the machine — every node compiles into how it thinks.</p>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", justifyContent: "flex-end", pointerEvents: "auto" }}>
@@ -950,11 +980,11 @@ export function DnaView({ creators, shorts, articles, onArticleDraft }) { // esl
             <Pill label="tasks" value={tasksToday} title="Worker tasks today" />
             <Pill label="fired" value={pulseCount} title="Activations this session" />
             <select value={level} onChange={(e) => setLevel(e.target.value)} title="Compile lens — how much of the mind to reveal (the worker always runs on the full prompt)"
-              style={{ ...GLASS, borderRadius: T.rPill, padding: "4px 10px", fontSize: "10px", fontWeight: 700, fontFamily: T.fontMono, color: T.muted, cursor: "pointer", pointerEvents: "auto" }}>
+              style={{ ...GLASS, borderRadius: T.rPill, padding: "4px 10px", fontSize: "10.5px", fontWeight: 700, fontFamily: T.fontMono, color: T.muted, cursor: "pointer", pointerEvents: "auto" }}>
               {LEVELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
             <button onClick={() => setPanel(panel === "pulse" ? null : "pulse")}
-              style={{ ...GLASS, borderRadius: T.rPill, border: `1px solid ${T.goldLine}`, padding: "5px 13px", color: T.gold, fontFamily: T.fontDisplay, fontSize: "11px", fontWeight: 700, cursor: "pointer", pointerEvents: "auto" }}>
+              style={{ ...GLASS, borderRadius: T.rPill, background: T.goldSoft, padding: "6px 13px", color: T.gold, fontFamily: T.fontDisplay, fontSize: "11px", fontWeight: 700, cursor: "pointer", pointerEvents: "auto" }}>
               ⚡ Pulse
             </button>
             <button onClick={() => setPanel(panel === "menu" ? null : "menu")} title="Mind menu" aria-label="Mind menu"
@@ -971,7 +1001,7 @@ export function DnaView({ creators, shorts, articles, onArticleDraft }) { // esl
               <button onClick={() => setRegionFilter(null)} style={{ ...GLASS, pointerEvents: "auto", flexShrink: 0, padding: "5px 11px", borderRadius: T.rPill, cursor: "pointer", color: T.gold, fontSize: "10.5px", fontWeight: 700, fontFamily: T.fontDisplay }}>All</button>
             )}
             {Object.keys(REGIONS).map(legendChip)}
-            <button onClick={growNode} style={{ ...GLASS, pointerEvents: "auto", flexShrink: 0, padding: "5px 11px", borderRadius: T.rPill, border: `1px solid ${T.goldLine}`, cursor: "pointer", color: T.gold, fontSize: "10.5px", fontWeight: 700, fontFamily: T.fontDisplay }}>＋ Node</button>
+            <button onClick={growNode} style={{ ...GLASS, pointerEvents: "auto", flexShrink: 0, padding: "6px 11px", borderRadius: T.rPill, background: T.goldSoft, cursor: "pointer", color: T.gold, fontSize: "10.5px", fontWeight: 700, fontFamily: T.fontDisplay }}>＋ Node</button>
           </div>
         )}
         {mobile && suggestTray}
@@ -981,18 +1011,17 @@ export function DnaView({ creators, shorts, articles, onArticleDraft }) { // esl
       {!mobile && (
         <div style={{ ...GLASS, position: "absolute", top: "76px", left: "14px", zIndex: 6, padding: "10px 10px 9px", width: "176px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "6px", padding: "0 7px" }}>
-            <span style={{ ...sectionLabel, fontSize: "9px" }}>Regions</span>
+            <span className="t-label" style={sectionLabel}>Regions</span>
             {regionFilter && (
-              <button onClick={() => setRegionFilter(null)} style={{ background: "none", border: "none", color: T.gold, fontSize: "9.5px", fontWeight: 700, cursor: "pointer", padding: 0, fontFamily: T.fontDisplay }}>all</button>
+              <button onClick={() => setRegionFilter(null)} style={{ background: "none", border: "none", color: T.gold, fontSize: "10.5px", fontWeight: 700, cursor: "pointer", padding: 0, fontFamily: T.fontDisplay }}>all</button>
             )}
           </div>
           {Object.keys(REGIONS).map(legendRow)}
           <div style={{ height: "1px", background: T.lineSoft, margin: "8px 0" }} />
-          <button onClick={growNode}
-            style={{ width: "100%", padding: "7px", background: T.goldSoft, border: `1px solid ${T.goldLine}`, borderRadius: "9px", color: T.gold, fontSize: "11px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay }}>
+          <button type="button" className="btn sm tinted full" onClick={growNode}>
             ＋ Node
           </button>
-          <div style={{ fontSize: "9px", color: T.muted, lineHeight: 1.6, marginTop: "8px", padding: "0 2px" }}>
+          <div style={{ fontSize: "10.5px", color: T.muted, lineHeight: 1.6, marginTop: "8px", padding: "0 2px" }}>
             dbl-click canvas — new node<br />⇧-drag node — wire synapse
           </div>
         </div>
@@ -1011,34 +1040,32 @@ export function DnaView({ creators, shorts, articles, onArticleDraft }) { // esl
       {panel === "pulse" && (
         <div style={{ ...GLASS, position: "absolute", top: mobile ? "104px" : "58px", right: mobile ? "10px" : inspectorBody ? "346px" : "14px", left: mobile ? "10px" : "auto", width: mobile ? "auto" : "348px", zIndex: 30, padding: "13px 14px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "9px" }}>
-            <span style={{ ...sectionLabel, fontSize: "9px" }}>Pulse the mind</span>
+            <span className="t-label" style={sectionLabel}>Pulse the mind</span>
             <button onClick={() => setPanel(null)} style={xBtn} aria-label="Close">×</button>
           </div>
           <div style={{ display: "flex", gap: "6px" }}>
-            <input value={pq} onChange={(e) => setPq(e.target.value)} onKeyDown={(e) => e.key === "Enter" && firePulse()} placeholder="Ask the mind…"
-              style={{ ...inputBase, padding: "8px 11px", fontSize: "12px" }} />
-            <button onClick={firePulse}
-              style={{ padding: "8px 14px", background: T.goldGrad, border: "none", borderRadius: T.rSm, color: T.textOnBrand, fontSize: "11px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay, flexShrink: 0 }}>
+            <input className="field" aria-label="Ask the mind" value={pq} onChange={(e) => setPq(e.target.value)} onKeyDown={(e) => e.key === "Enter" && firePulse()} placeholder="Ask the mind…"
+              style={{ padding: "8px 11px", fontSize: "12px", minHeight: 34 }} />
+            <button type="button" className="btn sm primary" onClick={firePulse} style={{ flexShrink: 0 }}>
               Fire
             </button>
           </div>
           {pulseRes && (
             <div style={{ marginTop: "11px" }}>
-              <div style={{ fontSize: "10px", color: T.muted, lineHeight: 1.5 }}>
+              <div style={{ fontSize: "10.5px", color: T.muted, lineHeight: 1.5 }}>
                 ⚡ Fired <span style={{ color: T.inkBrand, fontWeight: 600 }}>{pulseRes.seedLabels.join(" · ")}</span>
               </div>
               {pulseRes.excerpt.length > 0 && (
                 <div style={{ marginTop: "9px" }}>
-                  <div style={{ ...sectionLabel, fontSize: "8.5px", marginBottom: "5px" }}>From the compiled mind · {levelLabel}</div>
+                  <div className="t-label" style={{ marginBottom: "5px" }}>From the compiled mind · {levelLabel}</div>
                   <div style={{ maxHeight: "140px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "4px" }}>
                     {pulseRes.excerpt.map((l, i) => (
-                      <div key={i} style={{ fontFamily: T.fontMono, fontSize: "10px", color: T.muted, lineHeight: 1.5, borderLeft: `2px solid ${T.goldLine}`, paddingLeft: "8px" }}>{l}</div>
+                      <div key={i} style={{ fontFamily: T.fontMono, fontSize: "10.5px", color: T.muted, lineHeight: 1.5, borderLeft: `2px solid ${T.goldLine}`, paddingLeft: "8px" }}>{l}</div>
                     ))}
                   </div>
                 </div>
               )}
-              <button onClick={think} disabled={thinking}
-                style={{ marginTop: "10px", width: "100%", padding: "8px", background: thinking ? T.subtle : T.goldSoft, border: `1px solid ${T.goldLine}`, borderRadius: "9px", color: thinking ? T.faint : T.gold, fontSize: "11px", fontWeight: 700, cursor: thinking ? "wait" : "pointer", fontFamily: T.fontDisplay }}>
+              <button type="button" className="btn sm tinted full" onClick={think} disabled={thinking} style={{ marginTop: "10px" }}>
                 {thinking ? "Thinking…" : "✦ Think it through (Haiku)"}
               </button>
               {answer && (
@@ -1070,7 +1097,7 @@ export function DnaView({ creators, shorts, articles, onArticleDraft }) { // esl
       {inspectorBody && (mobile ? (
         <ModalSheet mobile onClose={() => setSelection(null)}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "14px 18px 0" }}>
-            <span style={{ ...sectionLabel, fontSize: "9.5px" }}>{selNode ? "Node" : "Synapse"}</span>
+            <span className="t-label" style={sectionLabel}>{selNode ? "Node" : "Synapse"}</span>
             <button onClick={() => setSelection(null)} style={xBtn} aria-label="Close">×</button>
           </div>
           <div style={{ overflowY: "auto", padding: "12px 18px 18px" }}>{inspectorBody}</div>
@@ -1078,7 +1105,7 @@ export function DnaView({ creators, shorts, articles, onArticleDraft }) { // esl
       ) : (
         <div style={{ ...GLASS, position: "absolute", top: "76px", right: "14px", width: "320px", maxHeight: "calc(100% - 100px)", zIndex: 9, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "12px 14px 0", flexShrink: 0 }}>
-            <span style={{ ...sectionLabel, fontSize: "9.5px" }}>{selNode ? "Node" : "Synapse"}</span>
+            <span className="t-label" style={sectionLabel}>{selNode ? "Node" : "Synapse"}</span>
             <button onClick={() => setSelection(null)} style={xBtn} aria-label="Close inspector">×</button>
           </div>
           <div style={{ overflowY: "auto", padding: "9px 14px 14px" }}>{inspectorBody}</div>
@@ -1139,8 +1166,7 @@ export function DnaView({ creators, shorts, articles, onArticleDraft }) { // esl
               </div>
             </div>
             <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
-              <button onClick={copyMind}
-                style={{ padding: "6px 13px", background: T.goldSoft, border: `1px solid ${T.goldLine}`, borderRadius: "8px", color: T.gold, fontSize: "11px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay }}>
+              <button type="button" className="btn sm tinted" onClick={copyMind}>
                 ⧉ Copy
               </button>
               <button onClick={() => setModal(null)} style={{ ...xBtn, fontSize: "20px" }} aria-label="Close">×</button>
@@ -1171,7 +1197,7 @@ export function DnaView({ creators, shorts, articles, onArticleDraft }) { // esl
                   <div key={m.id} style={{ display: "flex", gap: "10px", padding: "9px 11px", background: T.subtle, borderRadius: "9px", borderLeft: `3px solid ${KIND_COLOR[m.kind] || T.faint}` }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: "11.5px", color: T.ink, lineHeight: 1.5 }}>{m.summary}</div>
-                      <div style={{ fontSize: "9px", color: T.faint, marginTop: "3px", fontFamily: T.fontMono }}>{m.kind} · {new Date(m.ts).toLocaleString()}</div>
+                      <div style={{ fontSize: "10.5px", color: T.faint, marginTop: "3px", fontFamily: T.fontMono }}>{m.kind} · {new Date(m.ts).toLocaleString()}</div>
                     </div>
                   </div>
                 ))}

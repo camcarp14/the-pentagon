@@ -104,18 +104,115 @@ const read = (rel) => {
 const stripComments = (s) =>
   s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
+// Every .jsx under src/, discovered rather than listed. A hard-coded manifest
+// silently stops covering the file someone adds next — the component that gets
+// written after this test does is exactly the one nobody re-reads the list for.
+const srcFiles = () => {
+  const { readdirSync } = require("node:fs");
+  const { fileURLToPath } = require("node:url");
+  const { dirname, join, relative } = require("node:path");
+  const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const out = [];
+  const walk = (dir) => {
+    for (const e of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      if (e.name === "__tests__" || e.name === "node_modules") continue;
+      const p = join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith(".jsx")) out.push(relative(root, p));
+    }
+  };
+  walk(root);
+  return out;
+};
+
+// Every JSX element in `src` that names a class, as [tagName, classTokens].
+// The tag is read from the nearest preceding "<" — attribute values with
+// braces (onClick={() => …}) make a whole-opening-tag regex unreliable, and
+// the class list is what these rules are actually about.
+const classedElements = (src) => {
+  const out = [];
+  for (const m of src.matchAll(/className\s*=\s*/g)) {
+    let i = m.index + m[0].length;
+    let raw;
+    if (src[i] === '"' || src[i] === "'") {
+      const q = src[i];
+      const end = src.indexOf(q, i + 1);
+      raw = src.slice(i, end === -1 ? src.length : end + 1);
+    } else if (src[i] === "{") {
+      let depth = 0, j = i;
+      for (; j < src.length; j++) {
+        if (src[j] === "{") depth++;
+        else if (src[j] === "}" && --depth === 0) break;
+      }
+      raw = src.slice(i + 1, j);
+    } else continue;
+    // every literal chunk inside the expression contributes class tokens; a
+    // `${…}` hole is unknowable from source and is simply skipped
+    const tokens = [...raw.matchAll(/`([^`]*)`|"([^"]*)"|'([^']*)'/g)]
+      .map((s) => (s[1] ?? s[2] ?? s[3]).replace(/\$\{[^}]*\}/g, " "))
+      .join(" ")
+      .split(/\s+/)
+      .filter(Boolean);
+    const lt = src.lastIndexOf("<", m.index);
+    const tag = /^<\s*([A-Za-z][\w.]*)/.exec(src.slice(lt, lt + 40))?.[1] ?? "?";
+    out.push([tag, tokens]);
+  }
+  return out;
+};
+
+// Every `<div className="empty">…</div>` block, matched by depth rather than by
+// a fixed window, so what the test reads is the whole empty state.
+const emptyStateBlocks = (src) => {
+  const blocks = [];
+  for (const m of src.matchAll(/<div className="empty">/g)) {
+    const tags = /<div\b|<\/div>/g;
+    tags.lastIndex = m.index;
+    let depth = 0, t, end = src.length;
+    while ((t = tags.exec(src))) {
+      if (t[0] === "</div>") { if (--depth === 0) { end = tags.lastIndex; break; } }
+      else depth++;
+    }
+    blocks.push(src.slice(m.index, end));
+  }
+  return blocks;
+};
+
+// Every px length inside a font-size declaration, clamp()/min()/max() included
+// and case-insensitively — `font-size: clamp(9px, 2vw, 14px)` and
+// `font-size: 9PX` are both a 9px floor violation.
+const cssFontPx = (css) =>
+  [...css.matchAll(/font-size\s*:\s*([^;}]+)/gi)]
+    .flatMap((m) => [...m[1].matchAll(/([0-9.]+)\s*px/gi)].map((n) => Number(n[1])))
+    .filter((n) => Number.isFinite(n) && n > 0);
+
 describe("Macro obeys the language", () => {
   const css = stripComments(read("styles.css"));
-  const jsx = ["App.jsx", "components/Cockpit.jsx", "components/TradeCard.jsx",
-    "components/Journal.jsx", "components/Settings.jsx", "components/RunPlan.jsx",
-    "components/ChartPanel.jsx", "components/primitives.jsx"]
-    .map((f) => stripComments(read(f))).join("\n");
+  const files = srcFiles();
+  const jsx = files.map((f) => stripComments(read(f))).join("\n");
+
+  it("scans every .jsx under src, not a hand-kept list", () => {
+    // The manifest above is globbed. This is the assertion that keeps it
+    // honest: a new component under src/ must show up in `files`, and the
+    // surfaces that exist today must all still be in it.
+    expect(files.length).toBeGreaterThanOrEqual(9);
+    for (const f of ["App.jsx", "Root.jsx", "main.jsx", "components/Cockpit.jsx",
+      "components/TradeCard.jsx", "components/Journal.jsx", "components/Settings.jsx",
+      "components/RunPlan.jsx", "components/ChartPanel.jsx", "components/primitives.jsx"]) {
+      expect(files, `${f} must be scanned`).toContain(f);
+    }
+  });
 
   it("has no type under the 10.5px floor, in CSS or in a ternary", () => {
     // Five lived here: the bottom-tab label (9px), the answer card's row keys
     // (10px), the order-ticket keys (10px), the trend-shape header (9.5px) and
     // the "est" badge on mNAV (8.5px).
-    const cssSizes = [...css.matchAll(/font-size:\s*([0-9.]+)px/g)].map((m) => Number(m[1]));
+    //
+    // clamp() is this sheet's live idiom for the trade card's numerals, so the
+    // scan reads the whole declaration and every px inside it — a 9px lower
+    // bound in a clamp() is 9px on a phone. Case-insensitive for the same
+    // reason: CSS does not care that it was typed `9PX`.
+    const cssSizes = cssFontPx(css);
+    expect(cssSizes.length, "the font-size scan found nothing — it is broken").toBeGreaterThan(20);
     expect(cssSizes.filter((n) => n < 10.5), "css font-size under the floor").toEqual([]);
 
     // Ternaries too — `fontSize: compact ? 9 : 12` hides a 9.
@@ -147,8 +244,21 @@ describe("Macro obeys the language", () => {
     // kept the name, every form row would have rendered inside a filled 44px
     // well. Both forms live behind a loading gate, so this is checked in the
     // source — the markup cannot show them until data lands.
-    expect(jsx, "no wrapper may still be called .field")
-      .not.toMatch(/<div className="field"/);
+    //
+    // Read off the class LIST of every element, not off one literal spelling:
+    // `<div className="field">`, `<div className="field row">` and
+    // `<div className={`field ${x}`}>` are the same bug, and only the first of
+    // the three is a literal a single regex can be written against.
+    const CONTROLS = new Set(["input", "select", "textarea"]);
+    const wrappers = classedElements(jsx)
+      .filter(([tag, cls]) => cls.includes("field") && !CONTROLS.has(tag));
+    expect(wrappers.map(([t, c]) => `<${t} class="${c.join(" ")}">`),
+      "the kit's .field belongs on the control, never on a wrapper").toEqual([]);
+    // …and the scan must actually be seeing the controls that DO carry it
+    const carriers = classedElements(jsx).filter(([, cls]) => cls.includes("field"));
+    expect(carriers.length, "the .field scan found nothing — it is broken").toBeGreaterThanOrEqual(20);
+    expect(carriers.filter(([tag]) => !CONTROLS.has(tag))).toEqual([]);
+
     expect(jsx.match(/<div className="fld"/g).length).toBeGreaterThanOrEqual(20);
     expect(jsx.match(/<input className="field"/g).length).toBeGreaterThanOrEqual(20);
     expect(jsx).toMatch(/<select className="field"/);
@@ -177,7 +287,21 @@ describe("Macro obeys the language", () => {
     // .card did (1px border + --shadow-1), .cmdk did, .toast did. The answer
     // card's severity stripe was a border-left on top of that, and the kit's
     // `border: none` would have deleted it — it is an inset shadow layer now.
-    expect(css).not.toMatch(/\.card\s*\{[^}]*border:\s*1px[^}]*box-shadow/);
+    //
+    // EVERY rule in the sheet, not the three that were named: .error-row
+    // already has a border, so naming .card and .tcard only means the next
+    // shadow to land on an outlined element lands unseen.
+    const offenders = [];
+    let rules = 0;
+    for (const [, sel, body] of css.matchAll(/([^{}]+)\{([^{}]+)\}/g)) {
+      rules++;
+      const border = /(^|;)\s*border(-top|-bottom|-left|-right)?:(?!\s*none\b)/.test(body);
+      const shadow = /(^|;)\s*box-shadow:(?!\s*none\b)/.test(body);
+      if (border && shadow) offenders.push(`${sel.trim()} { ${body.trim()} }`);
+    }
+    expect(rules, "the rule walk found nothing — it is broken").toBeGreaterThan(100);
+    expect(offenders, `border + shadow on one element:\n${offenders.join("\n\n")}`).toEqual([]);
+
     expect(css).toMatch(/\.card\s*\{[^}]*border:\s*none/);
     expect(css).toMatch(/\[data-kit\] \.card\.tcard\s*\{\s*box-shadow:[^}]*inset 5px 0 0/);
     expect(css, "the stripe must not go back to being a border")
@@ -222,7 +346,19 @@ describe("Macro obeys the language", () => {
     expect(jsx.match(/error-row/g).length).toBeGreaterThan(0);
     // one Retry (or the always-reachable Refresh) per error surface
     expect(jsx.match(/>Retry</g).length).toBeGreaterThanOrEqual(4);
-    for (const m of jsx.match(/className="empty"/g) || []) expect(m).toBeTruthy();
+
+    // Every empty state, counted and then read. `for (const m of …) expect(m)
+    // .toBeTruthy()` asserted nothing in either direction: no matches meant no
+    // iterations, and a matched literal is always truthy. What the title of
+    // this case promises is that each empty state exists AND says what to do
+    // next, so that is what is checked.
+    const empties = emptyStateBlocks(jsx);
+    expect(empties.length, "empty states found — the app has five and may not lose one")
+      .toBeGreaterThanOrEqual(5);
+    for (const b of empties) {
+      expect(b, `an empty state with no title:\n${b}`).toMatch(/className="empty-title"/);
+      expect(b, `an empty state with no next step:\n${b}`).toMatch(/className="empty-sub"/);
+    }
     expect(jsx.match(/empty-sub/g).length).toBeGreaterThanOrEqual(4);
   });
 

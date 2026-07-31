@@ -176,9 +176,15 @@ describe("the primitives every panel is built from", () => {
     // an age — and .stattile-label is the kit's own 10.5px version of exactly
     // that: the floor, not below it. They only render once rows have loaded, so
     // the source is the honest place to check.
-    const users = ["Approvals", "BriefingCard", "Hypotheses", "Invariants", "Learnings", "Metrics"]
-      .filter((f) => read("components", "panels", `${f}.jsx`).includes('className="stattile-label"'));
-    expect(users).toHaveLength(6);
+    //
+    // Comments stripped first: several of these files EXPLAIN .stattile-label
+    // in a comment right above the markup that uses it, so an unstripped scan
+    // is satisfied by the prose after the markup is gone.
+    const panels = ["Approvals", "BriefingCard", "Hypotheses", "Invariants", "Learnings", "Metrics"];
+    const users = panels
+      .filter((f) => stripComments(read("components", "panels", `${f}.jsx`)).includes('className="stattile-label"'));
+    expect(users, `panels still hand-rolling the caption: ${panels.filter((p) => !users.includes(p)).join(", ")}`)
+      .toEqual(panels);
   });
 
   it("renders AlarmBlock without throwing", () => {
@@ -216,12 +222,42 @@ describe("AI Business obeys the language", () => {
     // 41 sites were under it, the smallest at 8.5px, and one hid inside
     // `fontSize: d.delta === null ? 10 : 11.5` where only the emptier state
     // reached the violation.
+    //
+    // A literal scan does not see Learnings.jsx, whose whole typographic
+    // ladder is `fontSize: type.size` off a WEIGHT map — every size in that
+    // file is one indirection away from the regex. So a reference is followed:
+    // the property (or binding) name the declaration reads is resolved against
+    // the numbers assigned to that name in the same file.
     for (const [name, src] of files) {
-      const sizes = [...src.matchAll(/fontSize:\s*([^,\n}]+)/g)]
-        .flatMap((m) => [...m[1].matchAll(/[\d.]+/g)].map((n) => Number(n[0])))
-        .filter((n) => Number.isFinite(n) && n > 0);
-      expect(sizes.filter((n) => n < 10.5), `${name} is under the floor`).toEqual([]);
+      const sizes = [];   // [where, value]
+      const refs = new Set();
+      for (const m of src.matchAll(/fontSize:\s*([^,\n}]+)/g)) {
+        const expr = m[1];
+        for (const n of expr.matchAll(/[\d.]+/g)) {
+          const v = Number(n[0]);
+          if (Number.isFinite(v) && v > 0) sizes.push([`fontSize: ${expr.trim()}`, v]);
+        }
+        // `type.size`, `WEIGHT[k].size` — the map key that holds the number
+        for (const p of expr.matchAll(/\.([A-Za-z_$][\w$]*)/g)) refs.add(p[1]);
+        // `fontSize: SMALL` — a bare binding
+        const bare = /^\s*([A-Za-z_$][\w$]*)\s*$/.exec(expr);
+        if (bare) refs.add(bare[1]);
+      }
+      for (const ref of refs) {
+        const decl = new RegExp(`(^|[{,;(\\s])${ref}\\s*[:=]\\s*(-?[\\d.]+)(?![\\w.])`, "g");
+        for (const m of src.matchAll(decl)) {
+          const v = Number(m[2]);
+          if (Number.isFinite(v) && v > 0) sizes.push([`fontSize → ${ref}: ${v}`, v]);
+        }
+      }
+      const under = sizes.filter(([, v]) => v < 10.5).map(([where]) => where);
+      expect(under, `${name} is under the floor:\n${under.join("\n")}`).toEqual([]);
     }
+    // the reference walk must actually be resolving something — Learnings.jsx
+    // holds its whole ladder behind `type.size`
+    const learnings = files.find(([n]) => n.endsWith("Learnings.jsx"))[1];
+    expect(learnings, "Learnings.jsx no longer reads its sizes from a map — re-check this scan")
+      .toMatch(/fontSize:\s*[A-Za-z_$][\w$]*\./);
   });
 
   it("puts no border and box-shadow on the same element", () => {
@@ -250,7 +286,60 @@ describe("AI Business obeys the language", () => {
       return src.slice(start);
     };
 
-    const BORDER = /(^|[^-\w])border:\s*(?!"none")(?!none)/;
+    // The whole opening tag of the JSX element that starts at `lt`. Braces and
+    // quotes are tracked so an arrow function in an attribute (`onClick={() =>
+    // …}`) does not end the tag at its own ">".
+    const openingTag = (src, lt) => {
+      let depth = 0, quote = null;
+      for (let i = lt + 1; i < src.length; i++) {
+        const c = src[i];
+        if (quote) { if (c === quote && src[i - 1] !== "\\") quote = null; continue; }
+        if (c === '"' || c === "'" || c === "`") { quote = c; continue; }
+        if (c === "{") depth++;
+        else if (c === "}") depth--;
+        else if (c === ">" && depth === 0) return src.slice(lt, i + 1);
+      }
+      return src.slice(lt);
+    };
+
+    const BORDER = /(^|[^-\w])border(Top|Bottom|Left|Right)?:\s*(?!"none")(?!none)/;
+
+    // ── 1. the shadow that is not written here at all ───────────────────────
+    // Nearly every surface in this tab gets its elevation from the KIT's
+    // .card, not from an inline boxShadow — so a walk that starts at the token
+    // `boxShadow:` cannot see the sign-in card, the panel, the halt block or
+    // the goal editor. Carrying .card IS carrying a shadow; the rule is that
+    // such an element may not also draw an outline.
+    let carded = 0;
+    for (const [name, src] of files) {
+      for (const m of src.matchAll(/className\s*=\s*(?:"([^"]*)"|\{([^}]*)\})/g)) {
+        const classText = (m[1] ?? m[2] ?? "").replace(/[`'"]/g, " ");
+        if (!/(^|\s)card($|\s)/.test(classText)) continue;
+        carded++;
+        const lt = src.lastIndexOf("<", m.index);
+        const tag = openingTag(src, lt);
+        expect(BORDER.test(tag), `${name}: the kit's .card already carries a shadow — this element also draws a border:\n${tag.slice(0, 300)}`).toBe(false);
+      }
+    }
+    expect(carded, "no .card element was found — the scan is broken").toBeGreaterThanOrEqual(4);
+
+    // ── 2. the tab's own stylesheet ─────────────────────────────────────────
+    // It was never read here at all. It is small, but it styles every input in
+    // the tab, and a rule is exactly where a border and a shadow drift back
+    // onto one element without any JSX changing.
+    const sheet = stripComments(read("styles.css"));
+    const cssOffenders = [];
+    let rules = 0;
+    for (const [, sel, body] of sheet.matchAll(/([^{}]+)\{([^{}]+)\}/g)) {
+      rules++;
+      const border = /(^|;)\s*border(-top|-bottom|-left|-right)?:(?!\s*none\b)/.test(body);
+      const shadow = /(^|;)\s*box-shadow:(?!\s*none\b)/.test(body);
+      if (border && shadow) cssOffenders.push(`${sel.trim()} { ${body.trim()} }`);
+    }
+    expect(rules, "styles.css produced no rules — the scan is broken").toBeGreaterThan(10);
+    expect(cssOffenders, `styles.css: border + shadow on one element:\n${cssOffenders.join("\n\n")}`).toEqual([]);
+
+    // ── 3. the inline shadow, walked out through the spreads ────────────────
     for (const [name, src] of files) {
       for (const m of src.matchAll(/boxShadow:\s*/g)) {
         // Walk OUT as well as in: the fold tile spreads `{ boxShadow }` into a

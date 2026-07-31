@@ -27,5 +27,14 @@ export const T = {
 };
 
 // Display / mono fonts as standalone consts (App.jsx references them directly).
-export const syne = "'Syne', system-ui";
-export const mono = "'DM Mono', monospace";
+//
+// SYSTEM STACK ONLY. These used to name 'Syne' and 'DM Mono' — two decorative
+// Google faces that App.jsx pulled in with a <link> at runtime. The design
+// language allows no decorative face, so both consts now resolve the shared
+// tokens (@cc/design/tokens.css: --font-display is the system stack, --font-mono
+// is ui-monospace). The NAMES stay, so all ~200 `fontFamily: syne` call sites
+// across App/EnginePanel/factory resolve unchanged — they just render in SF /
+// Segoe / Roboto now. The literal fallbacks matter for the standalone dev entry,
+// which loads no stylesheet of its own before the first paint.
+export const syne = 'var(--font-display, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif)';
+export const mono = 'var(--font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace)';

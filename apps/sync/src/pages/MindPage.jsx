@@ -162,7 +162,7 @@ export default function MindPage({ setPage }) {
                   else setFilter(new Set([r]));
                 }}
               >
-                <span className="mind-chip-dot" style={{ background: REGIONS[r].tint }} />
+                <span className="dotstatus" style={{ background: REGIONS[r].tint }} />
                 {REGIONS[r].label}
                 <span className="mind-chip-n">{count}</span>
               </button>
@@ -176,9 +176,12 @@ export default function MindPage({ setPage }) {
         <Sheet onClose={() => setSelection(null)} title={node.label}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div className="mind-insp-head">
-              <span className="mind-chip-dot" style={{ background: REGIONS[node.region].tint }} />
+              <span className="dotstatus" style={{ background: REGIONS[node.region].tint }} />
               <span className="t-label">{REGIONS[node.region].label}</span>
-              {node.locked && <span className="neuron-lock">locked</span>}
+              {/* .t-label is the one route to uppercase in this language, and
+                  it is the kit's. This chip used to roll its own 9.5px caps —
+                  under the 10.5px floor, and doing by hand what .t-label does. */}
+              {node.locked && <span className="t-label neuron-lock">locked</span>}
               <span style={{ marginLeft: "auto" }}>
                 <Switch
                   on={node.enabled !== false}

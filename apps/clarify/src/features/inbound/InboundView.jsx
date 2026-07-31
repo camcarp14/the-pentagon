@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { T, card as cardBase, sectionLabel as sectionLabelBase, inputBase } from "../../theme";
+import { T } from "../../theme";
 import { EmptyState, SkeletonLine, SkeletonRows } from "../../ui.jsx";
 import { LeadJourney } from "../../components/LeadJourney.jsx";
 import { cleanBody, cleanReplyBody, cleanSubject, sendEmail, timeAgo } from "../../lib/email.js";
@@ -153,41 +153,43 @@ export function InboundView({ cards, onNavigate, onCardsChange, toneMemory }) {
     setBusy("");
   };
 
-  const chip = (bg, color, text) => <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: T.rPill, background: bg, color, letterSpacing: "0.05em", textTransform: "uppercase", fontFamily: T.fontDisplay }}>{text}</span>;
+  // .t-label is the only uppercase in this language; the chip is the same run
+  // of capitals it always was, now at the kit's 12px instead of 10.
+  const chip = (bg, color, text) => <span className="t-label" style={{ padding: "3px 9px", borderRadius: T.rPill, background: bg, color }}>{text}</span>;
   const statusChip = (l) => l.card ? chip(`${T.green}1A`, T.green, l.card.status === "replied" ? "replied" : l.card.status === "meeting" ? "meeting" : "in pipeline")
     : l.status === "new" ? chip(`${T.blue}1A`, T.blue, "new")
     : l.status === "archived" ? chip("rgba(255,255,255,0.06)", T.faint, "archived")
     : chip(`${T.amber}1A`, T.amber, "reviewed");
 
   const Bubble = ({ who, when, color, subjectLine, bg = T.subtle, children }) => (
-    <div style={{ background: bg, borderRadius: T.rSm, padding: "12px 14px", borderLeft: `3px solid ${color}` }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-        <span style={{ fontSize: "11px", fontWeight: 700, color }}>{who}</span>
-        <span style={{ fontSize: "10px", color: T.faint }}>{when}</span>
+    <div style={{ background: bg, borderRadius: "12px", padding: "12px 14px", borderLeft: `3px solid ${color}` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", marginBottom: "6px" }}>
+        <span className="t-cap" style={{ fontWeight: 600, color }}>{who}</span>
+        <span className="t-cap" style={{ color: T.faint, flexShrink: 0 }}>{when}</span>
       </div>
-      {subjectLine && <div style={{ fontSize: "12px", fontWeight: 600, color: T.muted, marginBottom: "5px" }}>{subjectLine}</div>}
-      <div style={{ fontSize: "13px", color: T.ink, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>{children}</div>
+      {subjectLine && <div className="t-foot" style={{ fontWeight: 600, marginBottom: "5px" }}>{subjectLine}</div>}
+      <div className="t-body" style={{ lineHeight: 1.65, whiteSpace: "pre-wrap" }}>{children}</div>
     </div>
   );
 
   return (
     <div style={{ padding: "24px 28px", maxWidth: "1240px", margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "4px" }}>
-        <h1 style={{ fontSize: "24px", fontWeight: 800, fontFamily: T.fontDisplay, color: T.ink, margin: 0 }}>Inbound Leads</h1>
+        <h1 className="t-title1" style={{ margin: 0 }}>Inbound leads</h1>
         {newCount > 0 && chip(`${T.blue}1A`, T.blue, `${newCount} new`)}
       </div>
-      <div style={{ fontSize: "13px", color: T.muted, marginBottom: "16px" }}>Audit requests from the Clarify Paid Search site — reply right here; replying puts them in the pipeline automatically.</div>
+      <div className="t-foot" style={{ marginBottom: "16px" }}>Audit requests from the Clarify Paid Search site — reply right here; replying puts them in the pipeline automatically.</div>
 
       <div style={{ display: "flex", gap: "6px", marginBottom: "16px" }}>
         {["active", "new", "reviewed", "archived"].map(f => (
-          <button key={f} onClick={() => setFilter(f)} style={{ padding: "6px 14px", borderRadius: T.rPill, border: `1px solid ${filter === f ? "rgba(255,255,255,0.2)" : T.line}`, background: filter === f ? T.surface : "transparent", color: filter === f ? T.ink : T.muted, fontSize: "12px", fontWeight: 600, cursor: "pointer", textTransform: "capitalize" }}>{f}</button>
+          <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)} className={filter === f ? "pill active" : "pill"} style={{ textTransform: "capitalize" }}>{f}</button>
         ))}
       </div>
 
       {/* Page-level feedback — visible whether or not a lead is open, so a delete
           triggered straight from the list (no panel open) isn't silently swallowed. */}
       {note && (
-        <div style={{ marginBottom: "14px", padding: "10px 14px", borderRadius: T.rSm, background: note.startsWith("✓") ? T.green + "14" : T.red + "12", border: `1px solid ${note.startsWith("✓") ? T.green + "40" : T.red + "33"}`, fontSize: "12.5px", color: note.startsWith("✓") ? T.green : T.red }}>
+        <div role="status" style={{ marginBottom: "14px", padding: "10px 14px", borderRadius: "12px", background: note.startsWith("✓") ? T.green + "14" : T.red + "12", border: "none", fontSize: "12.5px", color: note.startsWith("✓") ? T.green : T.red }}>
           {note}
         </div>
       )}
@@ -199,55 +201,57 @@ export function InboundView({ cards, onNavigate, onCardsChange, toneMemory }) {
             <EmptyState icon="inbox" title={`No ${filter === "active" ? "active" : filter} leads`} sub="Inquiries from the Clarify Paid Search site will show up here as they come in." />
           )}
           {shown.map(l => (
-            <div key={l.id} onClick={() => selectLead(l)} style={{ ...cardBase, padding: "14px 16px", cursor: "pointer", border: `1px solid ${T.lineSoft}`, background: sel?.id === l.id ? `linear-gradient(rgba(255,255,255,0.05), rgba(255,255,255,0.05)), ${T.surface}` : T.surface, outline: sel?.id === l.id ? `2px solid ${T.gold}` : "none", position: "relative" }}>
+            // .card.pressable — the outline stays an OUTLINE (not a border), so
+            // the selected row still has the kit's shadow and no drawn edge.
+            <div key={l.id} onClick={() => selectLead(l)} className="card pressable" style={{ padding: "14px 16px", background: sel?.id === l.id ? `linear-gradient(rgba(255,255,255,0.05), rgba(255,255,255,0.05)), ${T.surface}` : undefined, outline: sel?.id === l.id ? `2px solid ${T.gold}` : "none", position: "relative" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
-                <span style={{ fontSize: "15px", fontWeight: 800, fontFamily: T.fontDisplay, color: T.ink, display: "flex", alignItems: "center", gap: "6px" }}>
+                <span className="t-head" style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
                   {l.status === "new" && <span aria-hidden="true" title="Unread" style={{ width: "6px", height: "6px", borderRadius: "50%", background: T.pink, flexShrink: 0 }} />}
                   {inboundBiz(l)}
                 </span>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   {statusChip(l)}
-                  <button onClick={(e) => { e.stopPropagation(); deleteLead(l); }} title="Delete lead" aria-label="Delete lead" className="co-icon-btn"
-                    style={{ background: "none", border: "none", color: T.faint, fontSize: "13px", cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}>🗑</button>
+                  <button onClick={(e) => { e.stopPropagation(); deleteLead(l); }} title="Delete lead" aria-label="Delete lead"
+                    type="button" className="co-icon-btn icon-btn">🗑</button>
                 </div>
               </div>
-              <div style={{ fontSize: "11.5px", color: T.muted, marginTop: "3px" }}>
+              <div className="t-cap" style={{ marginTop: "3px" }}>
                 {[inboundPerson(l), inboundBudget(l) && `${inboundBudget(l)} / mo`, timeAgo(l.created_at)].filter(Boolean).join(" · ")}
               </div>
-              {!sel && inboundMessage(l) && <div style={{ fontSize: "12.5px", color: T.muted, marginTop: "8px" }}>{inboundMessage(l).slice(0, 140)}</div>}
+              {!sel && inboundMessage(l) && <div className="t-foot" style={{ marginTop: "8px" }}>{inboundMessage(l).slice(0, 140)}</div>}
             </div>
           ))}
         </div>
 
         {/* Conversation panel */}
         {sel && (
-          <div style={{ ...cardBase, padding: "18px 20px" }}>
+          <div className="card" style={{ padding: "18px 20px" }}>
             {/* Mobile-only: explicit way back to the list, since it's hidden (not stacked) while a lead is open */}
-            <button onClick={() => setSelId(null)} className="co-mobile-only" style={{ display: "none", alignItems: "center", gap: "5px", background: "none", border: "none", color: T.muted, fontSize: "12px", fontWeight: 700, cursor: "pointer", padding: "0 0 12px", fontFamily: T.fontDisplay }}>← All leads</button>
+            <button onClick={() => setSelId(null)} type="button" className="co-mobile-only btn sm plain" style={{ display: "none", color: T.muted, marginBottom: "12px", padding: 0 }}>← All leads</button>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", flexWrap: "wrap" }}>
               <div>
-                <div style={{ fontSize: "17px", fontWeight: 800, fontFamily: T.fontDisplay, color: T.ink }}>{inboundBiz(sel)}</div>
-                <div style={{ fontSize: "12px", color: T.muted, marginTop: "2px" }}>
+                <div className="t-title2">{inboundBiz(sel)}</div>
+                <div className="t-foot" style={{ marginTop: "2px" }}>
                   {[inboundPerson(sel), sel.email, inboundService(sel), inboundBudget(sel) && `${inboundBudget(sel)}/mo`].filter(Boolean).join(" · ")}
                   {sel.website && <> · <a href={sel.website.startsWith("http") ? sel.website : `https://${sel.website}`} target="_blank" rel="noreferrer" style={{ color: T.blue }}>{sel.website} ↗</a></>}
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <button onClick={() => deleteLead(sel)} title="Delete lead" style={{ background: "none", border: `1px solid ${T.red}40`, borderRadius: "7px", color: T.red, fontSize: "11px", fontWeight: 700, cursor: "pointer", padding: "5px 10px" }}>🗑 Delete</button>
-                <button onClick={() => setSelId(null)} title="Close" className="co-icon-btn co-desktop-only" style={{ background: "none", border: "none", color: T.muted, fontSize: "18px", cursor: "pointer" }}>×</button>
+                <button onClick={() => deleteLead(sel)} type="button" title="Delete lead" className="btn sm danger">🗑 Delete</button>
+                <button onClick={() => setSelId(null)} type="button" title="Close" aria-label="Close lead" className="co-icon-btn co-desktop-only icon-btn">×</button>
               </div>
             </div>
             <div style={{ margin: "12px 0 14px" }}><LeadJourney card={sel.card} hasInbound={true} /></div>
 
             {/* Actions — contextual to where the lead stands */}
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "16px" }}>
-              {!sel.card && <button disabled={!!busy} onClick={() => addToPipeline(sel)} style={{ padding: "6px 14px", background: T.gold, border: "none", borderRadius: T.rSm, color: T.textOnBrand, fontSize: "11px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay }}>{busy === "pipeline" ? "Adding…" : "+ Add to pipeline"}</button>}
-              {sel.card && <button onClick={() => { sm.set("outreach_focus", sel.card.prospect?.business_name || sel.email); onNavigate("outreach"); }} style={{ padding: "6px 14px", background: "transparent", border: `1px solid ${T.goldLine}`, borderRadius: T.rSm, color: T.gold, fontSize: "11px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay }}>View in Outreach →</button>}
-              {sel.card && ["replied", "meeting"].includes(sel.card.status) && <button disabled={!!busy} onClick={() => convertToClient(sel)} style={{ padding: "6px 14px", background: T.green, border: "none", borderRadius: T.rSm, color: "#0A1B12", fontSize: "11px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay }}>{busy === "client" ? "Converting…" : "★ Convert to client"}</button>}
-              {sel.status !== "archived" && sel.status === "new" && <button onClick={() => patchLead(sel.id, { status: "reviewed" })} style={{ padding: "6px 14px", background: "transparent", border: `1px solid ${T.line}`, borderRadius: T.rSm, color: T.muted, fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>Mark reviewed</button>}
+              {!sel.card && <button type="button" disabled={!!busy} onClick={() => addToPipeline(sel)} className="btn sm primary">{busy === "pipeline" ? "Adding…" : "+ Add to pipeline"}</button>}
+              {sel.card && <button type="button" onClick={() => { sm.set("outreach_focus", sel.card.prospect?.business_name || sel.email); onNavigate("outreach"); }} className="btn sm tinted">View in Outreach →</button>}
+              {sel.card && ["replied", "meeting"].includes(sel.card.status) && <button type="button" disabled={!!busy} onClick={() => convertToClient(sel)} className="btn sm" style={{ background: T.green, color: "#0A1B12" }}>{busy === "client" ? "Converting…" : "★ Convert to client"}</button>}
+              {sel.status !== "archived" && sel.status === "new" && <button type="button" onClick={() => patchLead(sel.id, { status: "reviewed" })} className="btn sm quiet">Mark reviewed</button>}
               {sel.status !== "archived"
-                ? <button onClick={() => patchLead(sel.id, { status: "archived" })} style={{ padding: "6px 14px", background: "transparent", border: `1px solid ${T.line}`, borderRadius: T.rSm, color: T.muted, fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>Archive</button>
-                : <button onClick={() => patchLead(sel.id, { status: "reviewed" })} style={{ padding: "6px 14px", background: "transparent", border: `1px solid ${T.line}`, borderRadius: T.rSm, color: T.muted, fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>Restore</button>}
+                ? <button type="button" onClick={() => patchLead(sel.id, { status: "archived" })} className="btn sm quiet">Archive</button>
+                : <button type="button" onClick={() => patchLead(sel.id, { status: "reviewed" })} className="btn sm quiet">Restore</button>}
             </div>
 
             {/* The conversation — form message + full email thread */}
@@ -266,18 +270,18 @@ export function InboundView({ cards, onNavigate, onCardsChange, toneMemory }) {
                 </Bubble>
               )}
               {sel.card?.sent_at && !sel.card?.reply_body && (
-                <div style={{ fontSize: "11px", color: T.faint, paddingLeft: "4px" }}>Sent {timeAgo(sel.card.sent_at)} — reply detection is watching this thread.</div>
+                <div className="t-cap" style={{ color: T.faint, paddingLeft: "4px" }}>Sent {timeAgo(sel.card.sent_at)} — reply detection is watching this thread.</div>
               )}
             </div>
 
             {/* Composer */}
             <div style={{ marginTop: "16px", borderTop: `1px solid ${T.lineInk}`, paddingTop: "14px" }}>
-              <div style={{ ...sectionLabelBase, fontSize: "10px", marginBottom: "8px" }}>{sel.card?.sent_at ? "Reply" : "First reply — sending creates the pipeline card"}</div>
-              <input value={subject} onChange={e => setSubject(e.target.value)} style={{ ...inputBase, fontSize: "12.5px", fontWeight: 600, marginBottom: "8px" }} />
-              <textarea value={body} onChange={e => setBody(e.target.value)} rows={6} placeholder={`Hi ${inboundPerson(sel) || "there"} — thanks for reaching out about ${inboundService(sel) || "your search program"}…`} style={{ ...inputBase, fontSize: "13px", lineHeight: 1.6, resize: "vertical" }} />
+              <div className="t-label" style={{ marginBottom: "8px" }}>{sel.card?.sent_at ? "Reply" : "First reply — sending creates the pipeline card"}</div>
+              <input value={subject} onChange={e => setSubject(e.target.value)} aria-label="Subject" className="field" style={{ fontWeight: 600, marginBottom: "8px" }} />
+              <textarea value={body} onChange={e => setBody(e.target.value)} rows={6} aria-label="Reply body" placeholder={`Hi ${inboundPerson(sel) || "there"} — thanks for reaching out about ${inboundService(sel) || "your search program"}…`} className="field" style={{ lineHeight: 1.6, resize: "vertical" }} />
               <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
-                <button disabled={!!busy || !body.trim()} onClick={() => sendReply(sel)} style={{ padding: "8px 18px", background: busy || !body.trim() ? "rgba(255,255,255,0.06)" : T.ink, border: "none", borderRadius: T.rSm, color: busy || !body.trim() ? T.muted : T.textOnBrand, fontSize: "12px", fontWeight: 700, cursor: busy || !body.trim() ? "not-allowed" : "pointer", fontFamily: T.fontDisplay }}>{busy === "send" ? "Sending…" : "Send reply"}</button>
-                <button disabled={!!busy} onClick={() => draftAI(sel)} style={{ padding: "8px 14px", background: T.goldSoft, border: `1px solid ${T.goldLine}`, borderRadius: T.rSm, color: T.gold, fontSize: "12px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay }}>{busy === "draft" ? "Drafting…" : "✦ Draft with AI"}</button>
+                <button type="button" disabled={!!busy || !body.trim()} onClick={() => sendReply(sel)} className="btn md primary">{busy === "send" ? "Sending…" : "Send reply"}</button>
+                <button type="button" disabled={!!busy} onClick={() => draftAI(sel)} className="btn md tinted">{busy === "draft" ? "Drafting…" : "✦ Draft with AI"}</button>
               </div>
             </div>
           </div>

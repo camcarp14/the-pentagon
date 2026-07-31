@@ -21,7 +21,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DOMPurify from "dompurify";
 import { supabase } from "./supabaseClient";
-import { T, syne } from "./theme";
+// `syne` is gone from this file: every piece of type here is a kit class now,
+// and the kit sets its own family off --font-body.
+import { T } from "./theme";
 import { enginePhase, enginePlays, humanGap, PHASE } from "@cc/ops/plays.js";
 import { armWrites, subsystemWrites, armState } from "@cc/ops/arm.js";
 import { cadenceFor } from "@cc/ops/cadence.js";
@@ -166,74 +168,80 @@ export default function EnginePanel({ isMobile }) {
   };
 
   return (
-    <div style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 18, padding: isMobile ? 16 : 20, marginBottom: 16, boxShadow: T.cardShadow }}>
+    // The kit's card: one material, a shadow, no outline. This drew a 1px line
+    // AND T.cardShadow — the pair the language forbids.
+    <div className="card pad-lg" style={{ padding: isMobile ? 16 : 20, marginBottom: 16 }}>
       {/* header */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-        <span style={{ fontSize: 16, fontWeight: 800, color: T.ink, fontFamily: syne }}>The writer</span>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, border: `1px solid ${pill.c}55`, borderRadius: 999, padding: "3px 9px" }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: pill.c }} />
-          <span style={{ fontSize: 10.5, fontWeight: 800, color: pill.c, letterSpacing: "0.05em", textTransform: "uppercase" }}>{pill.t}</span>
+        <span className="t-head">The writer</span>
+        {/* The kit's .pill, tinted by state. Armed / Rehearsing / Off / Stopped
+            is written out beside the dot, so the state never rests on the hue. */}
+        <span className="pill" style={{ background: `${pill.c}1F`, height: 26, padding: "0 11px" }}>
+          <span className="dotstatus" style={{ background: pill.c }} />
+          <span className="t-label" style={{ color: pill.c }}>{pill.t}</span>
         </span>
         {phase.sinceLastRunMs != null && (
-          <span style={{ fontSize: 11, color: T.faint, marginLeft: "auto" }}>last pass {humanGap(phase.sinceLastRunMs)} ago</span>
+          <span className="t-cap" style={{ marginLeft: "auto" }}>last pass {humanGap(phase.sinceLastRunMs)} ago</span>
         )}
         {/* The off switch. Always visible once a control row exists, so the
             engine can never be in a state you cannot reverse from this screen. */}
         {loaded && mine && (
-          <button onClick={toggleMine} disabled={!!busy}
-            style={{
-              marginLeft: phase.sinceLastRunMs != null ? 10 : "auto", flex: "none",
-              minHeight: 30, padding: "0 11px", borderRadius: 8, cursor: busy ? "default" : "pointer",
-              border: `1px solid ${T.line}`, background: "transparent", color: T.sub,
-              fontSize: 11, fontWeight: 700, fontFamily: syne, opacity: busy ? 0.55 : 1,
-            }}>
+          <button type="button" className="btn sm quiet" onClick={toggleMine} disabled={!!busy}
+            style={{ marginLeft: phase.sinceLastRunMs != null ? 10 : "auto", flex: "none" }}>
             {busy === "toggle" ? "…" : mine.enabled === true ? "Turn off" : "Turn on"}
           </button>
         )}
       </div>
 
-      {err && <Msg tone={T.red}>{err}</Msg>}
+      {/* An error that a reload might clear gets a retry sitting on it. */}
+      {err && <Msg tone={T.red} onRetry={load} busy={!!busy}>{err}</Msg>}
       {note && <Msg tone={T.green}>{note}</Msg>}
 
       {/* the one true headline */}
       <div style={{ marginBottom: plays.length ? 14 : 0 }}>
-        <div style={{ fontSize: 19, fontWeight: 800, color: T.ink, fontFamily: syne, lineHeight: 1.25 }}>
+        <div className="t-title2" style={{ lineHeight: 1.25 }}>
           {loaded ? phase.headline : "Reading state…"}
         </div>
-        <div style={{ fontSize: 12.5, color: T.sub, marginTop: 4, lineHeight: 1.5 }}>{loaded ? phase.detail : ""}</div>
+        <div className="t-foot" style={{ marginTop: 4, lineHeight: 1.5 }}>{loaded ? phase.detail : ""}</div>
       </div>
 
       {/* plays — the first is always this phase's own remedy */}
+      {/* The kit's cell grammar, one play per row: 46px, a leading dot, a title,
+          a sub and a chevron. The first play is this phase's own remedy, so it
+          is tinted — and it also sits first, which is the signal that survives
+          the tint not being seen. */}
+      {/* Each play is wrapped, so the rows are never ADJACENT .cell siblings —
+          the kit draws a hairline between those, and these are separated cards
+          with their own tint, not a grouped list. */}
       {plays.map((p, i) => (
-        <button key={p.id} onClick={() => onPlay(p.action)} disabled={!!busy}
-          style={{
-            width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 12,
-            background: i === 0 ? `${TONE[p.tone] || T.sub}14` : "transparent",
-            border: `1px solid ${i === 0 ? `${TONE[p.tone] || T.sub}55` : T.line}`,
-            borderRadius: 12, padding: "12px 14px", marginBottom: 8, cursor: busy ? "default" : "pointer",
-            opacity: busy ? 0.6 : 1, minHeight: 46,
-          }}>
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: TONE[p.tone] || T.sub, flex: "none" }} />
-          <span style={{ minWidth: 0, flex: 1 }}>
-            <span style={{ display: "block", fontSize: 13.5, fontWeight: 700, color: T.ink }}>{busy === "arm" && p.action === "arm" ? "Arming…" : p.title}</span>
-            {p.sub && <span style={{ display: "block", fontSize: 11.5, color: T.sub, marginTop: 2, lineHeight: 1.45 }}>{p.sub}</span>}
-          </span>
-          <span style={{ color: T.faint, fontSize: 16 }}>›</span>
-        </button>
+        <div key={p.id} style={{ marginBottom: 8 }}>
+          <button type="button" className="cell tappable" onClick={() => onPlay(p.action)} disabled={!!busy}
+            style={{
+              background: i === 0 ? `${TONE[p.tone] || T.sub}14` : "transparent",
+              borderRadius: 12, opacity: busy ? 0.6 : 1,
+            }}>
+            <span className="dotstatus" style={{ background: TONE[p.tone] || T.sub }} />
+            <span className="cell-body">
+              <span className="cell-title" style={{ whiteSpace: "normal", fontWeight: 600 }}>{busy === "arm" && p.action === "arm" ? "Arming…" : p.title}</span>
+              {p.sub && <span className="cell-sub" style={{ whiteSpace: "normal", lineHeight: 1.45 }}>{p.sub}</span>}
+            </span>
+            <span className="cell-chevron">›</span>
+          </button>
+        </div>
       ))}
 
       {/* the queue */}
       {queue.map((item) => (
         <div key={item.id} style={{ border: `1px solid ${T.line}`, borderRadius: 12, marginTop: 8, opacity: item.stale ? 0.6 : 1 }}>
-          <button onClick={() => setOpenId(openId === item.id ? null : item.id)}
+          <button type="button" onClick={() => setOpenId(openId === item.id ? null : item.id)}
             style={{ width: "100%", textAlign: "left", background: "none", border: "none", padding: "12px 14px", cursor: "pointer" }}>
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: T.ink, lineHeight: 1.35 }}>{item.title}</div>
-            <div style={{ fontSize: 11.5, color: T.sub, marginTop: 3, lineHeight: 1.5 }}>{item.preview}</div>
-            {item.why && <div style={{ fontSize: 11, color: T.faint, marginTop: 5 }}>Why: {item.why}</div>}
+            <div className="t-call" style={{ fontWeight: 600, lineHeight: 1.35 }}>{item.title}</div>
+            <div className="t-cap" style={{ marginTop: 3, lineHeight: 1.5 }}>{item.preview}</div>
+            {item.why && <div className="t-cap" style={{ marginTop: 5 }}>Why: {item.why}</div>}
           </button>
           {openId === item.id && (
             <div style={{ padding: "0 14px 14px" }}>
-              <div style={{ background: T.navy, border: `1px solid ${T.line}`, borderRadius: 10, padding: 12, maxHeight: 320, overflowY: "auto", fontSize: 12.5, color: T.ink, lineHeight: 1.65, marginBottom: 10 }}
+              <div style={{ background: "var(--surface-2)", borderRadius: 10, padding: 12, maxHeight: 320, overflowY: "auto", fontSize: 12.5, color: "var(--ink)", lineHeight: 1.65, marginBottom: 10 }}
                 // SANITISE. body_html is model-written and lands in the table
                 // through the content engine, so it is untrusted markup by the
                 // time it reaches a browser — a <script> or an onerror= handler
@@ -266,7 +274,7 @@ export default function EnginePanel({ isMobile }) {
         </div>
       )}
       {!editing && ready && phase.phase !== PHASE.UNPOINTED && (
-        <button onClick={openEditor} style={{ marginTop: 12, background: "none", border: "none", color: T.faint, fontSize: 11.5, cursor: "pointer", padding: 0 }}>
+        <button type="button" className="btn sm plain" onClick={openEditor} style={{ marginTop: 12, paddingLeft: 0 }}>
           Change what it writes about ›
         </button>
       )}
@@ -274,29 +282,50 @@ export default function EnginePanel({ isMobile }) {
   );
 }
 
-function Msg({ tone, children }) {
-  return <div style={{ background: `${tone}18`, border: `1px solid ${tone}55`, borderRadius: 10, padding: "9px 12px", fontSize: 12, color: T.ink, marginBottom: 12, lineHeight: 1.5, wordBreak: "break-word" }}>{children}</div>;
+// A status strip. It states its tone in words as well as colour, and an error
+// carries the retry, because "one read failed" is exactly the case a second
+// attempt fixes — the panel loads four independent queries and shows whichever
+// ones came back.
+//
+// SAFE TO PRESS TWICE. `onRetry` is the panel's own `load` — a no-argument
+// useCallback([]) that only SELECTs and setState()s. It submits nothing, so a
+// double tap costs one extra read and cannot double-write; and it clears `err`
+// on success (the error list is rebuilt from scratch each pass) so the strip
+// disappears rather than sticking. It is still disabled while `busy`, because
+// `busy` means a WRITE is in flight and every write already ends in its own
+// load() — a concurrent read would race that one for the same four setStates.
+//
+// EXPORTED for the render test: the strip only mounts when a query fails, and
+// effects do not run under renderToStaticMarkup, so there is no cold path to it.
+export function Msg({ tone, children, onRetry, busy }) {
+  return (
+    <div role={onRetry ? "alert" : undefined} style={{ background: `${tone}18`, border: `1px solid ${tone}55`, borderRadius: 10, padding: "9px 12px", fontSize: 12, color: T.ink, marginBottom: 12, lineHeight: 1.5, wordBreak: "break-word", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+      <span style={{ flex: 1, minWidth: 0 }}>{children}</span>
+      {onRetry && <button type="button" className="btn sm quiet" onClick={onRetry} disabled={busy}>Try again</button>}
+    </div>
+  );
 }
 
+// The kit's .btn.md — 44px, not the 40px hand-rolled box with a 1px line. `tone`
+// tints a semantic action (publish = go) without becoming the tool's accent.
 function Btn({ children, onClick, disabled, tone }) {
   return (
-    <button onClick={onClick} disabled={disabled} style={{
-      minHeight: 40, padding: "0 16px", borderRadius: 10, cursor: disabled ? "default" : "pointer",
-      border: `1px solid ${tone || T.line}`, background: tone ? `${tone}22` : "transparent",
-      color: tone ? T.ink : T.sub, fontSize: 12.5, fontWeight: 700, fontFamily: syne, opacity: disabled ? 0.55 : 1,
-    }}>{children}</button>
+    <button type="button" className={`btn md ${tone ? "" : "quiet"}`} onClick={onClick} disabled={disabled}
+      style={tone ? { background: `${tone}22`, color: tone } : undefined}>{children}</button>
   );
 }
 
 function F({ label, hint, v, on, area, type = "text" }) {
-  const s = { width: "100%", background: T.navy, border: `1px solid ${T.line}`, borderRadius: 9, color: T.ink, fontSize: 12.5, padding: "9px 11px", fontFamily: "inherit", boxSizing: "border-box", lineHeight: 1.5 };
+  // The kit's .field: geometry, tone and focus ring. `.on-well` because this
+  // form sits inside the panel's own card.
+  const s = { fontSize: 12.5, padding: "9px 11px", minHeight: 40, lineHeight: 1.5 };
   return (
     <label style={{ display: "block", marginBottom: 11 }}>
-      <div style={{ fontSize: 11.5, fontWeight: 700, color: T.ink, marginBottom: 4 }}>{label}</div>
-      {hint && <div style={{ fontSize: 10.5, color: T.faint, marginBottom: 5 }}>{hint}</div>}
+      <div className="t-cap" style={{ color: "var(--ink)", fontWeight: 600, marginBottom: 4 }}>{label}</div>
+      {hint && <div className="t-cap" style={{ marginBottom: 5 }}>{hint}</div>}
       {area
-        ? <textarea rows={2} value={v || ""} onChange={(e) => on(e.target.value)} style={{ ...s, minHeight: 56, resize: "vertical" }} />
-        : <input type={type} value={v ?? ""} onChange={(e) => on(e.target.value)} style={s} />}
+        ? <textarea className="field" rows={2} value={v || ""} onChange={(e) => on(e.target.value)} style={{ ...s, minHeight: 56, resize: "vertical" }} />
+        : <input className="field" type={type} value={v ?? ""} onChange={(e) => on(e.target.value)} style={s} />}
     </label>
   );
 }

@@ -5,7 +5,7 @@
 // only ever writes rows with status='draft'. Safe mode still applies on top:
 // while safe, approved sends reroute to your own inbox.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { T, card as cardStyle, inputBase } from "../../theme.js";
+import { T } from "../../theme.js";
 import { EmptyState, SkeletonRows, useToast } from "../../ui.jsx";
 import { seqDb } from "../../lib/sequenceDb.js";
 import { db } from "../../lib/supabase.js";
@@ -38,7 +38,10 @@ async function wrapLinks(messageId, body) {
   return out;
 }
 
-function QueueItem({ msg, onDone }) {
+// Exported so the render test can mount one with a draft row: QueueView itself
+// only ever has rows after an async seqDb.getQueue(), so a cold render of the
+// tab reaches the skeleton and nothing inside it.
+export function QueueItem({ msg, onDone }) {
   const toast = useToast();
   const [expanded, setExpanded] = useState(false);
   const [subject, setSubject] = useState(msg.subject || "");
@@ -116,18 +119,20 @@ function QueueItem({ msg, onDone }) {
   };
 
   return (
-    <div style={{ ...cardStyle, padding: "16px 18px", display: "flex", flexDirection: "column", gap: "10px" }}>
+    <div className="card" style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: "10px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-        <span style={{ fontSize: "13.5px", fontWeight: 700, color: T.ink, fontFamily: T.fontDisplay, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span className="cell-title" style={{ minWidth: 0, flex: "0 1 auto" }}>
           {prospect?.business_name || "Unknown prospect"}
         </span>
-        <span style={{ fontSize: "9.5px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: kind.color, background: `${kind.color}1A`, border: `1px solid ${kind.color}33`, borderRadius: T.rPill, padding: "2px 8px", fontFamily: T.fontDisplay }}>
+        {/* Uppercase lives on .t-label and nowhere else — this was a hand-rolled
+            9.5px tracked capital run. */}
+        <span className="t-label" style={{ color: kind.color, background: `${kind.color}1A`, borderRadius: T.rPill, padding: "3px 9px" }}>
           {msg.meta?.step_name || kind.label}
         </span>
         {msg.meta?.personalized && (
-          <span title="AI-personalized from the prospect brief" style={{ fontSize: "9.5px", color: T.gold, background: T.goldSoft, border: `1px solid ${T.goldLine}`, borderRadius: T.rPill, padding: "2px 8px", fontWeight: 700 }}>✦ personalized</span>
+          <span title="AI-personalized from the prospect brief" className="t-cap" style={{ color: T.gold, background: T.goldSoft, borderRadius: T.rPill, padding: "2px 9px", fontWeight: 600 }}>✦ personalized</span>
         )}
-        <span style={{ marginLeft: "auto", fontSize: "10.5px", color: T.faint, fontFamily: T.fontMono, flexShrink: 0 }}>{timeAgo(msg.created_at)}</span>
+        <span className="t-cap" style={{ marginLeft: "auto", color: T.faint, fontFamily: T.fontMono, flexShrink: 0 }}>{timeAgo(msg.created_at)}</span>
       </div>
 
       <div style={{ fontSize: "11px", color: T.muted }}>
@@ -136,34 +141,36 @@ function QueueItem({ msg, onDone }) {
 
       {expanded ? (
         <>
-          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject"
-            style={{ ...inputBase, fontSize: "13px", fontWeight: 600 }} />
-          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={7}
-            style={{ ...inputBase, fontSize: "12.5px", lineHeight: 1.6, resize: "vertical", fontFamily: T.fontBody }} />
+          {/* The kit's .field — one well, no outline, kit focus ring. */}
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" aria-label="Subject"
+            className="field" style={{ fontWeight: 600 }} />
+          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={7} aria-label="Message body"
+            className="field" style={{ fontSize: "13.5px", lineHeight: 1.6, resize: "vertical" }} />
         </>
       ) : (
-        <button onClick={() => setExpanded(true)} title="Click to review and edit before sending"
-          style={{ textAlign: "left", background: T.subtle, border: `1px solid ${T.lineSoft}`, borderRadius: T.rSm, padding: "10px 12px", cursor: "pointer" }}>
+        // The kit's .cell tappable — a full-width row that opens the editor in
+        // place is that grammar exactly, and it brings the kit's press state and
+        // 46px floor to what was a bare styled block.
+        <button onClick={() => setExpanded(true)} type="button" title="Click to review and edit before sending"
+          className="cell tappable" style={{ background: T.subtle, borderRadius: "12px", padding: "10px 12px", flexDirection: "column", alignItems: "stretch", gap: 0 }}>
           <div style={{ fontSize: "12.5px", fontWeight: 600, color: T.ink, marginBottom: "4px" }}>{subject || "(no subject)"}</div>
           <div style={{ fontSize: "12px", color: T.muted, lineHeight: 1.55, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden", whiteSpace: "pre-wrap" }}>{body}</div>
         </button>
       )}
 
       <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-        <button onClick={approveAndSend} disabled={!!busy}
-          style={{ padding: "9px 18px", background: T.goldGrad, border: "none", borderRadius: T.rSm, color: T.textOnBrand, fontSize: "12px", fontWeight: 800, cursor: busy ? "not-allowed" : "pointer", fontFamily: T.fontDisplay, letterSpacing: "0.03em", boxShadow: `0 2px 10px rgba(0,0,0,0.35), ${T.glowBrass}` }}>
+        <button onClick={approveAndSend} type="button" disabled={!!busy} className="btn md primary">
           {busy === "sending" ? "Sending…" : "✓ Approve & Send"}
         </button>
         {!expanded && (
-          <button onClick={() => setExpanded(true)} style={{ padding: "9px 14px", background: "transparent", border: `1px solid ${T.line}`, borderRadius: T.rSm, color: T.muted, fontSize: "11.5px", fontWeight: 700, cursor: "pointer" }}>
+          <button onClick={() => setExpanded(true)} type="button" className="btn md quiet">
             Edit first
           </button>
         )}
-        <button onClick={reject} disabled={!!busy}
-          style={{ padding: "9px 14px", background: "transparent", border: `1px solid rgba(248,113,113,0.3)`, borderRadius: T.rSm, color: T.red, fontSize: "11.5px", fontWeight: 700, cursor: busy ? "not-allowed" : "pointer" }}>
+        <button onClick={reject} type="button" disabled={!!busy} className="btn md danger">
           {busy === "rejecting" ? "…" : "Reject"}
         </button>
-        {dirty && <span style={{ fontSize: "10.5px", color: T.amber }}>edited — saves on send</span>}
+        {dirty && <span className="t-cap" style={{ color: T.amber }}>edited — saves on send</span>}
       </div>
     </div>
   );
@@ -203,14 +210,14 @@ export function QueueView({ onNavigate }) {
   return (
     <div style={{ padding: "24px 28px", maxWidth: "760px", margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: "12px", marginBottom: "6px", flexWrap: "wrap" }}>
-        <h2 style={{ fontSize: "18px", fontWeight: 800, color: T.ink, fontFamily: T.fontDisplay, margin: 0 }}>Approval queue</h2>
+        <h2 className="t-title2" style={{ margin: 0 }}>Approval queue</h2>
         {queue && queue.length > 0 && (
-          <span style={{ fontSize: "11px", color: T.faint, fontFamily: T.fontMono }}>
+          <span className="t-cap" style={{ color: T.faint, fontFamily: T.fontMono }}>
             {queue.length} waiting{counts.reply ? ` · ${counts.reply} repl${counts.reply === 1 ? "y" : "ies"}` : ""}{counts.followup ? ` · ${counts.followup} follow-up${counts.followup === 1 ? "" : "s"}` : ""}
           </span>
         )}
       </div>
-      <div style={{ fontSize: "12px", color: T.muted, marginBottom: "18px", lineHeight: 1.6 }}>
+      <div className="t-foot" style={{ marginBottom: "18px", lineHeight: 1.6 }}>
         Everything the engine and the AI want to send, held for your call. Nothing goes out without a click here.
       </div>
 
@@ -219,7 +226,7 @@ export function QueueView({ onNavigate }) {
       ) : queue.length === 0 ? (
         <EmptyState icon="check" tint={T.green} title="Queue clear"
           sub="No drafts waiting on you. Sequence steps land here when they come due; replies land here as suggested responses."
-          action={<button onClick={() => onNavigate && onNavigate("sequences")} style={{ padding: "8px 16px", background: "transparent", border: `1px solid ${T.goldLine}`, borderRadius: T.rSm, color: T.gold, fontSize: "11.5px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay }}>Manage sequences →</button>}
+          action={<button onClick={() => onNavigate && onNavigate("sequences")} type="button" className="btn md tinted">Manage sequences →</button>}
         />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>

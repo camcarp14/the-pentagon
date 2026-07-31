@@ -227,12 +227,14 @@ export default function EnginePanel({ onNavigate }) {
   };
 
   return (
-    <div style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: 18, padding: isMobile ? 16 : 20, marginBottom: 16 }}>
+    <div className="card" style={{ borderRadius: 18, padding: isMobile ? 16 : 20, marginBottom: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-        <span style={{ fontSize: 16, fontWeight: 800, color: T.ink }}>Outbound engine</span>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, border: `1px solid ${pill.c}55`, borderRadius: 999, padding: "3px 9px" }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: pill.c }} />
-          <span style={{ fontSize: 10.5, fontWeight: 800, color: pill.c, letterSpacing: "0.05em", textTransform: "uppercase" }}>{pill.t}</span>
+        <span className="t-head">Outbound engine</span>
+        {/* The state word is spelled out next to the dot, so armed/off is never
+            colour on its own. */}
+        <span className="pill" style={{ height: "auto", gap: 6, padding: "3px 10px", background: `${pill.c}1A` }}>
+          <span className="dotstatus" style={{ background: pill.c }} />
+          <span className="t-label" style={{ color: pill.c }}>{pill.t}</span>
         </span>
         {phase.sinceLastRunMs != null && (
           <span style={{ fontSize: 11, color: T.faint, marginLeft: "auto" }}>last pass {humanGap(phase.sinceLastRunMs)} ago</span>
@@ -240,13 +242,8 @@ export default function EnginePanel({ onNavigate }) {
         {/* The off switch. Always visible once a control row exists, so the
             engine can never be in a state you cannot reverse from this screen. */}
         {loaded && mine && (
-          <button onClick={toggleMine} disabled={!!busy}
-            style={{
-              marginLeft: phase.sinceLastRunMs != null ? 10 : "auto", flex: "none",
-              minHeight: 30, padding: "0 11px", borderRadius: 8, cursor: busy ? "default" : "pointer",
-              border: `1px solid ${T.line}`, background: "transparent", color: T.muted,
-              fontSize: 11, fontWeight: 700, opacity: busy ? 0.55 : 1,
-            }}>
+          <button onClick={toggleMine} type="button" disabled={!!busy} className="btn sm quiet"
+            style={{ marginLeft: phase.sinceLastRunMs != null ? 10 : "auto", flex: "none" }}>
             {busy === "toggle" ? "…" : mine.enabled === true ? "Turn off" : "Turn on"}
           </button>
         )}
@@ -268,7 +265,7 @@ export default function EnginePanel({ onNavigate }) {
             </div>
           ))}
           {onNavigate && (
-            <button onClick={() => onNavigate("inbound")} style={{ marginTop: 8, background: "none", border: "none", color: T.green, fontSize: 11.5, fontWeight: 700, cursor: "pointer", padding: 0 }}>
+            <button onClick={() => onNavigate("inbound")} type="button" className="btn sm plain" style={{ marginTop: 8, color: T.green, padding: 0 }}>
               Open Inbound ›
             </button>
           )}
@@ -284,8 +281,8 @@ export default function EnginePanel({ onNavigate }) {
       </div>
 
       <div style={{ marginBottom: plays.length ? 14 : 0 }}>
-        <div style={{ fontSize: 19, fontWeight: 800, color: T.ink, lineHeight: 1.25 }}>{loaded ? phase.headline : "Reading state…"}</div>
-        <div style={{ fontSize: 12.5, color: T.muted, marginTop: 4, lineHeight: 1.5 }}>{loaded ? phase.detail : ""}</div>
+        <div className="t-title2" style={{ lineHeight: 1.25 }}>{loaded ? phase.headline : "Reading state…"}</div>
+        <div className="t-foot" style={{ marginTop: 4, lineHeight: 1.5 }}>{loaded ? phase.detail : ""}</div>
       </div>
 
       {/* What it worked out on its own, with the evidence for each line. The
@@ -293,7 +290,7 @@ export default function EnginePanel({ onNavigate }) {
           form the system could already answer. */}
       {loaded && derived && (
         <div style={{ border: `1px solid ${T.blue}55`, background: `${T.blue}0E`, borderRadius: 12, padding: "13px 15px", marginBottom: 12 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: T.blue, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 9 }}>
+          <div className="t-label" style={{ color: T.blue, marginBottom: 9 }}>
             Read from your pipeline
           </div>
           {[["Contacting", effective.icp], ["Offering", effective.offer]].filter(([, v]) => v).map(([k, v]) => {
@@ -314,38 +311,40 @@ export default function EnginePanel({ onNavigate }) {
       )}
 
       {plays.map((p, i) => (
-        <button key={p.id} onClick={() => onPlay(p.action)} disabled={!!busy || p.action === "none"}
+        // A whole tappable row, so it is .card.pressable rather than a .btn —
+        // and a card in this language does not draw an outline, so the tone tint
+        // carries the emphasis the border used to.
+        <button key={p.id} type="button" onClick={() => onPlay(p.action)} disabled={!!busy || p.action === "none"}
+          className={p.action === "none" ? "card pad-sm" : "card pad-sm pressable"}
           style={{
             width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 12,
-            background: i === 0 ? `${TONE[p.tone] || T.muted}14` : "transparent",
-            border: `1px solid ${i === 0 ? `${TONE[p.tone] || T.muted}55` : T.line}`,
-            borderRadius: 12, padding: "12px 14px", marginBottom: 8,
-            cursor: busy || p.action === "none" ? "default" : "pointer", opacity: busy ? 0.6 : 1, minHeight: 46,
+            background: i === 0 ? `${TONE[p.tone] || T.muted}1F` : undefined,
+            marginBottom: 8, opacity: busy ? 0.6 : 1, minHeight: 46,
           }}>
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: TONE[p.tone] || T.muted, flex: "none" }} />
+          <span className="dotstatus" style={{ width: 6, height: 6, background: TONE[p.tone] || T.muted }} />
           <span style={{ minWidth: 0, flex: 1 }}>
-            <span style={{ display: "block", fontSize: 13.5, fontWeight: 700, color: T.ink }}>{busy === "arm" && p.action === "arm" ? "Arming…" : p.title}</span>
-            {p.sub && <span style={{ display: "block", fontSize: 11.5, color: T.muted, marginTop: 2, lineHeight: 1.45 }}>{p.sub}</span>}
+            <span className="t-call" style={{ display: "block", fontWeight: 600 }}>{busy === "arm" && p.action === "arm" ? "Arming…" : p.title}</span>
+            {p.sub && <span className="t-cap" style={{ display: "block", marginTop: 2, lineHeight: 1.45 }}>{p.sub}</span>}
           </span>
           {p.action !== "none" && <span style={{ color: T.faint, fontSize: 16 }}>›</span>}
         </button>
       ))}
 
       {queue.map((item) => (
-        <div key={item.id} style={{ border: `1px solid ${T.line}`, borderRadius: 12, marginTop: 8, opacity: item.stale ? 0.6 : 1 }}>
-          <button onClick={() => setOpenId(openId === item.id ? null : item.id)}
-            style={{ width: "100%", textAlign: "left", background: "none", border: "none", padding: "12px 14px", cursor: "pointer" }}>
+        <div key={item.id} className="cellgroup" style={{ marginTop: 8, opacity: item.stale ? 0.6 : 1 }}>
+          <button onClick={() => setOpenId(openId === item.id ? null : item.id)} type="button" aria-expanded={openId === item.id}
+            className="cell tappable" style={{ width: "100%", textAlign: "left", display: "block", padding: "12px 14px", cursor: "pointer" }}>
             <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 3, flexWrap: "wrap" }}>
               <span style={{ fontSize: 11, color: T.faint }}>{item.target}</span>
-              {item.repaired && <span style={{ fontSize: 9.5, fontWeight: 800, color: T.amber, border: `1px solid ${T.amber}55`, borderRadius: 4, padding: "1px 5px" }}>REPAIRED</span>}
-              {item.stale && <span style={{ fontSize: 9.5, fontWeight: 800, color: T.amber }}>STALE</span>}
+              {item.repaired && <span className="t-label" style={{ color: T.amber, background: `${T.amber}1A`, borderRadius: 4, padding: "1px 6px" }}>Repaired</span>}
+              {item.stale && <span className="t-label" style={{ color: T.amber }}>Stale</span>}
             </div>
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: T.ink, lineHeight: 1.35 }}>{item.title}</div>
-            <div style={{ fontSize: 11.5, color: T.muted, marginTop: 3, lineHeight: 1.5 }}>{item.preview}</div>
+            <div className="t-call" style={{ fontWeight: 600, lineHeight: 1.35 }}>{item.title}</div>
+            <div className="t-cap" style={{ marginTop: 3, lineHeight: 1.5 }}>{item.preview}</div>
           </button>
           {openId === item.id && (
             <div style={{ padding: "0 14px 14px" }}>
-              <div style={{ background: T.bg || "#0F1522", border: `1px solid ${T.line}`, borderRadius: 10, padding: 12, maxHeight: 300, overflowY: "auto", fontSize: 12.5, color: T.ink, lineHeight: 1.65, marginBottom: 10, whiteSpace: "pre-wrap" }}>
+              <div style={{ background: T.bg || "#0F1522", border: "none", borderRadius: 12, padding: 12, maxHeight: 300, overflowY: "auto", fontSize: 13, color: T.ink, lineHeight: 1.65, marginBottom: 10, whiteSpace: "pre-wrap" }}>
                 {item.body}
               </div>
               {item.stale && <div style={{ fontSize: 11.5, color: T.amber, marginBottom: 9, lineHeight: 1.5 }}>Written {item.ageDays} days ago — sending is refused. Reject it and a fresh one gets written.</div>}
@@ -373,7 +372,7 @@ export default function EnginePanel({ onNavigate }) {
         </div>
       )}
       {!editing && ready && phase.phase !== PHASE.UNPOINTED && (
-        <button onClick={openEditor} style={{ marginTop: 12, background: "none", border: "none", color: T.faint, fontSize: 11.5, cursor: "pointer", padding: 0 }}>
+        <button onClick={openEditor} type="button" className="btn sm plain" style={{ marginTop: 12, color: T.faint, padding: 0 }}>
           Change who it writes to ›
         </button>
       )}
@@ -382,28 +381,29 @@ export default function EnginePanel({ onNavigate }) {
 }
 
 function Msg({ tone, children }) {
-  return <div style={{ background: `${tone}18`, border: `1px solid ${tone}55`, borderRadius: 10, padding: "9px 12px", fontSize: 12, color: T.ink, marginBottom: 12, lineHeight: 1.5, wordBreak: "break-word" }}>{children}</div>;
+  return <div role="status" className="t-foot" style={{ background: `${tone}1F`, border: "none", borderRadius: 12, padding: "9px 12px", color: T.ink, marginBottom: 12, lineHeight: 1.5, wordBreak: "break-word" }}>{children}</div>;
 }
 
+// The kit's .btn — one geometry and one press physics for both of this panel's
+// buttons, instead of a local 40px outline button.
 function Btn({ children, onClick, disabled, tone }) {
   return (
-    <button onClick={onClick} disabled={disabled} style={{
-      minHeight: 40, padding: "0 16px", borderRadius: 10, cursor: disabled ? "default" : "pointer",
-      border: `1px solid ${tone || T.line}`, background: tone ? `${tone}22` : "transparent",
-      color: tone ? T.ink : T.muted, fontSize: 12.5, fontWeight: 700, opacity: disabled ? 0.55 : 1,
-    }}>{children}</button>
+    <button onClick={onClick} type="button" disabled={disabled}
+      className={tone ? "btn md" : "btn md quiet"}
+      style={tone ? { background: `${tone}26`, color: T.ink } : undefined}>{children}</button>
   );
 }
 
+// The kit's .field, on the kit's well.
 function F({ label, hint, v, on, area, type = "text" }) {
-  const s = { width: "100%", background: T.bg || "#0F1522", border: `1px solid ${T.line}`, borderRadius: 9, color: T.ink, fontSize: 12.5, padding: "9px 11px", fontFamily: "inherit", boxSizing: "border-box", lineHeight: 1.5 };
+  const s = { padding: "9px 11px", lineHeight: 1.5 };
   return (
     <label style={{ display: "block", marginBottom: 11 }}>
-      <div style={{ fontSize: 11.5, fontWeight: 700, color: T.ink, marginBottom: 4 }}>{label}</div>
-      {hint && <div style={{ fontSize: 10.5, color: T.faint, marginBottom: 5 }}>{hint}</div>}
+      <div className="t-foot" style={{ color: T.ink, fontWeight: 600, marginBottom: 4 }}>{label}</div>
+      {hint && <div className="t-cap" style={{ color: T.faint, marginBottom: 5 }}>{hint}</div>}
       {area
-        ? <textarea rows={2} value={v || ""} onChange={(e) => on(e.target.value)} style={{ ...s, minHeight: 56, resize: "vertical" }} />
-        : <input type={type} value={v ?? ""} onChange={(e) => on(e.target.value)} style={s} />}
+        ? <textarea rows={2} value={v || ""} onChange={(e) => on(e.target.value)} className="field" style={{ ...s, minHeight: 56, resize: "vertical" }} />
+        : <input type={type} value={v ?? ""} onChange={(e) => on(e.target.value)} className="field" style={s} />}
     </label>
   );
 }

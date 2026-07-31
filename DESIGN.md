@@ -100,12 +100,15 @@ Taken from SESSION and now enforceable, because the tokens exist:
 7. **Every state is drawn.** Errors get a Retry, never a dead end. Empty states
    say what to do next and give you the button.
 
-## 5. Why the surfaces have not moved yet
+## 5. How the surfaces moved
 
 The kit and tokens are imported once, at `apps/shell/src/main.jsx`. **Every rule
-in `components.css` is scoped to `[data-kit]`, and nothing sets it yet.** A
-surface opts in by putting `data-kit` on its root; until it does, the sheet
-cannot reach it.
+in `components.css` is scoped to `[data-kit]`.** A surface opts in by putting
+`data-kit` on its root; until it does, the sheet cannot reach it. **All nine
+surfaces have now opted in** — this section used to say "nothing sets it yet",
+which stayed on the page for the whole migration and was flagged by two separate
+reviewers, each assuming the other owned it. If you are reading this while
+migrating something, the sentence you are about to falsify is this one.
 
 That scoping is not tidiness — it is the only reason this is safe to land, and it
 was not in the first version. That version argued the sheet was harmless because
@@ -129,7 +132,8 @@ An adversarial review with a fresh context window found all of it before it
 shipped. `packages/design/__tests__/theme.test.js` now fails if any rule in the
 kit loses its scope, and that assertion was itself mutation-tested.
 
-**Migration order**, from the audit (23 agents, 2.7M tokens, 2026-07-30):
+**Migration order**, from the audit (23 agents, 2.7M tokens, 2026-07-30). All
+nine have landed; the order is kept because it explains the shape of the result.
 
 | # | App | Why here | Cost |
 |---|-----|----------|------|
@@ -145,9 +149,71 @@ kit loses its scope, and that assertion was itself mutation-tested.
 
 Shell first because navigation is what the operator actually complained about.
 Clarify last because it is larger than the four smallest apps combined, and
-because by then the kit will have been proven on eight surfaces.
+because by then the kit had been proven on eight surfaces.
 
-## 6. Untouchable
+**What the order actually bought.** Every migration was reviewed by a fresh
+context window whose only job was to prove it broken, and every one of the nine
+reviews came back failing. That is the point of the arrangement, not a sign it
+went badly: the defects were found by someone who had not just written the code.
+The two that mattered most were both invisible to the app that caused them — the
+kit's `[data-kit]` scoping (§5 above) and the global keyframe namespace (§6
+below) — and neither could have been found by testing one surface in isolation.
+
+**Still outstanding.** ZTS's and Clarify's DNA tabs are only partly on the kit
+(roughly two dozen hand-rolled controls each), and both are exempted wholesale
+from the kit-control assertions rather than migrated. That is deliberate: those
+tabs are being retired in favour of the shell's single Minds screen
+(`apps/shell/src/Minds.jsx`), so restyling them would be work thrown away. Until
+the retirement lands, the exemptions are real coverage gaps on shipped surfaces
+and should be read as such.
+
+## 6. Keyframe names are document-global — the kit owns them
+
+A `@keyframes` name cannot be scoped. Not by `[data-kit]`, not by a class, not by
+a media query, not by a shadow root's parent, not by anything. There is one flat
+namespace per document, last definition wins, and nine tools share one document.
+
+That made §5's careful scoping a half-measure: every ordinary declaration in
+`components.css` is behind `[data-kit]`, but its sixteen keyframe names are not
+and cannot be. Six app files defined the same names. Several of those apps inject
+their sheet into `document.head` at mount and never remove it, so they land after
+the shell's `import "@cc/ui/components.css"` and win for **every tool on screen**,
+not just their own.
+
+The sharpest case, and the one that proves it is not theoretical: the kit's
+`shimmer` is a TRANSFORM sweep driving `[data-kit] .sk::after`, which starts at
+`translateX(-100%)`. ZTS's and Clarify's `shimmer` were BACKGROUND-POSITION
+sweeps. A background-position animation does nothing to that element, so with ZTS
+or Clarify mounted, kit skeleton loaders stopped animating **in every tool**.
+`packages/ui/index.jsx` shipped a third background-position `shimmer`, injected
+from JS at import time, which beat `components.css` unconditionally.
+
+**The rule:**
+
+1. `packages/ui/components.css` is the **sole owner** of the kit keyframe names —
+   today `pagein, slidel, slider, rise, shimmer, fadein, pulse, sheetup, breathe,
+   spin, shake, convene, sheetin, modalin, toastin, toastout`. The list is not
+   authoritative here; the file is.
+2. An app that wants the kit's behaviour **references** the name and does not
+   define it. No copy, however identical — an identical copy is a future
+   divergence that nothing will catch.
+3. An app that needs **different** behaviour defines a **prefixed** name —
+   `zts-`/`co-`/`mc-`/`rw-`/`sy-`/`biz-`/`sh-`, matching that app's existing
+   convention — and points its own consumers at the prefixed name. `business`
+   (`bizPulse`, `bizSpin`, `bizRise`), `sync` and `runway` (`rw-pulse`,
+   `rw-fadein`, `rw-rise`) already do this correctly and are the worked examples.
+4. Prefer (2) over (3). A 1px or 0.05-opacity difference is not a reason to fork
+   the motion system — §4.6 says motion is one physics, and this is where that
+   stops being a slogan.
+
+`packages/ui/__tests__/keyframes.test.js` enforces it. It derives the owned names
+from `components.css` rather than hardcoding them, so the guard follows the kit,
+and it scans JS/JSX **template literals** as well as `.css` files, because the two
+worst offenders injected their CSS from a template string and a `.css`-only glob
+missed both entirely. It carries scan-sanity floors so a regex that quietly stops
+matching cannot pass green, and every assertion in it was mutation-tested.
+
+## 7. Untouchable
 
 - Every `localStorage` key, Supabase table/column, query key and netlify function path.
 - The iOS standalone geometry — safe areas, the vvh-pinned shell, the letterbox

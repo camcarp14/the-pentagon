@@ -77,9 +77,19 @@ export default function SyncRoot() {
   // .sy-scope captures the Pentagon's custom properties under private names so
   // .sy-root can republish them as SYNC's own without a self-referential cycle.
   // It has to be a separate element for that to work — see styles.css.
+  //
+  // data-kit goes on .sy-root, which is THIS APP'S own root element and the
+  // only thing the shell hands SYNC. Every rule in packages/ui/components.css
+  // is scoped [data-kit], so from here the shared card, cell, stat tile,
+  // button, pill, segmented control, field, switch, sheet, toast, skeleton and
+  // type scale reach this tool and nothing else on the page — the same rule
+  // the shell follows by keeping data-kit off the wrapper that holds every
+  // tool. SYNC already spoke the kit's vocabulary (it was ported from the same
+  // SESSION language); what changes is that the definitions now come from one
+  // place instead of a private 1,100-line copy.
   return (
     <div className="sy-scope">
-      <div className="sy-root">
+      <div className="sy-root" data-kit>
         <ToastHost>
           <App />
         </ToastHost>

@@ -109,33 +109,48 @@ function fmtSubs(n) {
   return String(n);
 }
 // ─── Premium design system (inherited from Clarify's redesign) ───────────────
+// ON THE SHARED KIT. ZTS has no .css file — this template string IS its
+// stylesheet, so the migration happens here rather than in a sheet. What is left
+// below is only what packages/ui/components.css does NOT own: the page canvas,
+// the scrollbars, the selection colour, ZTS's own keyframe names (referenced by
+// name from a dozen inline `animation:` values), and the iOS input rule.
+//
+// The webfont <link> is GONE. It pulled Syne + DM Mono + Inter off Google's CDN
+// on every mount; the language allows the system stack and nothing else, and
+// theme.js's `syne`/`mono` consts now resolve --font-display / --font-mono.
+//
+// The `.zts-card-hover` lift is gone too: it added a 1px ring in a box-shadow to
+// an element that already drew a 1px border, which is the border-and-shadow pair
+// the language forbids. Cards that respond to a tap are `.card.pressable` now,
+// which is the kit's own press physics.
 function useGlobalStyles() {
   useEffect(() => {
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = "https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap";
-    document.head.appendChild(link);
     const style = document.createElement("style");
     style.textContent = `
       *, *::before, *::after { box-sizing: border-box; }
       * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
-      html, body { margin: 0; font-family: 'Inter', system-ui, sans-serif; }
+      html, body { margin: 0; font-family: var(--font-body, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif); }
       body { background-color: #0B0F1A; background-image: radial-gradient(1200px 600px at 12% -8%, rgba(62,207,142,0.06), transparent 60%), radial-gradient(1000px 700px at 100% 0%, rgba(110,168,254,0.05), transparent 55%); background-attachment: fixed; }
       ::-webkit-scrollbar { width: 8px; height: 8px; }
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
       ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); background-clip: padding-box; }
-      textarea, input, select, button { font-family: 'Inter', system-ui, sans-serif; }
+      textarea, input, select, button { font-family: var(--font-body, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif); }
       ::selection { background: rgba(62,207,142,0.28); color: #F7F9FC; }
       button, a, [role="button"], input, select, textarea { transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, transform 0.12s ease, opacity 0.16s ease; }
       button:not(:disabled):active { transform: translateY(0.5px); }
       button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(62,207,142,0.34); }
       input::placeholder, textarea::placeholder { color: #5A6780; }
-      @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
-      @keyframes fadein { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
-      @keyframes spin { to { transform: rotate(360deg); } }
+      /* pulse, fadein, spin and shimmer are the KIT's (packages/ui/components.css)
+         and are referenced, never redefined here. Keyframe names are
+         document-global — no attribute, class or scope can contain them — and
+         this sheet is appended to document.head and never removed, so it lands
+         after the shell's kit import and wins for every tool on screen, not just
+         ZTS. The shimmer copy was the sharpest edge: it was a background-position
+         sweep, and it silently froze the kit's transform-driven .sk::after
+         skeleton loader everywhere. Only ZTS-owned names live below.
+         See DESIGN.md §6. */
       @keyframes slideup { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: none; } }
-      @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
       @keyframes toastIn { from { opacity: 0; transform: translateX(18px) scale(0.97); } to { opacity: 1; transform: none; } }
       @keyframes toastOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(18px) scale(0.97); } }
       @keyframes toastShrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
@@ -143,8 +158,15 @@ function useGlobalStyles() {
       @keyframes cardIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
       html { overflow-x: hidden; }
       body { overflow-x: hidden; }
+      /* A tappable card lifts on hover. Elevation ONLY: no transform, so it
+         cannot fight the kit's :active press or survive prefers-reduced-motion,
+         and no ring, so the element never carries a border and a shadow at once.
+         Scoped to .zts-card and not to .card: this sheet is injected into the
+         document head and never removed, and every other tool's root carries
+         data-kit too — a bare `[data-kit] .card` rule here would follow the user
+         into Ideas and Business the moment they left ZTS. */
       @media (hover: hover) and (pointer: fine) {
-        .zts-card-hover:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.45), 0 16px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.07); }
+        [data-kit] .zts-card.pressable:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.45), 0 16px 40px rgba(0,0,0,0.35); }
       }
       @media (max-width: ${MOBILE_BP}px) {
         input, select, textarea { font-size: 16px !important; }
@@ -160,14 +182,26 @@ function useGlobalStyles() {
 // ZTS palette (T), display/mono fonts, and motion (M) now live in ./theme.js —
 // the shared midnight canvas + emerald accent, derived from @cc/design.
 
+// THE KIT'S CARD, not a local one. This drew a 1px border AND a drop shadow —
+// the pair the language forbids; .card separates by tone and shadow with no
+// outline. `hover` (and any onClick) now maps to .card.pressable, which is the
+// kit's press physics rather than a bespoke transform.
 const Card = ({ children, style, onClick, hover }) => (
-  <div onClick={onClick} className={hover ? "zts-card-hover" : undefined}
-    style={{ background: T.card, borderRadius: "16px", border: `1px solid ${T.line}`, boxShadow: T.cardShadow, padding: "18px 20px", cursor: onClick ? "pointer" : "default", transition: hover ? "transform 0.15s ease, box-shadow 0.15s ease" : undefined, ...style }}>{children}</div>
+  <div onClick={onClick} className={`card zts-card pad-md${onClick || hover ? " pressable" : ""}`}
+    style={{ minWidth: 0, ...style }}>{children}</div>
 );
-const Label = ({ children, style }) => <div style={{ fontSize: "11px", fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.13em", fontFamily: syne, ...style }}>{children}</div>;
+// THE KIT'S .t-label. This was 11px, weight 700, tracked 0.13em and uppercase in
+// a decorative face — under the 10.5px floor is the least of it: it was
+// hand-doing exactly what .t-label does at 12px. Uppercase now exists in this
+// app in one class only, which is the rule.
+const Label = ({ children, style }) => <div className="t-label" style={style}>{children}</div>;
+// THE KIT'S .btn. Was 12px text in a 10/18 padded box — a 38px target with a
+// gradient fill and a 1px line. .btn.md is the 44px one-thumb target, and
+// .primary / .quiet carry the fill, the radius, the disabled opacity and the
+// press physics.
 const Btn = ({ children, onClick, primary, disabled, style }) => (
-  <button onClick={onClick} disabled={disabled}
-    style={{ padding: "10px 18px", background: disabled ? "rgba(255,255,255,0.06)" : primary ? T.greenGrad : "transparent", border: primary ? `1px solid ${T.accentLine}` : `1px solid ${T.line}`, borderRadius: "10px", color: disabled ? T.faint : primary ? T.accentInk : T.sub, fontSize: "12px", fontWeight: 700, cursor: disabled ? "default" : "pointer", fontFamily: syne, letterSpacing: "0.02em", ...style }}>{children}</button>
+  <button type="button" onClick={onClick} disabled={disabled}
+    className={`btn md ${primary ? "primary" : "quiet"}`} style={style}>{children}</button>
 );
 
 // ─── Mobile retrofit — shared responsive helpers (desktop paths untouched) ───
@@ -193,11 +227,17 @@ const kanbanColStyle = (isMobile) => isMobile ? { minWidth: "80vw", maxWidth: "8
 
 // Shared modal chrome: centered card on desktop (unchanged), bottom sheet on
 // mobile so it feels native instead of a floating box on a big screen.
+// The scrim is the kit's .sheet-scrim (fixed inset-0, --scrim, z-300, fade-in);
+// the flex centring stays inline because this shell centres on desktop and
+// bottom-anchors on phone off ZTS's OWN 680px breakpoint. The panel is NOT the
+// kit's .sheet: .sheet flips to a centred modal at 761px, and ZTS decides
+// "mobile" at 680, so between those two widths the two would disagree about
+// where the panel lives. The grabber IS the kit's .sheet-grab.
 function ModalShell({ onClose, isMobile, width = 560, children }) {
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(11,18,32,0.5)", zIndex: 300, display: "flex", alignItems: isMobile ? "flex-end" : "center", justifyContent: "center", animation: `${isMobile ? "slideup" : "fadein"} 0.18s ease both` }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: isMobile ? "20px 20px 0 0" : "18px", width: isMobile ? "100%" : `${width}px`, maxWidth: isMobile ? "100%" : "94vw", maxHeight: isMobile ? "90vh" : "88vh", display: "flex", flexDirection: "column", boxShadow: isMobile ? "0 -12px 40px rgba(11,17,32,0.22)" : "0 32px 80px rgba(11,17,32,0.24)", overflow: "hidden" }}>
-        {isMobile && <div style={{ width: "36px", height: "4px", borderRadius: "3px", background: "rgba(255,255,255,0.18)", margin: "10px auto -4px", flexShrink: 0 }} />}
+    <div onClick={onClose} className="sheet-scrim" style={{ display: "flex", alignItems: isMobile ? "flex-end" : "center", justifyContent: "center", animation: `${isMobile ? "slideup" : "fadein"} 0.18s ease both` }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: isMobile ? "20px 20px 0 0" : "18px", width: isMobile ? "100%" : `${width}px`, maxWidth: isMobile ? "100%" : "94vw", maxHeight: isMobile ? "90vh" : "88vh", display: "flex", flexDirection: "column", boxShadow: "var(--shadow-deep, 0 32px 80px rgba(11,17,32,0.24))", overflow: "hidden" }}>
+        {isMobile && <div className="sheet-grab" style={{ flexShrink: 0 }} />}
         {children}
       </div>
     </div>
@@ -221,22 +261,63 @@ const TabIcon = ({ tab, color, size = 21 }) => (
   </svg>
 );
 // Fixed bottom tab bar — replaces the top segmented control on mobile only.
-function BottomNav({ view, setView, tabs }) {
+// EXPORTED for apps/zts/src/__tests__/render.test.jsx. It only ever renders
+// under `isMobile`, which is derived from window state the cold render never
+// reaches, so the test could not get at it through <App/> — and while it could
+// not, a free-variable ReferenceError in the entire phone navigation bar was
+// invisible to the suite. No prop, key or call site changed to export it.
+export function BottomNav({ view, setView, tabs }) {
   return (
     // CANONICAL BOTTOM-BAR GEOMETRY — all four tools must match exactly, or the
     // bar visibly changes height as you switch tools (measured on an iPhone
     // before this was unified: ZTS 84, Clarify 82, Runway 92, Macro 94px, from
     // three different bottom-padding formulas and two icon sizes).
     //   bar:  padding 4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))
-    //   item: min-height 46, padding 8px 2px 7px, gap 3, icon 21, label 9px
-    <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", background: "rgba(11,15,26,0.92)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: `1px solid ${T.line}`, boxShadow: "0 -2px 16px rgba(0,0,0,0.4)", padding: "4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))" }}>
+    //   item: min-height 46, padding 8px 2px 7px, gap 3, icon 21, label 10.5px
+    //
+    // The label line reads 10.5px because that is what every bar RENDERS. It
+    // said 9px until 2026-07-31 and the code below said 10.5, which made the
+    // canonical block a liar about the one measurement it existed to pin — and
+    // 9px would violate the hard 10.5px type floor (DESIGN.md §4.3), so the
+    // code was right and the comment was wrong. Corrected here, not there.
+    //
+    // TWO corrections to the ORIGINAL bar, both made in Macro and Looper first
+    // and then in all four bars together, so they still match each other:
+    //   · the label is 10.5px sentence case, not 9px UPPERCASE — 9px was under
+    //     the hard floor, and it was a second uppercase micro-style competing
+    //     with .t-label. 10.5px is the kit's own .dock-label size for this job,
+    //     which is why the canonical line above now reads 10.5.
+    //   · the drop shadow is gone. The bar already separates with a hairline,
+    //     and a border plus a shadow on one element is not allowed.
+    // The bar keeps its own geometry rather than the kit's .dock, because .dock
+    // pads with env(safe-area-inset-bottom) and this bar's safe-area formula is
+    // the canonical one above, shared with three other tools.
+    <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", background: "rgba(11,15,26,0.92)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: `1px solid ${T.line}`, padding: "4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))" }}>
       {tabs.map(t => {
         const active = view === t;
         const color = active ? T.greenDeep : T.faint;
         return (
-          <button key={t} onClick={() => setView(t)} style={{ flex: 1, minHeight: 46, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px", padding: "8px 2px 7px", background: "none", border: "none", cursor: "pointer" }}>
-            <TabIcon tab={t} color={color} />
-            <span style={{ fontSize: "9px", fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.04em", fontFamily: syne }}>{t}</span>
+          // The kit's .dock-tab / .dock-icon / .dock-label — the same three
+          // classes Clarify's bar takes, which is what "must match exactly"
+          // means now that a kit exists. The inline padding STAYS and wins the
+          // cascade: .dock-tab adds env(safe-area-inset-bottom) of its own and
+          // the wrapper above already pays that inset, so taking the kit's
+          // padding would double it. .dock-tab also buys the press grammar —
+          // the tab does not scale, the icon nudges.
+          <button key={t} type="button" onClick={() => setView(t)} aria-current={active ? "page" : undefined} className={active ? "dock-tab active" : "dock-tab"} style={{ flex: 1, minHeight: 46, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px", padding: "8px 2px 7px", background: "none", border: "none", cursor: "pointer" }}>
+            <span className="dock-icon"><TabIcon tab={t} color={color} /></span>
+            {/* .dock-label IS 10.5px / 600 / 0.01em — the canonical numbers, now
+                read off the kit rather than restated here. Only what is ZTS's
+                own is left inline: the tab hue, the active weight, sentence
+                case and the display family.
+                It also pins line-height: 1, which the canonical block never
+                listed and nothing here set, so this label's line box was
+                10.5 × `normal` ≈ 12.6px and the bar stood ~2px taller than
+                Clarify's — the one tool that had already taken .dock-label.
+                Reading the size off the kit closes that gap too. Macro's and
+                Runway's labels still inherit a 1.5 body line-height and run
+                ~5px taller again; that is theirs to fix, not this file's. */}
+            <span className="dock-label" style={{ fontWeight: active ? 700 : 600, color, textTransform: "capitalize", fontFamily: syne }}>{t}</span>
           </button>
         );
       })}
@@ -337,17 +418,14 @@ function StageStepper({ stages, current, onMove, blockForward = false, blockBack
   const back = blockBack ? null : stepStage(stages, current, -1);
   const fwd = blockForward ? null : stepStage(stages, current, +1);
   const fwdLabel = fwd ? stages.find(s => s.key === fwd)?.label : null;
-  const btn = (enabled) => ({
-    padding: "4px 9px", background: "transparent", border: `1px solid ${enabled ? T.line : "rgba(255,255,255,0.05)"}`,
-    borderRadius: "7px", fontSize: "10px", fontWeight: 700, color: enabled ? T.sub : "rgba(255,255,255,0.2)",
-    cursor: enabled ? "pointer" : "default", fontFamily: syne,
-  });
+  // The kit's .btn.sm — 34px and 13px type, where these were 10px inside a 26px
+  // box. The disabled state is .btn:disabled's opacity, not a second colour.
   return (
     <div style={{ display: "flex", gap: "5px", marginTop: "8px" }} onClick={e => e.stopPropagation()}>
-      <button title={back ? `Back to ${stages.find(s => s.key === back)?.label}` : "Already at the first stage"}
-        disabled={!back} onClick={() => back && onMove(back)} style={btn(!!back)}>‹</button>
-      <button title={fwd ? `Move to ${fwdLabel}` : forwardTitle || "Already at the last stage"}
-        disabled={!fwd} onClick={() => fwd && onMove(fwd)} style={{ ...btn(!!fwd), flex: 1 }}>
+      <button type="button" className="btn sm quiet" title={back ? `Back to ${stages.find(s => s.key === back)?.label}` : "Already at the first stage"}
+        disabled={!back} onClick={() => back && onMove(back)} style={{ paddingLeft: 11, paddingRight: 11 }}>‹</button>
+      <button type="button" className="btn sm quiet" title={fwd ? `Move to ${fwdLabel}` : forwardTitle || "Already at the last stage"}
+        disabled={!fwd} onClick={() => fwd && onMove(fwd)} style={{ flex: 1, minWidth: 0 }}>
         {fwd ? `${fwdLabel} ›` : stages[stages.length - 1].key === current ? "✓" : "—"}
       </button>
     </div>
@@ -551,7 +629,7 @@ async function synthesizeInsight(recentObs, allowSonnet) {
   return raw;
 }
 // ─── STUDIO VIEW — the Shorts production pillar ──────────────────────────────
-function StudioView({ shorts, setShorts, isMobile, loading, openSignal = 0, onSignalConsumed }) {
+export function StudioView({ shorts, setShorts, isMobile, loading, openSignal = 0, onSignalConsumed }) {
   const [composing, setComposing] = useState(false);
   const [openShort, setOpenShort] = useState(null);
   const toast = useToast();
@@ -595,8 +673,10 @@ function StudioView({ shorts, setShorts, isMobile, loading, openSignal = 0, onSi
     <div style={{ minHeight: "calc(100vh - 52px)", padding: viewPad(isMobile) }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
         <div>
-          <div style={{ fontSize: "18px", fontWeight: 700, color: T.ink, fontFamily: syne }}>Studio</div>
-          <div style={{ fontSize: "12px", color: T.faint, marginTop: "2px" }}>Generate Shorts and every asset — script, thumbnail, title, description — then ship.</div>
+          {/* One large title per page with a one-line sub under it — the page
+              grammar every surface in this language shares. */}
+          <h1 className="t-title2" style={{ margin: 0 }}>Studio</h1>
+          <p className="t-foot" style={{ margin: "3px 0 0" }}>Generate Shorts and every asset — script, thumbnail, title, description — then ship.</p>
         </div>
         <Btn primary onClick={() => setComposing(true)}>✦ New Short</Btn>
       </div>
@@ -615,26 +695,29 @@ function StudioView({ shorts, setShorts, isMobile, loading, openSignal = 0, onSi
             return (
               <div key={stage.key} style={kanbanColStyle(isMobile)}>
                 <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "10px", padding: "0 2px" }}>
-                  <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: stage.color }} />
-                  <span style={{ fontSize: "11px", fontWeight: 700, color: T.ink, fontFamily: syne }}>{stage.label}</span>
-                  <span style={{ fontSize: "11px", color: T.faint, fontFamily: mono }}>{items.length}</span>
+                  {/* The stage colour is a DOMAIN colour (SHORT_STAGES) — it stays
+                      literal. It is never the only signal: the name is right next
+                      to it, and the same colour rails the card's left edge. */}
+                  <span className="dotstatus" style={{ background: stage.color }} />
+                  <span className="t-label" style={{ color: "var(--ink)" }}>{stage.label}</span>
+                  <span className="t-cap t-num" style={{ fontFamily: mono }}>{items.length}</span>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   {items.map((s, idx) => {
                     const t = SHORT_TYPES[s.type] || SHORT_TYPES.angle;
                     return (
                       <div key={s.id} style={{ animation: `cardIn 0.3s ${M.easeOut} both`, animationDelay: `${Math.min(idx, 8) * 30}ms` }}>
-                      <Card hover onClick={() => setOpenShort(s)} style={{ padding: "12px 13px", borderLeft: `3px solid ${stage.color}` }}>
-                        <div style={{ display: "inline-block", fontSize: "8px", fontWeight: 700, color: T.amberDeep, background: "rgba(245,158,11,0.1)", padding: "2px 6px", borderRadius: "5px", textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: syne, marginBottom: "6px" }}>{t.label}</div>
-                        <div style={{ fontSize: "12px", fontWeight: 600, color: T.ink, lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{s.title || s.topic || "Untitled"}</div>
-                        {s.hook && <div style={{ fontSize: "10px", color: T.faint, marginTop: "4px", lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{s.hook}</div>}
+                      <Card hover onClick={() => setOpenShort(s)} style={{ padding: "12px 15px", boxShadow: `inset 3px 0 0 ${stage.color}, var(--shadow-card)` }}>
+                        <span className="t-label" style={{ display: "inline-block", color: T.amberDeep, background: "rgba(245,158,11,0.1)", padding: "3px 7px", borderRadius: "5px", marginBottom: "6px" }}>{t.label}</span>
+                        <div className="t-call" style={{ fontWeight: 600, lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{s.title || s.topic || "Untitled"}</div>
+                        {s.hook && <div className="t-cap" style={{ marginTop: "4px", lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{s.hook}</div>}
                         <StageStepper stages={SHORT_STAGES} current={stage.key}
                           onMove={(next) => updateShort(s.id, { stage: next, ...(next === "posted" ? { posted_at: new Date().toISOString() } : stage.key === "posted" ? { posted_at: null } : {}) })} />
                       </Card>
                       </div>
                     );
                   })}
-                  {items.length === 0 && <EmptyState compact icon="inbox" tint={T.faint} title="Nothing here" />}
+                  {items.length === 0 && <EmptyState compact icon="inbox" tint={T.faint} title="Nothing here" sub="Move one in with the › stepper on a card." />}
                 </div>
               </div>
             );
@@ -654,7 +737,11 @@ function StudioView({ shorts, setShorts, isMobile, loading, openSignal = 0, onSi
 }
 
 // Compose: pick type + topic, generate the full package.
-function ComposeModal({ onClose, onCreate, isMobile }) {
+// EXPORTED for apps/zts/src/__tests__/render.test.jsx. It sits behind Studio's
+// primary action, so it only mounts when `composing` state flips — state with
+// no prop behind it, which a cold render cannot move. Same reason as the four
+// view components above; nothing else in the app imports it.
+export function ComposeModal({ onClose, onCreate, isMobile }) {
   const [type, setType] = useState("angle");
   const [topic, setTopic] = useState("");
   const [gen, setGen] = useState(false);
@@ -671,34 +758,44 @@ function ComposeModal({ onClose, onCreate, isMobile }) {
   return (
     <ModalShell onClose={onClose} isMobile={isMobile} width={560}>
       <div style={{ padding: isMobile ? "14px 18px calc(18px + var(--safe-bottom))" : "26px 28px", overflowY: "auto" }}>
-        <div style={{ fontSize: "16px", fontWeight: 700, color: T.ink, fontFamily: syne, marginBottom: "4px" }}>New Short</div>
-        <div style={{ fontSize: "12px", color: T.faint, marginBottom: "20px" }}>Pick a type and topic — Claude drafts the hook, script, thumbnails, title, description, and tags.</div>
+        <h2 className="t-head" style={{ margin: "0 0 4px" }}>New Short</h2>
+        <p className="t-foot" style={{ margin: "0 0 20px" }}>Pick a type and topic — Claude drafts the hook, script, thumbnails, title, description, and tags.</p>
 
         <Label style={{ marginBottom: "8px" }}>Short type</Label>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: "8px", marginBottom: "18px" }}>
           {Object.entries(SHORT_TYPES).map(([k, t]) => (
-            <button key={k} onClick={() => setType(k)} style={{ textAlign: "left", padding: "12px 13px", background: type === k ? "rgba(14,159,110,0.07)" : "transparent", border: `1px solid ${type === k ? "rgba(14,159,110,0.35)" : T.line}`, borderRadius: "11px", cursor: "pointer" }}>
-              <div style={{ fontSize: "12px", fontWeight: 700, color: type === k ? T.greenDeep : T.ink, fontFamily: syne, marginBottom: "3px" }}>{t.label}</div>
-              <div style={{ fontSize: "10px", color: T.faint, lineHeight: 1.4 }}>{t.desc}</div>
+            // The kit's .stattile — the left-aligned, column, well-toned tile
+            // this was drawing by hand with a 1px outline and an 11px radius.
+            // `.tappable` is the press physics; `.selected` is the kit's own
+            // 1.5px inset accent ring, which replaces the hand-rolled accent
+            // border (and is an inset SHADOW on a border:none surface, so the
+            // selected tile is not carrying both — §4.2).
+            // Selected still reads as selected without colour: a ✓ and a
+            // heavier weight carry it, and the accent tint only reinforces.
+            <button key={k} type="button" onClick={() => setType(k)} aria-pressed={type === k}
+              className={`stattile tappable${type === k ? " selected" : ""}`}
+              style={{ padding: "12px 13px", background: type === k ? "var(--accent-a10, rgba(14,159,110,0.07))" : undefined, cursor: "pointer" }}>
+              <span className="t-cap" style={{ fontWeight: 700, color: type === k ? "var(--accent)" : "var(--ink)" }}>{type === k ? "✓ " : ""}{t.label}</span>
+              <span className="t-cap" style={{ lineHeight: 1.4 }}>{t.desc}</span>
             </button>
           ))}
         </div>
 
         <Label style={{ marginBottom: "8px" }}>{type === "news" ? "What's the news / event?" : "Topic or angle (optional)"}</Label>
-        <textarea value={topic} onChange={e => setTopic(e.target.value)} placeholder={type === "news" ? "e.g. another exchange just froze withdrawals…" : type === "educational" ? "e.g. why a metal backup beats paper" : "e.g. not your keys, not your coins — leave blank for Claude to pick"}
-          style={{ width: "100%", minHeight: "70px", padding: "11px 13px", border: `1px solid ${T.line}`, borderRadius: "10px", fontSize: "13px", color: T.ink, resize: "vertical", lineHeight: 1.5 }} />
+        <textarea className="field" value={topic} onChange={e => setTopic(e.target.value)} placeholder={type === "news" ? "e.g. another exchange just froze withdrawals…" : type === "educational" ? "e.g. why a metal backup beats paper" : "e.g. not your keys, not your coins — leave blank for Claude to pick"}
+          style={{ minHeight: "70px", resize: "vertical" }} />
 
         <div style={{ display: "flex", gap: "8px", marginTop: "20px" }}>
-          <Btn primary onClick={create} disabled={gen} style={{ flex: 1, padding: "12px" }}>{gen ? "Generating the package…" : "✦ Generate Short"}</Btn>
-          <Btn onClick={onClose} style={{ padding: "12px 18px" }}>Cancel</Btn>
+          <Btn primary onClick={create} disabled={gen} style={{ flex: 1 }}>{gen ? "Generating the package…" : "✦ Generate Short"}</Btn>
+          <Btn onClick={onClose}>Cancel</Btn>
         </div>
-        <div style={{ fontSize: "10px", color: T.faint, textAlign: "center", marginTop: "10px" }}>One Claude call drafts all assets. Runs on Haiku to stay cheap.</div>
+        <p className="t-cap" style={{ textAlign: "center", margin: "10px 0 0" }}>One Claude call drafts all assets. Runs on Haiku to stay cheap.</p>
       </div>
     </ModalShell>
   );
 }
 // Short detail — view/edit/regenerate every asset, run the publish checklist, advance stage.
-function ShortDetail({ short, onClose, onUpdate, onDelete, isMobile }) {
+export function ShortDetail({ short, onClose, onUpdate, onDelete, isMobile }) {
   const [regen, setRegen] = useState(null); // which asset is regenerating
   const [tab, setTab] = useState("assets");
   const toast = useToast();
@@ -734,29 +831,32 @@ function ShortDetail({ short, onClose, onUpdate, onDelete, isMobile }) {
 
   const AssetBlock = ({ title, asset, children }) => (
     <div style={{ marginBottom: "16px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "7px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: "7px" }}>
         <Label>{title}</Label>
-        {asset && <button onClick={() => doRegen(asset)} disabled={regen === asset} style={{ fontSize: "10px", fontWeight: 700, color: regen === asset ? T.faint : T.greenDeep, background: "none", border: "none", cursor: regen === asset ? "default" : "pointer", fontFamily: syne }}>{regen === asset ? "↻ regenerating…" : "↻ regenerate"}</button>}
+        {asset && <button type="button" className="btn sm plain" onClick={() => doRegen(asset)} disabled={regen === asset}>{regen === asset ? "↻ regenerating…" : "↻ regenerate"}</button>}
       </div>
       {children}
     </div>
   );
-  const box = { background: T.subtle, border: `1px solid ${T.line}`, borderRadius: "10px", padding: "12px 14px", fontSize: "13px", color: T.ink, lineHeight: 1.6, whiteSpace: "pre-wrap" };
+  // A read-only well, on the kit's well tone and radius. It used to carry a
+  // hairline as well; the tone step does that job on its own.
+  const box = { background: "var(--surface-2)", borderRadius: "var(--r-well, 12px)", padding: "12px 14px", fontSize: "13px", color: "var(--ink)", lineHeight: 1.6, whiteSpace: "pre-wrap" };
 
   const hPad = isMobile ? "18px" : "24px";
   return (
     <ModalShell onClose={onClose} isMobile={isMobile} width={640}>
         <div style={{ padding: `18px ${hPad}`, borderBottom: `1px solid ${T.line}`, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", flexShrink: 0 }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ display: "inline-block", fontSize: "9px", fontWeight: 700, color: T.amberDeep, background: "rgba(245,158,11,0.1)", padding: "2px 7px", borderRadius: "5px", textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: syne, marginBottom: "6px" }}>{t.label} · {short.stage}</div>
-            <div style={{ fontSize: "15px", fontWeight: 700, color: T.ink, fontFamily: syne, lineHeight: 1.3 }}>{short.title || short.topic || "Untitled Short"}</div>
+            <span className="t-label" style={{ display: "inline-block", color: T.amberDeep, background: "rgba(245,158,11,0.1)", padding: "3px 8px", borderRadius: "5px", marginBottom: "6px" }}>{t.label} · {short.stage}</span>
+            <h2 className="t-head" style={{ margin: 0, lineHeight: 1.3 }}>{short.title || short.topic || "Untitled Short"}</h2>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: T.faint, fontSize: "20px", cursor: "pointer", lineHeight: 1, flexShrink: 0 }}>×</button>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close" style={{ fontSize: "20px", lineHeight: 1 }}>×</button>
         </div>
 
-        <div style={{ display: "flex", gap: "4px", padding: `12px ${hPad} 0`, flexShrink: 0 }}>
+        {/* The kit's segmented control — two options, equal width. */}
+        <div className="seg" role="tablist" style={{ margin: `12px ${hPad} 0`, flexShrink: 0 }}>
           {[["assets", "Assets"], ["publish", `Publish (${checkDone}/${PUBLISH_CHECKLIST.length})`]].map(([k, l]) => (
-            <button key={k} onClick={() => setTab(k)} style={{ padding: "7px 14px", background: tab === k ? "rgba(14,159,110,0.08)" : "transparent", border: "none", borderRadius: "8px", color: tab === k ? T.greenDeep : T.faint, fontSize: "12px", fontWeight: 700, cursor: "pointer", fontFamily: syne }}>{l}</button>
+            <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={tab === k ? "seg-opt active" : "seg-opt"}>{l}</button>
           ))}
         </div>
 
@@ -765,7 +865,8 @@ function ShortDetail({ short, onClose, onUpdate, onDelete, isMobile }) {
             <>
               {!short.script && short.stage === "idea" ? (
                 <div style={{ textAlign: "center", padding: "30px 0" }}>
-                  <div style={{ fontSize: "13px", color: T.faint, marginBottom: "16px" }}>Generation didn't complete. Try again:</div>
+                  {/* An error gets a retry, and the retry says what it will do. */}
+                  <p className="t-call" style={{ margin: "0 0 16px", color: "var(--sub)" }}>Generation didn't complete. Try again:</p>
                   <Btn primary disabled={regen === "all"} onClick={async () => { setRegen("all"); const pkg = await generateShort({ type: short.type, topic: short.topic }); setRegen(null); if (pkg) onUpdate(short.id, { stage: "assets", ...pkg }); else toast.push("Generation failed again — try in a moment.", { tone: "error" }); }}>{regen === "all" ? "Generating…" : "✦ Generate assets"}</Btn>
                 </div>
               ) : (
@@ -776,10 +877,15 @@ function ShortDetail({ short, onClose, onUpdate, onDelete, isMobile }) {
                     <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                       {(short.thumbnail_concepts || []).map((tc, i) => (
                         <div key={i} style={{ ...box, display: "flex", gap: "12px", alignItems: "center" }}>
+                          {/* A thumbnail mock-up. The overlay keeps its poster
+                              weight but loses the CSS uppercase: in this language
+                              uppercase exists in .t-label and nowhere else, and
+                              the model already writes the overlay in the case it
+                              wants. */}
                           <div style={{ flexShrink: 0, width: "70px", height: "90px", background: T.navyGrad, borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", padding: "8px", textAlign: "center" }}>
-                            <span style={{ fontSize: "10px", fontWeight: 800, color: T.amber, fontFamily: syne, lineHeight: 1.1, textTransform: "uppercase" }}>{tc.text_overlay}</span>
+                            <span style={{ fontSize: "11px", fontWeight: 800, color: T.amber, fontFamily: syne, lineHeight: 1.1 }}>{tc.text_overlay}</span>
                           </div>
-                          <div style={{ fontSize: "12px", color: T.sub, lineHeight: 1.5 }}>{tc.visual}</div>
+                          <div className="t-cap" style={{ lineHeight: 1.5 }}>{tc.visual}</div>
                         </div>
                       ))}
                     </div>
@@ -787,7 +893,7 @@ function ShortDetail({ short, onClose, onUpdate, onDelete, isMobile }) {
                   <AssetBlock title="Title" asset="title"><div style={box}>{short.title || "—"}</div></AssetBlock>
                   <AssetBlock title="Description + tags" asset="description">
                     <div style={box}>{short.description || "—"}</div>
-                    {(short.tags || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", marginTop: "8px" }}>{short.tags.map((tag, i) => <span key={i} style={{ fontSize: "10px", color: T.sub, background: "rgba(255,255,255,0.06)", padding: "2px 8px", borderRadius: "12px", fontFamily: mono }}>#{tag}</span>)}</div>}
+                    {(short.tags || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", marginTop: "8px" }}>{short.tags.map((tag, i) => <span key={i} className="t-cap" style={{ background: "var(--ink-a06, rgba(255,255,255,0.06))", padding: "2px 9px", borderRadius: "999px", fontFamily: mono }}>#{tag}</span>)}</div>}
                   </AssetBlock>
                   {short.pinned_comment && <AssetBlock title="Pinned comment"><div style={box}>{short.pinned_comment}</div></AssetBlock>}
                 </>
@@ -795,11 +901,16 @@ function ShortDetail({ short, onClose, onUpdate, onDelete, isMobile }) {
             </>
           ) : (
             <div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "16px" }}>
+              {/* The kit's inset-grouped list: one .cellgroup, one .cell per
+                  item, hairlines only between rows. Done is a tick AND a
+                  strike-through, so the state never rests on colour. */}
+              <div className="cellgroup" style={{ marginBottom: "16px" }}>
                 {PUBLISH_CHECKLIST.map(item => (
-                  <button key={item} onClick={() => toggleCheck(item)} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 13px", background: checklist[item] ? "rgba(14,159,110,0.06)" : "transparent", border: `1px solid ${checklist[item] ? "rgba(14,159,110,0.25)" : T.line}`, borderRadius: "9px", cursor: "pointer", textAlign: "left" }}>
-                    <span style={{ width: "18px", height: "18px", borderRadius: "5px", border: `1.5px solid ${checklist[item] ? T.green : "#CBD5E1"}`, background: checklist[item] ? T.green : "transparent", color: "#FFF", fontSize: "11px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{checklist[item] ? "✓" : ""}</span>
-                    <span style={{ fontSize: "12px", color: checklist[item] ? T.sub : T.ink, fontWeight: 500, textDecoration: checklist[item] ? "line-through" : "none" }}>{item}</span>
+                  <button key={item} type="button" className="cell tappable has-leading" role="checkbox" aria-checked={!!checklist[item]} onClick={() => toggleCheck(item)}>
+                    <span className="cell-leading" style={{ width: "22px", height: "22px", borderRadius: "6px", background: checklist[item] ? T.green : "var(--ink-a08, rgba(255,255,255,0.08))", color: checklist[item] ? "#FFF" : "transparent", fontSize: "12px" }}>✓</span>
+                    <span className="cell-body">
+                      <span className="cell-title" style={{ whiteSpace: "normal", color: checklist[item] ? "var(--sub)" : "var(--ink)", textDecoration: checklist[item] ? "line-through" : "none" }}>{item}</span>
+                    </span>
                   </button>
                 ))}
               </div>
@@ -808,7 +919,7 @@ function ShortDetail({ short, onClose, onUpdate, onDelete, isMobile }) {
         </div>
 
         <div style={{ padding: `14px ${hPad}`, borderTop: `1px solid ${T.line}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap", flexShrink: 0 }}>
-          <button onClick={() => onDelete(short.id)} style={{ background: "none", border: "none", color: T.faint, fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>Delete</button>
+          <button type="button" className="btn sm quiet" onClick={() => onDelete(short.id)}>Delete</button>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             {short.script && <Btn onClick={sendToFactory} disabled={sendingBrief} title="Hand this Short's script + packaging to the shorts-factory production pipeline">{sendingBrief ? "Sending…" : "⇢ Factory"}</Btn>}
             <Btn onClick={copyAll}>Copy all</Btn>
@@ -849,7 +960,7 @@ ${creator.description ? `About them: ${creator.description}` : ""}`;
   if (!raw) return null;
   try { return JSON.parse(raw.replace(/```json|```/g, "").trim()); } catch { return null; }
 }
-function CreatorsView({ creators, setCreators, isMobile, loading, openSignal = 0, onSignalConsumed }) {
+export function CreatorsView({ creators, setCreators, isMobile, loading, openSignal = 0, onSignalConsumed }) {
   const [adding, setAdding] = useState(false);
   const [openCreator, setOpenCreator] = useState(null);
   const [sortBy, setSortBy] = useState("value");
@@ -900,11 +1011,11 @@ function CreatorsView({ creators, setCreators, isMobile, loading, openSignal = 0
     <div style={{ minHeight: "calc(100vh - 52px)", padding: viewPad(isMobile) }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
         <div>
-          <div style={{ fontSize: "18px", fontWeight: 700, color: T.ink, fontFamily: syne }}>Creators</div>
-          <div style={{ fontSize: "12px", color: T.faint, marginTop: "2px" }}>Find, contact, and track YouTube creators for ZTS collabs — prioritized by audience fit.</div>
+          <h1 className="t-title2" style={{ margin: 0 }}>Creators</h1>
+          <p className="t-foot" style={{ margin: "3px 0 0" }}>Find, contact, and track YouTube creators for ZTS collabs — prioritized by audience fit.</p>
         </div>
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ padding: "8px 12px", border: `1px solid ${T.line}`, borderRadius: "9px", fontSize: "12px", color: T.sub, background: T.subtle }}>
+          <select className="field" aria-label="Sort creators" value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ width: "auto" }}>
             <option value="value">Best fit first</option>
             <option value="subs">Most subscribers</option>
             <option value="name">A → Z</option>
@@ -914,9 +1025,10 @@ function CreatorsView({ creators, setCreators, isMobile, loading, openSignal = 0
       </div>
 
       {creators.length > 0 && (
-        <div style={{ display: "flex", alignItems: "baseline", gap: "10px", marginBottom: "16px", padding: "0 2px" }}>
-          <Label>Audience-fit reach</Label>
-          <span style={{ fontSize: "15px", fontWeight: 600, color: T.ink, fontFamily: mono }}>{fmtSubs(totalReach)}<span style={{ fontSize: "11px", color: T.faint }}> weighted reach in pipeline</span></span>
+        <div className="stattile" style={{ marginBottom: "16px" }}>
+          <div className="stattile-label">Audience-fit reach</div>
+          <div className="stattile-value">{fmtSubs(totalReach)}</div>
+          <div className="t-cap">weighted reach in pipeline</div>
         </div>
       )}
 
@@ -933,9 +1045,12 @@ function CreatorsView({ creators, setCreators, isMobile, loading, openSignal = 0
             return (
               <div key={stage.key} style={kanbanColStyle(isMobile)}>
                 <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "10px", padding: "0 2px" }}>
-                  <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: stage.color }} />
-                  <span style={{ fontSize: "11px", fontWeight: 700, color: T.ink, fontFamily: syne }}>{stage.label}</span>
-                  <span style={{ fontSize: "11px", color: T.faint, fontFamily: mono }}>{items.length}</span>
+                  {/* CREATOR_STAGES colours are domain data — the pipeline stage
+                      IS the colour. The stage name sits beside the dot, so the
+                      hue is never carrying the state on its own. */}
+                  <span className="dotstatus" style={{ background: stage.color }} />
+                  <span className="t-label" style={{ color: "var(--ink)" }}>{stage.label}</span>
+                  <span className="t-cap t-num" style={{ fontFamily: mono }}>{items.length}</span>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   {items.map((c, idx) => {
@@ -943,19 +1058,19 @@ function CreatorsView({ creators, setCreators, isMobile, loading, openSignal = 0
                     const tierColor = v.tier === "Prime" ? T.green : v.tier === "Strong" ? T.blue : v.tier === "Fit" ? T.amber : T.faint;
                     return (
                       <div key={c.id} style={{ animation: `cardIn 0.3s ${M.easeOut} both`, animationDelay: `${Math.min(idx, 8) * 30}ms` }}>
-                      <Card hover onClick={() => setOpenCreator(c)} style={{ padding: "12px 13px", borderLeft: `3px solid ${tierColor}` }}>
-                        <div style={{ fontSize: "12px", fontWeight: 700, color: T.ink, fontFamily: syne, lineHeight: 1.3 }}>{c.channel_name}</div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px", flexWrap: "wrap" }}>
-                          <span style={{ fontSize: "10px", color: T.sub, fontFamily: mono }}>{fmtSubs(c.subscriber_count)} subs</span>
-                          <span style={{ fontSize: "9px", fontWeight: 700, color: tierColor, background: tierColor + "15", padding: "1px 6px", borderRadius: "5px", fontFamily: syne }}>{v.tier} · {v.fitLabel}</span>
-                          {(c.pitch_body || sm.get(`pitch_${c.id}`)) && <span title="Collab pitch drafted" style={{ fontSize: "9px", fontWeight: 700, color: T.amberDeep, background: "rgba(245,158,11,0.1)", padding: "1px 6px", borderRadius: "5px", fontFamily: syne }}>✦ pitch</span>}
+                      <Card hover onClick={() => setOpenCreator(c)} style={{ padding: "12px 15px", boxShadow: `inset 3px 0 0 ${tierColor}, var(--shadow-card)` }}>
+                        <div className="t-call" style={{ fontWeight: 600, lineHeight: 1.3 }}>{c.channel_name}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "5px", flexWrap: "wrap" }}>
+                          <span className="t-cap t-num" style={{ fontFamily: mono }}>{fmtSubs(c.subscriber_count)} subs</span>
+                          <span className="t-label" style={{ color: tierColor, background: tierColor + "15", padding: "2px 7px", borderRadius: "5px" }}>{v.tier} · {v.fitLabel}</span>
+                          {(c.pitch_body || sm.get(`pitch_${c.id}`)) && <span title="Collab pitch drafted" className="t-label" style={{ color: T.amberDeep, background: "rgba(245,158,11,0.1)", padding: "2px 7px", borderRadius: "5px" }}>✦ pitch</span>}
                         </div>
                         <StageStepper stages={CREATOR_STAGES} current={stage.key} onMove={(next) => move(c.id, next)} />
                       </Card>
                       </div>
                     );
                   })}
-                  {items.length === 0 && <EmptyState compact icon="inbox" tint={T.faint} title="Nothing here" />}
+                  {items.length === 0 && <EmptyState compact icon="inbox" tint={T.faint} title="Nothing here" sub="Move one in with the › stepper on a card." />}
                 </div>
               </div>
             );
@@ -984,7 +1099,7 @@ function CreatorsView({ creators, setCreators, isMobile, loading, openSignal = 0
 // The pitch persists to the creators row when the columns exist; if the
 // schema doesn't have them yet, it falls back to local storage so the
 // feature works either way (the card badge reads from the same field).
-function CreatorDetail({ creator, onClose, onUpdate, onDelete, onMove, isMobile }) {
+export function CreatorDetail({ creator, onClose, onUpdate, onDelete, onMove, isMobile }) {
   const [editing, setEditing] = useState(false);
   const [f, setF] = useState({ channel_name: creator.channel_name || "", subscriber_count: String(creator.subscriber_count || ""), niche: creator.niche || "", engagement_rate: creator.engagement_rate != null ? String(creator.engagement_rate * 100) : "", description: creator.description || "" });
   const [pitch, setPitch] = useState(() => (creator.pitch_subject || creator.pitch_body) ? { subject: creator.pitch_subject || "", body: creator.pitch_body || "" } : sm.get(`pitch_${creator.id}`));
@@ -1037,31 +1152,39 @@ function CreatorDetail({ creator, onClose, onUpdate, onDelete, onMove, isMobile 
     try { navigator.clipboard.writeText(`Subject: ${pitch.subject}\n\n${pitch.body}`); toast.push("Pitch copied.", { tone: "success" }); } catch {}
   };
 
-  const input = { width: "100%", padding: "9px 12px", border: `1px solid ${T.line}`, borderRadius: "9px", fontSize: "13px", color: T.ink, marginBottom: "8px" };
-  const box = { background: T.subtle, border: `1px solid ${T.line}`, borderRadius: "10px", padding: "12px 14px", fontSize: "13px", color: T.ink, lineHeight: 1.6, whiteSpace: "pre-wrap" };
+  // The kit's .field carries the geometry, the tone and the focus ring; only the
+  // stacking gap is local. Same for the read-only well below.
+  const input = { marginBottom: "8px" };
+  const box = { background: "var(--surface-2)", borderRadius: "var(--r-well, 12px)", padding: "12px 14px", fontSize: "13px", color: "var(--ink)", lineHeight: 1.6, whiteSpace: "pre-wrap" };
 
   return (
     <ModalShell onClose={onClose} isMobile={isMobile} width={560}>
       <div style={{ padding: `18px ${hPad}`, borderBottom: `1px solid ${T.line}`, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", flexShrink: 0 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: "7px", flexWrap: "wrap", marginBottom: "5px" }}>
-            <span style={{ fontSize: "9px", fontWeight: 700, color: stageMeta.color, background: stageMeta.color + "15", padding: "2px 7px", borderRadius: "5px", textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: syne }}>{stageMeta.label}</span>
-            <span style={{ fontSize: "9px", fontWeight: 700, color: tierColor, background: tierColor + "15", padding: "2px 7px", borderRadius: "5px", fontFamily: syne }}>{v.tier} · {v.fitLabel}</span>
+            <span className="t-label" style={{ color: stageMeta.color, background: stageMeta.color + "15", padding: "3px 8px", borderRadius: "5px" }}>{stageMeta.label}</span>
+            <span className="t-label" style={{ color: tierColor, background: tierColor + "15", padding: "3px 8px", borderRadius: "5px" }}>{v.tier} · {v.fitLabel}</span>
           </div>
-          <div style={{ fontSize: "16px", fontWeight: 700, color: T.ink, fontFamily: syne }}>{creator.channel_name}</div>
-          <div style={{ fontSize: "11px", color: T.faint, fontFamily: mono, marginTop: "2px" }}>{fmtSubs(creator.subscriber_count)} subs · weighted reach {fmtSubs(v.score)}</div>
+          <h2 className="t-head" style={{ margin: 0 }}>{creator.channel_name}</h2>
+          <div className="t-cap t-num" style={{ fontFamily: mono, marginTop: "2px" }}>{fmtSubs(creator.subscriber_count)} subs · weighted reach {fmtSubs(v.score)}</div>
         </div>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: T.faint, fontSize: "20px", cursor: "pointer", lineHeight: 1, flexShrink: 0 }}>×</button>
+        <button type="button" className="icon-btn" onClick={onClose} aria-label="Close" style={{ fontSize: "20px", lineHeight: 1 }}>×</button>
       </div>
 
       <div style={{ padding: `16px ${hPad}`, overflowY: "auto" }}>
         {/* Stage movement — full stepper, both directions */}
         <Label style={{ marginBottom: "8px" }}>Pipeline stage</Label>
         <div style={{ display: "flex", gap: "5px", marginBottom: "18px", flexWrap: "wrap" }}>
+          {/* The kit's .pill, tinted with the stage's own domain colour. The
+              current stage is marked with a ✓ and aria-current as well as the
+              tint, so it does not depend on the hue being seen. */}
           {CREATOR_STAGES.map(s => (
-            <button key={s.key} onClick={() => s.key !== stage && onMove(creator.id, s.key)}
-              style={{ padding: "6px 12px", background: s.key === stage ? s.color + "15" : "transparent", border: `1px solid ${s.key === stage ? s.color + "50" : T.line}`, borderRadius: "8px", fontSize: "10px", fontWeight: 700, color: s.key === stage ? s.color : T.faint, cursor: s.key === stage ? "default" : "pointer", fontFamily: syne }}>
-              {s.label}
+            <button key={s.key} type="button" className="pill" aria-current={s.key === stage ? "step" : undefined}
+              onClick={() => s.key !== stage && onMove(creator.id, s.key)}
+              style={s.key === stage
+                ? { background: s.color + "22", color: s.color, fontWeight: 700, cursor: "default" }
+                : undefined}>
+              {s.key === stage ? "✓ " : ""}{s.label}
             </button>
           ))}
         </div>
@@ -1069,18 +1192,18 @@ function CreatorDetail({ creator, onClose, onUpdate, onDelete, onMove, isMobile 
         {/* Profile — view or edit */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
           <Label>Profile</Label>
-          {!editing && <button onClick={() => setEditing(true)} style={{ background: "none", border: "none", color: T.greenDeep, fontSize: "10px", fontWeight: 700, cursor: "pointer", fontFamily: syne }}>edit</button>}
+          {!editing && <button type="button" className="btn sm plain" onClick={() => setEditing(true)}>Edit</button>}
         </div>
         {editing ? (
           <div style={{ marginBottom: "16px" }}>
-            <input placeholder="Channel name" value={f.channel_name} onChange={e => set("channel_name", e.target.value)} style={input} />
-            <input placeholder="Subscriber count" value={f.subscriber_count} onChange={e => set("subscriber_count", e.target.value)} style={input} />
-            <input placeholder="Niche" value={f.niche} onChange={e => set("niche", e.target.value)} style={input} />
-            <input placeholder="Engagement rate % (optional)" value={f.engagement_rate} onChange={e => set("engagement_rate", e.target.value)} style={input} />
-            <textarea placeholder="Channel description" value={f.description} onChange={e => set("description", e.target.value)} style={{ ...input, minHeight: "56px", resize: "vertical" }} />
+            <input className="field" placeholder="Channel name" value={f.channel_name} onChange={e => set("channel_name", e.target.value)} style={input} />
+            <input className="field" placeholder="Subscriber count" value={f.subscriber_count} onChange={e => set("subscriber_count", e.target.value)} style={input} />
+            <input className="field" placeholder="Niche" value={f.niche} onChange={e => set("niche", e.target.value)} style={input} />
+            <input className="field" placeholder="Engagement rate % (optional)" value={f.engagement_rate} onChange={e => set("engagement_rate", e.target.value)} style={input} />
+            <textarea className="field" placeholder="Channel description" value={f.description} onChange={e => set("description", e.target.value)} style={{ ...input, minHeight: "56px", resize: "vertical" }} />
             <div style={{ display: "flex", gap: "8px" }}>
-              <Btn primary onClick={saveEdit} style={{ flex: 1, padding: "9px" }}>Save</Btn>
-              <Btn onClick={() => setEditing(false)} style={{ padding: "9px 16px" }}>Cancel</Btn>
+              <Btn primary onClick={saveEdit} style={{ flex: 1 }}>Save</Btn>
+              <Btn onClick={() => setEditing(false)}>Cancel</Btn>
             </div>
           </div>
         ) : (
@@ -1092,57 +1215,57 @@ function CreatorDetail({ creator, onClose, onUpdate, onDelete, onMove, isMobile 
         {/* Collab pitch — the "Drafted" stage's actual draft */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
           <Label>Collab pitch</Label>
-          <button onClick={draftPitch} disabled={drafting} style={{ background: "none", border: "none", color: drafting ? T.faint : T.greenDeep, fontSize: "10px", fontWeight: 700, cursor: drafting ? "default" : "pointer", fontFamily: syne }}>
+          <button type="button" className="btn sm plain" onClick={draftPitch} disabled={drafting}>
             {drafting ? "✦ drafting…" : pitch ? "↻ redraft" : "✦ draft with AI"}
           </button>
         </div>
         {pitch ? (
           <div style={{ marginBottom: "6px" }}>
             {/* Edits stay local per keystroke; persistence happens on blur. */}
-            <input value={pitch.subject} onChange={e => setPitch(p => ({ ...p, subject: e.target.value }))} onBlur={() => savePitch(pitch)} style={{ ...input, fontWeight: 600 }} />
-            <textarea value={pitch.body} onChange={e => setPitch(p => ({ ...p, body: e.target.value }))} onBlur={() => savePitch(pitch)} rows={7} style={{ ...input, resize: "vertical", lineHeight: 1.6, marginBottom: "8px" }} />
-            <Btn onClick={copyPitch} style={{ padding: "8px 16px" }}>Copy pitch</Btn>
+            <input className="field" aria-label="Pitch subject" value={pitch.subject} onChange={e => setPitch(p => ({ ...p, subject: e.target.value }))} onBlur={() => savePitch(pitch)} style={{ ...input, fontWeight: 600 }} />
+            <textarea className="field" aria-label="Pitch body" value={pitch.body} onChange={e => setPitch(p => ({ ...p, body: e.target.value }))} onBlur={() => savePitch(pitch)} rows={7} style={{ ...input, resize: "vertical", lineHeight: 1.6, marginBottom: "8px" }} />
+            <Btn onClick={copyPitch}>Copy pitch</Btn>
           </div>
         ) : (
-          <div style={{ ...box, color: T.faint }}>No pitch yet. "Draft with AI" writes a first-touch collab email grounded in their niche and the ZTS voice — drafting also moves them to Drafted.</div>
+          <div style={{ ...box, color: "var(--sub)" }}>No pitch yet. "Draft with AI" writes a first-touch collab email grounded in their niche and the ZTS voice — drafting also moves them to Drafted.</div>
         )}
       </div>
 
       <div style={{ padding: `13px ${hPad}`, borderTop: `1px solid ${T.line}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         {!confirmDel ? (
-          <button onClick={() => setConfirmDel(true)} style={{ background: "none", border: "none", color: T.faint, fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>Delete</button>
+          <button type="button" className="btn sm quiet" onClick={() => setConfirmDel(true)}>Delete</button>
         ) : (
-          <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontSize: "11px", color: T.red }}>Delete {creator.channel_name}?</span>
-            <button onClick={() => onDelete(creator.id)} style={{ padding: "5px 12px", background: T.red, border: "none", borderRadius: "7px", color: "#FFF", fontSize: "10px", fontWeight: 700, cursor: "pointer", fontFamily: syne }}>Yes, delete</button>
-            <button onClick={() => setConfirmDel(false)} style={{ background: "none", border: "none", color: T.faint, fontSize: "11px", cursor: "pointer" }}>Keep</button>
+          <span style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+            <span className="t-cap" style={{ color: T.red }}>Delete {creator.channel_name}?</span>
+            <button type="button" className="btn sm danger-solid" onClick={() => onDelete(creator.id)}>Yes, delete</button>
+            <button type="button" className="btn sm quiet" onClick={() => setConfirmDel(false)}>Keep</button>
           </span>
         )}
-        <Btn onClick={onClose} style={{ padding: "9px 18px" }}>Done</Btn>
+        <Btn onClick={onClose}>Done</Btn>
       </div>
     </ModalShell>
   );
 }
 
-function AddCreatorModal({ onClose, onAdd, isMobile }) {
+export function AddCreatorModal({ onClose, onAdd, isMobile }) {
   const [f, setF] = useState({ channel_name: "", subscriber_count: "", niche: "", description: "", engagement_rate: "" });
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
   const submit = () => { if (!f.channel_name) return; onAdd({ ...f, subscriber_count: Number(f.subscriber_count) || 0, engagement_rate: f.engagement_rate ? Number(f.engagement_rate) / 100 : null }); };
   const v = f.channel_name ? creatorValue({ ...f, subscriber_count: Number(f.subscriber_count) || 0 }) : null;
-  const input = { width: "100%", padding: "10px 12px", border: `1px solid ${T.line}`, borderRadius: "9px", fontSize: "13px", color: T.ink, marginBottom: "10px" };
+  const input = { marginBottom: "10px" };
   return (
     <ModalShell onClose={onClose} isMobile={isMobile} width={480}>
       <div style={{ padding: isMobile ? "14px 18px calc(18px + var(--safe-bottom))" : "26px 28px", overflowY: "auto" }}>
-        <div style={{ fontSize: "16px", fontWeight: 700, color: T.ink, fontFamily: syne, marginBottom: "18px" }}>Add Creator</div>
-        <input placeholder="Channel name" value={f.channel_name} onChange={e => set("channel_name", e.target.value)} style={input} />
-        <input placeholder="Subscriber count (e.g. 45000)" value={f.subscriber_count} onChange={e => set("subscriber_count", e.target.value)} style={input} />
-        <input placeholder="Niche (e.g. Bitcoin self-custody)" value={f.niche} onChange={e => set("niche", e.target.value)} style={input} />
-        <input placeholder="Engagement rate % (optional, e.g. 5)" value={f.engagement_rate} onChange={e => set("engagement_rate", e.target.value)} style={input} />
-        <textarea placeholder="Channel description (helps fit scoring)" value={f.description} onChange={e => set("description", e.target.value)} style={{ ...input, minHeight: "60px", resize: "vertical" }} />
-        {v && <div style={{ fontSize: "11px", color: T.sub, marginBottom: "14px", padding: "8px 12px", background: "rgba(14,159,110,0.06)", borderRadius: "8px" }}>Fit: <strong style={{ color: T.greenDeep }}>{v.tier}</strong> · {v.fitLabel} · weighted reach {fmtSubs(v.score)}</div>}
+        <h2 className="t-head" style={{ margin: "0 0 18px" }}>Add Creator</h2>
+        <input className="field" placeholder="Channel name" value={f.channel_name} onChange={e => set("channel_name", e.target.value)} style={input} />
+        <input className="field" placeholder="Subscriber count (e.g. 45000)" value={f.subscriber_count} onChange={e => set("subscriber_count", e.target.value)} style={input} />
+        <input className="field" placeholder="Niche (e.g. Bitcoin self-custody)" value={f.niche} onChange={e => set("niche", e.target.value)} style={input} />
+        <input className="field" placeholder="Engagement rate % (optional, e.g. 5)" value={f.engagement_rate} onChange={e => set("engagement_rate", e.target.value)} style={input} />
+        <textarea className="field" placeholder="Channel description (helps fit scoring)" value={f.description} onChange={e => set("description", e.target.value)} style={{ ...input, minHeight: "60px", resize: "vertical" }} />
+        {v && <div className="t-cap" style={{ marginBottom: "14px", padding: "9px 12px", background: "var(--accent-a08, rgba(14,159,110,0.06))", borderRadius: "8px" }}>Fit: <strong style={{ color: "var(--accent)" }}>{v.tier}</strong> · {v.fitLabel} · weighted reach {fmtSubs(v.score)}</div>}
         <div style={{ display: "flex", gap: "8px" }}>
-          <Btn primary onClick={submit} style={{ flex: 1, padding: "11px" }}>Add to pipeline</Btn>
-          <Btn onClick={onClose} style={{ padding: "11px 18px" }}>Cancel</Btn>
+          <Btn primary onClick={submit} style={{ flex: 1 }}>Add to pipeline</Btn>
+          <Btn onClick={onClose}>Cancel</Btn>
         </div>
       </div>
     </ModalShell>
@@ -1212,7 +1335,7 @@ function AgentEngine({ creators, shorts, articles, onArticleDraft }) {
 }
 
 // ─── AGENTS VIEW (control panel + feed) ──────────────────────────────────────
-function SeoView({ articles, setArticles, onAddArticle, isMobile, loading, openSignal = 0, onSignalConsumed }) {
+export function SeoView({ articles, setArticles, onAddArticle, isMobile, loading, openSignal = 0, onSignalConsumed }) {
   const [composing, setComposing] = useState(false);
   const [openArticle, setOpenArticle] = useState(null);
   const [keywords, setKeywords] = useState(() => sm.get("seo_keywords") || "");
@@ -1239,8 +1362,8 @@ function SeoView({ articles, setArticles, onAddArticle, isMobile, loading, openS
     <div style={{ minHeight: "calc(100vh - 52px)", padding: viewPad(isMobile) }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
         <div>
-          <div style={{ fontSize: "18px", fontWeight: 700, color: T.ink, fontFamily: syne }}>SEO</div>
-          <div style={{ fontSize: "12px", color: T.faint, marginTop: "2px" }}>The agent drafts search content on a cadence — nothing publishes without your approval.</div>
+          <h1 className="t-title2" style={{ margin: 0 }}>SEO</h1>
+          <p className="t-foot" style={{ margin: "3px 0 0" }}>The agent drafts search content on a cadence — nothing publishes without your approval.</p>
         </div>
         <Btn primary onClick={() => setComposing(true)}>✦ New Article</Btn>
       </div>
@@ -1250,24 +1373,29 @@ function SeoView({ articles, setArticles, onAddArticle, isMobile, loading, openS
         <Card>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
             <Label>Auto-draft cadence</Label>
-            <div onClick={() => { const on = !autoDraft; setAutoDraft(on); eng.set({ seoAutoDraft: on }); }} style={{ width: "38px", height: "22px", borderRadius: "12px", background: autoDraft ? T.green : "rgba(255,255,255,0.14)", position: "relative", cursor: "pointer", transition: "background 0.15s" }}>
-              <div style={{ position: "absolute", top: "2px", left: autoDraft ? "18px" : "2px", width: "18px", height: "18px", borderRadius: "50%", background: "#FFF", transition: "left 0.15s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
-            </div>
+            {/* The kit's .switch — iOS proportions, --green when on. The state is
+                also written out in the sentence below it, so "on" is legible
+                without reading the colour. */}
+            <button type="button" role="switch" aria-checked={autoDraft} aria-label="Auto-draft cadence"
+              className={autoDraft ? "switch small on" : "switch small"}
+              onClick={() => { const on = !autoDraft; setAutoDraft(on); eng.set({ seoAutoDraft: on }); }}>
+              <span className="switch-knob" />
+            </button>
           </div>
-          <div style={{ fontSize: "12px", color: T.sub, lineHeight: 1.5, marginBottom: "10px" }}>{autoDraft ? "The engine drafts a new article into In Review" : "Off — articles only generate when you click New Article"}{autoDraft && <> every <strong>{everyDays}</strong> days. It targets your keyword list first, then ZTS topic clusters.</>}</div>
+          <p className="t-foot" style={{ margin: "0 0 10px", lineHeight: 1.5 }}>{autoDraft ? "On — the engine drafts a new article into In Review" : "Off — articles only generate when you click New Article"}{autoDraft && <> every <strong>{everyDays}</strong> days. It targets your keyword list first, then ZTS topic clusters.</>}</p>
           {autoDraft && (
             <>
-              <input type="range" min="2" max="7" step="1" value={everyDays} onChange={e => { const v = Number(e.target.value); setEveryDays(v); eng.set({ seoEveryDays: v }); }} style={{ width: "100%", accentColor: T.green }} />
-              <div style={{ fontSize: "10px", color: T.faint, marginTop: "6px" }}>{everyDays <= 3 ? "≈ twice a week" : "≈ once a week"}{nextAuto ? ` · next draft ~${nextAuto.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}` : " · first draft on next engine pass"}</div>
+              <input className="scoreSlider" aria-label="Days between auto-drafts" type="range" min="2" max="7" step="1" value={everyDays} onChange={e => { const v = Number(e.target.value); setEveryDays(v); eng.set({ seoEveryDays: v }); }} style={{ "--slider-color": "var(--accent)", "--slider-fill": `${((everyDays - 2) / 5) * 100}%` }} />
+              <div className="t-cap" style={{ marginTop: "8px" }}>{everyDays <= 3 ? "≈ twice a week" : "≈ once a week"}{nextAuto ? ` · next draft ~${nextAuto.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}` : " · first draft on next engine pass"}</div>
             </>
           )}
         </Card>
         <Card>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: "10px" }}>
             <Label>Target keywords</Label>
-            <span style={{ fontSize: "9px", color: T.faint, fontWeight: 600 }}>paste from Search Console — GSC sync coming in phase 2</span>
+            <span className="t-cap" style={{ textAlign: "right" }}>paste from Search Console — GSC sync coming in phase 2</span>
           </div>
-          <textarea value={keywords} onChange={e => { setKeywords(e.target.value); sm.set("seo_keywords", e.target.value); }} placeholder={"one keyword per line, e.g.\nmetal seed phrase backup\nbitcoin inheritance planning"} style={{ width: "100%", minHeight: "76px", padding: "10px 12px", border: `1px solid ${T.line}`, borderRadius: "9px", fontSize: "12px", color: T.ink, resize: "vertical", lineHeight: 1.6, fontFamily: mono }} />
+          <textarea className="field" aria-label="Target keywords" value={keywords} onChange={e => { setKeywords(e.target.value); sm.set("seo_keywords", e.target.value); }} placeholder={"one keyword per line, e.g.\nmetal seed phrase backup\nbitcoin inheritance planning"} style={{ minHeight: "76px", resize: "vertical", lineHeight: 1.6, fontFamily: mono }} />
         </Card>
       </div>
 
@@ -1285,17 +1413,19 @@ function SeoView({ articles, setArticles, onAddArticle, isMobile, loading, openS
             return (
               <div key={stage.key} style={kanbanColStyle(isMobile)}>
                 <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "10px", padding: "0 2px" }}>
-                  <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: stage.color }} />
-                  <span style={{ fontSize: "11px", fontWeight: 700, color: T.ink, fontFamily: syne }}>{stage.label}</span>
-                  <span style={{ fontSize: "11px", color: T.faint, fontFamily: mono }}>{items.length}</span>
+                  {/* ARTICLE_STAGES colours are domain data; the label carries
+                      the meaning next to them. */}
+                  <span className="dotstatus" style={{ background: stage.color }} />
+                  <span className="t-label" style={{ color: "var(--ink)" }}>{stage.label}</span>
+                  <span className="t-cap t-num" style={{ fontFamily: mono }}>{items.length}</span>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   {items.map((a, idx) => (
                     <div key={a.id} style={{ animation: `cardIn 0.3s ${M.easeOut} both`, animationDelay: `${Math.min(idx, 8) * 30}ms` }}>
-                    <Card hover onClick={() => setOpenArticle(a)} style={{ padding: "12px 13px", borderLeft: `3px solid ${stage.color}` }}>
-                      {a.auto_drafted && <div style={{ display: "inline-block", fontSize: "8px", fontWeight: 700, color: T.greenDeep, background: "rgba(14,159,110,0.1)", padding: "2px 6px", borderRadius: "5px", textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: syne, marginBottom: "6px" }}>Agent draft</div>}
-                      <div style={{ fontSize: "12px", fontWeight: 600, color: T.ink, lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{a.title_tag || a.keyword || "Untitled"}</div>
-                      {a.target_keyword && <div style={{ fontSize: "10px", color: T.faint, marginTop: "4px", fontFamily: mono }}>{a.target_keyword}{a.word_count ? ` · ${a.word_count}w` : ""}</div>}
+                    <Card hover onClick={() => setOpenArticle(a)} style={{ padding: "12px 15px", boxShadow: `inset 3px 0 0 ${stage.color}, var(--shadow-card)` }}>
+                      {a.auto_drafted && <span className="t-label" style={{ display: "inline-block", color: "var(--accent)", background: "var(--accent-a10, rgba(14,159,110,0.1))", padding: "3px 7px", borderRadius: "5px", marginBottom: "6px" }}>Agent draft</span>}
+                      <div className="t-call" style={{ fontWeight: 600, lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{a.title_tag || a.keyword || "Untitled"}</div>
+                      {a.target_keyword && <div className="t-cap t-num" style={{ marginTop: "4px", fontFamily: mono }}>{a.target_keyword}{a.word_count ? ` · ${a.word_count}w` : ""}</div>}
                       {/* Arrows stop at Approved — actually publishing to Shopify
                           stays behind the explicit button in the detail modal.
                           Published articles are frozen: stepping one back would
@@ -1309,7 +1439,7 @@ function SeoView({ articles, setArticles, onAddArticle, isMobile, loading, openS
                     </Card>
                     </div>
                   ))}
-                  {items.length === 0 && <EmptyState compact icon="inbox" tint={T.faint} title="Nothing here" />}
+                  {items.length === 0 && <EmptyState compact icon="inbox" tint={T.faint} title="Nothing here" sub="Move one in with the › stepper on a card." />}
                 </div>
               </div>
             );
@@ -1329,7 +1459,7 @@ function SeoView({ articles, setArticles, onAddArticle, isMobile, loading, openS
   );
 }
 
-function ComposeArticleModal({ keywords, onClose, onCreate, isMobile }) {
+export function ComposeArticleModal({ keywords, onClose, onCreate, isMobile }) {
   const kwList = (keywords || "").split("\n").map(k => k.trim()).filter(Boolean);
   const [keyword, setKeyword] = useState(kwList[0] || "");
   const [notes, setNotes] = useState("");
@@ -1345,29 +1475,29 @@ function ComposeArticleModal({ keywords, onClose, onCreate, isMobile }) {
   return (
     <ModalShell onClose={onClose} isMobile={isMobile} width={520}>
       <div style={{ padding: isMobile ? "14px 18px calc(18px + var(--safe-bottom))" : "26px 28px", overflowY: "auto" }}>
-        <div style={{ fontSize: "16px", fontWeight: 700, color: T.ink, fontFamily: syne, marginBottom: "4px" }}>New Article</div>
-        <div style={{ fontSize: "12px", color: T.faint, marginBottom: "18px" }}>Claude drafts the full package — title tag, meta, outline, article, internal links — into your review queue.</div>
+        <h2 className="t-head" style={{ margin: "0 0 4px" }}>New Article</h2>
+        <p className="t-foot" style={{ margin: "0 0 18px" }}>Claude drafts the full package — title tag, meta, outline, article, internal links — into your review queue.</p>
         <Label style={{ marginBottom: "8px" }}>Target keyword</Label>
         {kwList.length > 0 ? (
-          <select value={keyword} onChange={e => setKeyword(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: `1px solid ${T.line}`, borderRadius: "9px", fontSize: "13px", color: T.ink, background: T.subtle, marginBottom: "14px" }}>
+          <select className="field" aria-label="Target keyword" value={keyword} onChange={e => setKeyword(e.target.value)} style={{ marginBottom: "14px" }}>
             {kwList.map((k, i) => <option key={i} value={k}>{k}</option>)}
             <option value="">— let the agent pick from ZTS clusters —</option>
           </select>
         ) : (
-          <input value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="e.g. metal seed phrase backup (blank = agent picks)" style={{ width: "100%", padding: "10px 12px", border: `1px solid ${T.line}`, borderRadius: "9px", fontSize: "13px", color: T.ink, marginBottom: "14px" }} />
+          <input className="field" aria-label="Target keyword" value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="e.g. metal seed phrase backup (blank = agent picks)" style={{ marginBottom: "14px" }} />
         )}
         <Label style={{ marginBottom: "8px" }}>Angle / notes (optional)</Label>
-        <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. compare against paper backups, mention the FTX collapse" style={{ width: "100%", minHeight: "60px", padding: "10px 12px", border: `1px solid ${T.line}`, borderRadius: "9px", fontSize: "13px", color: T.ink, resize: "vertical" }} />
+        <textarea className="field" aria-label="Angle or notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. compare against paper backups, mention the FTX collapse" style={{ minHeight: "60px", resize: "vertical" }} />
         <div style={{ display: "flex", gap: "8px", marginTop: "18px" }}>
-          <Btn primary onClick={create} disabled={gen} style={{ flex: 1, padding: "12px" }}>{gen ? "Drafting (~30s)…" : "✦ Generate article"}</Btn>
-          <Btn onClick={onClose} style={{ padding: "12px 18px" }}>Cancel</Btn>
+          <Btn primary onClick={create} disabled={gen} style={{ flex: 1 }}>{gen ? "Drafting (~30s)…" : "✦ Generate article"}</Btn>
+          <Btn onClick={onClose}>Cancel</Btn>
         </div>
       </div>
     </ModalShell>
   );
 }
 
-function ArticleDetail({ article, onClose, onUpdate, onDelete, isMobile }) {
+export function ArticleDetail({ article, onClose, onUpdate, onDelete, isMobile }) {
   const [publishing, setPublishing] = useState(false);
   const [pubResult, setPubResult] = useState(null);
   const [regenerating, setRegenerating] = useState(false);
@@ -1393,17 +1523,17 @@ function ArticleDetail({ article, onClose, onUpdate, onDelete, isMobile }) {
     } catch (e) { setPubResult({ error: e.message }); }
     setPublishing(false);
   };
-  const box = { background: T.subtle, border: `1px solid ${T.line}`, borderRadius: "10px", padding: "12px 14px", fontSize: "13px", color: T.ink, lineHeight: 1.6 };
+  const box = { background: "var(--surface-2)", borderRadius: "var(--r-well, 12px)", padding: "12px 14px", fontSize: "13px", color: "var(--ink)", lineHeight: 1.6 };
   const hPad = isMobile ? "18px" : "24px";
   return (
     <ModalShell onClose={onClose} isMobile={isMobile} width={720}>
         <div style={{ padding: `18px ${hPad}`, borderBottom: `1px solid ${T.line}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", flexShrink: 0 }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ display: "inline-block", fontSize: "9px", fontWeight: 700, color: T.amberDeep, background: "rgba(245,158,11,0.1)", padding: "2px 7px", borderRadius: "5px", textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: syne, marginBottom: "6px" }}>{stage}{article.auto_drafted ? " · agent draft" : ""}</div>
-            <div style={{ fontSize: "15px", fontWeight: 700, color: T.ink, fontFamily: syne, lineHeight: 1.3 }}>{article.title_tag || article.keyword || "Untitled"}</div>
-            {article.target_keyword && <div style={{ fontSize: "11px", color: T.faint, marginTop: "3px", fontFamily: mono }}>{article.target_keyword} · {article.search_intent || "—"} · {article.word_count || "?"} words</div>}
+            <span className="t-label" style={{ display: "inline-block", color: T.amberDeep, background: "rgba(245,158,11,0.1)", padding: "3px 8px", borderRadius: "5px", marginBottom: "6px" }}>{stage}{article.auto_drafted ? " · agent draft" : ""}</span>
+            <h2 className="t-head" style={{ margin: 0, lineHeight: 1.3 }}>{article.title_tag || article.keyword || "Untitled"}</h2>
+            {article.target_keyword && <div className="t-cap t-num" style={{ marginTop: "3px", fontFamily: mono }}>{article.target_keyword} · {article.search_intent || "—"} · {article.word_count || "?"} words</div>}
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: T.faint, fontSize: "20px", cursor: "pointer", lineHeight: 1, flexShrink: 0 }}>×</button>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close" style={{ fontSize: "20px", lineHeight: 1 }}>×</button>
         </div>
         <div style={{ padding: `18px ${hPad}`, overflowY: "auto" }}>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px", marginBottom: "16px" }}>
@@ -1414,14 +1544,16 @@ function ArticleDetail({ article, onClose, onUpdate, onDelete, isMobile }) {
           <div style={{ ...box, marginBottom: "16px" }}>{article.meta_description || "—"}</div>
           {(article.internal_links || []).length > 0 && (<>
             <Label style={{ marginBottom: "6px" }}>Internal links</Label>
-            <div style={{ ...box, marginBottom: "16px" }}>{article.internal_links.map((l, i) => <div key={i} style={{ fontSize: "12px" }}>"{l.anchor}" → <span style={{ fontFamily: mono, color: T.greenDeep }}>{l.target}</span></div>)}</div>
+            <div style={{ ...box, marginBottom: "16px" }}>{article.internal_links.map((l, i) => <div key={i} className="t-cap" style={{ color: "var(--ink)" }}>"{l.anchor}" → <span style={{ fontFamily: mono, color: "var(--accent)" }}>{l.target}</span></div>)}</div>
           </>)}
           <Label style={{ marginBottom: "6px" }}>Article</Label>
           <div style={{ ...box, maxHeight: isMobile ? "44vh" : "320px", overflowY: "auto" }} dangerouslySetInnerHTML={{ __html: article.article_html ? DOMPurify.sanitize(article.article_html) : "<em>No draft yet.</em>" }} />
-          {pubResult && <div style={{ marginTop: "12px", padding: "10px 14px", borderRadius: "9px", fontSize: "12px", background: pubResult.error ? "rgba(220,38,38,0.07)" : "rgba(14,159,110,0.07)", color: pubResult.error ? T.red : T.greenDeep, border: `1px solid ${pubResult.error ? "rgba(220,38,38,0.2)" : "rgba(14,159,110,0.25)"}` }}>{pubResult.error ? `Publish failed: ${pubResult.error}` : pubResult.method === "clipboard" ? "Local mode — article HTML copied to clipboard. Paste into Shopify admin → Blog posts → Add." : "Published to Shopify ✓"}</div>}
+          {/* The publish result is a status message, and it says which one it is
+              in words — the tint only agrees with the sentence. */}
+          {pubResult && <div className="t-cap" style={{ marginTop: "12px", padding: "10px 14px", borderRadius: "9px", background: pubResult.error ? "rgba(220,38,38,0.07)" : "var(--accent-a08, rgba(14,159,110,0.07))", color: pubResult.error ? T.red : "var(--accent)" }}>{pubResult.error ? `Publish failed: ${pubResult.error} — fix it and hit Publish again.` : pubResult.method === "clipboard" ? "Local mode — article HTML copied to clipboard. Paste into Shopify admin → Blog posts → Add." : "Published to Shopify ✓"}</div>}
         </div>
         <div style={{ padding: `14px ${hPad}`, borderTop: `1px solid ${T.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap", flexShrink: 0 }}>
-          <button onClick={() => onDelete(article.id)} style={{ background: "none", border: "none", color: T.faint, fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>Delete</button>
+          <button type="button" className="btn sm quiet" onClick={() => onDelete(article.id)}>Delete</button>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             {stage === "idea" && <Btn primary onClick={regenerate} disabled={regenerating}>{regenerating ? "Drafting…" : "✦ Generate draft"}</Btn>}
             {stage === "review" && <><Btn onClick={reject}>✕ Reject</Btn><Btn primary onClick={approve}>✓ Approve</Btn></>}
@@ -1429,7 +1561,7 @@ function ArticleDetail({ article, onClose, onUpdate, onDelete, isMobile }) {
               <Btn onClick={() => onUpdate(article.id, { stage: "review" })} title="Send back for another look">‹ Back to review</Btn>
               <Btn primary onClick={publish} disabled={publishing}>{publishing ? "Publishing…" : "🚀 Publish to Shopify"}</Btn>
             </>}
-            {stage === "published" && article.published_url && <a href={article.published_url} target="_blank" rel="noopener" style={{ fontSize: "12px", color: T.greenDeep, fontWeight: 700, textDecoration: "none", padding: "10px 16px" }}>View live ›</a>}
+            {stage === "published" && article.published_url && <a className="btn md plain" href={article.published_url} target="_blank" rel="noopener" style={{ textDecoration: "none" }}>View live ›</a>}
           </div>
         </div>
     </ModalShell>
@@ -1437,7 +1569,7 @@ function ArticleDetail({ article, onClose, onUpdate, onDelete, isMobile }) {
 }
 
 // ─── MISSION — command center across both pillars ────────────────────────────
-function MissionView({ creators, shorts, onNavigate, isMobile, loading }) {
+export function MissionView({ creators, shorts, onNavigate, isMobile, loading }) {
   const engCtrl = eng.get();
   const kbAll = kb.all();
   const cPipe = { prospected: creators.filter(c => (c.stage||"prospected") === "prospected").length, sent: creators.filter(c => c.stage === "sent").length, replied: creators.filter(c => c.stage === "replied").length, collab: creators.filter(c => c.stage === "collab").length };
@@ -1446,8 +1578,18 @@ function MissionView({ creators, shorts, onNavigate, isMobile, loading }) {
   const roster = AGENT_META.map(m => { const notes = kbAll.filter(e => e.agent === m.key); const enabled = m.key === "synthesizer" ? !engCtrl.observeOnly : engCtrl.agents[m.key] !== false; return { key: m.key, name: m.name, enabled, notes: notes.length }; });
   const recent = obs.getAll().slice(0, 6);
 
+  // The kit's stat tile — .stattile.on-canvas is the card-weight variant, so it
+  // sits in the same grid as the two pipeline cards without a second material.
   const Stat = ({ label, value, sub, accent, format, onClick }) => (
-    <Card onClick={onClick} hover={!!onClick}><Label style={{ marginBottom: "10px" }}>{label}</Label><div style={{ fontSize: "26px", fontWeight: 500, color: accent || T.ink, fontFamily: mono, lineHeight: 1 }}>{typeof value === "number" ? <AnimatedNumber value={value} format={format} /> : value}</div>{sub && <div style={{ fontSize: "10px", color: T.faint, marginTop: "6px" }}>{sub}</div>}</Card>
+    // No role/tabIndex: this is the same click-a-div affordance it has always
+    // been, and giving it keyboard FOCUS without a keyboard ACTIVATION would be
+    // a promise the element does not keep. Wiring one is a behaviour change and
+    // this pass is a restyle.
+    <div className={`stattile on-canvas${onClick ? " tappable" : ""}`} onClick={onClick}>
+      <div className="stattile-label">{label}</div>
+      <div className="stattile-value" style={{ fontSize: "26px", color: accent || "var(--ink)" }}>{typeof value === "number" ? <AnimatedNumber value={value} format={format} /> : value}</div>
+      {sub && <div className="t-cap" style={{ marginTop: "4px" }}>{sub}</div>}
+    </div>
   );
   const spanMobile = isMobile ? { gridColumn: "1 / -1" } : undefined;
 
@@ -1467,8 +1609,8 @@ function MissionView({ creators, shorts, onNavigate, isMobile, loading }) {
     <div style={{ minHeight: "calc(100vh - 52px)", padding: viewPad(isMobile) }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "18px", flexWrap: "wrap", gap: "8px" }}>
         <div>
-          <div style={{ fontSize: isMobile ? "20px" : "24px", fontWeight: 700, color: T.ink, fontFamily: syne }}>Mission</div>
-          <div style={{ fontSize: "12px", color: T.faint, marginTop: "2px" }}>Zero To Secure</div>
+          <h1 className={isMobile ? "t-title2" : "t-title1"} style={{ margin: 0 }}>Mission</h1>
+          <p className="t-foot" style={{ margin: "3px 0 0" }}>Zero To Secure</p>
         </div>
       </div>
 
@@ -1480,21 +1622,24 @@ function MissionView({ creators, shorts, onNavigate, isMobile, loading }) {
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: isMobile ? "10px" : "14px", marginBottom: "16px" }}>
         <Card style={spanMobile}>
           <Label style={{ marginBottom: "12px" }}>Creator Pipeline</Label>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 6 }}>
+            {/* The stage colours here are the CREATOR_STAGES hues — domain data.
+                The stage name is under every number, so the count is never read
+                off the colour alone. */}
             {[["Prospected", cPipe.prospected, T.faint], ["Sent", cPipe.sent, T.blue], ["Replied", cPipe.replied, "#EC4899"], ["Collab", cPipe.collab, T.green]].map(([l, v, c], i) => (
-              <div key={i} style={{ textAlign: "center" }}><div style={{ fontSize: "22px", fontWeight: 500, color: c, fontFamily: mono, lineHeight: 1 }}><AnimatedNumber value={v} /></div><div style={{ fontSize: "9px", color: T.faint, marginTop: "5px", textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: syne, fontWeight: 700 }}>{l}</div></div>
+              <div key={i} style={{ textAlign: "center", minWidth: 0 }}><div className="stattile-value" style={{ fontSize: "22px", color: c, lineHeight: 1 }}><AnimatedNumber value={v} /></div><div className="stattile-label" style={{ marginTop: "5px" }}>{l}</div></div>
             ))}
           </div>
-          <div style={{ fontSize: "10px", color: T.faint, marginTop: "12px", textAlign: "center" }}><span style={{ color: T.green, fontWeight: 600 }}>{fmtSubs(totalReach)} weighted reach</span> in pipeline</div>
+          <div className="t-cap" style={{ marginTop: "12px", textAlign: "center" }}><span style={{ color: "var(--accent)", fontWeight: 600 }}>{fmtSubs(totalReach)} weighted reach</span> in pipeline</div>
         </Card>
         <Card style={spanMobile}>
           <Label style={{ marginBottom: "12px" }}>Shorts Studio</Label>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 6 }}>
             {[["In Production", sPipe.wip, T.amber], ["Ready", sPipe.ready, T.green], ["Posted", sPipe.posted, T.purple]].map(([l, v, c], i) => (
-              <div key={i} style={{ textAlign: "center" }}><div style={{ fontSize: "22px", fontWeight: 500, color: c, fontFamily: mono, lineHeight: 1 }}><AnimatedNumber value={v} /></div><div style={{ fontSize: "9px", color: T.faint, marginTop: "5px", textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: syne, fontWeight: 700 }}>{l}</div></div>
+              <div key={i} style={{ textAlign: "center", minWidth: 0 }}><div className="stattile-value" style={{ fontSize: "22px", color: c, lineHeight: 1 }}><AnimatedNumber value={v} /></div><div className="stattile-label" style={{ marginTop: "5px" }}>{l}</div></div>
             ))}
           </div>
-          <div style={{ fontSize: "10px", color: T.amberDeep, marginTop: "12px", textAlign: "center", cursor: "pointer", fontWeight: 600 }} onClick={() => onNavigate("studio")}>Open Studio ›</div>
+          <button type="button" className="btn sm plain full" style={{ marginTop: "10px" }} onClick={() => onNavigate("studio")}>Open Studio ›</button>
         </Card>
         <Stat label="Ready to Post" value={sPipe.ready} sub={sPipe.ready > 0 ? "get them scheduled" : "none queued"} accent={sPipe.ready > 0 ? T.green : T.ink} onClick={() => onNavigate("studio")} />
         <Stat label="AI Spend" value={obs.getAll().reduce((s,l) => s + (l.costEstimate||0), 0)} format={(n) => `$${n.toFixed(2)}`} sub={`${obs.getAll().length} calls`} />
@@ -1502,12 +1647,14 @@ function MissionView({ creators, shorts, onNavigate, isMobile, loading }) {
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? "12px" : "16px" }}>
         <Card>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}><Label>Agent Roster</Label><span style={{ fontSize: "10px", color: T.faint, fontWeight: 700 }}>Controls in System ›</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: "14px" }}><Label>Agent Roster</Label><span className="t-cap">Controls in System ›</span></div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+            {/* running / ready / off is spelled out under every name — the dot
+                agrees with the word rather than replacing it. */}
             {roster.map((a, i) => { const active = a.enabled && engCtrl.running; return (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: "9px", padding: "9px 11px", background: T.subtle, borderRadius: "9px", border: `1px solid ${T.line}` }}>
-                <span style={{ width: "7px", height: "7px", borderRadius: "50%", flexShrink: 0, background: active ? T.green : a.enabled ? T.faint : T.ghost }} />
-                <div style={{ minWidth: 0 }}><div style={{ fontSize: "11px", fontWeight: 700, color: T.ink, fontFamily: syne, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.name}</div><div style={{ fontSize: "9px", color: T.faint }}>{a.notes > 0 ? `${a.notes} note${a.notes!==1?"s":""}` : a.enabled ? "ready" : "off"}</div></div>
+              <div key={i} className="stattile" style={{ flexDirection: "row", alignItems: "center", gap: "9px", padding: "9px 11px" }}>
+                <span className="dotstatus" style={{ background: active ? T.green : a.enabled ? T.faint : T.ghost }} />
+                <div style={{ minWidth: 0 }}><div className="t-cap" style={{ color: "var(--ink)", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.name}</div><div className="stattile-label">{a.notes > 0 ? `${a.notes} note${a.notes!==1?"s":""}` : active ? "running" : a.enabled ? "ready" : "off"}</div></div>
               </div>
             ); })}
           </div>
@@ -1518,9 +1665,9 @@ function MissionView({ creators, shorts, onNavigate, isMobile, loading }) {
             <div style={{ display: "flex", flexDirection: "column", gap: "9px" }}>
               {recent.map((l, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: l.ok === false ? T.red : T.green, flexShrink: 0 }} />
-                  <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: "11px", color: T.ink, fontWeight: 600 }}>{({ generate_short: "Generated a Short", regen_asset: "Regenerated asset", agent_synthesis: "Engine synthesis" })[l.fn] || l.fn}</div></div>
-                  <span style={{ fontSize: "10px", color: T.faint, fontFamily: mono }}>${(l.costEstimate||0).toFixed(4)}</span>
+                  <span className="dotstatus" style={{ background: l.ok === false ? T.red : T.green }} />
+                  <div style={{ flex: 1, minWidth: 0 }}><div className="t-cap" style={{ color: "var(--ink)", fontWeight: 600 }}>{({ generate_short: "Generated a Short", regen_asset: "Regenerated asset", agent_synthesis: "Engine synthesis" })[l.fn] || l.fn}{l.ok === false ? " · failed" : ""}</div></div>
+                  <span className="t-cap t-num" style={{ fontFamily: mono }}>${(l.costEstimate||0).toFixed(4)}</span>
                 </div>
               ))}
             </div>
@@ -1532,21 +1679,23 @@ function MissionView({ creators, shorts, onNavigate, isMobile, loading }) {
 }
 
 // ─── OPS — observability ─────────────────────────────────────────────────────
-function LoginScreen() {
+export function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState("password");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [sent, setSent] = useState(false);
-  const inputStyle = { width: "100%", padding: "11px 13px", fontSize: 13, border: `1px solid ${T.line}`, borderRadius: 9, background: T.subtle, color: T.ink, outline: "none", boxSizing: "border-box" };
+  const inputStyle = { marginBottom: 10 };
 
   if (!supabase) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, color: T.ink, background: "#0B0F1A" }}>
-        <div style={{ width: 380, maxWidth: "94vw", padding: "24px 26px", background: T.card, border: `1px solid ${T.line}`, borderRadius: 16, boxShadow: T.cardShadow }}>
-          <div style={{ fontSize: 13, fontWeight: 700, fontFamily: syne, marginBottom: 8 }}>Supabase isn't configured yet</div>
-          <div style={{ fontSize: 12, color: T.sub, lineHeight: 1.6 }}>Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY, then redeploy — sign-in needs a real Supabase project to check against.</div>
+      // data-kit: the unconfigured gate is a separate root from the form below,
+      // so it opts in on its own.
+      <div data-kit style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, color: T.ink, background: "#0B0F1A" }}>
+        <div className="card pad-lg" style={{ width: 380, maxWidth: "94vw" }}>
+          <h1 className="t-head" style={{ margin: "0 0 8px" }}>Supabase isn't configured yet</h1>
+          <p className="t-foot" style={{ margin: 0, lineHeight: 1.6 }}>Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY, then redeploy — sign-in needs a real Supabase project to check against.</p>
         </div>
       </div>
     );
@@ -1567,29 +1716,38 @@ function LoginScreen() {
   const disabled = busy || !email || (mode === "password" && !password);
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "#0B0F1A" }}>
-      <div style={{ width: 380, maxWidth: "94vw", padding: "30px 32px", background: T.card, border: `1px solid ${T.line}`, borderRadius: 18, boxShadow: "0 32px 80px rgba(0,0,0,0.55), 0 8px 24px rgba(0,0,0,0.4)" }}>
+    // data-kit: the sign-in screen is a root of its own (it renders instead of
+    // the app, not inside it), so it opts into the kit here.
+    <div data-kit style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "#0B0F1A" }}>
+      {/* .entrance-card is the kit's own sign-in surface: one material, a deep
+          shadow, no outline. It carried a 1px line AND a two-part shadow. */}
+      {/* animationDelay 0: the kit's .entrance-card holds the card invisible for
+          500ms, which is tuned for a shell boot that has already painted. This
+          screen IS the first paint. */}
+      <div className="entrance-card" style={{ animationDelay: "0s" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 6 }}>
+          {/* The ZTS seal. Its brass gradient is the brand mark itself, not a
+              theme choice, so the hexes stay literal. */}
           <span style={{ width: 20, height: 20, borderRadius: 6, background: `linear-gradient(135deg, ${T.amberDeep} 0%, #A87C2E 100%)`, boxShadow: "0 2px 6px rgba(184,145,58,0.4)" }} />
-          <span style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", fontFamily: syne, color: T.ink }}>Zero To Secure</span>
+          <span className="t-label" style={{ color: "var(--ink)" }}>Zero To Secure</span>
         </div>
-        <div style={{ fontSize: 12, color: T.faint, marginBottom: 22 }}>Sign in to the command center.</div>
-        <input value={email} onChange={e => setEmail(e.target.value)} placeholder="email" type="email" autoComplete="email"
-          style={{ ...inputStyle, marginBottom: 10 }} />
+        <p className="t-foot" style={{ margin: "0 0 22px" }}>Sign in to the command center.</p>
+        <input className="field" value={email} onChange={e => setEmail(e.target.value)} placeholder="email" type="email" autoComplete="email"
+          style={inputStyle} />
         {mode === "password" && (
-          <input value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => { if (e.key === "Enter") signIn(); }} placeholder="password" type="password" autoComplete="current-password"
-            style={{ ...inputStyle, marginBottom: 10 }} />
+          <input className="field" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => { if (e.key === "Enter") signIn(); }} placeholder="password" type="password" autoComplete="current-password"
+            style={inputStyle} />
         )}
-        {err && <div style={{ fontSize: 11, color: T.red, marginBottom: 10 }}>{err}</div>}
-        {sent && <div style={{ fontSize: 11, color: T.green, marginBottom: 10 }}>Login link sent — check your email.</div>}
-        <button onClick={mode === "password" ? signIn : sendMagic} disabled={disabled}
-          style={{ width: "100%", padding: 12, fontSize: 12, fontWeight: 800, fontFamily: syne, borderRadius: 10, cursor: disabled ? "default" : "pointer", border: "none", background: disabled ? "rgba(255,255,255,0.06)" : T.greenGrad, color: disabled ? T.faint : T.accentInk }}>
+        {/* The failure names itself and the button beside it IS the retry. */}
+        {err && <p className="t-cap" role="alert" style={{ color: T.red, margin: "0 0 10px" }}>{err} — check the details and try again.</p>}
+        {sent && <p className="t-cap" style={{ color: "var(--accent)", margin: "0 0 10px" }}>Login link sent — check your email.</p>}
+        <button type="button" className="btn md primary full" onClick={mode === "password" ? signIn : sendMagic} disabled={disabled}>
           {busy ? (mode === "password" ? "Signing in…" : "Sending…") : (mode === "password" ? "Sign in" : "Email me a login link")}
         </button>
-        <div onClick={() => { setMode(mode === "password" ? "magic" : "password"); setErr(null); setSent(false); }}
-          style={{ fontSize: 10, color: T.faint, textAlign: "center", marginTop: 12, cursor: "pointer" }}>
+        <button type="button" className="btn sm plain full" style={{ marginTop: 8 }}
+          onClick={() => { setMode(mode === "password" ? "magic" : "password"); setErr(null); setSent(false); }}>
           {mode === "password" ? "Use a magic link instead" : "Use a password instead"}
-        </div>
+        </button>
       </div>
     </div>
   );
@@ -1710,43 +1868,59 @@ export default function App({ embedded = false }) {
   })();
 
   if (!embedded && !authChecked) return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0B0F1A" }}>
-      <div style={{ width: "32px", height: "32px", border: "2px solid rgba(255,255,255,0.1)", borderTopColor: T.green, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    // data-kit: the boot gate is its own root, and .spinner is the kit's drawn
+    // arc — including its reduced-motion stop, which a hand-rolled
+    // `animation: spin infinite` does not get.
+    <div data-kit style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0B0F1A" }}>
+      <span className="spinner" role="status" aria-label="Checking your session" style={{ width: "32px", height: "32px" }} />
     </div>
   );
   if (!embedded && !session) return <LoginScreen />;
 
   return (
-    <div style={{ minHeight: "100vh", fontFamily: "'Inter', system-ui, sans-serif", paddingBottom: isMobile ? "calc(60px + var(--safe-bottom))" : 0 }}>
+    // data-kit: ZTS opts into the shared kit HERE, on its own root. It renders
+    // inside the shell's tool slot, so every [data-kit] rule in
+    // packages/ui/components.css reaches this app and nothing else — the same
+    // rule the shell follows by keeping data-kit off the wrapper that holds
+    // every tool.
+    <div data-kit style={{ minHeight: "100vh", fontFamily: "var(--font-body)", paddingBottom: isMobile ? "calc(60px + var(--safe-bottom))" : 0 }}>
       <AgentEngine creators={creators} shorts={shorts} articles={articles} onArticleDraft={addArticle} />
       <DnaWorker creators={creators} shorts={shorts} articles={articles} onArticleDraft={addArticle} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} actions={paletteActions} />
       {/* each tool owns its own ⌘K palette; the shell does not capture ⌘K */}
       {!(embedded && isMobile) && (
-      <div style={{ borderBottom: `1px solid ${T.line}`, padding: isMobile ? "0 16px" : "0 24px", height: "52px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: embedded ? "52px" : 0, background: "rgba(11,15,26,0.78)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", boxShadow: "0 1px 0 rgba(255,255,255,0.03), 0 4px 16px rgba(0,0,0,0.35)", zIndex: 50 }}>
+      // Glass bar: a hairline edge and NOTHING else. It used to draw the
+      // hairline AND a two-part drop shadow, which is the border-plus-shadow
+      // pair the language forbids — the same fix Macro's bar took.
+      <div style={{ borderBottom: `1px solid ${T.line}`, padding: isMobile ? "0 16px" : "0 24px", height: "52px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: embedded ? "52px" : 0, background: "rgba(11,15,26,0.78)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
           {!embedded && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+            {/* The ZTS mark — brand, not theme, so the gradient stays literal. */}
             <span style={{ width: "18px", height: "18px", borderRadius: "5px", background: "linear-gradient(135deg, #12B886 0%, #0A7A54 100%)", boxShadow: "0 1px 3px rgba(10,122,84,0.4), inset 0 1px 0 rgba(255,255,255,0.25)", display: "inline-block" }} />
-            <span style={{ fontSize: "13px", fontWeight: 800, color: T.inkDeep, letterSpacing: "0.14em", textTransform: "uppercase", fontFamily: syne }}>Zero To Secure</span>
+            <span className="t-label" style={{ color: T.inkDeep }}>Zero To Secure</span>
           </span>
           )}
           {!isMobile && (
-            <div style={{ display: "flex", gap: "2px", background: "rgba(255,255,255,0.045)", borderRadius: "10px", padding: "3px", marginLeft: "12px", border: `1px solid ${T.lineSoft}`, position: "relative" }}>
+            // The kit's segmented control. The sliding pill is .seg-thumb, still
+            // measured off the active tab's offsetLeft/offsetWidth exactly as
+            // before — the kit already animates left/width, so the only thing
+            // that changed is who owns the geometry.
+            <div className="seg" role="tablist" style={{ marginLeft: "12px", minWidth: 320 }}>
               {tabIndicator.ready && (
-                <div style={{ position: "absolute", top: "3px", bottom: "3px", left: `${tabIndicator.left}px`, width: `${tabIndicator.width}px`, background: T.navy, borderRadius: "7px", boxShadow: T.shadowTab, transition: `left ${M.durBase} ${M.easeSpring}, width ${M.durBase} ${M.easeSpring}`, zIndex: 0 }} />
+                <div className="seg-thumb" style={{ left: `${tabIndicator.left}px`, width: `${tabIndicator.width}px`, zIndex: 0 }} />
               )}
               {TABS.map(t => (
-                <button key={t} ref={el => { tabRefs.current[t] = el; }} onClick={() => setView(t)} style={{ position: "relative", zIndex: 1, padding: "5px 15px", background: "transparent", border: "none", borderRadius: "7px", color: view === t ? T.inkDeep : T.faint, fontSize: "11px", fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase", fontFamily: syne, transition: `color ${M.durBase} ${M.easeStd}` }}>{t}</button>
+                <button key={t} type="button" role="tab" aria-selected={view === t} ref={el => { tabRefs.current[t] = el; }} onClick={() => setView(t)}
+                  className={view === t ? "seg-opt active" : "seg-opt"} style={{ textTransform: "capitalize" }}>{t}</button>
               ))}
             </div>
           )}
         </div>
         {!isMobile && !embedded && (
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <button onClick={() => setPaletteOpen(true)} title="Command palette (⌘K)" style={{ background: "none", border: `1px solid ${T.line}`, borderRadius: 7, color: T.faint, fontSize: 10, padding: "5px 10px", cursor: "pointer", fontWeight: 600, fontFamily: mono }}>⌘K</button>
-            <button onClick={() => supabase?.auth.signOut()} style={{ background: "none", border: `1px solid ${T.line}`, borderRadius: 7, color: T.sub, fontSize: 10, padding: "5px 10px", cursor: "pointer", fontWeight: 600, fontFamily: syne }}>Sign out</button>
+            <button type="button" className="btn sm quiet" onClick={() => setPaletteOpen(true)} title="Command palette (⌘K)" style={{ fontFamily: mono }}>⌘K</button>
+            <button type="button" className="btn sm quiet" onClick={() => supabase?.auth.signOut()}>Sign out</button>
           </div>
         )}
       </div>

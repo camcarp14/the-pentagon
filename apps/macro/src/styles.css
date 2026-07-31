@@ -369,15 +369,17 @@ tr:last-child td { border-bottom: none; }
 /* ---------------- skeletons ---------------- */
 .sk { position: relative; overflow: hidden; background: rgba(255, 255, 255, 0.055); border-radius: 8px; }
 .sk::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent); animation: shimmer 1.4s infinite; }
-@keyframes shimmer { 100% { transform: translateX(100%); } }
+/* `shimmer` is the kit's (packages/ui/components.css) and is REFERENCED, never
+   redefined here: keyframe names are document-global, this sheet is injected
+   into the shared head, and a second copy would shadow the kit's for every
+   other tool on screen. Same for pagein/rise/toastin/toastout/fadein below.
+   See DESIGN.md §6. */
 .sk-line { height: 13px; margin: 8px 0; } .sk-line.w40 { width: 40%; } .sk-line.w60 { width: 60%; } .sk-line.w80 { width: 80%; }
 .sk-big { height: 30px; width: 55%; margin: 10px 0 6px; }
 
 /* ---------------- motion: transitions, stagger ---------------- */
 .pagefade { animation: pagein var(--dur-3) var(--ease-out) both; }
-@keyframes pagein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .stagger > * { animation: rise var(--dur-3) var(--ease-out) both; animation-delay: calc(var(--i, 0) * 45ms); }
-@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .stagger > *:nth-child(1) { --i: 0; } .stagger > *:nth-child(2) { --i: 1; } .stagger > *:nth-child(3) { --i: 2; } .stagger > *:nth-child(4) { --i: 3; }
 .stagger > *:nth-child(5) { --i: 4; } .stagger > *:nth-child(6) { --i: 5; } .stagger > *:nth-child(7) { --i: 6; } .stagger > *:nth-child(8) { --i: 7; }
 
@@ -407,8 +409,6 @@ tr:last-child td { border-bottom: none; }
 .toast.out { animation: toastout var(--dur-2) var(--ease-out) both; }
 .toast .tdot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex: none; }
 .toast.err .tdot { background: var(--crit); }
-@keyframes toastin { from { opacity: 0; transform: translateY(14px) scale(0.97); } to { opacity: 1; transform: none; } }
-@keyframes toastout { to { opacity: 0; transform: translateY(8px) scale(0.98); } }
 
 /* ---------------- command palette ---------------- */
 .cmdk-wrap { position: fixed; inset: 0; z-index: 95; background: rgba(0, 0, 0, 0.62); backdrop-filter: blur(4px); display: grid; place-items: start center; padding: 12vh 16px 16px; animation: fadein var(--dur-2) ease both; }
@@ -421,7 +421,6 @@ tr:last-child td { border-bottom: none; }
 .cmdk .item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 10px; cursor: pointer; font-size: 14.5px; opacity: 0.75; }
 .cmdk .item.on { background: rgba(255, 255, 255, 0.07); opacity: 1; }
 kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px; opacity: 0.8; }
-@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
 
 /* ---------------- auth gate ---------------- */
 .gate { min-height: 100dvh; display: grid; place-items: center; padding: 20px; }

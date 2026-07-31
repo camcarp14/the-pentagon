@@ -243,7 +243,7 @@ export default function ConsolePage({ onSettings }) {
           onClick={voice.toggleConversation}
           disabled={!voice.sttSupported}
         >
-          <span className="convo-dot" />
+          <span className="dotstatus" />
           {voice.handsFree ? "End conversation" : "Start conversation"}
         </button>
 

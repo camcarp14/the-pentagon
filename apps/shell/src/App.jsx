@@ -87,8 +87,11 @@ const PentagonLogo = ({ size = 22 }) => (
 function Boot() {
   return (
     <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#0b0d12" }}>
+      {/* `spin` is the kit's (packages/ui/components.css), imported once in
+          main.jsx and identical to the copy that used to live here. Keyframe
+          names are document-global, so a second definition mounted by the shell
+          would shadow the kit's for every tool it hosts. See DESIGN.md §6. */}
       <div style={{ width: 30, height: 30, border: "2px solid rgba(255,255,255,0.1)", borderTopColor: "#FFB224", borderRadius: "50%", animation: "spin .8s linear infinite" }} />
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }

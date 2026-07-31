@@ -76,20 +76,22 @@ Local action queues with pending items: ${pendingByClient.length ? pendingByClie
         <button onClick={() => setOpen(true)}
           onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = T.shadowHover; }}
           onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = T.shadowFloat; }}
-          style={{ padding: "13px 22px", background: T.goldGrad, border: "none", borderRadius: "30px", color: T.textOnBrand, fontSize: "12px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay, letterSpacing: "0.04em", boxShadow: T.shadowFloat, display: "flex", alignItems: "center", gap: "8px" }}>
+          type="button" className="btn md primary" style={{ borderRadius: "30px", boxShadow: T.shadowFloat }}>
           <span style={{ color: T.textOnBrand }}>✦</span> Ask Clarify
         </button>
       )}
       {open && (
-        <div className="co-agent-panel" style={{ width: "380px", height: "520px", maxWidth: "calc(100vw - 24px)", background: T.surface, borderRadius: "16px", boxShadow: T.shadowModal, border: `1px solid ${T.lineInk}`, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        // Border dropped: shadowModal already lifts this off the canvas, and a
+        // border plus a shadow on one element is the thing the language forbids.
+        <div className="co-agent-panel" style={{ width: "380px", height: "520px", maxWidth: "calc(100vw - 24px)", background: T.surface, borderRadius: "16px", boxShadow: T.shadowModal, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ padding: "14px 16px", borderBottom: `1px solid ${T.lineInk}`, display: "flex", alignItems: "center", justifyContent: "space-between", background: T.surface }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <span style={{ color: T.gold, fontSize: "13px" }}>✦</span>
-              <span style={{ fontSize: "12px", fontWeight: 700, color: T.ink, fontFamily: T.fontDisplay }}>Clarify Assistant</span>
+              <span className="t-call" style={{ fontWeight: 600 }}>Clarify Assistant</span>
             </div>
             <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-              {messages.length > 0 && <button onClick={clearMemory} title="Clear conversation memory" style={{ background: "none", border: "none", color: T.faint, fontSize: "10px", cursor: "pointer" }}>Clear</button>}
-              <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: T.faint, fontSize: "16px", cursor: "pointer", lineHeight: 1 }}>×</button>
+              {messages.length > 0 && <button onClick={clearMemory} type="button" title="Clear conversation memory" className="btn sm plain" style={{ color: T.faint }}>Clear</button>}
+              <button onClick={() => setOpen(false)} type="button" aria-label="Close assistant" className="icon-btn">×</button>
             </div>
           </div>
 
@@ -97,20 +99,21 @@ Local action queues with pending items: ${pendingByClient.length ? pendingByClie
             {messages.length === 0 && (
               <div style={{ textAlign: "center", padding: "40px 16px", color: T.muted }}>
                 <div style={{ fontSize: "22px", marginBottom: "10px" }}>✦</div>
-                <div style={{ fontSize: "12px", lineHeight: 1.6 }}>Ask about outreach pipeline status, client findings, or what to prioritize today. I read live state from across the app before answering.</div>
+                <div className="t-foot" style={{ lineHeight: 1.6 }}>Ask about outreach pipeline status, client findings, or what to prioritize today. I read live state from across the app before answering.</div>
               </div>
             )}
             {messages.map((m, i) => (
               <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
-                <div style={{ maxWidth: "82%", padding: "9px 13px", background: m.role === "user" ? T.goldSoft : T.subtle, border: m.role === "assistant" ? `1px solid ${T.lineInk}` : "none", borderRadius: m.role === "user" ? "12px 12px 3px 12px" : "12px 12px 12px 3px", fontSize: "12px", color: T.ink, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                <div style={{ maxWidth: "82%", padding: "9px 13px", background: m.role === "user" ? T.goldSoft : T.subtle, border: "none", borderRadius: m.role === "user" ? "12px 12px 3px 12px" : "12px 12px 12px 3px", fontSize: "13px", color: T.ink, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
                   {m.content}
                 </div>
               </div>
             ))}
             {sending && (
               <div style={{ display: "flex" }}>
-                <div style={{ padding: "10px 14px", background: T.subtle, border: `1px solid ${T.lineInk}`, borderRadius: "12px 12px 12px 3px" }}>
-                  <span style={{ color: T.faint, fontSize: "16px", letterSpacing: "3px" }}>···</span>
+                <div style={{ padding: "10px 14px", background: T.subtle, border: "none", borderRadius: "12px 12px 12px 3px" }}>
+                  {/* The kit's three-dot convening indicator. */}
+                  <span className="convene" aria-label="Thinking"><span className="cd" /><span className="cd" /><span className="cd" /></span>
                 </div>
               </div>
             )}
@@ -120,9 +123,8 @@ Local action queues with pending items: ${pendingByClient.length ? pendingByClie
           <div style={{ padding: "12px 14px", borderTop: `1px solid ${T.lineInk}`, display: "flex", gap: "8px" }}>
             <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && !e.shiftKey && send()}
               placeholder="Ask anything across Outreach, Analyst, Clients…"
-              style={{ flex: 1, padding: "9px 12px", background: T.subtle, border: `1px solid ${T.line}`, borderRadius: "8px", fontSize: "12px", color: T.ink, outline: "none" }} />
-            <button onClick={send} disabled={!input.trim() || sending}
-              style={{ padding: "9px 16px", background: !input.trim() || sending ? T.subtle : T.gold, border: "none", borderRadius: "8px", color: !input.trim() || sending ? T.faint : T.textOnBrand, fontSize: "11px", fontWeight: 700, cursor: !input.trim() || sending ? "not-allowed" : "pointer", fontFamily: T.fontDisplay }}>
+              aria-label="Ask the Clarify assistant" className="field" style={{ flex: 1, width: "auto", minHeight: 38, padding: "9px 12px", fontSize: "13.5px" }} />
+            <button onClick={send} type="button" disabled={!input.trim() || sending} className="btn sm primary">
               Send
             </button>
           </div>

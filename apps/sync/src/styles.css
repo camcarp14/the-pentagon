@@ -155,57 +155,49 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── type ──────────────────────────────────────────────────────────────────── */
-.sy-root .t-ltitle { font-size: 32px; line-height: 1.14; font-weight: 700; letter-spacing: -0.024em; color: var(--ink); text-wrap: balance; }
-.sy-root .t-title1 { font-size: 26px; line-height: 1.2;  font-weight: 700; letter-spacing: -0.02em;  color: var(--ink); text-wrap: balance; }
-.sy-root .t-title2 { font-size: 21px; line-height: 1.25; font-weight: 700; letter-spacing: -0.016em; color: var(--ink); }
-.sy-root .t-head { font-size: 17px; line-height: 1.3;  font-weight: 600; letter-spacing: -0.011em; color: var(--ink); }
-.sy-root .t-body { font-size: 15px; line-height: 1.55; font-weight: 400; color: var(--ink); }
-.sy-root .t-call { font-size: 13.5px; line-height: 1.45; font-weight: 400; color: var(--ink); }
-.sy-root .t-foot { font-size: 12.5px; line-height: 1.4; font-weight: 400; color: var(--sub); }
-.sy-root .t-cap { font-size: 11.5px; line-height: 1.3; font-weight: 500; color: var(--sub); }
-.sy-root .t-label { font-size: 11.5px; line-height: 1; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--faint); }
-.sy-root .t-num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1, "cv05" 1; }
+/* The scale is the kit's. .t-ltitle … .t-cap … .t-label … .t-num all come from
+   [data-kit] in packages/ui/components.css, which .sy-root now opts into, so
+   a heading in SYNC is the same heading as one in Runway or Ideas.
+   .t-mono is the one class with no kit answer: SYNC columns durations, token
+   counts and clock times in a true monospace, which the kit does not carry. */
 .sy-root .t-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 
 /* ── press physics — every touch acknowledged inside 100ms ─────────────────── */
+/* The press scale itself, .press and .hoverable are the kit's. Two rules stay.
+   The first is not cosmetic: .cell, .seg-opt, .pill, .side-item and .dock-tab
+   are all <button>s, and the kit never sets a font-family on them — without
+   this, half the app renders in the UA's default control face.
+   The second resolves the focus ring through SYNC's own --focus-ring, which is
+   mixed off the accent it republished from the Pentagon. */
 .sy-root button { font-family: inherit; }
-.sy-root button:active:not(:disabled) { transform: scale(0.97); }
-.sy-root .press { transition: transform var(--dur-1) var(--ease-out), opacity var(--dur-1) ease; }
-.sy-root .press:active { transform: scale(0.97); }
-.sy-root .hoverable { transition: background var(--dur-1) ease; }
-@media (hover: hover) { .sy-root .hoverable:hover { background: var(--ink-a03); } }
-.sy-root :focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 8px; }
+/* :where() so the whole thing weighs (0,1,0) instead of (0,2,0), and that is
+   load-bearing rather than tidy. The ring is a box-shadow, so it follows the
+   element's own radius, and the 8px is the fallback for a focusable that has
+   none. While the radii lived in this sheet — after this rule — they won the
+   tie and the fallback never reached them. They live in the kit's sheet now,
+   which the browser parses BEFORE this one, so at (0,2,0) this rule would
+   quietly win instead: a focused pill would go from 999px to 8px, a focused
+   button from 12px to 8px, on every control in the app. Zero specificity
+   yields to anything that names a radius and still covers what does not.
 
-/* ── entrances — quiet, brief, only on arrival ─────────────────────────────── */
-.sy-root .pagefade { animation: pagein var(--dur-3) var(--ease-out) both; }
-@keyframes pagein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-.sy-root .stagger > * { animation: rise var(--dur-3) var(--ease-out) both; animation-delay: calc(var(--i, 0) * 34ms); }
-@keyframes rise { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
-.sy-root .stagger > *:nth-child(1) { --i: 0 } .sy-root .stagger > *:nth-child(2) { --i: 1 }
-.sy-root .stagger > *:nth-child(3) { --i: 2 } .sy-root .stagger > *:nth-child(4) { --i: 3 }
-.sy-root .stagger > *:nth-child(5) { --i: 4 } .sy-root .stagger > *:nth-child(6) { --i: 5 }
-.sy-root .stagger > *:nth-child(7) { --i: 6 } .sy-root .stagger > *:nth-child(8) { --i: 7 }
-.sy-root .stagger > *:nth-child(n+9) { --i: 8 }
+   DELIBERATE, and now reviewed twice: this puts a box-shadow on elements that
+   already carry a border, and that is NOT the §4.2 violation it resembles.
+   §4.2 is about RESTING elevation — a card wearing an outline and a drop
+   shadow at rest is two materials pretending to be one. A focus ring is a
+   transient state, and drawing it as a shadow is the standard replacement for
+   the `outline: none` sitting on the same line. The border-and-shadow guard in
+   __tests__/render.test.jsx is keyed on the exact selector for this reason, so
+   a state variant stays its own row rather than merging into the resting
+   element. Do not "fix" this; it has been declined once already. */
+.sy-root :where(:focus-visible) { outline: none; box-shadow: var(--focus-ring); border-radius: 8px; }
 
-/* ── skeletons — pages develop instead of arrive ───────────────────────────── */
-.sy-root .sk { position: relative; overflow: hidden; background: var(--ink-a05); border-radius: 8px; }
-.sy-root .sk::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, var(--ink-a04), transparent); animation: shimmer 1.4s infinite; }
-@keyframes shimmer { 100% { transform: translateX(100%); } }
-.sy-root .sk-line { height: 12px; margin: 8px 0; }
-.sy-root .sk-line.w30 { width: 30%; } .sy-root .sk-line.w40 { width: 40%; }
-.sy-root .sk-line.w60 { width: 60%; } .sy-root .sk-line.w80 { width: 80%; }
-.sy-root .sk-big { height: 28px; width: 52%; margin: 10px 0 6px; }
-
-/* ── height:auto expansion, zero measuring, zero jank ──────────────────────── */
-.sy-root .expand { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--dur-3) var(--ease-out); }
-.sy-root .expand.open { grid-template-rows: 1fr; }
-.sy-root .expand > div { overflow: hidden; min-height: 0; }
-
-/* ── shared keyframes ──────────────────────────────────────────────────────── */
-@keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-@keyframes breathe { 0%, 100% { transform: scale(1); opacity: 0.55; } 50% { transform: scale(1.06); opacity: 0.9; } }
+/* ── entrances, skeletons, expansion, shared keyframes ─────────────────────── */
+/* All the kit's: .pagefade, .stagger (and its nth-child delays), .sk/.sk-line/
+   .sk-big, .expand, and the pagein/rise/shimmer/fadein/pulse/spin keyframes.
+   Deleting SYNC's copies of those @keyframes matters beyond this app — a
+   keyframe name is global no matter which selector uses it, and SYNC's sheet
+   is injected last, so its `rise` and its `pulse` were quietly redefining the
+   kit's for every other tool that happened to be loaded. */
 
 /* ── thinking — three quiet dots, one thought ──────────────────────────────── */
 .sy-root .think { display: inline-flex; align-items: center; gap: 7px; }
@@ -214,44 +206,29 @@
 .sy-root .think .td:nth-child(3) { animation-delay: 0.32s; }
 @keyframes thinkdot { 0%, 100% { opacity: 0.22; transform: scale(0.75); } 40% { opacity: 1; transform: scale(1); } }
 
-/* ═══ THE KIT ════════════════════════════════════════════════════════════════ */
+/* ═══ ON TOP OF THE KIT ══════════════════════════════════════════════════════
+   .sy-root carries data-kit, so packages/ui/components.css now owns the card,
+   the cell, the stat tile, the button, the icon button, the pill, the
+   segmented control, the field, the switch, the sheet, the toast, the skeleton
+   and the whole type scale.
 
-/* cards — one material, no outlines */
-.sy-root .card { background: var(--surface); border: none; border-radius: var(--r-card); box-shadow: var(--shadow-card); }
-.sy-root .card.pad-lg { padding: 20px; }
-.sy-root .card.pad-md { padding: 16px; }
-.sy-root .card.pad-sm { padding: 12px; }
+   Everything in this section is what SYNC needs ON TOP of that: a primitive
+   the kit has no answer for, or the one property it leaves undeclared that
+   this app depends on. Nothing here restates a kit declaration — where a rule
+   looks close, the comment says what the difference is and why it survived.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Cards. pad-none has no kit equivalent, and the kit's .pressable acknowledges
+   a press but never lifts — SYNC's timeline blocks and cards do. */
 .sy-root .card.pad-none { padding: 0; }
-.sy-root .card.pressable { cursor: pointer; transition: transform var(--dur-1) var(--ease-out), box-shadow var(--dur-2) var(--ease-out); }
 @media (hover: hover) { .sy-root .card.pressable:hover { box-shadow: var(--shadow-float); } }
-.sy-root .card.pressable:active { transform: scale(0.985); }
 
-/* section header */
-.sy-root .sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 0 4px 8px; margin-top: 4px; }
-.sy-root .sec-link { font-size: 12.5px; font-weight: 500; color: var(--accent); background: none; border: none; cursor: pointer; padding: 4px; }
-
-/* cells — inset-grouped list grammar */
-.sy-root .cellgroup { background: var(--surface); border-radius: var(--r-card); box-shadow: var(--shadow-card); overflow: hidden; }
-.sy-root .cell {
-  display: flex; align-items: center; gap: 12px; width: 100%;
-  min-height: 46px; padding: 10px 16px; background: transparent; border: none;
-  text-align: left; color: var(--ink); position: relative; font-family: inherit;
-}
-.sy-root .cell.tappable { cursor: pointer; }
-@media (hover: hover) { .sy-root .cell.tappable:hover { background: var(--ink-a03); } }
+/* Cells. Two states the kit does not draw. `done` is a closed queue item, and
+   it says so with a strike as well as a colour, because colour is never the
+   only signal. The :active guard cancels the kit's global button press-scale:
+   a full-width list row that shrinks under a thumb reads as the whole list
+   moving rather than as one row being chosen. */
 .sy-root .cell.tappable:active { background: var(--ink-a05); transform: none; }
-.sy-root .cell + .cell::before, .sy-root .cell-sep {
-  content: ''; position: absolute; top: 0; right: 0; height: 0.5px;
-  left: 16px; background: var(--line);
-}
-.sy-root .cell.has-leading + .cell.has-leading::before { left: 56px; }
-.sy-root .cell-leading { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 9px; }
-.sy-root .cell-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.sy-root .cell-title { font-size: 15.5px; font-weight: 500; letter-spacing: -0.008em; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sy-root .cell-sub { font-size: 12.5px; color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sy-root .cell-value { flex: none; font-size: 14px; color: var(--sub); display: inline-flex; align-items: center; gap: 6px; }
-.sy-root .cell-chevron { flex: none; color: var(--faint); display: inline-flex; margin-right: -4px; }
-.sy-root .cell.destructive .cell-title { color: var(--red); }
 .sy-root .cell.done .cell-title { color: var(--faint); text-decoration: line-through; text-decoration-thickness: 1px; }
 
 /* the tick — an open item shows an empty box, not a grey check. A check that
@@ -270,189 +247,96 @@
 .sy-root .tickbox:active { transform: scale(0.92); }
 .sy-root .tickbox.on { background: var(--green-a14); color: var(--green); box-shadow: none; }
 
-/* stat tiles — hero numbers */
-.sy-root .stattile {
-  background: var(--surface-2); border: none; border-radius: var(--r-well);
-  padding: 12px 12px 11px; text-align: left; display: flex; flex-direction: column; gap: 3px;
-  min-width: 0; position: relative; font-family: inherit;
-}
-.sy-root .stattile.on-canvas { background: var(--surface); box-shadow: var(--shadow-card); border-radius: var(--r-card); padding: 16px; }
-.sy-root .stattile.tappable { cursor: pointer; transition: transform var(--dur-1) var(--ease-out); }
-.sy-root .stattile.tappable:active { transform: scale(0.97); }
-.sy-root .stattile.selected { box-shadow: inset 0 0 0 1.5px var(--accent); }
-.sy-root .stattile-value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sy-root .stattile-label { font-size: 10.5px; font-weight: 500; color: var(--sub); line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sy-root .stattile-delta { font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
-
-/* buttons */
-.sy-root .btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-  border: none; cursor: pointer; font-family: var(--font-body);
-  font-weight: 600; letter-spacing: -0.008em; border-radius: 12px; white-space: nowrap;
-  transition: opacity var(--dur-1) ease, transform var(--dur-1) var(--ease-out), background var(--dur-1) ease;
-  -webkit-user-select: none; user-select: none;
-}
-.sy-root .btn:disabled { opacity: 0.42; cursor: default; }
-.sy-root .btn.lg { height: 50px; padding: 0 22px; font-size: 16px; }
-.sy-root .btn.md { height: 44px; padding: 0 18px; font-size: 15px; }
-.sy-root .btn.sm { height: 34px; padding: 0 14px; font-size: 13px; border-radius: 10px; }
-.sy-root .btn.full { width: 100%; }
-.sy-root .btn.primary { background: var(--accent); color: var(--on-accent); }
-.sy-root .btn.tinted { background: var(--accent-a16); color: var(--accent); }
-.sy-root .btn.quiet { background: var(--ink-a06); color: var(--ink); }
-.sy-root .btn.plain { background: transparent; color: var(--accent); }
-.sy-root .btn.danger { background: var(--red-a14); color: var(--red); }
-.sy-root .btn.danger-solid { background: var(--red); color: #fff; }
+/* Buttons. The kit sizes, tints and disables them. SYNC adds the one property
+   it leaves out — a label that wraps inside a fixed-height button is clipped,
+   and "End conversation" is two words in a 44px box — plus the hover tints,
+   which the kit does not draw at all. */
+.sy-root .btn { white-space: nowrap; }
 @media (hover: hover) {
   .sy-root .btn.quiet:hover:not(:disabled) { background: var(--ink-a10); }
   .sy-root .btn.tinted:hover:not(:disabled) { background: var(--accent-a25); }
   .sy-root .btn.plain:hover:not(:disabled) { background: var(--accent-a10); }
 }
 
-/* icon button — 38px box, 44pt reach */
-.sy-root .icon-btn {
-  width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center;
-  background: transparent; border: none; border-radius: 11px; color: var(--sub);
-  cursor: pointer; padding: 0; flex: none; position: relative;
-  transition: background var(--dur-1) ease, color var(--dur-1) ease;
-}
-.sy-root .icon-btn::after { content: ''; position: absolute; inset: -4px; }
+/* Icon buttons. The kit draws the 38px box and the 44pt reach; the disabled
+   state, the hover that lifts the glyph as well as the ground, and the "on"
+   state that reports a live microphone are all SYNC's. */
+.sy-root .icon-btn { transition: background var(--dur-1) ease, color var(--dur-1) ease; }
 .sy-root .icon-btn:disabled { opacity: 0.4; cursor: default; }
 @media (hover: hover) { .sy-root .icon-btn:hover:not(:disabled) { background: var(--ink-a06); color: var(--ink); } }
 .sy-root .icon-btn.on { color: var(--accent); background: var(--accent-a12); }
 
-/* pills — monochrome filters (accent is not for filters) */
-.sy-root .pill {
-  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px;
-  border-radius: 999px; border: none; background: var(--ink-a05); color: var(--sub);
-  font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; flex: none;
-  font-family: inherit; transition: background var(--dur-1) ease, color var(--dur-1) ease;
-}
-.sy-root .pill.active { background: var(--ink); color: var(--bg); font-weight: 600; }
-@media (hover: hover) { .sy-root .pill:not(.active):hover { background: var(--ink-a10); color: var(--ink); } }
+/* Pills. The kit's .pillrow carries 16px of side padding for a shell whose
+   pages bleed to the edge of the glass; SYNC's rows sit inside .content-max,
+   which already has that padding, so the row would be indented twice. */
 .sy-root .pillrow { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 10px; scrollbar-width: none; -ms-overflow-style: none; }
-.sy-root .pillrow::-webkit-scrollbar { display: none; }
+@media (hover: hover) { .sy-root .pill:not(.active):hover { background: var(--ink-a10); color: var(--ink); } }
 
-/* segmented — ≤4 options, equal width, thumb glides */
-.sy-root .seg { display: flex; background: var(--seg-bg); border-radius: 10px; padding: 2px; position: relative; }
-.sy-root .seg-opt {
-  flex: 1; min-height: 32px; border: none; background: transparent; border-radius: 8px;
-  font-size: 13px; font-weight: 500; color: var(--sub); cursor: pointer; position: relative; z-index: 1;
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  padding: 4px; min-width: 0; font-family: inherit;
-}
-.sy-root .seg-opt.active { color: var(--ink); font-weight: 600; }
-.sy-root .seg-opt:active:not(:disabled) { transform: none; }
-.sy-root .seg-thumb {
-  position: absolute; top: 2px; bottom: 2px; border-radius: 8px; background: var(--seg-thumb);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14), 0 3px 8px rgba(0, 0, 0, 0.07);
-  transition: left var(--dur-2) var(--ease-out), width var(--dur-2) var(--ease-out);
-}
+/* Fields. `resize` is the load-bearing one: every TextArea in SYNC lives in a
+   sheet with its own scroll container, and a drag handle in the corner lets
+   one be pulled straight past it. */
+.sy-root .field, .sy-root textarea.field { line-height: 1.45; resize: none; transition: background var(--dur-1) ease; }
 
-/* fields */
-.sy-root .field, .sy-root textarea.field {
-  width: 100%; background: var(--surface-2); border: none; border-radius: 12px;
-  color: var(--ink); font-size: 15px; padding: 12px 14px; min-height: 44px;
-  font-family: var(--font-body); line-height: 1.45; resize: none;
-  transition: background var(--dur-1) ease;
-}
-.sy-root .field::placeholder { color: var(--faint); }
-.sy-root .field.on-well { background: var(--ink-a05); }
-
-/* switch — iOS proportions */
-.sy-root .switch { width: 51px; height: 31px; border-radius: 999px; background: var(--ink-a16); position: relative; cursor: pointer; display: inline-block; flex: none; border: none; padding: 0; transition: background var(--dur-2) ease; }
-.sy-root .switch.on { background: var(--green); }
+/* The switch is the kit's. This cancels the kit's global button press-scale,
+   which on a 51x31 track reads as the whole control twitching rather than as
+   a toggle being thrown. */
 .sy-root .switch:active:not(:disabled) { transform: none; }
-.sy-root .switch-knob { position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 1px 1px rgba(0,0,0,0.12), 0 3px 8px rgba(0,0,0,0.16); transition: left var(--dur-2) var(--ease-out); }
-.sy-root .switch.on .switch-knob { left: 22px; }
-.sy-root .switch.small { width: 40px; height: 25px; }
-.sy-root .switch.small .switch-knob { width: 21px; height: 21px; }
-.sy-root .switch.small.on .switch-knob { left: 17px; }
 
-/* status dot */
-.sy-root .dotstatus { width: 7px; height: 7px; border-radius: 50%; flex: none; display: inline-block; }
-.sy-root .dotstatus.pulse { animation: pulse 2s var(--ease-inout) infinite; }
-
-/* empty states — always guide, never just "no data" */
-.sy-root .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 40px 24px; }
-.sy-root .empty-icon { color: var(--faint); margin-bottom: 2px; }
-.sy-root .empty-title { font-size: 15px; font-weight: 600; color: var(--ink); }
-.sy-root .empty-sub { font-size: 12.5px; line-height: 1.55; color: var(--sub); max-width: 320px; }
-
-/* spinner — a drawn arc, not a gif */
-.sy-root .spinner { display: inline-block; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ink-a10); border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
-
-/* scrollbars — slim, palette-matched, both themes */
+/* scrollbars — slim, palette-matched (no kit equivalent) */
 .sy-root .scroll-thin { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; overscroll-behavior: contain; }
 .sy-root .scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
 .sy-root .scroll-thin::-webkit-scrollbar-track { background: transparent; }
 .sy-root .scroll-thin::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
 .sy-root .scroll-thin:hover::-webkit-scrollbar-thumb { background: var(--faint); background-clip: padding-box; }
 
-.sy-root kbd {
-  font-family: var(--font-mono); font-size: 10.5px; color: var(--sub);
-  background: var(--ink-a06); border: none; border-radius: 5px; padding: 3px 6px; line-height: 1;
-}
-
 /* ═══ CHROME ═════════════════════════════════════════════════════════════════ */
 
-/* sidebar rail — tablet / desktop */
+/* Sidebar rail — tablet / desktop.
+   The kit's .sidebar is written for a page that scrolls the document: it is
+   100vh/100dvh tall, position:sticky, and pads itself with
+   env(safe-area-inset-*). SYNC's rail is a flex child of a column that has
+   ALREADY subtracted the shell's bar, so a viewport-height rail overflows it
+   by exactly that bar, and the raw inset is the letterbox bug --safe-bottom
+   exists to avoid. `position: static` is declared rather than left off: the
+   kit sets sticky, and a property this rule does not name is a property the
+   kit still wins. */
 .sy-root .sidebar {
   width: 232px; flex: none;
   border-right: 0.5px solid var(--line);
   padding: 16px 10px calc(14px + var(--safe-bottom, 0px));
   display: flex; flex-direction: column; gap: 14px;
-  height: 100%; overflow: hidden;
+  height: 100%; overflow: hidden; position: static;
 }
-.sy-root .side-nav { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
-.sy-root .side-brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 6px; }
-.sy-root .side-brand-name { font-size: 15px; font-weight: 700; letter-spacing: 0.14em; color: var(--ink); }
-.sy-root .side-item {
-  display: flex; align-items: center; gap: 11px; width: 100%;
-  padding: 0 10px; height: 38px; border-radius: 10px; border: none;
-  background: transparent; cursor: pointer; color: var(--sub);
-  font-size: 14.5px; font-weight: 500; text-align: left; font-family: inherit;
-  transition: background var(--dur-1) ease, color var(--dur-1) ease;
-}
-.sy-root .side-item .side-ic { color: var(--faint); display: inline-flex; flex: none; transition: transform var(--dur-1) var(--ease-out), color var(--dur-1) ease; }
+/* The rail rows are the kit's .side-item. These are the three things it does
+   not carry: a colour shift on hover, a badge for the count on a destination,
+   and that badge picking up the accent when the destination is the live one.
+   The transition is here for the same reason — the kit declares none, so the
+   hover would hard-cut. */
+.sy-root .side-item { transition: background var(--dur-1) ease, color var(--dur-1) ease; }
 @media (hover: hover) { .sy-root .side-item:hover { background: var(--ink-a04); color: var(--ink); } }
 .sy-root .side-item:active { transform: none; }
-.sy-root .side-item:active .side-ic { transform: scale(0.9); }
-.sy-root .side-item.active { background: var(--accent-a12); color: var(--ink); font-weight: 600; }
-.sy-root .side-item.active .side-ic { color: var(--accent); }
 .sy-root .side-badge { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--faint); font-variant-numeric: tabular-nums; }
 .sy-root .side-item.active .side-badge { color: var(--accent); }
-.sy-root .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
 
-/* mobile dock — safe-area padding lives inside each tab */
+/* mobile dock — safe-area padding lives inside each tab.
+   The bar itself stays SYNC's: the kit's .dock has no `flex: none`, and this
+   one is the last in-flow child of a fixed-height column, so without it the
+   bar stretches to fill whatever the pages leave over. Everything above the
+   bar — the tab, its icon, its label, the press nudge — is the kit's.
+   .dock-label in particular: SYNC's own was 10px, under the 10.5px floor this
+   language sets, and the kit's is 10.5. */
 .sy-root .dock {
   position: relative; display: flex; flex: none;
   background: var(--glass);
   -webkit-backdrop-filter: blur(22px) saturate(1.8); backdrop-filter: blur(22px) saturate(1.8);
   border-top: 0.5px solid var(--line);
 }
-.sy-root .dock-tab {
-  flex: 1; position: relative; background: none; border: none;
-  cursor: pointer; display: flex; flex-direction: column; align-items: center;
-  justify-content: flex-start; gap: 3px; font-family: inherit;
-  padding: 8px 0 calc(8px + var(--safe-bottom, 0px));
-  color: var(--faint); -webkit-user-select: none; user-select: none;
-  transition: color var(--dur-1) ease;
-}
-.sy-root .dock-tab.active { color: var(--accent); }
-.sy-root .dock-tab:active:not(:disabled) { transform: none; }
-.sy-root .dock-tab:active .dock-icon { transform: scale(0.88); }
-.sy-root .dock-icon { display: inline-flex; transition: transform var(--dur-1) var(--ease-out); position: relative; }
-.sy-root .dock-label { font-size: 10px; font-weight: 600; line-height: 1; white-space: nowrap; }
+.sy-root .dock-tab { transition: color var(--dur-1) ease; }
+.sy-root .dock-icon { position: relative; }
 .sy-root .dock-pip { position: absolute; top: -2px; right: -6px; min-width: 7px; height: 7px; border-radius: 999px; background: var(--accent); }
 
-/* content column */
-.sy-root .content-head {
-  flex: none; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
-  padding: 16px 28px 12px;
-  position: relative; z-index: 20;
-}
-.sy-root .content-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+/* content column — the header is the kit's; the column's width is not. */
+.sy-root .content-head { padding: 16px 28px 12px; }
 /* Every page in SYNC is a single column of lists and cards. 900px is where a
    line of body text stops being a paragraph and starts being a spreadsheet —
    past it, list rows read as empty space with a word at each end. */
@@ -464,60 +348,45 @@
 }
 
 
-/* ═══ SHEETS ═════════════════════════════════════════════════════════════════ */
-.sy-root .sheet-scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 300; animation: fadein var(--dur-2) ease both; -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
-.sy-root .sheet {
-  position: fixed; z-index: 301; background: var(--surface);
-  display: flex; flex-direction: column;
-  left: 0; right: 0; bottom: 0;
-  border-radius: 22px 22px 0 0;
-  box-shadow: var(--shadow-deep);
+/* ═══ SHEETS ═════════════════════════════════════════════════════════════════
+   The sheet is the kit's — the panel, the grabber, the head, the body, the
+   spring, the phone→tablet switch from a bottom sheet to a centred modal.
+
+   Three rules stay, and all three are the same disagreement: the kit clears
+   the home indicator and the notch with raw env(safe-area-inset-*), and SYNC
+   cannot. --safe-bottom is 0 on a letterboxed iOS install where the reported
+   inset is dead space, and env() there floats the panel off the screen edge —
+   the bug this whole move was meant to end. `100%` rather than `100vh` in the
+   desktop max-height is the other half of it: 100vh on an installed app is the
+   screen, not the window.
+
+   They are written as .sy-root[data-kit], one notch above the kit's own
+   [data-kit] .sheet, so the safe area never depends on which stylesheet the
+   browser happened to parse last. ══════════════════════════════════════════ */
+.sy-root .sheet-scrim { -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+.sy-root[data-kit] .sheet {
   max-height: calc(100% - 24px);
   padding-bottom: var(--safe-bottom, 0px);
-  animation: sheetin var(--dur-3) var(--ease-spring) both;
-  overscroll-behavior: contain;
 }
-@keyframes sheetin { from { opacity: 0.5; transform: translateY(56px); } to { opacity: 1; transform: none; } }
-.sy-root .sheet-grab { flex: none; display: flex; justify-content: center; padding: 9px 0 3px; }
-.sy-root .sheet-grab::after { content: ''; width: 36px; height: 5px; border-radius: 999px; background: var(--ink-a12); }
-.sy-root .sheet-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 18px 10px; }
-.sy-root .sheet-body { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 18px 16px; }
-.sy-root .sheet-foot { flex: none; padding: 10px 18px calc(14px + var(--safe-bottom, 0px)); display: flex; gap: 10px; }
+.sy-root[data-kit] .sheet-foot { padding: 10px 18px calc(14px + var(--safe-bottom, 0px)); }
 @media (min-width: 761px) {
-  .sy-root .sheet {
-    left: 50%; right: auto; bottom: auto; top: 50%;
-    transform: translate(-50%, -50%);
-    width: 580px; max-width: calc(100vw - 48px);
-    border-radius: 18px; max-height: calc(100% - 96px);
-    animation: modalin var(--dur-3) var(--ease-spring) both;
-  }
-  @keyframes modalin { from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
-  .sy-root .sheet-grab { display: none; }
-  .sy-root .sheet-head { padding: 18px 22px 10px; }
-  .sy-root .sheet-body { padding: 4px 22px 18px; }
-  .sy-root .sheet-foot { padding: 12px 22px 20px; }
+  .sy-root[data-kit] .sheet { width: 580px; max-height: calc(100% - 96px); }
+  .sy-root[data-kit] .sheet-foot { padding: 12px 22px 20px; }
 }
 
-/* ═══ TOASTS ═════════════════════════════════════════════════════════════════ */
+/* ═══ TOASTS ═════════════════════════════════════════════════════════════════
+   The toast is the kit's. Its host is not: the kit parks the stack at
+   84px + env(safe-area-inset-bottom), which on this app would sit it behind
+   the tab bar on a notched phone and float it off the glass on a letterboxed
+   one. .tmsg is SYNC's — a toast reports one line and truncates, it never
+   grows into a paragraph over the composer. */
 .sy-root .toasts {
-  position: fixed; bottom: calc(92px + var(--safe-bottom, 0px)); left: 50%;
-  transform: translateX(-50%); z-index: 900; display: flex; flex-direction: column;
-  gap: 8px; align-items: center; pointer-events: none; padding: 0 14px; width: 100%; max-width: 460px;
+  bottom: calc(92px + var(--safe-bottom, 0px));
+  max-width: 460px;
 }
 @media (min-width: 761px) { .sy-root .toasts { bottom: 24px; } }
-.sy-root .toast {
-  pointer-events: auto; background: var(--glass-raised);
-  -webkit-backdrop-filter: blur(22px) saturate(1.8); backdrop-filter: blur(22px) saturate(1.8);
-  color: var(--ink); border-radius: 999px; padding: 11px 18px; font-size: 13.5px; font-weight: 500;
-  box-shadow: var(--shadow-float); animation: toastin var(--dur-3) var(--ease-spring) both;
-  display: flex; gap: 9px; align-items: center; max-width: 100%;
-}
-.sy-root .toast.out { animation: toastout var(--dur-2) var(--ease-out) both; }
-.sy-root .toast .tdot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--green); }
-.sy-root .toast.err .tdot { background: var(--red); }
+.sy-root .toast { max-width: 100%; }
 .sy-root .toast .tmsg { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@keyframes toastin { from { opacity: 0; transform: translateY(14px) scale(0.97); } to { opacity: 1; transform: none; } }
-@keyframes toastout { to { opacity: 0; transform: translateY(8px) scale(0.98); } }
 
 /* ═══ COMMAND PALETTE ════════════════════════════════════════════════════════ */
 .sy-root .cmdk-scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 700; animation: fadein var(--dur-2) ease both; -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
@@ -628,51 +497,23 @@
   -webkit-tap-highlight-color: transparent;
 }
 .sy-root .mind-chip.on { color: var(--ink); border-color: var(--ink-a16, var(--ink-a08)); }
-.sy-root .mind-chip-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
-.sy-root .mind-chip-n { font-family: var(--font-mono); font-size: 10px; opacity: 0.6; }
+/* The region swatch is the kit's .dotstatus. This sheet used to carry its own
+   `.mind-chip-dot`, byte-for-byte identical to `[data-kit] .dotstatus` in
+   packages/ui/components.css — a private second copy of a shared thing, which
+   is the exact class of duplicate this migration exists to delete. The tint
+   still arrives inline, because a region's hue is data (§4.4), not theme. */
+/* 10.5px, not 10: the floor in this language is 10.5 and this counter was the
+   last thing under it after the tab-bar label. */
+.sy-root .mind-chip-n { font-family: var(--font-mono); font-size: 10.5px; opacity: 0.6; }
 .sy-root .mind-insp-head { display: flex; align-items: center; gap: 8px; }
 
-/* ── the mind ─────────────────────────────────────────────────────────────── */
-/* A neuron reads as a row until you open it, because there are twenty-odd of
-   them and the list has to be scannable before it is editable. A silenced one
-   dims rather than disappearing: a belief you switched off is information, and
-   hiding it would make the prompt's contents unguessable from the UI. */
-.sy-root .stats-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.sy-root .neuron {
-  border: 1px solid var(--ink-a06); border-radius: 12px;
-  background: var(--ink-a02); margin-bottom: 7px; overflow: hidden;
-}
-.sy-root .neuron.off { opacity: 0.5; }
-.sy-root .neuron-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
-.sy-root .neuron-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-.sy-root .neuron-label {
-  flex: 1; min-width: 0; text-align: left; background: none; border: 0;
-  font: inherit; font-size: 13.5px; font-weight: 500; color: var(--ink);
-  cursor: pointer; display: flex; align-items: center; gap: 8px;
-  -webkit-tap-highlight-color: transparent;
-}
-.sy-root .neuron-lock {
-  font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
-  color: var(--faint); border: 1px solid var(--ink-a08); border-radius: 4px; padding: 1px 4px;
-}
-.sy-root .neuron-weight {
-  font-family: var(--font-mono); font-size: 11px; color: var(--faint); flex: none;
-  font-variant-numeric: tabular-nums;
-}
-.sy-root .neuron-body { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 10px; }
-.sy-root .neuron-tools { display: flex; align-items: flex-end; gap: 10px; }
-.sy-root .neuron-band {
-  margin-left: 7px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em;
-  text-transform: uppercase; color: var(--faint);
-}
-.sy-root .tension {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 9px 0; border-bottom: 1px solid var(--ink-a06); font-size: 12.5px;
-}
-.sy-root .tension-from { color: var(--ink); font-weight: 500; }
-.sy-root .tension-verb { color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; }
-.sy-root .tension-to { color: var(--sub); }
-.sy-root .tension-w { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--faint); }
+/* ── the mind inspector ───────────────────────────────────────────────────── */
+/* Both of these used to set their own 9.5px uppercase with their own tracking.
+   Uppercase has exactly one route in this language and it is .t-label, which
+   both now wear — these rules are what is left once the type is the kit's:
+   a box for the lock, and a separation for the band. */
+.sy-root .neuron-lock { border: 1px solid var(--ink-a08); border-radius: 5px; padding: 3px 6px; color: var(--faint); }
+.sy-root .neuron-band { margin-left: 7px; font-weight: 500; color: var(--faint); }
 .sy-root .mind-prompt {
   margin: 0; white-space: pre-wrap; word-break: break-word;
   font-family: var(--font-mono); font-size: 11px; line-height: 1.6; color: var(--sub);
@@ -709,12 +550,11 @@
 .sy-root .convo-btn:disabled { opacity: 0.45; cursor: default; }
 .sy-root .convo-btn:active:not(:disabled) { background: var(--ink-a08); }
 .sy-root .convo-btn.on { color: var(--accent); border-color: var(--accent); background: transparent; }
-.sy-root .convo-dot {
-  width: 7px; height: 7px; border-radius: 50%; flex: none;
-  background: var(--faint);
-  transition: background var(--dur-1) ease;
-}
-.sy-root .convo-btn.on .convo-dot { background: var(--accent); animation: convo-live 1.9s ease-in-out infinite; }
+/* The live dot is the kit's .dotstatus too — SYNC's `.convo-dot` was the same
+   four declarations again (see .mind-chip-dot above). What is left here is the
+   half the kit does not carry: a resting colour and the fade between states. */
+.sy-root .convo-btn .dotstatus { background: var(--faint); transition: background var(--dur-1) ease; }
+.sy-root .convo-btn.on .dotstatus { background: var(--accent); animation: convo-live 1.9s ease-in-out infinite; }
 @keyframes convo-live {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
@@ -798,23 +638,33 @@
   font-family: var(--font-mono); font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums;
 }
 .sy-root .tl-blocks { position: absolute; inset: 0; left: 58px; pointer-events: none; }
+/* The venture rail on the left edge was a `border-left: 3px solid var(--tone)`
+   on a card that also carries --shadow-card. This language does not put a
+   border and a shadow on the same element, and the reason shows up here: the
+   border sat in the box model, so the rail moved the text 3px right of every
+   other card's text and the elevation had a hard 3px edge on one side.
+   An inset shadow paints the same 3px rail in the same colour, inside the same
+   radius, without touching the box — the padding below carries the offset the
+   border used to. The tone itself stays literal: it is which venture a block
+   belongs to, which is data, not theme. */
 .sy-root .tl-block {
   position: absolute; left: 0; right: 0; pointer-events: auto;
-  border-radius: 11px; padding: 6px 11px; overflow: hidden;
-  background: var(--surface); box-shadow: var(--shadow-card);
-  border-left: 3px solid var(--tone, var(--accent));
+  border-radius: 11px; padding: 6px 11px 6px 14px; overflow: hidden;
+  background: var(--surface);
+  box-shadow: var(--shadow-card), inset 3px 0 0 var(--tone, var(--accent));
+  border: none;
   cursor: pointer; text-align: left; font-family: inherit;
   transition: transform var(--dur-1) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
   display: flex; flex-direction: column; justify-content: center; gap: 1px; min-height: 0;
 }
 /* A 30-minute block is 29px tall. Its title must still fit, so short blocks
    drop to a single centred line rather than clipping their own text. */
-.sy-root .tl-block.short { padding: 0 11px; }
+.sy-root .tl-block.short { padding: 0 11px 0 14px; }
 .sy-root .tl-block.short .tl-block-t { font-size: 12.5px; }
-@media (hover: hover) { .sy-root .tl-block:hover { box-shadow: var(--shadow-float); } }
+@media (hover: hover) { .sy-root .tl-block:hover { box-shadow: var(--shadow-float), inset 3px 0 0 var(--tone, var(--accent)); } }
 .sy-root .tl-block:active { transform: scale(0.99); }
 .sy-root .tl-block.done { opacity: 0.5; }
-.sy-root .tl-block.now { box-shadow: var(--shadow-float), inset 0 0 0 1.5px var(--tone, var(--accent)); }
+.sy-root .tl-block.now { box-shadow: var(--shadow-float), inset 3px 0 0 var(--tone, var(--accent)), inset 0 0 0 1.5px var(--tone, var(--accent)); }
 .sy-root .tl-block-t { font-size: 13px; font-weight: 600; color: var(--ink); letter-spacing: -0.008em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sy-root .tl-block-s { font-size: 11px; color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The now-line sits in the same gutter grid as the hour labels: the time reads
@@ -841,49 +691,27 @@
 .sy-root .focusbar-ring { flex: none; }
 .sy-root .focusbar-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 
-/* ═══ BOOT — the mark draws itself while the room wakes ═════════════════════ */
-.sy-root .boot {
-  position: fixed; inset: 0; z-index: 1000;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
-  background: var(--bg);
-}
-.sy-root .boot.leaving { animation: bootout var(--dur-3) var(--ease-out) both; }
-@keyframes bootout { to { opacity: 0; } }
-
-.sy-root .boot-mark .ba {
-  fill: none; stroke: var(--accent); stroke-width: 2.4; stroke-linecap: round;
-  /* r=29 → circumference ≈ 182.2; each arc draws 40% of the ring */
-  stroke-dasharray: 73 110;
-  transform-origin: center;
-}
-.sy-root .boot-mark .ba-1 { animation: bsweep1 1.35s var(--ease-inout) both; }
-.sy-root .boot-mark .ba-2 { animation: bsweep2 1.35s var(--ease-inout) both; }
-@keyframes bsweep1 { from { transform: rotate(-140deg); opacity: 0; } 30% { opacity: 1; } to { transform: rotate(0deg); opacity: 1; } }
-@keyframes bsweep2 { from { transform: rotate(320deg); opacity: 0; } 30% { opacity: 1; } to { transform: rotate(180deg); opacity: 1; } }
-
-.sy-root .boot-mark .bcore {
-  fill: var(--accent); opacity: 0; transform-origin: center;
-  animation: bcore 0.55s var(--ease-spring) 1.15s both;
-}
-@keyframes bcore { from { opacity: 0; transform: scale(0.2); } to { opacity: 1; transform: scale(1); } }
-
-.sy-root .boot-word {
-  font-size: 15px; font-weight: 700; letter-spacing: 0.42em; text-indent: 0.42em;
-  color: var(--ink); animation: fadein var(--dur-4) ease 0.85s both;
-}
-.sy-root .boot-sub {
-  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em;
-  color: var(--faint); animation: fadein var(--dur-4) ease 1.3s both;
-}
+/* The boot screen's twelve rules are gone with it. Boot.jsx was deleted when
+   the shell took over the startup state — the sheet was still carrying .boot,
+   .boot-mark, .boot-word and their four keyframes for a screen no component
+   renders. Same for the Mind's old list UI (.neuron-head, .tension…), replaced
+   by the canvas, and the sidebar wordmark the shell's top bar made redundant. */
 
 /* ═══ ONBOARDING ═════════════════════════════════════════════════════════════ */
 /* A real scroll container: definite height from the frame, and `margin: auto`
    on the card rather than flex centring. Centring a flex child taller than its
    container clips the TOP of it and makes the start unscrollable — which is how
    the Start button ended up unreachable on a phone. margin:auto centres when
-   there is room and yields when there isn't. */
+   there is room and yields when there isn't.
+   `min-height: 0` is load-bearing now that the kit is switched on: the kit's
+   .entrance is a standalone login screen and is min-height:100dvh. Inside
+   SYNC's column — which has already subtracted the shell's 52px bar — a
+   100dvh child is 52px taller than the space it has, and every one of those
+   pixels comes off the bottom of a card whose last element is the Start
+   button. That is the same bug this comment was written for, arriving from a
+   different direction. */
 .sy-root .entrance {
-  height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  height: 100%; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
   display: flex; flex-direction: column;
   padding: 18px 16px calc(18px + var(--safe-bottom, 0px));
 }
@@ -921,13 +749,16 @@
 .sy-root .opt-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
 .sy-root .opt-sub { font-size: 12.5px; line-height: 1.45; color: var(--sub); }
 
-/* ═══ REDUCED MOTION — motion is optional to the user's nervous system ═══════ */
+/* ═══ REDUCED MOTION — motion is optional to the user's nervous system ═══════
+   The kit's block is now the floor, and it is strictly stronger than the one
+   that used to be here: it kills the durations, it stops the spinner's
+   iteration rather than running it at 100,000rpm, and it cancels the press
+   transform with !important, which a per-app rule provably cannot do.
+   What is left is the five animations the kit has never heard of — SYNC's
+   transcript turns, its action ledger, its command palette and its live dot. */
 @media (prefers-reduced-motion: reduce) {
-  .sy-root *, .sy-root *::before, .sy-root *::after { animation-duration: 0.01ms !important; animation-delay: 0s !important; transition-duration: 0.01ms !important; }
-  .sy-root .pagefade, .sy-root .stagger > *, .sy-root .toast, .sy-root .sheet, .sy-root .cmdk, .sy-root .turn, .sy-root .act { animation: none !important; }
-  .sy-root .expand, .sy-root .seg-thumb, .sy-root .switch-knob { transition: none; }
-  .sy-root .sk::after { animation: none; }
-  .sy-root .dotstatus.pulse { animation: none; }
+  .sy-root .turn, .sy-root .act, .sy-root .cmdk, .sy-root .cmdk-scrim { animation: none !important; }
+  .sy-root .dotstatus.pulse, .sy-root .convo-btn.on .dotstatus, .sy-root .think .td { animation: none !important; }
 }
 
 
@@ -962,10 +793,9 @@
   font-variant-numeric: tabular-nums;
 }
 
-.sy-root .app { flex: 1; min-height: 0; display: flex; }
-.sy-root .app-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
-.sy-root .app-page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-@media (max-width: 760px) { .sy-root .app { flex-direction: column; } }
+/* .app / .app-main / .app-page are declared once, in the geometry block at the
+   bottom of this sheet. They were declared twice, identically, and a duplicate
+   that drifts is worse than no rule at all. */
 
 /* the document-level scrollbar treatment, applied to every scroll region */
 .sy-root .content-scroll, .sy-root .stream, .sy-root .sheet-body, .sy-root .side-nav, .sy-root .cmdk-list {
@@ -1104,7 +934,29 @@
 
 /* The tab bar is the last in-flow child of the column and clears the home
    indicator with the shell's variable — never var(--safe-bottom, 0px)
-   directly, which reports dead space on a letterboxed install. */
-.sy-root .dock-tab { padding: 8px 0 calc(8px + var(--safe-bottom, 0px)); }
+   directly, which reports dead space on a letterboxed install.
+   [data-kit] is on the selector deliberately. The kit's own .dock-tab pads
+   with a raw env(safe-area-inset-bottom); at equal specificity the winner
+   would be whichever sheet the browser parsed last, and this app's whole
+   reason for moving into the shell was that inset being wrong. One extra
+   attribute takes the question off the table. */
+.sy-root[data-kit] .dock-tab { padding: 8px 0 calc(8px + var(--safe-bottom, 0px)); }
 .sy-root .composer { padding-bottom: 12px; }
-.sy-root .entrance { height: 100%; padding-top: 18px; padding-bottom: calc(18px + var(--safe-bottom, 0px)); }
+.sy-root[data-kit] .entrance { height: 100%; min-height: 0; padding-top: 18px; padding-bottom: calc(18px + var(--safe-bottom, 0px)); }
+
+/* ── the portal layer ───────────────────────────────────────────────────────
+   Sheets, toasts and the command palette are portaled to <body>, which is
+   OUTSIDE .sy-root — so none of this stylesheet reached them, and none of the
+   Pentagon's custom properties resolved there either: <body> sits above the
+   shell's themed wrapper as well. Every one of those surfaces was rendering
+   with `background: var(--surface)` resolving to nothing.
+
+   ui/kit.jsx's PortalLayer renders the same two-element bridge Root.jsx does,
+   at the portal target, so the whole cascade applies again. `display: contents`
+   is what makes it free: the pair generates no boxes, so the fixed-position
+   scrim, sheet, toast stack and palette measure against the viewport exactly
+   as they did when they were <body>'s own children — while custom properties,
+   colour, and the font still inherit straight through. */
+.sy-root.sy-layer {
+  display: contents;
+}

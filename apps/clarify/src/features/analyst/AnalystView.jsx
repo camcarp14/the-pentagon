@@ -18,10 +18,10 @@ export function UploadCard({ type, upload, onUpload, onRemove }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: "11px", fontWeight: 700, color: upload ? SEV.pass : T.ink, fontFamily: T.fontDisplay }}>{type.label}</div>
           {upload
-            ? <div style={{ fontSize: "10px", color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{upload.name} · <span style={{ fontFamily: T.fontMono }}>{upload.totalRows}</span> rows</div>
-            : <div style={{ fontSize: "10px", color: T.faint }}>{type.hint}</div>}
+            ? <div style={{ fontSize: "10.5px", color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{upload.name} · <span style={{ fontFamily: T.fontMono }}>{upload.totalRows}</span> rows</div>
+            : <div style={{ fontSize: "10.5px", color: T.faint }}>{type.hint}</div>}
         </div>
-        {upload && <button onClick={e => { e.stopPropagation(); onRemove(); }} style={{ background: "none", border: "none", color: T.faint, cursor: "pointer", fontSize: "16px", lineHeight: 1 }}>×</button>}
+        {upload && <button onClick={e => { e.stopPropagation(); onRemove(); }} type="button" aria-label="Remove upload" className="icon-btn">×</button>}
       </div>
     </div>
   );
@@ -31,10 +31,10 @@ export function UploadCard({ type, upload, onUpload, onRemove }) {
 // ─── Analyst: Metric Tile ─────────────────────────────────────────────────────
 export function MetricTile({ label, value, sub, color, accent }) {
   return (
-    <div style={{ flex: 1, padding: "16px 18px", background: accent ? T.goldSoft : T.surface, borderRadius: "10px", border: accent ? `1px solid ${T.goldLine}` : `1px solid ${T.lineInk}`, boxShadow: T.shadowCard }}>
-      <div style={{ fontSize: "9px", fontWeight: 700, color: T.faint, textTransform: "uppercase", letterSpacing: "0.14em", fontFamily: T.fontDisplay, marginBottom: "8px" }}>{label}</div>
+    <div className="card" style={{ flex: 1, padding: "16px 18px", background: accent ? T.goldSoft : T.surface }}>
+      <div className="t-label" style={{ color: T.faint, marginBottom: "8px" }}>{label}</div>
       <div style={{ fontSize: "26px", fontWeight: 500, color: color || T.inkDeep, fontFamily: T.fontMono, letterSpacing: "-0.02em", lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontSize: "10px", color: T.faint, marginTop: "5px" }}>{sub}</div>}
+      {sub && <div style={{ fontSize: "10.5px", color: T.faint, marginTop: "5px" }}>{sub}</div>}
     </div>
   );
 }
@@ -47,8 +47,8 @@ export function BarChart({ data, valueKey, labelKey, color, formatValue, title, 
   const barH = 26, gap = 8, lblW = 160, numW = 60, w = 520;
 
   return (
-    <div style={{ background: T.surface, borderRadius: "10px", border: `1px solid ${T.lineInk}`, padding: "16px 20px", boxShadow: T.shadowCard }}>
-      <div style={{ fontSize: "9px", fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontFamily: T.fontDisplay, marginBottom: "12px" }}>{title}</div>
+    <div className="card" style={{ padding: "16px 20px" }}>
+      <div className="t-label" style={{ color: T.muted, marginBottom: "12px" }}>{title}</div>
       <svg width="100%" viewBox={`0 0 ${w} ${sorted.length * (barH + gap) + 4}`} style={{ overflow: "visible" }}>
         {sorted.map((d, i) => {
           const y = i * (barH + gap);
@@ -56,9 +56,9 @@ export function BarChart({ data, valueKey, labelKey, color, formatValue, title, 
           const lbl = String(d[labelKey] || "").replace(/Non-Brand - |Brand - |\| Chicago.*|Exact.*|PI |Law /gi, "").trim().slice(0, 24);
           return (
             <g key={i}>
-              <text x={lblW - 6} y={y + barH * 0.68} textAnchor="end" fontSize="10" fill={T.faint} fontFamily={T.fontMono}>{lbl}</text>
+              <text x={lblW - 6} y={y + barH * 0.68} textAnchor="end" fontSize="10.5" fill={T.faint} fontFamily={T.fontMono}>{lbl}</text>
               <rect x={lblW} y={y + 3} width={Math.max(barW, 2)} height={barH - 6} fill={color} rx="3" opacity="0.75" />
-              <text x={lblW + barW + 5} y={y + barH * 0.68} fontSize="10" fill={T.faint} fontFamily={T.fontMono}>{formatValue(d[valueKey])}</text>
+              <text x={lblW + barW + 5} y={y + barH * 0.68} fontSize="10.5" fill={T.faint} fontFamily={T.fontMono}>{formatValue(d[valueKey])}</text>
             </g>
           );
         })}
@@ -67,7 +67,7 @@ export function BarChart({ data, valueKey, labelKey, color, formatValue, title, 
           return (
             <>
               <line x1={tx} y1={0} x2={tx} y2={sorted.length * (barH + gap)} stroke={T.amber} strokeWidth="1.5" strokeDasharray="4,3" />
-              <text x={tx + 4} y={10} fontSize="9" fill={T.amber} fontFamily={T.fontDisplay}>{targetLabel}</text>
+              <text x={tx + 4} y={10} fontSize="10.5" fill={T.amber} fontFamily={T.fontDisplay}>{targetLabel}</text>
             </>
           );
         })()}
@@ -121,10 +121,10 @@ export function AnalysisComparison({ current, savedAnalyses }) {
   const SIG = { needs_attention: { c: SEV.critical, l: "Needs Attention" }, stable: { c: SEV.warning, l: "Stable" }, performing: { c: SEV.pass, l: "Performing" } };
 
   return (
-    <div style={{ marginBottom: "16px", padding: "16px 18px", background: T.surface, border: `1px solid ${T.lineInk}`, borderRadius: "12px", boxShadow: T.shadowCard }}>
+    <div className="card" style={{ marginBottom: "16px", padding: "16px 18px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
-        <span style={{ fontSize: "11px", fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.12em", fontFamily: T.fontDisplay }}>Since Last Analysis</span>
-        <span style={{ fontSize: "10px", color: T.faint }}>{daysAgo === 0 ? "earlier today" : `${daysAgo}d ago`}</span>
+        <span className="t-label" style={{ color: T.muted }}>Since Last Analysis</span>
+        <span style={{ fontSize: "10.5px", color: T.faint }}>{daysAgo === 0 ? "earlier today" : `${daysAgo}d ago`}</span>
       </div>
 
       {cmp.signalChanged && (
@@ -140,12 +140,12 @@ export function AnalysisComparison({ current, savedAnalyses }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "10px" }}>
           {cmp.deltas.map((d, i) => (
             <div key={i} style={{ padding: "10px 12px", background: T.subtle, borderRadius: "9px" }}>
-              <div style={{ fontSize: "9px", fontWeight: 700, color: T.faint, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: T.fontDisplay, marginBottom: "5px" }}>{d.label}</div>
+              <div className="t-label" style={{ color: T.faint, marginBottom: "5px" }}>{d.label}</div>
               <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
                 <span style={{ fontSize: "15px", fontWeight: 600, color: T.ink, fontFamily: T.fontMono }}>{fmtVal(d.cur, d.money)}</span>
                 <span style={{ fontSize: "11px", fontWeight: 700, color: d.good ? SEV.pass : SEV.critical, fontFamily: T.fontMono }}>{d.pctChange > 0 ? "▲" : "▼"}{Math.abs(d.pctChange)}%</span>
               </div>
-              <div style={{ fontSize: "9px", color: T.ghost, marginTop: "2px", fontFamily: T.fontMono }}>was {fmtVal(d.prev, d.money)}</div>
+              <div style={{ fontSize: "10.5px", color: T.ghost, marginTop: "2px", fontFamily: T.fontMono }}>was {fmtVal(d.prev, d.money)}</div>
             </div>
           ))}
         </div>
@@ -477,7 +477,7 @@ export function AnalystView() {
       {/* Sidebar */}
       <div style={{ borderRight: `1px solid ${T.lineInk}`, padding: "24px 16px", background: T.surface, overflowY: "auto", display: "flex", flexDirection: "column" }}>
         <div style={{ marginBottom: "14px" }}>
-          <div style={{ fontSize: "9px", fontWeight: 700, color: T.gold, textTransform: "uppercase", letterSpacing: "0.14em", fontFamily: T.fontDisplay, marginBottom: "2px" }}>Reports</div>
+          <div className="t-label" style={{ color: T.gold, marginBottom: "2px" }}>Reports</div>
           <div style={{ fontSize: "11px", color: T.faint }}>Upload Google Ads exports</div>
         </div>
         {REPORT_TYPES.map(type => (
@@ -486,22 +486,20 @@ export function AnalystView() {
             onRemove={() => setUploads(prev => { const n = { ...prev }; delete n[type.key]; return n; })} />
         ))}
         <div style={{ borderTop: `1px solid ${T.lineSoft}`, paddingTop: "16px", marginTop: "10px" }}>
-          <div style={{ fontSize: "9px", fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontFamily: T.fontDisplay, marginBottom: "8px" }}>Client Context</div>
-          <input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Client name"
-            style={{ width: "100%", padding: "7px 10px", background: T.subtle, border: `1px solid ${T.line}`, borderRadius: "7px", fontSize: "12px", color: T.ink, outline: "none", boxSizing: "border-box", marginBottom: "7px" }} />
-          <textarea value={clientContext} onChange={e => setClientContext(e.target.value)} rows={4}
+          <div className="t-label" style={{ color: T.muted, marginBottom: "8px" }}>Client Context</div>
+          <input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Client name" aria-label="Client name"
+            className="field" style={{ minHeight: 36, padding: "7px 10px", fontSize: "13px", marginBottom: "7px" }} />
+          <textarea value={clientContext} onChange={e => setClientContext(e.target.value)} rows={4} aria-label="Client context"
             placeholder="Goals, recent changes, client concerns, anything AI should know…"
-            style={{ width: "100%", padding: "7px 10px", background: T.subtle, border: `1px solid ${T.line}`, borderRadius: "7px", fontSize: "12px", color: T.ink, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box", lineHeight: 1.5 }} />
+            className="field" style={{ padding: "7px 10px", fontSize: "13px", resize: "vertical", lineHeight: 1.5 }} />
         </div>
         <div style={{ marginTop: "auto", paddingTop: "14px" }}>
-          <button onClick={runAnalysis} disabled={!hasUploads || analyzing}
-            style={{ width: "100%", padding: "11px", background: !hasUploads || analyzing ? T.subtle : T.goldGrad, border: "none", borderRadius: "9px", color: !hasUploads || analyzing ? T.faint : T.textOnBrand, fontSize: "12px", fontWeight: 700, cursor: !hasUploads || analyzing ? "not-allowed" : "pointer", letterSpacing: "0.05em", fontFamily: T.fontDisplay }}>
-            {analyzing ? "Analyzing…" : "✦ Run Analysis"}
+          <button onClick={runAnalysis} type="button" disabled={!hasUploads || analyzing} className="btn md primary full">
+            {analyzing ? "Analyzing…" : "✦ Run analysis"}
           </button>
           {hasAnalysis && (
-            <button onClick={generateReport} disabled={reportGenerating}
-              style={{ width: "100%", marginTop: "7px", padding: "9px", background: "transparent", border: `1px solid ${T.line}`, borderRadius: "9px", color: T.muted, fontSize: "11px", fontWeight: 600, cursor: reportGenerating ? "not-allowed" : "pointer", fontFamily: T.fontDisplay }}>
-              {reportGenerating ? "Generating…" : "↗ Client Report"}
+            <button onClick={generateReport} type="button" disabled={reportGenerating} className="btn md quiet full" style={{ marginTop: "7px" }}>
+              {reportGenerating ? "Generating…" : "↗ Client report"}
             </button>
           )}
         </div>
@@ -509,7 +507,7 @@ export function AnalystView() {
         {/* Saved analyses */}
         {savedAnalyses.length > 0 && (
           <div style={{ borderTop: `1px solid ${T.lineSoft}`, paddingTop: "16px", marginTop: "16px" }}>
-            <div style={{ fontSize: "9px", fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontFamily: T.fontDisplay, marginBottom: "10px" }}>Saved Analyses</div>
+            <div className="t-label" style={{ color: T.muted, marginBottom: "10px" }}>Saved Analyses</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
               {savedAnalyses.map(save => {
                 const SIG_COLORS = { needs_attention: SEV.critical, stable: SEV.warning, performing: SEV.pass };
@@ -531,10 +529,12 @@ export function AnalystView() {
                     <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: dot, flexShrink: 0, boxShadow: `0 0 4px ${dot}80` }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: "11px", fontWeight: 600, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{save.clientName}</div>
-                      <div style={{ fontSize: "10px", color: T.faint, fontFamily: T.fontMono }}>{ago}</div>
+                      <div style={{ fontSize: "10.5px", color: T.faint, fontFamily: T.fontMono }}>{ago}</div>
                     </div>
-                    <button onClick={e => deleteSave(save.id, e)}
-                      style={{ background: "none", border: "none", color: T.ghost, cursor: "pointer", fontSize: "14px", lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>×</button>
+                    {/* The kit's .icon-btn — this was a bare background:none /
+                        border:none glyph with a 2px-wide hit area. */}
+                    <button onClick={e => deleteSave(save.id, e)} type="button" aria-label="Delete saved analysis"
+                      className="icon-btn" style={{ width: 26, height: 26, fontSize: "14px", lineHeight: 1 }}>×</button>
                   </div>
                 );
               })}
@@ -560,16 +560,15 @@ export function AnalystView() {
                 <div style={{ fontSize: "16px", fontWeight: 700, color: T.inkDeep, fontFamily: T.fontDisplay, letterSpacing: "-0.01em" }}>Portfolio Intelligence</div>
                 <div style={{ fontSize: "11px", color: T.faint, marginTop: "2px" }}>{savedAnalyses.length} saved session{savedAnalyses.length !== 1 ? "s" : ""} · computed instantly</div>
               </div>
-              <button onClick={synthesizePortfolio} disabled={synthesizing}
-                style={{ padding: "8px 16px", background: synthesizing ? T.subtle : T.goldGrad, border: "none", borderRadius: "8px", color: synthesizing ? T.faint : T.textOnBrand, fontSize: "11px", fontWeight: 700, cursor: synthesizing ? "not-allowed" : "pointer", fontFamily: T.fontDisplay, letterSpacing: "0.04em" }}>
+              <button onClick={synthesizePortfolio} type="button" disabled={synthesizing} className="btn sm primary">
                 {synthesizing ? "Synthesizing…" : "✦ Synthesize"}
               </button>
             </div>
 
             {/* Synthesized ranking */}
             {portfolioInsight?.length > 0 && (
-              <div style={{ background: T.surface, borderRadius: "11px", border: `1px solid ${T.lineInk}`, padding: "16px 18px", marginBottom: "14px", boxShadow: T.shadowCard }}>
-                <div style={{ fontSize: "9px", fontWeight: 700, color: T.gold, textTransform: "uppercase", letterSpacing: "0.14em", fontFamily: T.fontDisplay, marginBottom: "12px" }}>Where To Focus First</div>
+              <div className="card" style={{ padding: "16px 18px", marginBottom: "14px" }}>
+                <div className="t-label" style={{ color: T.gold, marginBottom: "12px" }}>Where To Focus First</div>
                 {portfolioInsight.map((item, i) => (
                   <div key={i} style={{ display: "flex", gap: "12px", alignItems: "flex-start", marginBottom: i < portfolioInsight.length - 1 ? "10px" : 0 }}>
                     <span style={{ fontSize: "14px", fontWeight: 500, color: T.ghost, fontFamily: T.fontMono, minWidth: "20px" }}>0{item.urgency}</span>
@@ -592,19 +591,19 @@ export function AnalystView() {
                 const ago = (() => { const d = Date.now() - save.id; const h = Math.floor(d/3600000); return h < 24 ? `${h}h ago` : `${Math.floor(h/24)}d ago`; })();
                 return (
                   <div key={save.id} onClick={() => { setClientName(save.clientName || ""); setClientContext(save.clientContext || ""); setUploads(save.uploads || {}); setAnalysis(save.analysis || null); setCsvMetrics(save.csvMetrics || null); setMessages(save.messages || []); setRawAnalysis(""); }}
-                    style={{ background: T.surface, borderRadius: "11px", border: `1px solid ${T.lineInk}`, padding: "14px 16px", cursor: "pointer", boxShadow: T.shadowCard, transition: "box-shadow 0.15s" }}
+                    className="card" style={{ padding: "14px 16px", cursor: "pointer", transition: "box-shadow 0.15s" }}
                     onMouseEnter={e => e.currentTarget.style.boxShadow = T.shadowHover}
                     onMouseLeave={e => e.currentTarget.style.boxShadow = T.shadowCard}>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
                       <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: sig.color, flexShrink: 0, boxShadow: `0 0 5px ${sig.color}80` }} />
                       <span style={{ fontSize: "13px", fontWeight: 700, color: T.ink, fontFamily: T.fontDisplay, flex: 1 }}>{save.clientName || "Unnamed"}</span>
-                      <span style={{ fontSize: "10px", color: T.faint, fontFamily: T.fontMono }}>{ago}</span>
+                      <span style={{ fontSize: "10.5px", color: T.faint, fontFamily: T.fontMono }}>{ago}</span>
                     </div>
                     {topAction && <div style={{ fontSize: "11px", color: T.muted, lineHeight: 1.55, marginBottom: "6px" }}>{topAction}</div>}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span style={{ fontSize: "9px", fontWeight: 700, color: sig.color, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: T.fontDisplay }}>{sig.label}</span>
+                      <span className="t-label" style={{ color: sig.color }}>{sig.label}</span>
                       <button onClick={e => { e.stopPropagation(); const s = store.get("analyst_saves", []).filter(x => x.id !== save.id); store.set("analyst_saves", s); setSavedAnalyses(s); }}
-                        style={{ background: "none", border: "none", color: T.ghost, cursor: "pointer", fontSize: "14px", padding: "0 2px" }}>×</button>
+                        type="button" aria-label="Delete saved analysis" className="icon-btn" style={{ width: 28, height: 28 }}>×</button>
                     </div>
                   </div>
                 );
@@ -616,7 +615,7 @@ export function AnalystView() {
         {/* Pre-analysis metrics from CSV */}
         {csvMetrics && !hasAnalysis && !analyzing && (
           <div style={{ marginBottom: "20px" }}>
-            <div style={{ fontSize: "9px", fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontFamily: T.fontDisplay, marginBottom: "10px" }}>From Uploaded Data</div>
+            <div className="t-label" style={{ color: T.muted, marginBottom: "10px" }}>From Uploaded Data</div>
             <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
               <MetricTile label="Total Spend" value={`$${csvMetrics.totalCost.toLocaleString("en-US", { maximumFractionDigits: 0 })}`} sub="across all campaigns" />
               <MetricTile label="Conversions" value={csvMetrics.totalConv.toFixed(0)} sub="reported total" />
@@ -653,16 +652,16 @@ export function AnalystView() {
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "20px", gap: "16px" }}>
                 <div>
                   <button onClick={() => { setAnalysis(null); setRawAnalysis(""); setCsvMetrics(null); setMessages([]); setClientName(""); setClientContext(""); setUploads({}); }}
-                    style={{ display: "flex", alignItems: "center", gap: "5px", padding: 0, marginBottom: "8px", background: "none", border: "none", color: T.faint, fontSize: "11px", fontWeight: 600, cursor: "pointer", fontFamily: T.fontDisplay }}>
-                    ← Back to Portfolio
+                    type="button" className="btn sm plain" style={{ padding: 0, marginBottom: "8px", color: T.faint }}>
+                    ← Back to portfolio
                   </button>
-                  {clientName && <div style={{ fontSize: "18px", fontWeight: 700, color: T.inkDeep, fontFamily: T.fontDisplay, letterSpacing: "-0.01em" }}>{clientName}</div>}
+                  {clientName && <h2 className="t-title2" style={{ margin: 0 }}>{clientName}</h2>}
                   <div style={{ fontSize: "11px", color: T.faint, marginTop: "2px" }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
                 </div>
                 {analysis && (
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 16px", background: sig.bg, border: `1px solid ${sig.border}`, borderRadius: "10px", flexShrink: 0 }}>
                     <span style={{ fontSize: "16px", color: sig.color }}>{sig.icon}</span>
-                    <span style={{ fontSize: "11px", fontWeight: 700, color: sig.color, fontFamily: T.fontDisplay, letterSpacing: "0.07em", textTransform: "uppercase" }}>{sig.label}</span>
+                    <span className="t-label" style={{ color: sig.color }}>{sig.label}</span>
                   </div>
                 )}
               </div>
@@ -711,8 +710,8 @@ export function AnalystView() {
 
               {/* Summary */}
               {analysis?.summary && (
-                <div style={{ background: T.surface, borderRadius: "11px", border: `1px solid ${T.lineInk}`, padding: "18px 20px", marginBottom: "14px", boxShadow: T.shadowCard }}>
-                  <div style={{ fontSize: "9px", fontWeight: 700, color: T.faint, textTransform: "uppercase", letterSpacing: "0.14em", fontFamily: T.fontDisplay, marginBottom: "8px" }}>Summary</div>
+                <div className="card" style={{ padding: "18px 20px", marginBottom: "14px" }}>
+                  <div className="t-label" style={{ color: T.faint, marginBottom: "8px" }}>Summary</div>
                   <p style={{ fontSize: "13px", color: T.ink, lineHeight: 1.75, margin: 0 }}>{analysis.summary}</p>
                 </div>
               )}
@@ -720,22 +719,22 @@ export function AnalystView() {
               {/* Priority actions */}
               {analysis?.priorities?.length > 0 && (
                 <div style={{ marginBottom: "14px" }}>
-                  <div style={{ fontSize: "9px", fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontFamily: T.fontDisplay, marginBottom: "10px" }}>Priority Actions</div>
+                  <div className="t-label" style={{ color: T.muted, marginBottom: "10px" }}>Priority Actions</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                     {analysis.priorities.map((p, i) => (
-                      <div key={i} style={{ background: T.surface, borderRadius: "11px", border: `1px solid ${T.lineInk}`, padding: "16px 18px", display: "flex", gap: "16px", alignItems: "flex-start", boxShadow: T.shadowCard }}>
+                      <div key={i} className="card" style={{ padding: "16px 18px", display: "flex", gap: "16px", alignItems: "flex-start" }}>
                         <div style={{ fontSize: "22px", fontWeight: 400, color: T.ghost, fontFamily: T.fontMono, lineHeight: 1, minWidth: "28px", paddingTop: "2px" }}>0{p.rank}</div>
                         <div style={{ flex: 1 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "5px" }}>
                             <div style={{ fontSize: "13px", fontWeight: 700, color: T.ink, fontFamily: T.fontDisplay }}>{p.action}</div>
-                            {p.confidence != null && <span style={{ fontSize: "9px", fontFamily: T.fontMono, color: p.confidence >= 0.85 ? SEV.pass : SEV.warning, background: `${p.confidence >= 0.85 ? SEV.pass : SEV.warning}1a`, padding: "1px 6px", borderRadius: "20px" }}>{Math.round((p.confidence || 0) * 100)}%</span>}
+                            {p.confidence != null && <span style={{ fontSize: "10.5px", fontFamily: T.fontMono, color: p.confidence >= 0.85 ? SEV.pass : SEV.warning, background: `${p.confidence >= 0.85 ? SEV.pass : SEV.warning}1a`, padding: "1px 6px", borderRadius: "20px" }}>{Math.round((p.confidence || 0) * 100)}%</span>}
                           </div>
                           <div style={{ fontSize: "12px", color: T.muted, lineHeight: 1.65, marginBottom: p.sourceData ? "5px" : 0 }}>{p.rationale}</div>
-                          {p.sourceData && <div style={{ fontSize: "10px", color: T.faint, fontStyle: "italic" }}>↳ {p.sourceData}</div>}
+                          {p.sourceData && <div style={{ fontSize: "10.5px", color: T.faint, fontStyle: "italic" }}>↳ {p.sourceData}</div>}
                         </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: "4px", flexShrink: 0 }}>
-                          <span style={{ fontSize: "9px", fontWeight: 700, color: IMPACT_COLOR[p.impact], background: IMPACT_COLOR[p.impact] + "15", padding: "2px 8px", borderRadius: "20px", letterSpacing: "0.07em", textTransform: "uppercase", textAlign: "center", fontFamily: T.fontDisplay }}>{p.impact} impact</span>
-                          <span style={{ fontSize: "9px", fontWeight: 700, color: EFFORT_COLOR[p.effort], background: EFFORT_COLOR[p.effort] + "15", padding: "2px 8px", borderRadius: "20px", letterSpacing: "0.07em", textTransform: "uppercase", textAlign: "center", fontFamily: T.fontDisplay }}>{p.effort} effort</span>
+                          <span className="t-label" style={{ color: IMPACT_COLOR[p.impact], background: IMPACT_COLOR[p.impact] + "15", padding: "2px 8px", borderRadius: "20px", textAlign: "center" }}>{p.impact} impact</span>
+                          <span className="t-label" style={{ color: EFFORT_COLOR[p.effort], background: EFFORT_COLOR[p.effort] + "15", padding: "2px 8px", borderRadius: "20px", textAlign: "center" }}>{p.effort} effort</span>
                         </div>
                       </div>
                     ))}
@@ -746,15 +745,15 @@ export function AnalystView() {
               {/* Findings grid */}
               {analysis?.findings?.length > 0 && (
                 <div style={{ marginBottom: "14px" }}>
-                  <div style={{ fontSize: "9px", fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontFamily: T.fontDisplay, marginBottom: "10px" }}>Findings by Area</div>
+                  <div className="t-label" style={{ color: T.muted, marginBottom: "10px" }}>Findings by Area</div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "8px" }}>
                     {analysis.findings.map((f, i) => (
-                      <div key={i} style={{ background: T.surface, borderRadius: "11px", border: `1px solid ${FSTATUS_COLOR[f.status] || SEV.pass}22`, padding: "14px 16px", boxShadow: T.shadowCard }}>
+                      <div key={i} className="card" style={{ padding: "14px 16px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "10px" }}>
-                          <span style={{ color: FSTATUS_COLOR[f.status] || SEV.pass, fontSize: "9px", fontWeight: 700 }}>●</span>
+                          <span style={{ color: FSTATUS_COLOR[f.status] || SEV.pass, fontSize: "10.5px", fontWeight: 700 }}>●</span>
                           <span style={{ fontSize: "11px", fontWeight: 700, color: T.ink, fontFamily: T.fontDisplay }}>{f.area}</span>
-                          {f.confidence != null && <span style={{ marginLeft: "auto", fontSize: "9px", fontFamily: T.fontMono, color: f.confidence >= 0.85 ? SEV.pass : SEV.warning }}>{Math.round((f.confidence||0)*100)}%</span>}
-                          <span style={{ fontSize: "9px", fontWeight: 700, color: FSTATUS_COLOR[f.status] || SEV.pass, textTransform: "uppercase", letterSpacing: "0.06em", marginLeft: f.confidence != null ? "4px" : "auto" }}>{f.status}</span>
+                          {f.confidence != null && <span style={{ marginLeft: "auto", fontSize: "10.5px", fontFamily: T.fontMono, color: f.confidence >= 0.85 ? SEV.pass : SEV.warning }}>{Math.round((f.confidence||0)*100)}%</span>}
+                          <span className="t-label" style={{ color: FSTATUS_COLOR[f.status] || SEV.pass, marginLeft: f.confidence != null ? "4px" : "auto" }}>{f.status}</span>
                         </div>
                         <ul style={{ margin: 0, padding: "0 0 0 14px" }}>
                           {f.insights?.map((ins, j) => (
@@ -763,7 +762,7 @@ export function AnalystView() {
                         </ul>
                         {f.citations?.length > 0 && (
                           <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: `1px solid ${T.lineSoft}` }}>
-                            {f.citations.map((c, j) => <div key={j} style={{ fontSize: "10px", color: T.faint, fontStyle: "italic" }}>↳ {c}</div>)}
+                            {f.citations.map((c, j) => <div key={j} style={{ fontSize: "10.5px", color: T.faint, fontStyle: "italic" }}>↳ {c}</div>)}
                           </div>
                         )}
                       </div>
@@ -775,27 +774,13 @@ export function AnalystView() {
               {/* Quick wins */}
               {analysis?.quickWins?.length > 0 && (
                 <div style={{ marginBottom: "24px" }}>
-                  <div style={{ fontSize: "9px", fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontFamily: T.fontDisplay, marginBottom: "10px" }}>Quick Wins</div>
-                  <div style={{ background: T.surface, borderRadius: "11px", border: `1px solid ${T.lineInk}`, padding: "14px 18px", boxShadow: T.shadowCard }}>
-                    {analysis.quickWins.map((win, i) => {
-                        const w = typeof win === "string" ? { action: win } : (win || {});
-                        const winKey = `${clientName}_qw_${i}`;
-                        const done = completedWins[winKey];
-                        return (
-                          <div key={i} style={{ display: "flex", gap: "10px", alignItems: "flex-start", marginBottom: i < analysis.quickWins.length - 1 ? "10px" : 0, opacity: done ? 0.5 : 1, transition: "opacity 0.2s" }}>
-                            <button onClick={() => toggleWin(winKey)}
-                              style={{ width: "18px", height: "18px", borderRadius: "4px", border: `2px solid ${done ? SEV.pass : T.line}`, background: done ? SEV.pass : "transparent", cursor: "pointer", flexShrink: 0, marginTop: "1px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                              {done && <span style={{ color: T.textOnBrand, fontSize: "10px", fontWeight: 700 }}>✓</span>}
-                            </button>
-                            <div style={{ flex: 1 }}>
-                              <span style={{ fontSize: "12px", color: T.ink, lineHeight: 1.65, textDecoration: done ? "line-through" : "none" }}>{w.action || String(win)}</span>
-                              {w.effortLevel && <span style={{ marginLeft: "8px", fontSize: "9px", fontFamily: T.fontMono, color: T.faint, background: "rgba(255,255,255,0.06)", padding: "1px 7px", borderRadius: "20px" }}>{w.effortLevel}</span>}
-                              {w.estimatedImpact && !done && <div style={{ fontSize: "10px", color: T.muted, marginTop: "3px", fontStyle: "italic" }}>→ {w.estimatedImpact}</div>}
-                              {done && <div style={{ fontSize: "10px", color: SEV.pass, marginTop: "2px" }}>Completed</div>}
-                            </div>
-                          </div>
-                        );
-                      })}
+                  <div className="t-label" style={{ color: T.muted, marginBottom: "10px" }}>Quick Wins</div>
+                  <div className="card" style={{ padding: "14px 18px" }}>
+                    {analysis.quickWins.map((win, i) => (
+                      <QuickWinRow key={i} win={win} last={i === analysis.quickWins.length - 1}
+                        done={!!completedWins[`${clientName}_qw_${i}`]}
+                        onToggle={() => toggleWin(`${clientName}_qw_${i}`)} />
+                    ))}
                   </div>
                 </div>
               )}
@@ -804,32 +789,32 @@ export function AnalystView() {
               {localQueue.length > 0 && (
                 <div style={{ marginBottom: "24px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
-                    <div style={{ fontSize: "9px", fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontFamily: T.fontDisplay }}>Action Queue</div>
-                    <span style={{ fontSize: "10px", fontFamily: T.fontMono, color: T.gold, background: T.goldSoft, padding: "1px 7px", borderRadius: "20px" }}>{localQueue.filter(q => q.status === "pending").length} pending</span>
-                    <button onClick={() => setQueueVisible(v => !v)} style={{ marginLeft: "auto", background: "none", border: "none", color: T.faint, cursor: "pointer", fontSize: "11px" }}>{queueVisible ? "▲ hide" : "▼ show"}</button>
+                    <div className="t-label" style={{ color: T.muted }}>Action Queue</div>
+                    <span style={{ fontSize: "10.5px", fontFamily: T.fontMono, color: T.gold, background: T.goldSoft, padding: "1px 7px", borderRadius: "20px" }}>{localQueue.filter(q => q.status === "pending").length} pending</span>
+                    <button onClick={() => setQueueVisible(v => !v)} type="button" aria-expanded={queueVisible} className="btn sm plain" style={{ marginLeft: "auto", color: T.faint }}>{queueVisible ? "▲ hide" : "▼ show"}</button>
                   </div>
                   {queueVisible && (
                     <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                       {localQueue.map((item) => (
-                        <div key={item.id} style={{ background: T.surface, borderRadius: "10px", border: `1px solid ${item.status === "approved" ? `${SEV.pass}33` : item.status === "skipped" ? T.lineSoft : T.lineInk}`, padding: "12px 14px", opacity: item.status === "skipped" ? 0.45 : 1, transition: "opacity 0.2s, border-color 0.2s", boxShadow: T.shadowCard }}>
+                        <div key={item.id} className="card" style={{ padding: "12px 14px", opacity: item.status === "skipped" ? 0.45 : 1, transition: "opacity 0.2s, border-color 0.2s" }}>
                           <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
                             <div style={{ flex: 1 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
                                 <span style={{ fontSize: "12px", fontWeight: 700, color: T.ink, fontFamily: T.fontDisplay }}>{item.action}</span>
-                                {item.confidence != null && <span style={{ fontSize: "9px", fontFamily: T.fontMono, color: item.confidence >= 0.85 ? SEV.pass : SEV.warning }}>{Math.round((item.confidence||0)*100)}%</span>}
+                                {item.confidence != null && <span style={{ fontSize: "10.5px", fontFamily: T.fontMono, color: item.confidence >= 0.85 ? SEV.pass : SEV.warning }}>{Math.round((item.confidence||0)*100)}%</span>}
                               </div>
                               <div style={{ fontSize: "11px", color: T.muted, lineHeight: 1.55, marginBottom: item.sourceData ? "4px" : 0 }}>{item.rationale}</div>
-                              {item.sourceData && <div style={{ fontSize: "10px", color: T.faint, fontStyle: "italic" }}>↳ {item.sourceData}</div>}
+                              {item.sourceData && <div style={{ fontSize: "10.5px", color: T.faint, fontStyle: "italic" }}>↳ {item.sourceData}</div>}
                             </div>
                             <div style={{ display: "flex", flexDirection: "column", gap: "4px", flexShrink: 0 }}>
-                              {["high","medium","low"].includes(item.impact) && <span style={{ fontSize: "9px", fontWeight: 700, color: { high: SEV.pass, medium: SEV.warning, low: T.faint }[item.impact], background: { high: `${SEV.pass}1a`, medium: `${SEV.warning}1a`, low: "rgba(255,255,255,0.06)" }[item.impact], padding: "2px 7px", borderRadius: "20px", textTransform: "uppercase", letterSpacing: "0.07em", fontFamily: T.fontDisplay, textAlign: "center" }}>{item.impact}</span>}
+                              {["high","medium","low"].includes(item.impact) && <span className="t-label" style={{ color: { high: SEV.pass, medium: SEV.warning, low: T.faint }[item.impact], background: { high: `${SEV.pass}1a`, medium: `${SEV.warning}1a`, low: "rgba(255,255,255,0.06)" }[item.impact], padding: "2px 7px", borderRadius: "20px", textAlign: "center" }}>{item.impact}</span>}
                               {item.status === "pending" && (
                                 <div style={{ display: "flex", gap: "4px", marginTop: "4px" }}>
-                                  <button onClick={() => updateQueueItem(item.id, "approved")} style={{ padding: "4px 8px", background: SEV.pass, border: "none", borderRadius: "6px", color: T.textOnBrand, fontSize: "10px", fontWeight: 700, cursor: "pointer" }}>✓</button>
-                                  <button onClick={() => updateQueueItem(item.id, "skipped")} style={{ padding: "4px 8px", background: T.raised, border: "none", borderRadius: "6px", color: T.faint, fontSize: "10px", cursor: "pointer" }}>—</button>
+                                  <button onClick={() => updateQueueItem(item.id, "approved")} type="button" aria-label="Approve action" className="btn sm" style={{ background: SEV.pass, color: T.textOnBrand, height: 28, padding: "0 10px" }}>✓</button>
+                                  <button onClick={() => updateQueueItem(item.id, "skipped")} type="button" aria-label="Skip action" className="btn sm quiet" style={{ height: 28, padding: "0 10px" }}>—</button>
                                 </div>
                               )}
-                              {item.status === "approved" && <span style={{ fontSize: "10px", color: SEV.pass, fontWeight: 700, marginTop: "4px" }}>✓ Approved</span>}
+                              {item.status === "approved" && <span style={{ fontSize: "10.5px", color: SEV.pass, fontWeight: 700, marginTop: "4px" }}>✓ Approved</span>}
                             </div>
                           </div>
                         </div>
@@ -842,14 +827,14 @@ export function AnalystView() {
               {/* Raw fallback */}
               {rawAnalysis && (
                 <div style={{ background: T.surface, borderRadius: "11px", border: `1px solid ${T.lineInk}`, padding: "20px", marginBottom: "24px" }}>
-                  <div style={{ fontSize: "9px", fontWeight: 700, color: T.faint, textTransform: "uppercase", letterSpacing: "0.14em", fontFamily: T.fontDisplay, marginBottom: "12px" }}>Analysis</div>
+                  <div className="t-label" style={{ color: T.faint, marginBottom: "12px" }}>Analysis</div>
                   <pre style={{ fontSize: "12px", color: T.ink, lineHeight: 1.75, whiteSpace: "pre-wrap", margin: 0, fontFamily: "inherit" }}>{rawAnalysis}</pre>
                 </div>
               )}
 
               {/* Chat */}
               <div style={{ borderTop: `1px solid ${T.lineInk}`, paddingTop: "24px" }}>
-                <div style={{ fontSize: "9px", fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontFamily: T.fontDisplay, marginBottom: "16px" }}>Follow-up · Context carries</div>
+                <div className="t-label" style={{ color: T.muted, marginBottom: "16px" }}>Follow-up · Context carries</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "14px" }}>
                   {chatMessages.map((m, i) => (
                     <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
@@ -869,10 +854,9 @@ export function AnalystView() {
                 </div>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendChat()}
-                    placeholder="Ask a follow-up, add context, dig deeper into any area…"
-                    style={{ flex: 1, padding: "11px 14px", background: T.subtle, border: `1px solid ${T.line}`, borderRadius: "9px", fontSize: "13px", color: T.ink, outline: "none" }} />
-                  <button onClick={sendChat} disabled={!chatInput.trim() || sending}
-                    style={{ padding: "11px 20px", background: !chatInput.trim() || sending ? T.subtle : T.goldGrad, border: "none", borderRadius: "9px", color: !chatInput.trim() || sending ? T.faint : T.textOnBrand, fontSize: "12px", fontWeight: 700, cursor: !chatInput.trim() || sending ? "not-allowed" : "pointer", fontFamily: T.fontDisplay }}>
+                    placeholder="Ask a follow-up, add context, dig deeper into any area…" aria-label="Follow-up question"
+                    className="field" style={{ flex: 1, width: "auto" }} />
+                  <button onClick={sendChat} type="button" disabled={!chatInput.trim() || sending} className="btn md primary">
                     Send
                   </button>
                 </div>
@@ -890,8 +874,8 @@ export function AnalystView() {
             <div style={{ padding: "18px 24px", borderBottom: `1px solid ${T.line}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: "13px", fontWeight: 700, color: T.ink, fontFamily: T.fontDisplay }}>Client Report</span>
               <div style={{ display: "flex", gap: "8px" }}>
-                <button onClick={() => navigator.clipboard.writeText(clientReport)} style={{ padding: "5px 12px", background: T.raised, border: "none", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", color: T.muted }}>Copy</button>
-                <button onClick={() => setShowReport(false)} className="co-modal-close" style={{ background: "none", border: "none", fontSize: "20px", color: T.faint, cursor: "pointer" }}>×</button>
+                <button onClick={() => navigator.clipboard.writeText(clientReport)} type="button" className="btn sm quiet">Copy</button>
+                <button onClick={() => setShowReport(false)} type="button" aria-label="Close report" className="co-modal-close icon-btn">×</button>
               </div>
             </div>
             <div style={{ flex: 1, overflowY: "auto", padding: "24px 28px" }}>
@@ -906,15 +890,44 @@ export function AnalystView() {
 
 
 
+// ─── QuickWinRow ──────────────────────────────────────────────────────────────
+// One line of the Quick Wins card. Lifted out of AnalystView's map so the tick
+// box is reachable on its own — it only ever renders once an analysis has come
+// back from the model, which no cold render of the tab can produce.
+export function QuickWinRow({ win, done, last, onToggle }) {
+  const w = typeof win === "string" ? { action: win } : (win || {});
+  const label = w.action || String(win);
+  return (
+    <div style={{ display: "flex", gap: "10px", alignItems: "flex-start", marginBottom: last ? 0 : "10px", opacity: done ? 0.5 : 1, transition: "opacity 0.2s" }}>
+      {/* The kit's .icon-btn, sized down to the 18px tick box. It was a bare
+          18px square with its own border, background and cursor. */}
+      <button onClick={onToggle} type="button" role="checkbox" aria-checked={!!done} aria-label={label}
+        className="icon-btn" style={{ width: "18px", height: "18px", borderRadius: "4px", border: `2px solid ${done ? SEV.pass : T.line}`, background: done ? SEV.pass : "transparent", marginTop: "1px" }}>
+        {done && <span style={{ color: T.textOnBrand, fontSize: "10.5px", fontWeight: 700 }}>✓</span>}
+      </button>
+      <div style={{ flex: 1 }}>
+        <span style={{ fontSize: "12px", color: T.ink, lineHeight: 1.65, textDecoration: done ? "line-through" : "none" }}>{label}</span>
+        {w.effortLevel && <span style={{ marginLeft: "8px", fontSize: "10.5px", fontFamily: T.fontMono, color: T.faint, background: "rgba(255,255,255,0.06)", padding: "1px 7px", borderRadius: "20px" }}>{w.effortLevel}</span>}
+        {w.estimatedImpact && !done && <div style={{ fontSize: "10.5px", color: T.muted, marginTop: "3px", fontStyle: "italic" }}>→ {w.estimatedImpact}</div>}
+        {done && <div style={{ fontSize: "10.5px", color: SEV.pass, marginTop: "2px" }}>Completed</div>}
+      </div>
+    </div>
+  );
+}
+
+
 // ─── ReasoningTrace ───────────────────────────────────────────────────────────
 export function ReasoningTrace({ trace }) {
   const [open, setOpen] = useState(false);
   return (
     <div style={{ marginBottom: "12px", background: "rgba(255,255,255,0.03)", borderRadius: "8px", border: `1px solid ${T.lineSoft}`, overflow: "hidden" }}>
-      <button onClick={() => setOpen(o => !o)} style={{ width: "100%", padding: "10px 14px", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", textAlign: "left" }}>
-        <span style={{ fontSize: "10px" }}>🧠</span>
-        <span style={{ fontSize: "10px", fontWeight: 700, color: T.muted, fontFamily: T.fontDisplay, letterSpacing: "0.08em", textTransform: "uppercase" }}>How the Agent Reasoned</span>
-        <span style={{ marginLeft: "auto", fontSize: "10px", color: T.faint }}>{open ? "▲" : "▼"}</span>
+      {/* The kit's .cell tappable — a full-width row that opens a disclosure is
+          exactly that grammar, and it brings the 46px target the hand-rolled
+          10px/14px header never had. */}
+      <button onClick={() => setOpen(o => !o)} type="button" aria-expanded={open} className="cell tappable" style={{ gap: "8px" }}>
+        <span style={{ fontSize: "10.5px" }}>🧠</span>
+        <span className="t-label" style={{ color: T.muted }}>How the Agent Reasoned</span>
+        <span style={{ marginLeft: "auto", fontSize: "10.5px", color: T.faint }}>{open ? "▲" : "▼"}</span>
       </button>
       {open && <div style={{ padding: "0 14px 12px 14px", fontSize: "11px", color: T.muted, lineHeight: 1.7, fontStyle: "italic" }}>{trace}</div>}
     </div>

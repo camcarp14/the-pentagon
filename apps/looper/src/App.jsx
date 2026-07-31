@@ -483,7 +483,11 @@ function RunView({ L, onSetup, onChat }) {
         </section>
         <section className="card pad-md">
           <div className="t-label lp-ttl">Last few iterations</div>
-          {journal.length === 0 ? <p className="t-cap" style={{ margin: 0 }}>Nothing yet — the first one lands about a minute after you start the run.</p> : (
+          {/* The interval effect fires a tick immediately on start, so nothing
+              waits a cadence before it begins — and the cadence is 45/60/90/120s
+              by difficulty, never a flat minute. Both halves of the old
+              sentence ("about a minute after you start") were untrue. */}
+          {journal.length === 0 ? <p className="t-cap" style={{ margin: 0 }}>Nothing yet — the first iteration starts the moment the run does, then one every {DIFF(run.difficulty).cadence}s.</p> : (
             <ul className="lp-journal">
               {journal.slice(0, 4).map((e) => (
                 <li key={e.id}>

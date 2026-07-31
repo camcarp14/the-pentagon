@@ -5,7 +5,7 @@
 // (never series color), hover tooltips on every plot, legend for 2+ series,
 // series palette validated for this dark surface (see CHART_SERIES).
 import { useEffect, useMemo, useRef, useState } from "react";
-import { T, card as cardStyle, sectionLabel } from "../../theme.js";
+import { T } from "../../theme.js";
 import { AnimatedNumber, EmptyState, SkeletonRows } from "../../ui.jsx";
 import {
   CHART_SERIES, funnelStages, stepPerformance, segmentRates, weeklyTrend,
@@ -22,8 +22,10 @@ const pct = (v) => `${Math.round(v * 100)}%`;
 function Tip({ tip }) {
   if (!tip) return null;
   return (
-    <div style={{ position: "absolute", left: tip.x, top: tip.y, transform: "translate(-50%, calc(-100% - 10px))", pointerEvents: "none", zIndex: 5, background: T.raised, border: `1px solid ${T.line}`, borderRadius: T.rSm, boxShadow: T.shadowPopover, padding: "7px 10px", whiteSpace: "nowrap" }}>
-      <div style={{ fontSize: "10px", color: T.faint, fontFamily: T.fontMono, marginBottom: "2px" }}>{tip.label}</div>
+    // Border removed: shadowPopover already separates this from the plot, and a
+    // border plus a shadow on one element is what the language forbids.
+    <div style={{ position: "absolute", left: tip.x, top: tip.y, transform: "translate(-50%, calc(-100% - 10px))", pointerEvents: "none", zIndex: 5, background: T.raised, borderRadius: T.rSm, boxShadow: T.shadowPopover, padding: "7px 10px", whiteSpace: "nowrap" }}>
+      <div style={{ fontSize: "10.5px", color: T.faint, fontFamily: T.fontMono, marginBottom: "2px" }}>{tip.label}</div>
       {tip.rows.map((r, i) => (
         <div key={i} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", color: T.ink }}>
           {r.color && <span style={{ width: "7px", height: "7px", borderRadius: "2px", background: r.color, flexShrink: 0 }} />}
@@ -52,13 +54,14 @@ function Panel({ title, sub, right, children }) {
     // minWidth: 0 stops grid blowout — without it the trend chart's min-width
     // SVG propagates min-content through the shared column track and every
     // panel inflates past the viewport on phones.
-    <div style={{ ...cardStyle, padding: "18px 20px", position: "relative", minWidth: 0 }}>
+    // The kit's .card — it carried a border AND shadowCard before.
+    <div className="card" style={{ padding: "18px 20px", position: "relative", minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: sub ? "2px" : "14px", flexWrap: "wrap" }}>
-        <div style={{ ...sectionLabel }}>{title}</div>
+        <div className="t-label">{title}</div>
         <div style={{ flex: 1 }} />
         {right}
       </div>
-      {sub && <div style={{ fontSize: "11px", color: T.faint, marginBottom: "14px" }}>{sub}</div>}
+      {sub && <div className="t-cap" style={{ color: T.faint, marginBottom: "14px" }}>{sub}</div>}
       {children}
     </div>
   );
@@ -66,12 +69,13 @@ function Panel({ title, sub, right, children }) {
 
 function StatTile({ label, value, sub, format }) {
   return (
-    <div style={{ ...cardStyle, padding: "16px 18px" }}>
-      <div style={{ fontSize: "10px", fontWeight: 700, color: T.faint, textTransform: "uppercase", letterSpacing: "0.12em", fontFamily: T.fontDisplay, marginBottom: "8px" }}>{label}</div>
-      <div style={{ fontSize: "26px", fontWeight: 700, color: T.ink, fontFamily: T.fontMono, lineHeight: 1 }}>
+    // The kit's stat tile, on the canvas: surface, card shadow, no outline.
+    <div className="stattile on-canvas" style={{ padding: "16px 18px" }}>
+      <div className="stattile-label">{label}</div>
+      <div className="stattile-value" style={{ fontSize: "26px" }}>
         <AnimatedNumber value={value} format={format} />
       </div>
-      {sub && <div style={{ fontSize: "10.5px", color: T.muted, marginTop: "7px" }}>{sub}</div>}
+      {sub && <div className="t-cap" style={{ marginTop: "5px" }}>{sub}</div>}
     </div>
   );
 }
@@ -138,7 +142,7 @@ function TrendChart({ buckets }) {
           {gridVals.map((v) => (
             <g key={v}>
               <line x1={PAD.l} x2={W - PAD.r} y1={y(v)} y2={y(v)} stroke="rgba(255,255,255,0.055)" strokeWidth="1" />
-              <text x={PAD.l - 6} y={y(v) + 3} textAnchor="end" fontSize="8.5" fill={T.faint} fontFamily="'DM Mono', monospace">{v}</text>
+              <text x={PAD.l - 6} y={y(v) + 3} textAnchor="end" fontSize="10.5" fill={T.faint} fontFamily={T.fontMono}>{v}</text>
             </g>
           ))}
           {hoverI != null && <line x1={x(hoverI)} x2={x(hoverI)} y1={PAD.t} y2={H - PAD.b} stroke="rgba(255,255,255,0.14)" strokeWidth="1" />}
@@ -148,7 +152,7 @@ function TrendChart({ buckets }) {
             <g key={i}>
               {(hoverI === i || b.sent > 0) && <circle cx={x(i)} cy={y(b.sent)} r={hoverI === i ? 4 : 2.5} fill={BRASS} stroke="#141B2C" strokeWidth="2" />}
               {(hoverI === i || b.replies > 0) && <circle cx={x(i)} cy={y(b.replies)} r={hoverI === i ? 4 : 2.5} fill={BLUE} stroke="#141B2C" strokeWidth="2" />}
-              <text x={x(i)} y={H - 6} textAnchor="middle" fontSize="8.5" fill={T.faint} fontFamily="'DM Mono', monospace">{b.label}</text>
+              <text x={x(i)} y={H - 6} textAnchor="middle" fontSize="10.5" fill={T.faint} fontFamily={T.fontMono}>{b.label}</text>
             </g>
           ))}
         </svg>
@@ -260,8 +264,8 @@ export function AnalyticsView({ cards }) {
 
   return (
     <div style={{ padding: "24px 28px", maxWidth: "1060px", margin: "0 auto" }}>
-      <h2 style={{ fontSize: "18px", fontWeight: 800, color: T.ink, fontFamily: T.fontDisplay, margin: "0 0 4px" }}>Pipeline analytics</h2>
-      <div style={{ fontSize: "12px", color: T.muted, marginBottom: "18px" }}>Conversion, response, and sequence performance — computed live from the pipeline.</div>
+      <h2 className="t-title2" style={{ margin: "0 0 4px" }}>Pipeline analytics</h2>
+      <div className="t-foot" style={{ marginBottom: "18px" }}>Conversion, response, and sequence performance — computed live from the pipeline.</div>
 
       {/* Headline stats */}
       <div className="co-grid4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px", marginBottom: "14px" }}>
@@ -301,8 +305,8 @@ export function AnalyticsView({ cards }) {
           right={
             <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
               {SEGMENT_DIMENSIONS.map((d) => (
-                <button key={d.key} onClick={() => setDimension(d.key)}
-                  style={{ padding: "4px 10px", borderRadius: T.rPill, border: `1px solid ${dimension === d.key ? T.goldLine : T.lineSoft}`, background: dimension === d.key ? T.goldSoft : "transparent", color: dimension === d.key ? T.gold : T.muted, fontSize: "10px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay }}>
+                <button key={d.key} type="button" aria-pressed={dimension === d.key} onClick={() => setDimension(d.key)}
+                  className={dimension === d.key ? "pill active" : "pill"} style={{ height: 28, padding: "0 12px", fontSize: "12px" }}>
                   {d.label}
                 </button>
               ))}

@@ -5,8 +5,47 @@
 
 import { useState, useRef, useEffect, useCallback, forwardRef, createContext, useContext } from "react";
 import { createPortal } from "react-dom";
+import { appMeta, cssVars } from "@cc/design";
 import { IcChevronRight, IcChevronDown, IcClose, IcCheck } from "./icons.jsx";
 import { useTween } from "./hooks.js";
+
+/* ── the portal layer ──────────────────────────────────────────────────────── */
+// Everything in this file that portals — the sheet, the toast stack, and the
+// command palette next door — targets document.body, because a page wrapper
+// that animates with transform becomes the containing block for position:fixed
+// and would clip its own scrim (see the note on Sheet below).
+//
+// <body> is also outside .sy-root AND outside the shell's themed wrapper, so a
+// portaled sheet was landing somewhere no stylesheet and no design token could
+// reach it: `background: var(--surface)` with no --surface to resolve.
+//
+// This is the same two-element bridge Root.jsx renders, rebuilt at the portal
+// target. .sy-scope captures the palette, .sy-root republishes it under SYNC's
+// names and opts into the shared kit, so the sheet, the toast and the palette
+// are drawn by the same rules as everything inside the app. `display: contents`
+// (styles.css) keeps the pair out of the layout entirely, so every fixed child
+// still measures against the viewport exactly as it did.
+//
+// cssVars("sync") is stamped inline rather than left to the cascade, and it has
+// to be. Half the properties .sy-scope reads — --muted, --border, --good,
+// --bad, --warn, --accent-ink — exist ONLY in that object; @cc/design's
+// stylesheet never emits them, the shell puts them on its wrapper at render,
+// and <body> is above that wrapper. Worse, the :root palette a portal WOULD
+// inherit is Porcelain, the light one. Left to the cascade a sheet would come
+// out half-unstyled on a light ground inside a dark app. Same call the shell
+// makes on the same helper, so there is one palette and not two.
+export function PortalLayer({ children }) {
+  return (
+    <div
+      className="sy-scope"
+      data-palette="sync"
+      data-theme={appMeta("sync").mode}
+      style={cssVars("sync")}
+    >
+      <div className="sy-root sy-layer" data-kit>{children}</div>
+    </div>
+  );
+}
 
 /* ── surfaces ──────────────────────────────────────────────────────────────── */
 export function Card({ pad = "md", pressable, onClick, className = "", style, children, ...rest }) {
@@ -315,7 +354,7 @@ export function Sheet({ onClose, title, headTrailing, footer, children, z = 300,
   // the containing block for position:fixed — a sheet rendered in place could
   // sit under a live dock with a clipped scrim.
   return createPortal(
-    <>
+    <PortalLayer>
       <div className="sheet-scrim" style={{ zIndex: z }} onClick={dismissible ? onClose : undefined} />
       <div className="sheet" style={{ zIndex: z + 1 }} role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : undefined}>
         <div className="sheet-grab" />
@@ -331,7 +370,7 @@ export function Sheet({ onClose, title, headTrailing, footer, children, z = 300,
         <div className="sheet-body scroll-thin" style={bodyStyle}>{children}</div>
         {footer && <div className="sheet-foot">{footer}</div>}
       </div>
-    </>,
+    </PortalLayer>,
     document.body
   );
 }
@@ -376,22 +415,24 @@ export function ToastHost({ children }) {
     <ToastCtx.Provider value={push}>
       {children}
       {createPortal(
-        <div className="toasts" role="status" aria-live="polite">
-          {items.map((t) => (
-            <div key={t.id} className={`toast${t.err ? " err" : ""}${t.out ? " out" : ""}`}>
-              <span className="tdot" />
-              <span className="tmsg">{t.msg}</span>
-              {t.action && (
-                <button
-                  className="act-undo"
-                  onClick={() => { t.action(); setItems((xs) => xs.filter((x) => x.id !== t.id)); }}
-                >
-                  {t.actionLabel || "Undo"}
-                </button>
-              )}
-            </div>
-          ))}
-        </div>,
+        <PortalLayer>
+          <div className="toasts" role="status" aria-live="polite">
+            {items.map((t) => (
+              <div key={t.id} className={`toast${t.err ? " err" : ""}${t.out ? " out" : ""}`}>
+                <span className="tdot" />
+                <span className="tmsg">{t.msg}</span>
+                {t.action && (
+                  <button
+                    className="act-undo"
+                    onClick={() => { t.action(); setItems((xs) => xs.filter((x) => x.id !== t.id)); }}
+                  >
+                    {t.actionLabel || "Undo"}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </PortalLayer>,
         document.body
       )}
     </ToastCtx.Provider>

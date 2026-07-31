@@ -103,11 +103,12 @@ export function ClientDetail({ client, findings, actions, onBack, onDelete }) {
       ];
 
   const SectionCard = ({ title, subtitle, children, action }) => (
-    <div style={{ background: T.surface, borderRadius: "14px", border: `1px solid ${T.lineInk}`, padding: "18px 20px", boxShadow: T.shadowCard, marginBottom: "14px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
+    // .card — every panel in this tab carried a border AND shadowCard.
+    <div className="card" style={{ padding: "18px 20px", marginBottom: "14px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
         <div>
-          <div style={{ fontSize: "13px", fontWeight: 700, color: T.inkDeep, fontFamily: T.fontDisplay, letterSpacing: "-0.01em" }}>{title}</div>
-          {subtitle && <div style={{ fontSize: "10px", color: T.faint, marginTop: "2px" }}>{subtitle}</div>}
+          <div className="t-call" style={{ fontWeight: 600 }}>{title}</div>
+          {subtitle && <div className="t-cap" style={{ color: T.faint, marginTop: "2px" }}>{subtitle}</div>}
         </div>
         {action}
       </div>
@@ -116,7 +117,8 @@ export function ClientDetail({ client, findings, actions, onBack, onDelete }) {
   );
 
   const Pill = ({ children, color, bg }) => (
-    <span style={{ fontSize: "9px", fontWeight: 700, color, background: bg, padding: "2px 8px", borderRadius: "20px", letterSpacing: "0.05em", textTransform: "uppercase", fontFamily: T.fontDisplay }}>{children}</span>
+    // .t-label — the language's one uppercase, at 12px rather than 10.
+    <span className="t-label" style={{ color, background: bg, padding: "3px 9px", borderRadius: "20px" }}>{children}</span>
   );
 
   const trendArrow = (n) => n > 0 ? `▲ ${n}%` : n < 0 ? `▼ ${Math.abs(n)}%` : "—";
@@ -130,14 +132,13 @@ export function ClientDetail({ client, findings, actions, onBack, onDelete }) {
     <div style={{ minHeight: "calc(100vh - 48px)", background: "transparent", padding: "24px 28px" }}>
       {/* Header */}
       <div style={{ marginBottom: "20px" }}>
-        <button onClick={onBack}
-          style={{ display: "flex", alignItems: "center", gap: "5px", padding: 0, marginBottom: "12px", background: "none", border: "none", color: T.faint, fontSize: "11px", fontWeight: 600, cursor: "pointer", fontFamily: T.fontDisplay }}>
-          ← All Clients
+        <button onClick={onBack} type="button" className="btn sm plain" style={{ padding: 0, marginBottom: "12px", color: T.faint }}>
+          ← All clients
         </button>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
           <div>
-            <div style={{ fontSize: "22px", fontWeight: 700, color: T.inkDeep, fontFamily: T.fontDisplay, letterSpacing: "-0.02em" }}>{client.name}</div>
-            <div style={{ fontSize: "12px", color: T.faint, marginTop: "3px" }}>
+            <h2 className="t-title1" style={{ margin: 0 }}>{client.name}</h2>
+            <div className="t-foot" style={{ color: T.faint, marginTop: "3px" }}>
               {client.industry || "No industry set"}
               {client.google_ads_customer_id && ` · ${client.google_ads_customer_id}`}
               {client.monthly_budget && ` · $${client.monthly_budget}/mo budget`}
@@ -146,12 +147,12 @@ export function ClientDetail({ client, findings, actions, onBack, onDelete }) {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             {onDelete && (
-              <button onClick={() => onDelete(client)} style={{ padding: "8px 14px", background: "transparent", border: `1px solid ${T.red}40`, borderRadius: "8px", color: T.red, fontSize: "11px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay, whiteSpace: "nowrap" }}>🗑 Delete Client</button>
+              <button onClick={() => onDelete(client)} type="button" className="btn sm danger" style={{ whiteSpace: "nowrap" }}>🗑 Delete client</button>
             )}
             {!hasLiveData && (
-              <div style={{ padding: "8px 14px", background: `${T.amber}1F`, border: `1px solid ${T.amber}33`, borderRadius: "10px", maxWidth: "320px" }}>
-                <div style={{ fontSize: "11px", fontWeight: 700, color: T.amber, fontFamily: T.fontDisplay }}>Demo data shown</div>
-                <div style={{ fontSize: "10px", color: T.muted, marginTop: "2px", lineHeight: 1.5 }}>Connect the Google Ads Script to replace this with live account figures.</div>
+              <div style={{ padding: "8px 14px", background: `${T.amber}1F`, border: "none", borderRadius: "12px", maxWidth: "320px" }}>
+                <div className="t-foot" style={{ fontWeight: 600, color: T.amber }}>Demo data shown</div>
+                <div className="t-cap" style={{ marginTop: "2px", lineHeight: 1.5 }}>Connect the Google Ads Script to replace this with live account figures.</div>
               </div>
             )}
           </div>
@@ -166,9 +167,10 @@ export function ClientDetail({ client, findings, actions, onBack, onDelete }) {
           { label: "Blended CPA", value: `$${blendedCpa}`, color: client.cpa_target && blendedCpa > client.cpa_target ? T.red : T.green },
           { label: "Open Findings", value: cF.length || (hasLiveData ? 0 : recommendations.length), color: cF.some(f => f.severity === "critical") ? T.red : undefined },
         ].map((k, i) => (
-          <div key={i} style={{ background: T.surface, borderRadius: "10px", border: `1px solid ${T.lineInk}`, padding: "13px 16px", boxShadow: T.shadowCard }}>
-            <div style={{ fontSize: "9px", fontWeight: 700, color: T.faint, textTransform: "uppercase", letterSpacing: "0.12em", fontFamily: T.fontDisplay, marginBottom: "6px" }}>{k.label}</div>
-            <div style={{ fontSize: "22px", fontWeight: 500, color: k.color || T.inkDeep, fontFamily: T.fontMono, lineHeight: 1 }}>{k.value}</div>
+          // The kit's stat tile on the canvas — a hero number with its caption.
+          <div key={i} className="stattile on-canvas" style={{ padding: "13px 16px" }}>
+            <div className="stattile-label">{k.label}</div>
+            <div className="stattile-value" style={{ fontSize: "22px", color: k.color || T.inkDeep }}>{k.value}</div>
           </div>
         ))}
       </div>
@@ -177,18 +179,20 @@ export function ClientDetail({ client, findings, actions, onBack, onDelete }) {
       <SectionCard title="Performance" subtitle="Daily trend — toggle metric and range"
         action={
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-            <div style={{ display: "flex", gap: "2px", background: T.subtle, borderRadius: "7px", padding: "2px" }}>
+            {/* Both toggles are the kit's segmented control now, so metric and
+                range read as one kind of switch instead of two. */}
+            <div className="seg" role="tablist">
               {Object.keys(metricMeta).map(k => (
-                <button key={k} onClick={() => setMetricView(k)}
-                  style={{ padding: "3px 9px", background: metricView === k ? T.raised : "transparent", border: "none", borderRadius: "5px", color: metricView === k ? T.ink : T.faint, fontSize: "10px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay, boxShadow: metricView === k ? T.shadowTab : "none" }}>
+                <button key={k} type="button" role="tab" aria-selected={metricView === k} onClick={() => setMetricView(k)}
+                  className={metricView === k ? "seg-opt active" : "seg-opt"} style={{ flex: "0 0 auto", minHeight: 28, padding: "3px 10px" }}>
                   {metricMeta[k].label}
                 </button>
               ))}
             </div>
-            <div style={{ display: "flex", gap: "2px", background: T.subtle, borderRadius: "7px", padding: "2px" }}>
+            <div className="seg" role="tablist">
               {[["7d","7D"],["30d","30D"],["90d","90D"]].map(([k,l]) => (
-                <button key={k} onClick={() => setPerfRange(k)}
-                  style={{ padding: "3px 9px", background: perfRange === k ? T.raised : "transparent", border: "none", borderRadius: "5px", color: perfRange === k ? T.ink : T.faint, fontSize: "10px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay, boxShadow: perfRange === k ? T.shadowTab : "none" }}>{l}</button>
+                <button key={k} type="button" role="tab" aria-selected={perfRange === k} onClick={() => setPerfRange(k)}
+                  className={perfRange === k ? "seg-opt active" : "seg-opt"} style={{ flex: "0 0 auto", minHeight: 28, padding: "3px 10px" }}>{l}</button>
               ))}
             </div>
           </div>
@@ -204,7 +208,7 @@ export function ClientDetail({ client, findings, actions, onBack, onDelete }) {
             );
           })}
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: T.faint, fontFamily: T.fontMono }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10.5px", color: T.faint, fontFamily: T.fontMono }}>
           <span>{perfSeries[0]?.date}</span>
           <span>avg {mm.prefix}{mm.key === "cpc" ? seriesAvg.toFixed(2) : Math.round(seriesAvg)}</span>
           <span>{perfSeries[perfSeries.length - 1]?.date}</span>
@@ -213,7 +217,7 @@ export function ClientDetail({ client, findings, actions, onBack, onDelete }) {
 
       {/* CPC trends + tier — two columns */}
       <div className="co-grid2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-        <div style={{ background: T.surface, borderRadius: "14px", border: `1px solid ${T.lineInk}`, padding: "18px 20px", boxShadow: T.shadowCard }}>
+        <div className="card" style={{ padding: "18px 20px" }}>
           <div style={{ fontSize: "13px", fontWeight: 700, color: T.inkDeep, fontFamily: T.fontDisplay, marginBottom: "14px" }}>CPC by Tier</div>
           {cpcTiers.map((t, i) => (
             <div key={i} style={{ marginBottom: i < cpcTiers.length - 1 ? "12px" : 0 }}>
@@ -221,20 +225,20 @@ export function ClientDetail({ client, findings, actions, onBack, onDelete }) {
                 <span style={{ fontSize: "11px", fontWeight: 600, color: T.ink }}>{t.tier}</span>
                 <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                   <span style={{ fontSize: "12px", fontFamily: T.fontMono, color: T.ink }}>${t.cpc.toFixed(2)}</span>
-                  <span style={{ fontSize: "9px", fontWeight: 700, color: trendColor(t.trend, true), minWidth: "34px", textAlign: "right" }}>{trendArrow(t.trend)}</span>
+                  <span style={{ fontSize: "10.5px", fontWeight: 700, color: trendColor(t.trend, true), minWidth: "34px", textAlign: "right" }}>{trendArrow(t.trend)}</span>
                 </div>
               </div>
               <div style={{ height: "5px", background: T.subtle, borderRadius: "3px", overflow: "hidden" }}>
                 <div style={{ width: `${t.share}%`, height: "100%", background: t.color, borderRadius: "3px" }} />
               </div>
-              <div style={{ fontSize: "9px", color: T.faint, marginTop: "2px" }}>{t.share}% of spend</div>
+              <div style={{ fontSize: "10.5px", color: T.faint, marginTop: "2px" }}>{t.share}% of spend</div>
             </div>
           ))}
         </div>
 
-        <div style={{ background: T.surface, borderRadius: "14px", border: `1px solid ${T.lineInk}`, padding: "18px 20px", boxShadow: T.shadowCard }}>
+        <div className="card" style={{ padding: "18px 20px" }}>
           <div style={{ fontSize: "13px", fontWeight: 700, color: T.inkDeep, fontFamily: T.fontDisplay, marginBottom: "6px" }}>CPC Trend</div>
-          <div style={{ fontSize: "10px", color: T.faint, marginBottom: "14px" }}>30-day average cost per click</div>
+          <div style={{ fontSize: "10.5px", color: T.faint, marginBottom: "14px" }}>30-day average cost per click</div>
           <div style={{ display: "flex", alignItems: "flex-end", gap: "2px", height: "120px" }}>
             {perfSeries.map((p, i) => {
               const vals = perfSeries.map(x => x.cpc);
@@ -253,7 +257,7 @@ export function ClientDetail({ client, findings, actions, onBack, onDelete }) {
             <thead>
               <tr style={{ borderBottom: `1px solid ${T.line}` }}>
                 {["Domain", "Impr. Share", "Overlap Rate", "Top of Page", "Outranking", "Position Above"].map(h => (
-                  <th key={h} style={{ textAlign: h === "Domain" ? "left" : "right", padding: "8px 10px", fontSize: "9px", fontWeight: 700, color: T.faint, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: T.fontDisplay }}>{h}</th>
+                  <th key={h} style={{ textAlign: h === "Domain" ? "left" : "right", padding: "8px 10px" }} className="t-label">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -284,7 +288,7 @@ export function ClientDetail({ client, findings, actions, onBack, onDelete }) {
             <thead>
               <tr style={{ borderBottom: `1px solid ${T.line}` }}>
                 {["Keyword", "Cost", "Clicks", "Conv", "CPA", "IS", ""].map((h, hi) => (
-                  <th key={hi} style={{ textAlign: hi === 0 ? "left" : "right", padding: "8px 10px", fontSize: "9px", fontWeight: 700, color: T.faint, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: T.fontDisplay }}>{h}</th>
+                  <th key={hi} style={{ textAlign: hi === 0 ? "left" : "right", padding: "8px 10px" }} className="t-label">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -315,7 +319,7 @@ export function ClientDetail({ client, findings, actions, onBack, onDelete }) {
             <thead>
               <tr style={{ borderBottom: `1px solid ${T.line}` }}>
                 {["Campaign", "Cost", "Conv", "CPA", "Pacing", "Status"].map((h, hi) => (
-                  <th key={hi} style={{ textAlign: hi === 0 ? "left" : "right", padding: "8px 10px", fontSize: "9px", fontWeight: 700, color: T.faint, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: T.fontDisplay }}>{h}</th>
+                  <th key={hi} style={{ textAlign: hi === 0 ? "left" : "right", padding: "8px 10px" }} className="t-label">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -520,9 +524,9 @@ export function ClientsView({ deepClientId = null, onNavigate }) {
       {origin && (
         <div style={{ maxWidth: "1240px", margin: "12px auto 0", padding: "0 28px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "9px 14px", borderRadius: T.rSm, background: T.goldSoft, border: `1px solid ${T.goldLine}`, fontSize: "12px", color: T.inkDeep }}>
-            <span style={{ fontWeight: 700, fontFamily: T.fontDisplay, fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase", color: T.gold }}>Origin</span>
+            <span className="t-label" style={{ color: T.gold }}>Origin</span>
             Came in via {origin.source || "inbound form"}{origin.email ? ` (${origin.email})` : ""}
-            <button onClick={() => { if (origin.email) sm.set("inbound_focus", origin.email); onNavigate && onNavigate("inbound"); }} style={{ marginLeft: "auto", background: "none", border: "none", color: T.gold, fontSize: "12px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay }}>View conversation →</button>
+            <button onClick={() => { if (origin.email) sm.set("inbound_focus", origin.email); onNavigate && onNavigate("inbound"); }} type="button" className="btn sm plain" style={{ marginLeft: "auto" }}>View conversation →</button>
           </div>
         </div>
       )}
@@ -534,13 +538,13 @@ export function ClientsView({ deepClientId = null, onNavigate }) {
     <div style={{ minHeight: "calc(100vh - 48px)", background: "transparent", padding: "24px 28px" }}>
       {/* Load error banner — surfaces real Supabase failures instead of a silent empty state */}
       {loadError && (
-        <div style={{ marginBottom: "16px", padding: "12px 16px", background: `${T.red}1F`, border: `1px solid ${T.red}33`, borderRadius: "10px", display: "flex", gap: "10px", alignItems: "flex-start" }}>
+        <div role="alert" style={{ marginBottom: "16px", padding: "12px 16px", background: `${T.red}1F`, border: "none", borderRadius: "12px", display: "flex", gap: "10px", alignItems: "flex-start" }}>
           <span style={{ color: T.red, fontSize: "13px", flexShrink: 0 }}>⚠</span>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: "12px", fontWeight: 700, color: T.red, fontFamily: T.fontDisplay }}>Couldn't load client data</div>
-            <div style={{ fontSize: "11px", color: T.ink, marginTop: "2px", lineHeight: 1.5 }}>{loadError}</div>
+            <div className="t-foot" style={{ fontWeight: 600, color: T.red }}>Couldn't load client data</div>
+            <div className="t-cap" style={{ color: T.ink, marginTop: "2px", lineHeight: 1.5 }}>{loadError}</div>
           </div>
-          <button onClick={load} style={{ fontSize: "10px", fontWeight: 700, color: T.red, background: "none", border: `1px solid ${T.red}4D`, borderRadius: "6px", padding: "4px 10px", cursor: "pointer", flexShrink: 0 }}>Retry</button>
+          <button onClick={load} type="button" className="btn sm danger" style={{ flexShrink: 0 }}>Retry</button>
         </div>
       )}
 
@@ -552,34 +556,34 @@ export function ClientsView({ deepClientId = null, onNavigate }) {
           { label: "Pending Actions", value: filteredActions.length, color: filteredActions.length > 0 ? T.amber : undefined },
           { label: "Agent", value: "Active", color: T.green },
         ].map((m, i) => (
-          <div key={i} className="co-portfolio-card" style={{ flex: 1, minWidth: "120px", background: T.surface, borderRadius: "10px", border: `1px solid ${T.lineInk}`, padding: "14px 16px", boxShadow: T.shadowCard }}>
-            <div style={{ fontSize: "9px", fontWeight: 700, color: T.faint, textTransform: "uppercase", letterSpacing: "0.14em", fontFamily: T.fontDisplay, marginBottom: "6px" }}>{m.label}</div>
-            <div style={{ fontSize: "24px", fontWeight: 500, color: m.color || T.inkDeep, fontFamily: T.fontMono, lineHeight: 1 }}>{m.value}</div>
+          <div key={i} className="co-portfolio-card stattile on-canvas" style={{ flex: 1, minWidth: "120px", padding: "14px 16px" }}>
+            <div className="stattile-label">{m.label}</div>
+            <div className="stattile-value" style={{ fontSize: "24px", color: m.color || T.inkDeep }}>{m.value}</div>
           </div>
         ))}
-        <button onClick={() => { setAddError(""); setShowAdd(true); }} style={{ padding: "12px 20px", background: T.goldGrad, border: "none", borderRadius: "9px", color: T.textOnBrand, fontSize: "12px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay, letterSpacing: "0.05em", whiteSpace: "nowrap", boxShadow: T.glowBrass }}>+ Add Client</button>
+        <button onClick={() => { setAddError(""); setShowAdd(true); }} type="button" className="btn md primary" style={{ whiteSpace: "nowrap" }}>+ Add client</button>
       </div>
 
       <div className="co-grid2" style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: "16px", alignItems: "start" }}>
         {/* Clients */}
         <div>
-          <div style={{ fontSize: "9px", fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontFamily: T.fontDisplay }}>Active Clients</div>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-              <div style={{ display: "flex", gap: "2px", background: T.subtle, borderRadius: "7px", padding: "2px" }}>
+          <div className="t-label">Active clients</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginTop: "8px", marginBottom: "12px" }}>
+              <div className="seg" role="tablist">
                 {[["7d","7D"],["30d","30D"],["90d","90D"],["all","All"]].map(([key,label]) => (
-                  <button key={key} onClick={() => setDateRange(key)}
-                    style={{ padding: "3px 11px", background: dateRange === key ? T.raised : "transparent", border: "none", borderRadius: "5px", color: dateRange === key ? T.ink : T.faint, fontSize: "10px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay, boxShadow: dateRange === key ? T.shadowTab : "none" }}>
+                  <button key={key} type="button" role="tab" aria-selected={dateRange === key} onClick={() => setDateRange(key)}
+                    className={dateRange === key ? "seg-opt active" : "seg-opt"} style={{ flex: "0 0 auto", minHeight: 28, padding: "3px 12px" }}>
                     {label}
                   </button>
                 ))}
               </div>
-              {excludedCount > 0 && <span style={{ fontSize: "10px", color: T.faint }}>{excludedCount} older finding{excludedCount !== 1 ? "s" : ""} outside this range</span>}
+              {excludedCount > 0 && <span className="t-cap" style={{ color: T.faint }}>{excludedCount} older finding{excludedCount !== 1 ? "s" : ""} outside this range</span>}
             </div>
           {clients.length === 0 ? (
-            <div style={{ background: T.surface, borderRadius: "12px", border: `1px solid ${T.lineInk}`, padding: "48px", textAlign: "center" }}>
-              <div style={{ fontSize: "14px", fontWeight: 700, color: T.inkDeep, fontFamily: T.fontDisplay, marginBottom: "8px" }}>No clients yet</div>
-              <div style={{ fontSize: "13px", color: T.faint, marginBottom: "20px" }}>Add your first client to start autonomous monitoring</div>
-              <button onClick={() => { setAddError(""); setShowAdd(true); }} style={{ padding: "10px 24px", background: T.goldGrad, border: "none", borderRadius: "8px", color: T.textOnBrand, fontSize: "12px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay }}>+ Add Client</button>
+            <div className="card" style={{ padding: "48px", textAlign: "center" }}>
+              <div className="t-head" style={{ marginBottom: "8px" }}>No clients yet</div>
+              <div className="t-foot" style={{ marginBottom: "20px" }}>Add your first client to start autonomous monitoring</div>
+              <button onClick={() => { setAddError(""); setShowAdd(true); }} type="button" className="btn md primary">+ Add client</button>
             </div>
           ) : clients.map(client => {
             const cF = cf(client.id), cA = ca(client.id);
@@ -587,26 +591,29 @@ export function ClientsView({ deepClientId = null, onNavigate }) {
             const latest = cF[0];
             const open = selectedClient?.id === client.id;
             return (
+              // .card.pressable. The "has a critical finding" edge was a red
+              // border on an element that also carried shadowCard; it rides as an
+              // inset shadow now, and the red count chip beside it says the same
+              // thing in a number so the state is never colour alone.
               <div key={client.id} onClick={() => setSelectedClient(client)}
-                style={{ background: T.surface, borderRadius: "12px", border: `1px solid ${hasCrit ? `${T.red}2E` : T.line}`, padding: "16px 20px", cursor: "pointer", boxShadow: T.shadowCard, marginBottom: "10px", transition: "box-shadow 0.15s" }}
-                onMouseEnter={e => e.currentTarget.style.boxShadow = T.shadowHover}
-                onMouseLeave={e => e.currentTarget.style.boxShadow = T.shadowCard}>
+                className="card pressable" style={{ padding: "16px 20px", marginBottom: "10px", boxShadow: hasCrit ? `inset 3px 0 0 ${T.red}, var(--shadow-card)` : undefined }}
+                onMouseEnter={e => e.currentTarget.style.boxShadow = hasCrit ? `inset 3px 0 0 ${T.red}, ${T.shadowHover}` : T.shadowHover}
+                onMouseLeave={e => e.currentTarget.style.boxShadow = hasCrit ? `inset 3px 0 0 ${T.red}, ${T.shadowCard}` : ""}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 }}>
-                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: hasCrit ? T.red : T.muted, flexShrink: 0, boxShadow: hasCrit ? `0 0 6px ${T.red}80` : "none" }} />
+                    <span className="dotstatus" style={{ width: "8px", height: "8px", background: hasCrit ? T.red : T.muted }} />
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: "14px", fontWeight: 700, color: T.ink, fontFamily: T.fontDisplay }}>{client.name}</div>
-                      {client.industry && <div style={{ fontSize: "11px", color: T.faint }}>{client.industry}</div>}
-                      {latest && <div style={{ fontSize: "11px", color: T.muted, marginTop: "4px", lineHeight: 1.5 }}>{latest.title}</div>}
-                      {!latest && <div style={{ fontSize: "11px", color: T.faint, marginTop: "4px" }}>No findings yet — install Google Ads Script to start</div>}
+                      <div className="t-call" style={{ fontWeight: 600 }}>{client.name}</div>
+                      {client.industry && <div className="t-cap" style={{ color: T.faint }}>{client.industry}</div>}
+                      {latest && <div className="t-cap" style={{ marginTop: "4px", lineHeight: 1.5 }}>{latest.title}</div>}
+                      {!latest && <div className="t-cap" style={{ color: T.faint, marginTop: "4px" }}>No findings yet — install the Google Ads Script to start</div>}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: "5px", flexShrink: 0, alignItems: "center" }}>
-                    {client.cpa_target && <span style={{ fontSize: "10px", fontFamily: T.fontMono, color: T.muted, background: "rgba(255,255,255,0.04)", padding: "3px 8px", borderRadius: "6px" }}>target ${client.cpa_target}</span>}
-                    {cF.length > 0 && <span style={{ fontSize: "10px", fontWeight: 700, color: hasCrit ? T.red : T.amber, background: (hasCrit ? T.red : T.amber) + "12", padding: "3px 8px", borderRadius: "6px" }}>{cF.length}</span>}
-                    {cA.length > 0 && <span style={{ fontSize: "10px", fontWeight: 700, color: T.blue, background: `${T.blue}1A`, padding: "3px 8px", borderRadius: "6px" }}>✦ {cA.length}</span>}
-                    <button onClick={(e) => { e.stopPropagation(); deleteClient(client); }} title="Delete client" aria-label="Delete client" className="co-icon-btn"
-                      style={{ background: "none", border: "none", color: T.faint, fontSize: "13px", cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}>🗑</button>
+                    {client.cpa_target && <span className="t-cap" style={{ fontFamily: T.fontMono, background: "rgba(255,255,255,0.05)", padding: "3px 8px", borderRadius: "6px" }}>target ${client.cpa_target}</span>}
+                    {cF.length > 0 && <span className="t-cap" title={hasCrit ? "Open findings, at least one critical" : "Open findings"} style={{ fontWeight: 600, color: hasCrit ? T.red : T.amber, background: (hasCrit ? T.red : T.amber) + "18", padding: "3px 8px", borderRadius: "6px" }}>{cF.length}</span>}
+                    {cA.length > 0 && <span className="t-cap" title="Pending actions" style={{ fontWeight: 600, color: T.blue, background: `${T.blue}1A`, padding: "3px 8px", borderRadius: "6px" }}>✦ {cA.length}</span>}
+                    <button onClick={(e) => { e.stopPropagation(); deleteClient(client); }} type="button" title="Delete client" aria-label="Delete client" className="co-icon-btn icon-btn">🗑</button>
                   </div>
                 </div>
                 {/* Click opens full detail page — see ClientDetail */}
@@ -617,27 +624,28 @@ export function ClientsView({ deepClientId = null, onNavigate }) {
 
         {/* Action queue */}
         <div className="co-sticky-side" style={{ position: "sticky", top: "72px" }}>
-          <div style={{ fontSize: "9px", fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontFamily: T.fontDisplay, marginBottom: "12px" }}>Action Queue</div>
-          <div style={{ background: T.surface, borderRadius: "12px", border: `1px solid ${T.lineInk}`, overflow: "hidden", boxShadow: T.shadowCard }}>
+          <div className="t-label" style={{ marginBottom: "12px" }}>Action queue</div>
+          {/* .cellgroup — an inset-grouped list, which is what this is. */}
+          <div className="cellgroup">
             {filteredActions.length === 0 ? (
               <EmptyState icon="spark" compact title={`No pending actions${dateRange !== "all" ? " in this range" : ""}`} />
             ) : filteredActions.slice(0, 7).map((a, i) => (
               <div key={a.id} style={{ padding: "14px 16px", borderBottom: i < Math.min(filteredActions.length, 7) - 1 ? `1px solid ${T.lineSoft}` : "none" }}>
-                <div style={{ fontSize: "9px", fontWeight: 700, color: T.gold, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px", fontFamily: T.fontDisplay }}>{(a.action_type || "action").replace(/_/g, " ")}</div>
-                <div style={{ fontSize: "12px", color: T.ink, fontWeight: 600, marginBottom: "4px" }}>{a.description}</div>
-                <div style={{ fontSize: "11px", color: T.muted, marginBottom: "8px", lineHeight: 1.5 }}>{(a.rationale || "").slice(0, 120)}{(a.rationale || "").length > 120 ? "…" : ""}</div>
-                {a.impact_estimate && <div style={{ fontSize: "10px", color: T.green, marginBottom: "8px" }}>→ {a.impact_estimate}</div>}
+                <div className="t-label" style={{ color: T.gold, marginBottom: "4px" }}>{(a.action_type || "action").replace(/_/g, " ")}</div>
+                <div className="t-foot" style={{ color: T.ink, fontWeight: 600, marginBottom: "4px" }}>{a.description}</div>
+                <div className="t-cap" style={{ marginBottom: "8px", lineHeight: 1.5 }}>{(a.rationale || "").slice(0, 120)}{(a.rationale || "").length > 120 ? "…" : ""}</div>
+                {a.impact_estimate && <div className="t-cap" style={{ color: T.green, marginBottom: "8px" }}>→ {a.impact_estimate}</div>}
                 <div style={{ display: "flex", gap: "6px" }}>
-                  <button onClick={() => approveAction(a.id)} style={{ flex: 1, padding: "6px", background: T.goldGrad, border: "none", borderRadius: "6px", color: T.textOnBrand, fontSize: "11px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay }}>Approve</button>
-                  <button onClick={() => dismissFinding(a.id)} style={{ padding: "6px 10px", background: "transparent", border: `1px solid ${T.line}`, borderRadius: "6px", color: T.faint, fontSize: "11px", cursor: "pointer" }}>Skip</button>
+                  <button onClick={() => approveAction(a.id)} type="button" className="btn sm primary" style={{ flex: 1 }}>Approve</button>
+                  <button onClick={() => dismissFinding(a.id)} type="button" className="btn sm quiet">Skip</button>
                 </div>
               </div>
             ))}
           </div>
           {clients.length > 0 && filteredFindings.length === 0 && (
-            <div style={{ marginTop: "12px", background: `${T.amber}1F`, borderRadius: "10px", border: `1px solid ${T.amber}33`, padding: "16px" }}>
-              <div style={{ fontSize: "11px", fontWeight: 700, color: T.amber, fontFamily: T.fontDisplay, marginBottom: "6px" }}>Agent not connected yet</div>
-              <div style={{ fontSize: "11px", color: T.muted, lineHeight: 1.6 }}>Install the Google Ads Script in your client's account to start the pipeline.</div>
+            <div style={{ marginTop: "12px", background: `${T.amber}1F`, borderRadius: "12px", border: "none", padding: "16px" }}>
+              <div className="t-foot" style={{ fontWeight: 600, color: T.amber, marginBottom: "6px" }}>Agent not connected yet</div>
+              <div className="t-cap" style={{ lineHeight: 1.6 }}>Install the Google Ads Script in your client's account to start the pipeline.</div>
             </div>
           )}
         </div>
@@ -649,28 +657,27 @@ export function ClientsView({ deepClientId = null, onNavigate }) {
           onClick={e => e.target === e.currentTarget && setShowAdd(false)}>
           <div className="co-modal-sheet" style={{ background: T.surface, borderRadius: "14px", maxWidth: "420px", width: "100%", boxShadow: T.shadowModal }}>
             <div style={{ padding: "20px 24px", borderBottom: `1px solid ${T.line}` }}>
-              <div style={{ fontSize: "14px", fontWeight: 700, color: T.inkDeep, fontFamily: T.fontDisplay }}>Add Client</div>
+              <div className="t-head">Add client</div>
             </div>
             <div style={{ padding: "20px 24px" }}>
               {[{ k: "name", l: "Client Name *", p: "Chicago PI Law" }, { k: "industry", l: "Industry", p: "Personal Injury Law" }, { k: "monthly_budget", l: "Monthly Budget ($)", p: "8500" }, { k: "cpa_target", l: "CPA Target ($)", p: "120" }, { k: "google_ads_customer_id", l: "Google Ads Customer ID", p: "123-456-7890" }].map(f => (
                 <div key={f.k} style={{ marginBottom: "12px" }}>
-                  <label style={{ fontSize: "10px", fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: T.fontDisplay, display: "block", marginBottom: "5px" }}>{f.l}</label>
-                  <input value={nc[f.k]} onChange={e => setNc(p => ({ ...p, [f.k]: e.target.value }))} placeholder={f.p}
-                    style={{ width: "100%", padding: "9px 12px", background: T.subtle, border: `1px solid ${T.line}`, borderRadius: "8px", fontSize: "13px", color: T.ink, outline: "none", boxSizing: "border-box" }} />
+                  <label className="t-label" style={{ display: "block", marginBottom: "5px" }}>{f.l}</label>
+                  <input value={nc[f.k]} onChange={e => setNc(p => ({ ...p, [f.k]: e.target.value }))} placeholder={f.p} aria-label={f.l}
+                    className="field" />
                 </div>
               ))}
               {addError && (
-                <div style={{ marginBottom: "12px", padding: "10px 12px", background: `${T.red}1F`, border: `1px solid ${T.red}33`, borderRadius: "8px" }}>
-                  <div style={{ fontSize: "11px", fontWeight: 700, color: T.red, fontFamily: T.fontDisplay, marginBottom: "2px" }}>Save failed</div>
-                  <div style={{ fontSize: "10px", color: T.ink, lineHeight: 1.5 }}>{addError}</div>
+                <div role="alert" style={{ marginBottom: "12px", padding: "10px 12px", background: `${T.red}1F`, border: "none", borderRadius: "12px" }}>
+                  <div className="t-foot" style={{ fontWeight: 600, color: T.red, marginBottom: "2px" }}>Save failed</div>
+                  <div className="t-cap" style={{ color: T.ink, lineHeight: 1.5 }}>{addError} — fix it and press Add client again.</div>
                 </div>
               )}
               <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
-                <button onClick={addClient} disabled={saving || !nc.name}
-                  style={{ flex: 1, padding: "11px", background: !nc.name || saving ? T.subtle : T.goldGrad, border: "none", borderRadius: "9px", color: !nc.name || saving ? T.faint : T.textOnBrand, fontSize: "12px", fontWeight: 700, cursor: !nc.name || saving ? "not-allowed" : "pointer", fontFamily: T.fontDisplay }}>
-                  {saving ? "Adding…" : "Add Client"}
+                <button onClick={addClient} type="button" disabled={saving || !nc.name} className="btn md primary" style={{ flex: 1 }}>
+                  {saving ? "Adding…" : "Add client"}
                 </button>
-                <button onClick={() => setShowAdd(false)} style={{ padding: "11px 20px", background: "transparent", border: `1px solid ${T.line}`, borderRadius: "9px", color: T.muted, fontSize: "12px", cursor: "pointer" }}>Cancel</button>
+                <button onClick={() => setShowAdd(false)} type="button" className="btn md quiet">Cancel</button>
               </div>
             </div>
           </div>

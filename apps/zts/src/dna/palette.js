@@ -45,8 +45,16 @@ export const ZTS_MIND_PALETTE = Object.freeze({
   shadow: "0 10px 30px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.45)",
   glow: "0 0 24px rgba(227,179,65,0.20)",
 
-  fontDisplay: "'Syne', ui-sans-serif, system-ui, sans-serif",
-  fontMono: "'DM Mono', ui-monospace, SFMono-Regular, monospace",
+  // The two font slots, and ONLY the font slots, moved off the transcription.
+  // App.jsx no longer loads Syne or DM Mono — the design language allows the
+  // system stack and no decorative face — so these two names had nothing behind
+  // them and already fell through to the next family in each list. Naming the
+  // tokens instead removes a dangling reference that would silently take effect
+  // again the day anything else on the page happened to load Syne. Every colour,
+  // shadow, glow and region hue below is untouched: those are this canvas's
+  // domain data, and the canvas itself is not this migration's to restyle.
+  fontDisplay: "var(--font-display, ui-sans-serif, system-ui, sans-serif)",
+  fontMono: "var(--font-mono, ui-monospace, SFMono-Regular, monospace)",
 
   // From REGIONS[k].color in apps/zts/src/dna/dna.js.
   region: {

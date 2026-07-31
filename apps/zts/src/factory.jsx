@@ -159,25 +159,25 @@ function mdToHtml(md) {
 function ReviewModal({ project, markdown, onClose, onApprove, approving }) {
   const approved = project.approved_version != null && project.approved_version === project.draft_version;
   return (
-    <div onClick={(e) => e.target === e.currentTarget && onClose()} style={{ position: "fixed", inset: 0, background: "rgba(11,18,32,0.5)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", animation: `fadein ${M.durFast} ease both` }}>
-      <div style={{ background: F.card, borderRadius: "18px", width: "720px", maxWidth: "94vw", maxHeight: "86vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 32px 80px rgba(11,17,32,0.24)" }}>
+    <div onClick={(e) => e.target === e.currentTarget && onClose()} className="sheet-scrim" style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", animation: `fadein ${M.durFast} ease both` }}>
+      <div style={{ background: "var(--surface)", borderRadius: "18px", width: "720px", maxWidth: "94vw", maxHeight: "86vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "var(--shadow-deep, 0 32px 80px rgba(11,17,32,0.24))" }}>
         <div style={{ padding: "16px 22px", borderBottom: `1px solid ${F.line}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexShrink: 0 }}>
           <div>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: F.ink, fontFamily: F.syne }}>{project.title}</div>
-            <div style={{ fontSize: "11px", color: F.faint, fontFamily: F.mono, marginTop: "2px" }}>draft v{project.draft_version}{approved ? " · approved" : ""}{project.has_final ? " · exported" : ""}</div>
+            <h2 className="t-head" style={{ margin: 0 }}>{project.title}</h2>
+            <div className="t-cap t-num" style={{ fontFamily: F.mono, marginTop: "2px" }}>draft v{project.draft_version}{approved ? " · approved" : ""}{project.has_final ? " · exported" : ""}</div>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: F.faint, fontSize: "20px", cursor: "pointer", lineHeight: 1 }}>×</button>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close" style={{ fontSize: "20px", lineHeight: 1 }}>×</button>
         </div>
         <div className="factory-md" style={{ padding: "18px 24px", overflowY: "auto", fontSize: "13px", color: F.ink, lineHeight: 1.65 }}
           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(mdToHtml(markdown)) }} />
         <div style={{ padding: "13px 22px", borderTop: `1px solid ${F.line}`, display: "flex", justifyContent: "flex-end", gap: "8px", flexShrink: 0 }}>
           {!approved && project.draft_version > 0 && (
-            <button onClick={onApprove} disabled={approving} style={{ padding: "9px 18px", background: approving ? "rgba(255,255,255,0.06)" : F.greenGrad, border: "none", borderRadius: "9px", color: approving ? F.faint : F.accentInk, fontSize: "12px", fontWeight: 700, cursor: approving ? "default" : "pointer", fontFamily: F.syne }}>
+            <button type="button" className="btn md primary" onClick={onApprove} disabled={approving}>
               {approving ? "Approving…" : `✓ Approve draft v${project.draft_version}`}
             </button>
           )}
           {approved && !project.has_final && (
-            <span style={{ fontSize: "11px", color: F.greenDeep, fontWeight: 600, alignSelf: "center" }}>Approved — export from the CLI: <code style={{ fontFamily: F.mono }}>python -m pipeline.cli export {project.name}</code></span>
+            <span className="t-cap" style={{ color: "var(--accent)", fontWeight: 600, alignSelf: "center" }}>Approved — export from the CLI: <code style={{ fontFamily: F.mono }}>python -m pipeline.cli export {project.name}</code></span>
           )}
         </div>
       </div>
@@ -229,27 +229,38 @@ export function FactoryPanel({ isMobile }) {
 
   return (
     <div style={{ marginTop: "26px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "9px", marginBottom: "12px" }}>
-        <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: status === "online" ? F.green : status === "checking" ? F.amber : F.faint, animation: status === "online" ? "pulse 2.5s infinite" : "none" }} />
-        <span style={{ fontSize: "11px", fontWeight: 700, color: F.sub, textTransform: "uppercase", letterSpacing: "0.13em", fontFamily: F.syne }}>Factory — production</span>
-        <span style={{ fontSize: "10px", color: F.faint, fontFamily: F.mono }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "9px", marginBottom: "12px", flexWrap: "wrap" }}>
+        {/* online / checking / offline is spelled out beside the dot, so the
+            hue is never the only thing carrying the bridge's state.
+            The live pulse is the kit's own `.dotstatus.pulse` (2s). This took
+            the kit's class and then hand-rolled `animation: "pulse 2.5s
+            infinite"` inline on top of it — a second, half-a-second-different
+            copy of the kit's motion on the kit's own element, which is the fork
+            §4.6 ("motion is one physics") exists to stop. The class carries it
+            now; the `pulse` keyframe is still components.css's, referenced by
+            name and defined nowhere in this app (DESIGN.md §6). */}
+        <span className={`dotstatus${status === "online" ? " pulse" : ""}`} style={{ background: status === "online" ? F.green : status === "checking" ? F.amber : F.faint }} />
+        <span className="t-label">Factory — production</span>
+        <span className="t-cap" style={{ fontFamily: F.mono }}>
           {status === "online" ? `bridge connected · ${projects.length} project${projects.length !== 1 ? "s" : ""}` : status === "checking" ? "looking for the bridge…" : "bridge offline"}
         </span>
-        {status === "online" && <button onClick={refresh} style={{ marginLeft: "auto", background: "none", border: "none", color: F.faint, fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>↻</button>}
+        {status === "online" && <button type="button" className="btn sm plain" onClick={refresh} title="Refresh the project list" style={{ marginLeft: "auto" }}>↻ Refresh</button>}
       </div>
 
       {status === "offline" && (
-        <div style={{ background: F.card, border: `1px dashed rgba(255,255,255,0.12)`, borderRadius: "14px", padding: "16px 18px", display: "flex", gap: "14px", alignItems: "flex-start", flexWrap: "wrap" }}>
+        // A dashed outline and no shadow: this is a "nothing running here yet"
+        // frame, not an elevated card.
+        <div style={{ background: "var(--surface)", border: `1px dashed var(--line-strong, rgba(255,255,255,0.12))`, borderRadius: "14px", padding: "16px 18px", display: "flex", gap: "14px", alignItems: "flex-start", flexWrap: "wrap" }}>
           <div style={{ flex: 1, minWidth: "240px" }}>
-            <div style={{ fontSize: "12.5px", fontWeight: 700, color: F.ink, fontFamily: F.syne, marginBottom: "4px" }}>Footage-to-Short pipeline, on your machine</div>
-            <div style={{ fontSize: "11.5px", color: F.sub, lineHeight: 1.6 }}>
-              shorts-factory lives in this repo under <code style={{ fontFamily: F.mono, background: F.subtle, padding: "1px 5px", borderRadius: "4px" }}>factory/</code> — it transcribes your raw footage, picks the best clip, cuts dead air, adds captions and pop-ups, and enforces a review gate before export. Start the bridge and this panel comes alive with your projects.
+            <div className="t-call" style={{ fontWeight: 600, marginBottom: "4px" }}>Footage-to-Short pipeline, on your machine</div>
+            <div className="t-cap" style={{ lineHeight: 1.6 }}>
+              shorts-factory lives in this repo under <code style={{ fontFamily: F.mono, background: "var(--ink-a06, rgba(255,255,255,0.06))", padding: "1px 5px", borderRadius: "4px" }}>factory/</code> — it transcribes your raw footage, picks the best clip, cuts dead air, adds captions and pop-ups, and enforces a review gate before export. Start the bridge and this panel comes alive with your projects.
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "6px", minWidth: "220px" }}>
-            <code style={{ fontFamily: F.mono, fontSize: "11px", background: "#0B1120", color: "#7DE3B8", padding: "8px 12px", borderRadius: "8px", whiteSpace: "nowrap" }}>cd factory && python bridge.py</code>
-            <button onClick={() => { navigator.clipboard.writeText("cd factory && python bridge.py").then(() => toast.push("Command copied.", { tone: "success" })).catch(() => toast.push("Clipboard blocked — copy it manually.", { tone: "warning" })); }}
-              style={{ alignSelf: "flex-end", background: "none", border: "none", color: F.greenDeep, fontSize: "10px", fontWeight: 700, cursor: "pointer", fontFamily: F.syne }}>copy</button>
+            <code style={{ fontFamily: F.mono, fontSize: "11px", background: "var(--surface-2)", color: "var(--accent)", padding: "8px 12px", borderRadius: "8px", whiteSpace: "nowrap" }}>cd factory && python bridge.py</code>
+            <button type="button" className="btn sm plain" style={{ alignSelf: "flex-end" }}
+              onClick={() => { navigator.clipboard.writeText("cd factory && python bridge.py").then(() => toast.push("Command copied.", { tone: "success" })).catch(() => toast.push("Clipboard blocked — copy it manually.", { tone: "warning" })); }}>Copy</button>
           </div>
         </div>
       )}
@@ -264,17 +275,23 @@ export function FactoryPanel({ isMobile }) {
           {projects.map((p, idx) => {
             const st = stageOf(p);
             return (
-              <div key={p.name} onClick={() => p.has_review && openReview(p)} style={{
-                background: F.card, border: `1px solid ${F.line}`, borderLeft: `3px solid ${st.color}`,
-                borderRadius: "12px", padding: "12px 14px", cursor: p.has_review ? "pointer" : "default",
-                animation: `cardIn 0.3s ${M.easeOut} both`, animationDelay: `${Math.min(idx, 8) * 30}ms`,
-              }}>
-                <div style={{ fontSize: "12px", fontWeight: 700, color: F.ink, fontFamily: F.syne, textTransform: "capitalize" }}>{p.title}</div>
+              // The kit's card. The stage rail is an INSET shadow next to the
+              // card's own, not a border — .card already carries a shadow, and
+              // the two may not share an element. The stage name is written out
+              // on the chip beside it, so the rail's hue is decoration.
+              <div key={p.name} onClick={() => p.has_review && openReview(p)}
+                className={`card pad-sm${p.has_review ? " pressable" : ""}`}
+                style={{
+                  boxShadow: `inset 3px 0 0 ${st.color}, var(--shadow-card)`,
+                  padding: "12px 15px", cursor: p.has_review ? "pointer" : "default",
+                  animation: `cardIn 0.3s ${M.easeOut} both`, animationDelay: `${Math.min(idx, 8) * 30}ms`,
+                }}>
+                <div className="t-cap" style={{ color: "var(--ink)", fontWeight: 600, textTransform: "capitalize" }}>{p.title}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "5px", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "9px", fontWeight: 700, color: st.color, background: st.color + "15", padding: "1px 7px", borderRadius: "5px", fontFamily: F.syne, textTransform: "uppercase", letterSpacing: "0.04em" }}>{st.label}</span>
-                  {p.duration != null && <span style={{ fontSize: "10px", color: F.faint, fontFamily: F.mono }}>{Math.round(p.duration)}s raw</span>}
+                  <span className="t-label" style={{ color: st.color, background: st.color + "15", padding: "2px 7px", borderRadius: "5px" }}>{st.label}</span>
+                  {p.duration != null && <span className="t-cap t-num" style={{ fontFamily: F.mono }}>{Math.round(p.duration)}s raw</span>}
                 </div>
-                {p.has_review && <div style={{ fontSize: "10px", color: F.greenDeep, fontWeight: 600, marginTop: "7px" }}>Open review →</div>}
+                {p.has_review && <div className="t-cap" style={{ color: "var(--accent)", fontWeight: 600, marginTop: "7px" }}>Open review →</div>}
               </div>
             );
           })}
@@ -282,7 +299,10 @@ export function FactoryPanel({ isMobile }) {
       )}
 
       {review && <ReviewModal project={review.project} markdown={review.markdown} onClose={() => setReview(null)} onApprove={approve} approving={approving} />}
-      <style>{`.factory-md h2, .factory-md h3, .factory-md h4, .factory-md h5 { font-family: 'Syne', system-ui; margin: 16px 0 6px; } .factory-md code { font-family: 'DM Mono', monospace; background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px; font-size: 12px; } .factory-md ul { margin: 4px 0 10px; padding-left: 20px; } .factory-md p { margin: 4px 0; }`}</style>
+      {/* The review doc's own typography. No decorative family here either —
+          headings take --font-display (the system stack) and code takes
+          --font-mono, the same two the rest of the app now resolves. */}
+      <style>{`.factory-md h2, .factory-md h3, .factory-md h4, .factory-md h5 { font-family: var(--font-display); margin: 16px 0 6px; } .factory-md code { font-family: var(--font-mono); background: var(--ink-a08, rgba(255,255,255,0.08)); padding: 1px 5px; border-radius: 4px; font-size: 12px; } .factory-md ul { margin: 4px 0 10px; padding-left: 20px; } .factory-md p { margin: 4px 0; }`}</style>
     </div>
   );
 }

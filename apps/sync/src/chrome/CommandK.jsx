@@ -4,6 +4,7 @@ import {
   IcSearch, IcConsole, IcDay, IcQueue, IcBrief, IcMemory, IcMic, IcMicOff,
   IcSettings, IcSun, IcMoon, IcSparkle, IcSend, IcTrash, IcFocus,
 } from "../ui/icons.jsx";
+import { PortalLayer } from "../ui/kit.jsx";
 import { getState, setSettings, clearConversation } from "../data/store.js";
 
 // ─── ⌘K ──────────────────────────────────────────────────────────────────────
@@ -125,8 +126,10 @@ export default function CommandK({ open, onClose, setPage, voice, onSettings }) 
 
   let lastGroup = null;
 
+  // Portaled to <body> like the sheets, and wrapped for the same reason: the
+  // palette's own tokens and rules do not reach outside .sy-root.
   return createPortal(
-    <>
+    <PortalLayer>
       <div className="cmdk-scrim" onClick={onClose} />
       <div className="cmdk" role="dialog" aria-modal="true" aria-label="Command palette">
         <div className="cmdk-input">
@@ -169,7 +172,7 @@ export default function CommandK({ open, onClose, setPage, voice, onSettings }) 
           <span className="t-cap" style={{ marginLeft: "auto" }}>Anything unmatched goes to SYNC</span>
         </div>
       </div>
-    </>,
+    </PortalLayer>,
     document.body
   );
 }

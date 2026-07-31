@@ -22,7 +22,7 @@
 // missing (a deliberate loud guard), so the env is stubbed BEFORE the dynamic
 // imports below. Nothing here touches a real network.
 
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
@@ -36,7 +36,20 @@ vi.stubEnv("VITE_SUPABASE_ANON_KEY", "stub-anon-key");
 const { default: Runway } = await import("../Root.jsx");
 const { default: Login } = await import("../pages/Login.jsx");
 const { default: JobForm, emptyJobForm } = await import("../ui/JobForm.jsx");
-const { EmptyState, ErrorState } = await import("../ui/primitives.jsx");
+const { EmptyState, ErrorState, ToastProvider } = await import("../ui/primitives.jsx");
+const { AppProvider } = await import("../lib/store.jsx");
+// Every page and panel that used to be string-matched only. They ARE
+// renderable: useApp() needs the provider's value, not its data, and the
+// effects that fetch never run under renderToStaticMarkup — so each of these
+// stands up cold in its loading/empty state with no network and no mocks.
+const { default: Board } = await import("../pages/Board.jsx");
+const { default: Capture } = await import("../pages/Capture.jsx");
+const { default: JobDetail } = await import("../pages/JobDetail.jsx");
+const { default: Market } = await import("../pages/Market.jsx");
+const { default: ProfilePage } = await import("../pages/ProfilePage.jsx");
+const { default: PrintView } = await import("../pages/PrintView.jsx");
+const { default: TailorTab } = await import("../ui/TailorTab.jsx");
+const { BreakdownBars, FlagChips } = await import("../ui/FitPanel.jsx");
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel) => readFileSync(join(here, "..", rel), "utf8");
@@ -54,6 +67,7 @@ beforeAll(() => {
   console.warn = cap; console.error = cap;
 });
 afterAll(() => { console.warn = realWarn; console.error = realErr; });
+beforeEach(() => { warnings.length = 0; });
 
 const html = () => renderToStaticMarkup(createElement(Runway));
 // the surfaces past the session gate, each in the router they assume
@@ -62,11 +76,74 @@ const loginHtml = () => routed(createElement(Login));
 const formHtml = () =>
   routed(createElement(JobForm, { value: emptyJobForm, onChange: () => {}, flags: [], onFlags: () => {} }));
 
+// The pages assume the full mount context: a router, the app store and the
+// toast host. None of them needs data — every fetch is in an effect.
+const inApp = (el) =>
+  routed(createElement(AppProvider, null, createElement(ToastProvider, null, el)));
+
+// Capture builds its bookmarklet from window.location.origin at render time,
+// in the component body, so Node's missing `window` is not a migration bug —
+// it is the browser global the bookmarklet is made of. Stubbed only for the
+// span of that render, and removed again, so nothing else sees a fake browser.
+const FAKE_WINDOW = {
+  location: { origin: "https://runway.test", href: "https://runway.test/capture" },
+  matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
+  open: () => {},
+};
+const withWindow = (fn) => {
+  const had = Object.prototype.hasOwnProperty.call(globalThis, "window");
+  const prev = globalThis.window;
+  globalThis.window = FAKE_WINDOW;
+  try { return fn(); } finally { if (had) globalThis.window = prev; else delete globalThis.window; }
+};
+
+// Every surface this app has, keyed by name so a failure says which one.
+const SURFACES = {
+  Root: () => html(),
+  Login: () => loginHtml(),
+  JobForm: () => formHtml(),
+  Board: () => inApp(createElement(Board)),
+  Capture: () => withWindow(() => inApp(createElement(Capture))),
+  JobDetail: () => inApp(createElement(JobDetail)),
+  Market: () => inApp(createElement(Market)),
+  ProfilePage: () => inApp(createElement(ProfilePage)),
+  PrintView: () => inApp(createElement(PrintView)),
+  TailorTab: () => inApp(createElement(TailorTab, { job: { id: "j1", company: "C", title: "T" } })),
+  FitPanel: () => inApp(createElement("div", null,
+    createElement(BreakdownBars, { breakdown: [{ k: "comp", label: "Comp", pts: 4, max: 5, why: "at floor" }] }),
+    createElement(FlagChips, { flags: ["low_comp"] }),
+  )),
+};
+const everySurface = () => Object.values(SURFACES).map((f) => f()).join("\n");
+
+// Opening tags of rendered HTML, as [tagName, classTokens]. Quoted attribute
+// values are consumed as units, so a ">" inside one cannot end the tag early.
+const OPEN_TAG = /<([a-zA-Z][\w-]*)((?:\s+[a-zA-Z-][\w:-]*(?:=(?:"[^"]*"|'[^']*'|[^\s>]+))?)*)\s*\/?>/g;
+const classedElements = (out) =>
+  [...out.matchAll(OPEN_TAG)].map((m) => {
+    const cls = /\bclass="([^"]*)"/.exec(m[2])?.[1] ?? "";
+    return [m[1], cls.split(/\s+/).filter(Boolean)];
+  });
+
 describe("Runway renders on the kit", () => {
   it("renders at all", () => {
     expect(() => html()).not.toThrow();
     expect(() => loginHtml()).not.toThrow();
     expect(() => formHtml()).not.toThrow();
+  });
+
+  it("renders EVERY page and panel, not just the three that mount trivially", () => {
+    // Board, Capture, JobDetail, Market, ProfilePage, PrintView, TailorTab and
+    // FitPanel used to be string-matched only, on the belief that useApp()
+    // made them unrenderable. It does not: the provider supplies a value, the
+    // fetches live in effects the server renderer never runs, and each page
+    // therefore stands up in its own loading/empty state with no data at all.
+    // A restyle that breaks a reference in any of them now fails here.
+    for (const [name, render] of Object.entries(SURFACES)) {
+      let out;
+      expect(() => { out = render(); }, `${name} threw while rendering`).not.toThrow();
+      expect(out, `${name} rendered nothing`).toMatch(/<[a-z]/);
+    }
   });
 
   it("opts into the kit on its own root", () => {
@@ -98,12 +175,33 @@ describe("Runway renders on the kit", () => {
     // <label>+<input> ROW wrapper (margin-bottom: 14px); the kit's .field IS
     // the control — a filled 44px well. Had the wrapper kept the name, every
     // form row in the app would have rendered inside one.
-    const out = loginHtml() + formHtml();
+    //
+    // Read off the class LIST rather than off `class="field"` as a literal:
+    // `<div class="field section">` is the same 44px well and the closing
+    // quote is nowhere near the word. And EVERY control is checked, over every
+    // form in the app — "at least one input has .field" is green through a
+    // migration that reached one row out of thirty.
+    const CONTROLS = new Set(["input", "select", "textarea"]);
+    const out = everySurface();
+    const els = classedElements(out);
+
+    const wrappers = els.filter(([tag, cls]) => cls.includes("field") && !CONTROLS.has(tag));
+    expect(wrappers.map(([t, c]) => `<${t} class="${c.join(" ")}">`),
+      "the kit's .field belongs on the control, never on a wrapper").toEqual([]);
+
+    // every control the app renders carries it — not merely one of them
+    const controls = els.filter(([tag]) => CONTROLS.has(tag));
+    expect(controls.length, "the control scan found nothing — it is broken").toBeGreaterThanOrEqual(30);
+    const bare = controls.filter(([, cls]) => !cls.includes("field"));
+    expect(bare.map(([t, c]) => `<${t} class="${c.join(" ")}">`),
+      "a control that never adopted the kit's .field").toEqual([]);
+
+    // and all three control elements are represented, so the sweep is real
+    for (const tag of CONTROLS) {
+      expect(controls.filter(([t]) => t === tag).length, `no <${tag}> was rendered`).toBeGreaterThan(0);
+    }
+
     expect(out, "the wrapper must be .fld").toMatch(/<div class="fld"/);
-    expect(out, "the control must be .field").toMatch(/<input class="field"/);
-    expect(out).toMatch(/<select class="field"/);
-    expect(out).toMatch(/<textarea class="field"/);
-    expect(out, "no wrapper may still be called .field").not.toMatch(/<div class="field"/);
   });
 
   it("gives every error a retry", () => {
@@ -113,13 +211,15 @@ describe("Runway renders on the kit", () => {
   });
 
   it("emits no NaN and no literal 'undefined' into markup", () => {
-    const out = html() + loginHtml() + formHtml();
-    expect(out).not.toMatch(/NaN/);
-    expect(out).not.toMatch(/(style|class)="[^"]*undefined/);
+    for (const [name, render] of Object.entries(SURFACES)) {
+      const out = render();
+      expect(out, `${name} emitted NaN`).not.toMatch(/NaN/);
+      expect(out, `${name} emitted undefined`).not.toMatch(/(style|class)="[^"]*undefined/);
+    }
   });
 
   it("renders without a React warning", () => {
-    html(); loginHtml(); formHtml();
+    everySurface();
     const react = warnings.filter((w) => !w.startsWith("[@cc/"));
     expect(react, `React warned:\n${react.join("\n")}`).toEqual([]);
   });
@@ -147,7 +247,15 @@ describe("Runway obeys the language", () => {
     expect(jsx, "no call site may still say sheet").not.toMatch(/className="sheet/);
     expect(allCss, "no rule may still target .sheet").not.toMatch(/(^|[\s,{])\.sheet[\s.,:{-]/m);
     expect(allCss).toMatch(/\.paper \{[^}]*max-width: 816px/);
-    expect(allCss).toMatch(/\.paper \{[^}]*position: static|\.paper \{(?![^}]*position:)/);
+    // The old form of this line was `position: static` OR the mere ABSENCE of
+    // a position declaration — and the print block's own `.paper {` rule has
+    // no position, so the second alternative made it green whatever the first
+    // rule said. What matters is the positive property: NO rule anywhere may
+    // take .paper out of flow.
+    const paperRules = [...allCss.matchAll(/(^|[\s,}])\.paper\s*\{([^}]*)\}/g)].map((m) => m[2]);
+    expect(paperRules.length, "no .paper rule found — the scan is broken").toBeGreaterThanOrEqual(2);
+    const outOfFlow = paperRules.filter((b) => /position:\s*(fixed|absolute|sticky)/.test(b));
+    expect(outOfFlow, `.paper must stay in flow — it is a printed page, not chrome:\n${outOfFlow.join("\n")}`).toEqual([]);
     expect(read("pages/PrintView.jsx")).toContain('className="paper"');
     expect(read("pages/PrintView.jsx")).toContain('className="paper-body"');
     // and the print stylesheet still strips the shadow/margins off the paper
@@ -238,10 +346,14 @@ describe("Runway obeys the language", () => {
   it("routes the dashboard metrics through the kit's stat tiles", () => {
     // The metric strip is only reachable behind the session gate, so the
     // source is the honest place to check it.
-    const board = read("pages/Board.jsx");
-    expect(board).toContain('className="stattile on-canvas metric"');
-    expect(board).toContain('className="stattile-label"');
-    expect(board).toContain('className="stattile-value"');
+    // Counted, not merely present: the strip is four tiles (Active, Applied
+    // this week, Response rate, Needs follow-up) and a single toContain stays
+    // green through three of the four reverting to hand-rolled markup.
+    const board = stripComments(read("pages/Board.jsx"));
+    const count = (re) => (board.match(re) || []).length;
+    expect(count(/className="stattile on-canvas metric"/g), "the metric strip is four kit tiles").toBe(4);
+    expect(count(/className="stattile-label"/g), "one kit label per tile").toBe(4);
+    expect(count(/className="stattile-value"/g), "one kit value per tile").toBe(4);
     expect(board, "the hand-rolled .lab/.big/.note markup is gone").not.toMatch(/className="(lab|big)"/);
     // and the phone stage strip is the kit's monochrome filter pill
     expect(board).toMatch(/`pill\$\{s\.id === stage \? ' active' : ''\}`/);

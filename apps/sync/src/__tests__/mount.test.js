@@ -14,18 +14,38 @@ import { dirname, join } from "node:path";
 const here = dirname(fileURLToPath(import.meta.url));
 const css = readFileSync(join(here, "..", "styles.css"), "utf8");
 
-/** Every rule prelude in the sheet, minus at-rules and keyframe stops. */
+/**
+ * Every rule prelude in the sheet, minus at-rules and keyframe stops.
+ *
+ * Brace-matched rather than regex-scanned, and that is not tidiness. The
+ * previous version anchored each prelude to the preceding `}`, so the FIRST
+ * rule inside every `@media` block — the one preceded by `{` — was never
+ * returned at all: sixteen rules in this sheet, and any unscoped selector
+ * among them would have passed the isolation check below by not being looked
+ * at. Descending into at-rule bodies is what makes that check total.
+ */
 function selectors(sheet) {
   const out = [];
-  const re = /(^|\})\s*((?:\/\*[\s\S]*?\*\/\s*)*)([^{}]+)\{/g;
-  let m;
-  while ((m = re.exec(sheet))) {
-    const sel = m[3].replace(/\/\*[\s\S]*?\*\//g, "").trim();
-    if (!sel || sel.startsWith("@")) continue;
-    // Keyframe stops: `from`, `to`, `0%, 100%`.
-    if (/^(from|to|[\d.]+%)(\s*,\s*(from|to|[\d.]+%))*$/.test(sel)) continue;
-    out.push(sel);
-  }
+  const clean = sheet.replace(/\/\*[\s\S]*?\*\//g, "");
+  (function walk(text) {
+    let i = 0, prelude = "";
+    while (i < text.length) {
+      if (text[i] !== "{") { prelude += text[i]; i++; continue; }
+      let d = 0, j = i;
+      for (; j < text.length; j++) {
+        if (text[j] === "{") d++;
+        else if (text[j] === "}") { d--; if (d === 0) { j++; break; } }
+      }
+      const body = text.slice(i + 1, j - 1);
+      const sel = prelude.trim();
+      // @media/@supports hold rules; @keyframes holds stops, which are not
+      // selectors and are not scopeable.
+      if (sel.startsWith("@")) {
+        if (/^@(media|supports|layer|container|scope)\b/i.test(sel)) walk(body);
+      } else if (sel) out.push(sel);
+      prelude = ""; i = j;
+    }
+  })(clean);
   return out;
 }
 
@@ -36,8 +56,24 @@ describe("stylesheet isolation", () => {
   // ever stops seeing the sheet — otherwise the two checks below would pass
   // vacuously against an empty list, which is exactly how a regression test
   // ends up proving nothing.
+  //
+  // It was 250 against a sheet of 336 rules. Moving SYNC onto the shared kit
+  // deleted the 150-odd that were a private second copy of it — the type
+  // scale, the card, the cell, the stat tile, the button, the pill, the
+  // segmented control, the field, the switch, the sheet, the toast, the
+  // skeleton — plus the dead boot screen and the Mind's replaced list UI.
+  // The number moves with the sheet; what it guards does not.
+  //
+  // It was then relaxed to 120, which is where a floor stops doing its job:
+  // the sheet parses to 200 rules TODAY (2026-07-31, counted with the walker
+  // above, at-rule bodies included), so half the stylesheet could vanish and
+  // this would still be green — and the two checks below would go on passing
+  // vacuously against whatever was left. 170 is ~85% of the real number:
+  // loose enough that ordinary deletion does not trip it, tight enough that a
+  // parser which loses a chunk of the sheet does. If you make a large, real
+  // deletion, move this number and record the new count here.
   it("has rules to check at all", () => {
-    expect(sels.length).toBeGreaterThan(250);
+    expect(sels.length).toBeGreaterThan(170);
   });
 
   it("scopes every selector under .sy-root or .sy-scope", () => {
@@ -78,6 +114,18 @@ describe("stylesheet isolation", () => {
     expect(frame).toEqual(["vh", "dvh"]);
   });
 
+  it("keeps its blanket rules under the kit's, not over them", () => {
+    // The kit's sheet is parsed BEFORE this one, so at equal specificity this
+    // sheet wins every tie. That is what makes the safe-area overrides above
+    // reliable — and what makes a broad rule here dangerous, because it now
+    // outranks a kit rule it used to lose to. The focus ring is the one that
+    // bit: it sets a fallback border-radius, and at (0,2,0) that would
+    // repaint every focused .btn, .pill and .switch in the app at 8px.
+    expect(css).toMatch(/\.sy-root :where\(:focus-visible\)/);
+    expect(css, "an unweighted :focus-visible would outrank the kit's radii")
+      .not.toMatch(/\.sy-root :focus-visible\s*\{/);
+  });
+
   it("carries no light room", () => {
     // The Pentagon is one dark canvas and the shell hardcodes data-theme.
     // A scoped-but-later light palette would win outright over the dark one.
@@ -99,6 +147,37 @@ describe("mount contract", () => {
 
   it("holds the first paint until the sheet is in the document", () => {
     expect(root).toMatch(/if \(!styled\) return null/);
+  });
+
+  it("opts into the shared kit on its own root and nowhere else", () => {
+    // data-kit belongs on .sy-root, the one element the shell hands this tool.
+    // Put it any higher and it would restyle every other app's .card/.btn/
+    // .field on the way past — which is the reason the shell keeps it off the
+    // wrapper that holds them all.
+    expect(root).toMatch(/className="sy-root" data-kit/);
+    expect(root).not.toMatch(/className="sy-scope"[^>]*data-kit/);
+  });
+
+  it("carries the same bridge to the surfaces it portals out of the tree", () => {
+    // Sheets, toasts and the palette render into <body>, which is outside
+    // .sy-root and outside the shell's themed wrapper — so every rule in this
+    // sheet and every design token missed them entirely. PortalLayer rebuilds
+    // .sy-scope > .sy-root there; without it those three surfaces draw with
+    // `background: var(--surface)` resolving to nothing at all.
+    const kit = readFileSync(join(here, "..", "ui", "kit.jsx"), "utf8");
+    expect(kit).toMatch(/export function PortalLayer/);
+    expect(kit).toMatch(/className="sy-root sy-layer" data-kit/);
+    // Every portal in the app goes through it.
+    const cmdk = readFileSync(join(here, "..", "chrome", "CommandK.jsx"), "utf8");
+    for (const [name, code] of [["kit.jsx", kit], ["CommandK.jsx", cmdk]]) {
+      const portals = (code.match(/createPortal\(/g) || []).length;
+      const wrapped = (code.match(/<PortalLayer>/g) || []).length;
+      expect(portals, `${name} has portals to check`).toBeGreaterThan(0);
+      expect(wrapped, `${name}: every createPortal must be wrapped`).toBe(portals);
+    }
+    // …and the wrapper must generate no box, or it is a full-height black
+    // rectangle appended to <body> under the whole shell.
+    expect(css).toMatch(/\.sy-root\.sy-layer\s*\{[^}]*display:\s*contents/);
   });
 
   it("renders .sy-scope outside .sy-root", () => {

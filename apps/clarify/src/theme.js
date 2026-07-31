@@ -47,10 +47,21 @@ export const T = {
   greenHi: "#5EE0A8",
   violet: "#A78BFA",                // snoozed / call-tracking accents
 
-  // type — Syne stays; it's the brand
-  fontDisplay: "'Syne', system-ui",
-  fontBody: "'Inter', system-ui, sans-serif",
-  fontMono: "'DM Mono', monospace",
+  // type — the platform stack, not a face of our own.
+  //
+  // These three keys used to name 'Syne' (display) and 'DM Mono'. SESSION's
+  // rule is a system stack with no decorative face: hierarchy comes from size
+  // and weight, not from a second typeface. Every one of the ~190 call sites
+  // already reads T.fontDisplay / T.fontBody / T.fontMono, so pointing the
+  // three keys at the platform variables retires Syne everywhere at once and
+  // keeps Clarify on exactly the family the shell sets for itself.
+  //
+  // fontDisplay resolves to the BODY variable deliberately — there is no
+  // second face to promote to, and --font-display is where a decorative one
+  // would come back in.
+  fontDisplay: "var(--font-body)",
+  fontBody: "var(--font-body)",
+  fontMono: "var(--font-mono)",
 
   // radii
   rSm: "8px",
@@ -78,40 +89,40 @@ export const T = {
 };
 
 // ── Shared style fragments — spread these, then override locally as needed ──
-export const card = {
-  background: T.surface,
-  borderRadius: T.rLg,
-  border: `1px solid ${T.lineInk}`,
-  boxShadow: T.shadowCard,
-};
+//
+// The `card` and `sectionLabel` fragments that used to live here are GONE, not
+// rewritten: `card` put a 1px border AND shadowCard on ~forty surfaces at once
+// (the language forbids a border and a box-shadow on the same element), and
+// `sectionLabel` was a hand-rolled 11px uppercase run. Both are the kit's now —
+// `className="card"` and `className="t-label"` — so there is no local copy left
+// for either violation to drift back into.
 
-export const sectionLabel = {
-  fontSize: "11px",
-  fontWeight: 700,
-  color: T.muted,
-  textTransform: "uppercase",
-  letterSpacing: "0.14em",
-  fontFamily: T.fontDisplay,
-};
-
+// The kit's .field: one well, no outline, 12px radius, 44px minimum. Call sites
+// render `className="field"`; what stays here is the same material for the few
+// inputs that need a non-standard footprint (the DNA numeric spinners, the
+// time pickers) and would look wrong at 44px.
 export const inputBase = {
   width: "100%",
   padding: "10px 14px",
   background: T.subtle,
-  border: `1px solid ${T.line}`,
-  borderRadius: T.rSm,
+  border: "none",
+  borderRadius: "12px",
   fontSize: "14px",
   color: T.ink,
   outline: "none",
   boxSizing: "border-box",
 };
 
+// Selects have no kit primitive of their own — .field's 44px floor would double
+// the height of the outreach toolbar, which is a one-line scroller on a phone.
+// They take the kit's field MATERIAL (well, no outline, 12px radius) at the
+// compact footprint the toolbar was built around.
 export const selectBase = {
   background: T.subtle,
-  border: `1px solid ${T.lineSoft}`,
-  borderRadius: T.rSm,
-  padding: "6px 10px",
-  fontSize: "11px",
+  border: "none",
+  borderRadius: "12px",
+  padding: "7px 11px",
+  fontSize: "12px",
   color: T.muted,
   cursor: "pointer",
   outline: "none",

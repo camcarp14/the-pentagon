@@ -5,7 +5,7 @@
 // A failed gate skips the step. Steps draft into the approval queue — the
 // sequence never sends anything itself.
 import { useEffect, useMemo, useState } from "react";
-import { T, card as cardStyle, selectBase } from "../../theme.js";
+import { T, selectBase } from "../../theme.js";
 import { EmptyState, SkeletonRows, useToast } from "../../ui.jsx";
 import { seqDb } from "../../lib/sequenceDb.js";
 import { GATE_LABELS, OPEN_TRACKING_LIVE, effectiveGate } from "../../lib/sequences.js";
@@ -18,15 +18,15 @@ const GATE_OPTIONS = Object.entries(GATE_LABELS).map(([value, label]) => {
 function StepEditor({ step, index, count, onChange, onDelete, onMove }) {
   const set = (patch) => onChange({ ...step, ...patch });
   return (
-    <div style={{ background: T.subtle, border: `1px solid ${T.lineSoft}`, borderRadius: T.rMd, padding: "12px 14px", display: "flex", flexDirection: "column", gap: "10px" }}>
+    <div style={{ background: T.subtle, border: "none", borderRadius: "12px", padding: "12px 14px", display: "flex", flexDirection: "column", gap: "10px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
         <span style={{ width: "22px", height: "22px", borderRadius: "7px", background: T.goldSoft, border: `1px solid ${T.goldLine}`, color: T.gold, fontSize: "11px", fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", fontFamily: T.fontMono, flexShrink: 0 }}>{step.step_order}</span>
         <input value={step.name} onChange={(e) => set({ name: e.target.value })} placeholder="Step name"
           style={{ flex: 1, minWidth: "120px", background: "transparent", border: "none", outline: "none", fontSize: "13px", fontWeight: 700, color: T.ink, fontFamily: T.fontDisplay }} />
         <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
-          <button title="Move up" disabled={index === 0} onClick={() => onMove(-1)} className="co-icon-btn" style={{ padding: "4px 8px", background: "transparent", border: `1px solid ${T.lineSoft}`, borderRadius: "6px", color: index === 0 ? T.ghost : T.muted, fontSize: "11px", cursor: index === 0 ? "not-allowed" : "pointer" }}>↑</button>
-          <button title="Move down" disabled={index === count - 1} onClick={() => onMove(1)} className="co-icon-btn" style={{ padding: "4px 8px", background: "transparent", border: `1px solid ${T.lineSoft}`, borderRadius: "6px", color: index === count - 1 ? T.ghost : T.muted, fontSize: "11px", cursor: index === count - 1 ? "not-allowed" : "pointer" }}>↓</button>
-          <button title="Delete step" onClick={onDelete} className="co-icon-btn" style={{ padding: "4px 8px", background: "transparent", border: "1px solid rgba(248,113,113,0.25)", borderRadius: "6px", color: T.red, fontSize: "11px", cursor: "pointer" }}>✕</button>
+          <button title="Move up" aria-label="Move step up" type="button" disabled={index === 0} onClick={() => onMove(-1)} className="co-icon-btn btn sm quiet">↑</button>
+          <button title="Move down" aria-label="Move step down" type="button" disabled={index === count - 1} onClick={() => onMove(1)} className="co-icon-btn btn sm quiet">↓</button>
+          <button title="Delete step" aria-label="Delete step" type="button" onClick={onDelete} className="co-icon-btn btn sm danger">✕</button>
         </div>
       </div>
 
@@ -35,7 +35,7 @@ function StepEditor({ step, index, count, onChange, onDelete, onMove }) {
           wait
           <input type="number" min={0} max={60} value={step.wait_days}
             onChange={(e) => set({ wait_days: Math.max(0, Number(e.target.value) || 0) })}
-            style={{ width: "52px", background: T.surface, border: `1px solid ${T.line}`, borderRadius: "6px", padding: "4px 8px", fontSize: "12px", color: T.ink, outline: "none", fontFamily: T.fontMono }} />
+            className="field on-well" style={{ width: "52px", minHeight: 30, padding: "4px 8px", fontSize: "12px", fontFamily: T.fontMono }} />
           day{step.wait_days === 1 ? "" : "s"} after previous send, then
         </label>
         <select value={step.send_condition} onChange={(e) => set({ send_condition: e.target.value })}
@@ -50,7 +50,7 @@ function StepEditor({ step, index, count, onChange, onDelete, onMove }) {
 
       <textarea value={step.body_template || ""} onChange={(e) => set({ body_template: e.target.value })} rows={2}
         placeholder={"Direction for this touch. Merge vars: {{business_name}} {{first_name}} {{city}} {{category}} {{website}}"}
-        style={{ width: "100%", background: T.surface, border: `1px solid ${T.lineSoft}`, borderRadius: T.rSm, padding: "9px 11px", fontSize: "12px", color: T.ink, outline: "none", lineHeight: 1.55, resize: "vertical", fontFamily: T.fontBody }} />
+        className="field on-well" style={{ padding: "9px 11px", fontSize: "13px", lineHeight: 1.55, resize: "vertical" }} />
     </div>
   );
 }
@@ -93,7 +93,7 @@ function SequenceCard({ seq, steps, enrolledCount, onSave, onDelete }) {
   };
 
   return (
-    <div style={{ ...cardStyle, padding: "18px 20px", display: "flex", flexDirection: "column", gap: "14px" }}>
+    <div className="card" style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: "14px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
         <input value={draft.name} onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
           style={{ flex: 1, minWidth: "150px", background: "transparent", border: "none", outline: "none", fontSize: "15px", fontWeight: 800, color: T.ink, fontFamily: T.fontDisplay }} />
@@ -119,11 +119,10 @@ function SequenceCard({ seq, steps, enrolledCount, onSave, onDelete }) {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-        <button onClick={addStep} style={{ padding: "8px 14px", background: "transparent", border: `1px dashed ${T.line}`, borderRadius: T.rSm, color: T.muted, fontSize: "11.5px", fontWeight: 700, cursor: "pointer" }}>+ Add step</button>
+        <button onClick={addStep} type="button" className="btn sm quiet">+ Add step</button>
         <div style={{ flex: 1 }} />
-        <button onClick={() => onDelete(seq.id)} style={{ padding: "8px 12px", background: "transparent", border: "1px solid rgba(248,113,113,0.25)", borderRadius: T.rSm, color: T.red, fontSize: "11px", fontWeight: 700, cursor: "pointer" }}>Delete</button>
-        <button onClick={save} disabled={!dirty || busy}
-          style={{ padding: "8px 18px", background: dirty ? T.goldGrad : T.subtle, border: dirty ? "none" : `1px solid ${T.lineSoft}`, borderRadius: T.rSm, color: dirty ? T.textOnBrand : T.ghost, fontSize: "11.5px", fontWeight: 800, cursor: dirty && !busy ? "pointer" : "not-allowed", fontFamily: T.fontDisplay }}>
+        <button onClick={() => onDelete(seq.id)} type="button" className="btn sm danger">Delete</button>
+        <button onClick={save} type="button" disabled={!dirty || busy} className={dirty ? "btn sm primary" : "btn sm quiet"}>
           {busy ? "Saving…" : "Save changes"}
         </button>
       </div>
@@ -204,11 +203,11 @@ export function SequencesView() {
   return (
     <div style={{ padding: "24px 28px", maxWidth: "860px", margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "6px" }}>
-        <h2 style={{ fontSize: "18px", fontWeight: 800, color: T.ink, fontFamily: T.fontDisplay, margin: 0 }}>Sequences</h2>
+        <h2 className="t-title2" style={{ margin: 0 }}>Sequences</h2>
         <div style={{ flex: 1 }} />
-        <button onClick={createSequence} style={{ padding: "8px 16px", background: T.goldGrad, border: "none", borderRadius: T.rSm, color: T.textOnBrand, fontSize: "11.5px", fontWeight: 800, cursor: "pointer", fontFamily: T.fontDisplay }}>+ New sequence</button>
+        <button onClick={createSequence} type="button" className="btn sm primary">+ New sequence</button>
       </div>
-      <div style={{ fontSize: "12px", color: T.muted, marginBottom: "18px", lineHeight: 1.6, maxWidth: "620px" }}>
+      <div className="t-foot" style={{ marginBottom: "18px", lineHeight: 1.6, maxWidth: "620px" }}>
         Steps wait, check their gate against real signals (replies and link clicks{OPEN_TRACKING_LIVE ? ", opens" : " — opens come online when sends go HTML"}), then draft into the approval queue. A failed gate skips the step. Nothing here ever sends on its own.
       </div>
 

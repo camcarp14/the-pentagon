@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { T, card as cardBase, sectionLabel as sectionLabelBase } from "../../theme";
+import { T } from "../../theme";
 import { AnimatedNumber, SkeletonLine } from "../../ui.jsx";
 import { AGENT_META } from "../system/AgentsView.jsx";
 import { eng, goalProgress, kb } from "../../lib/engine.js";
@@ -49,21 +49,22 @@ export function MonthCalendar({ onNavigate, hideOpenLink, cards = [] }) {
   return (
     <div style={{ marginTop: "16px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-        <span style={{ fontSize: "11px", fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.13em", fontFamily: T.fontDisplay }}>Calendar · {monthLabel}</span>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <button onClick={() => setMonthOffset(monthOffset - 1)} style={{ width: "26px", height: "26px", background: T.subtle, border: `1px solid ${T.line}`, borderRadius: "7px", color: T.muted, cursor: "pointer", fontSize: "12px" }}>‹</button>
-          {monthOffset !== 0 && <button onClick={() => setMonthOffset(0)} style={{ padding: "0 10px", height: "26px", background: T.subtle, border: `1px solid ${T.line}`, borderRadius: "7px", color: T.muted, cursor: "pointer", fontSize: "10px", fontWeight: 600 }}>Today</button>}
-          <button onClick={() => setMonthOffset(monthOffset + 1)} style={{ width: "26px", height: "26px", background: T.subtle, border: `1px solid ${T.line}`, borderRadius: "7px", color: T.muted, cursor: "pointer", fontSize: "12px" }}>›</button>
-          {!hideOpenLink && <span onClick={() => onNavigate && onNavigate("calendar")} style={{ fontSize: "10px", color: T.gold, cursor: "pointer", fontWeight: 700, marginLeft: "4px" }}>Open Calendar ›</span>}
+        <span className="t-label">Calendar · {monthLabel}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <button onClick={() => setMonthOffset(monthOffset - 1)} type="button" aria-label="Previous month" className="btn sm quiet" style={{ padding: "0 12px" }}>‹</button>
+          {monthOffset !== 0 && <button onClick={() => setMonthOffset(0)} type="button" className="btn sm quiet">Today</button>}
+          <button onClick={() => setMonthOffset(monthOffset + 1)} type="button" aria-label="Next month" className="btn sm quiet" style={{ padding: "0 12px" }}>›</button>
+          {!hideOpenLink && <button type="button" onClick={() => onNavigate && onNavigate("calendar")} className="btn sm plain">Open Calendar ›</button>}
         </div>
       </div>
 
       <div className="co-grid2" style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: "16px", alignItems: "start" }}>
         {/* Month grid */}
-        <div style={{ background: T.surface, borderRadius: "14px", border: `1px solid ${T.lineInk}`, padding: "16px 18px", boxShadow: T.shadowCard }}>
+        {/* .card — this had a 1px border AND shadowCard on one element. */}
+        <div className="card" style={{ padding: "16px 18px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px", marginBottom: "6px" }}>
             {["S","M","T","W","T","F","S"].map((d, i) => (
-              <div key={i} style={{ textAlign: "center", fontSize: "10px", fontWeight: 700, color: T.faint, textTransform: "uppercase", letterSpacing: "0.05em", fontFamily: T.fontDisplay }}>{d}</div>
+              <div key={i} className="stattile-label" style={{ textAlign: "center" }}>{d}</div>
             ))}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px" }}>
@@ -86,17 +87,19 @@ export function MonthCalendar({ onNavigate, hideOpenLink, cards = [] }) {
 
         {/* This month's meetings list */}
         <div>
-          <div style={{ fontSize: "10px", fontWeight: 700, color: T.faint, textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: T.fontDisplay, marginBottom: "10px" }}>This Month</div>
+          <div className="t-label" style={{ marginBottom: "10px" }}>This month</div>
           {upcomingThisMonth.length === 0 ? (
-            <div style={{ background: T.surface, borderRadius: "12px", border: `1px solid ${T.lineInk}`, padding: "24px 18px", textAlign: "center", fontSize: "12px", color: T.faint }}>
+            <div className="card" style={{ padding: "24px 18px", textAlign: "center", fontSize: "12px", color: T.faint }}>
               No meetings this month. Book one from the Calendar tab.
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               {upcomingThisMonth.slice(0, 5).map((m, i) => (
-                <div key={i} style={{ background: T.surface, borderRadius: "10px", border: `1px solid ${T.lineInk}`, borderLeft: `3px solid ${T.blueDeep}`, padding: "10px 13px" }}>
-                  <div style={{ fontSize: "12px", fontWeight: 700, color: T.ink, fontFamily: T.fontDisplay, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.business}</div>
-                  <div style={{ fontSize: "10px", color: T.muted, marginTop: "2px", fontFamily: T.fontMono }}>{new Date(m.start).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · {fmtTime(m.start)}</div>
+                // .card, with the blue rail as an inset shadow rather than a
+                // borderLeft — a card in this language does not draw an outline.
+                <div key={i} className="card pad-sm" style={{ boxShadow: `inset 3px 0 0 ${T.blueDeep}, var(--shadow-card)` }}>
+                  <div className="cell-title">{m.business}</div>
+                  <div className="t-cap" style={{ marginTop: "2px", fontFamily: T.fontMono }}>{new Date(m.start).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · {fmtTime(m.start)}</div>
                 </div>
               ))}
             </div>
@@ -189,12 +192,14 @@ export function MissionControl({ cards, onNavigate, inboundNew = 0 }) {
   // ── Recent activity feed (last obs events) ──
   const recentActivity = [...obsLogs].sort((a, b) => new Date(b.ts) - new Date(a.ts)).slice(0, 6);
 
+  // Both of these are the kit's, not local re-implementations: .card (which is
+  // where the border-plus-shadow violation lived) and .t-label.
   const Card = ({ children, span, pad }) => (
-    <div style={{ ...cardBase, padding: pad || "18px 20px", gridColumn: span ? `span ${span}` : undefined }}>{children}</div>
+    <div className="card" style={{ padding: pad || "18px 20px", gridColumn: span ? `span ${span}` : undefined }}>{children}</div>
   );
   const SectionLabel = ({ children, action }) => (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
-      <span style={{ ...sectionLabelBase }}>{children}</span>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
+      <span className="t-label">{children}</span>
       {action}
     </div>
   );
@@ -213,7 +218,7 @@ export function MissionControl({ cards, onNavigate, inboundNew = 0 }) {
       {/* Header */}
       <div style={{ marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "10px" }}>
         <div>
-          <div style={{ fontSize: "22px", fontWeight: 700, color: T.ink, fontFamily: T.fontDisplay, letterSpacing: "-0.02em" }}>Mission Control</div>
+          <h1 className="t-title1" style={{ margin: 0 }}>Mission control</h1>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
           {(() => {
@@ -246,10 +251,13 @@ export function MissionControl({ cards, onNavigate, inboundNew = 0 }) {
             {[["Prospected", pipeline.prospected, T.muted, null], ["Drafts", pipeline.draft, T.amber, null], ["Sent", pipeline.sent, T.blue, "sent"], ["Replied", pipeline.replied, T.pink, "replied"]].map(([l, v, c, tk], i) => {
               const t = tk ? trend(v, tk) : null;
               return (
-              <div key={i} style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "22px", fontWeight: 500, color: c, fontFamily: T.fontMono, lineHeight: 1 }}><AnimatedNumber value={v} /></div>
-                <div style={{ fontSize: "9px", color: T.faint, marginTop: "5px", textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: T.fontDisplay, fontWeight: 700 }}>{l}</div>
-                {t != null && <div style={{ fontSize: "9px", color: t > 0 ? T.green : T.faint, fontFamily: T.fontMono, marginTop: "2px" }}>{t > 0 ? `+${t}` : t} today</div>}
+              // The kit's stat tile. The caption under each number was 9px
+              // uppercase; .stattile-label is the 10.5px sentence-case version
+              // of exactly that — the floor, not below it.
+              <div key={i} className="stattile" style={{ background: "transparent", alignItems: "center", textAlign: "center", padding: 0 }}>
+                <div className="stattile-value" style={{ fontSize: "22px", color: c }}><AnimatedNumber value={v} /></div>
+                <div className="stattile-label">{l}</div>
+                {t != null && <div className="stattile-delta" style={{ color: t > 0 ? T.green : T.faint }}>{t > 0 ? `+${t}` : t} today</div>}
               </div>
             );})}
           </div>
@@ -264,23 +272,23 @@ export function MissionControl({ cards, onNavigate, inboundNew = 0 }) {
           ) : (
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               {[["Active", counts?.activeClients || 0, T.ink], ["Critical", counts?.criticalFindings || 0, counts?.criticalFindings > 0 ? T.red : T.muted], ["Pending", counts?.pendingActions || 0, counts?.pendingActions > 0 ? T.amber : T.muted]].map(([l, v, c], i) => (
-                <div key={i} style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: "22px", fontWeight: 500, color: c, fontFamily: T.fontMono, lineHeight: 1 }}><AnimatedNumber value={v} /></div>
-                  <div style={{ fontSize: "9px", color: T.faint, marginTop: "5px", textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: T.fontDisplay, fontWeight: 700 }}>{l}</div>
+                <div key={i} className="stattile" style={{ background: "transparent", alignItems: "center", textAlign: "center", padding: 0 }}>
+                  <div className="stattile-value" style={{ fontSize: "22px", color: c }}><AnimatedNumber value={v} /></div>
+                  <div className="stattile-label">{l}</div>
                 </div>
               ))}
             </div>
           )}
-          <div onClick={() => jump("clients")} style={{ fontSize: "10px", color: T.gold, marginTop: "12px", textAlign: "center", cursor: "pointer", fontWeight: 600 }}>Open Clients ›</div>
+          <button type="button" onClick={() => jump("clients")} className="btn sm plain full" style={{ marginTop: "12px" }}>Open Clients ›</button>
         </Card>
 
         <Card>
           <SectionLabel>AI Spend</SectionLabel>
-          <div style={{ fontSize: "30px", fontWeight: 500, color: T.ink, fontFamily: T.fontMono, lineHeight: 1 }}><AnimatedNumber value={aiCost} format={(n) => `$${n.toFixed(2)}`} /></div>
+          <div className="stattile-value" style={{ fontSize: "30px", color: T.ink }}><AnimatedNumber value={aiCost} format={(n) => `$${n.toFixed(2)}`} /></div>
           <div style={{ height: "5px", background: T.subtle, borderRadius: "3px", overflow: "hidden", marginTop: "10px" }}>
             <div style={{ width: `${budgetPct}%`, height: "100%", background: budgetPct > 80 ? T.red : T.green, borderRadius: "3px", transition: `width ${T.durSlow} ${T.easeOut}` }} />
           </div>
-          <div onClick={() => jump("ops")} style={{ fontSize: "10px", color: T.gold, marginTop: "10px", cursor: "pointer", fontWeight: 600 }}>Open Costs ›</div>
+          <button type="button" onClick={() => jump("ops")} className="btn sm plain" style={{ marginTop: "10px", padding: 0 }}>Open Costs ›</button>
         </Card>
       </div>
 
@@ -289,12 +297,14 @@ export function MissionControl({ cards, onNavigate, inboundNew = 0 }) {
         const engOn = engCtrl.running;
         const lastAct = recentActivity[0];
         return (
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "12px 16px", background: T.surface, borderRadius: "12px", border: `1px solid ${T.lineInk}`, boxShadow: T.shadowCard, marginBottom: "16px" }}>
-            <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: engOn ? T.green : T.faint, boxShadow: engOn ? `0 0 6px ${T.green}80` : "none", animation: engOn ? "pulse 2.5s infinite" : "none", flexShrink: 0 }} />
-            <span style={{ fontSize: "12px", color: T.muted, fontWeight: 500, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div className="card" style={{ display: "flex", alignItems: "center", gap: "10px", padding: "12px 16px", marginBottom: "16px" }}>
+            {/* The kit's status dot — the word "running"/"paused" next to it is
+                what actually carries the state; the dot only echoes it. */}
+            <span className={engOn ? "dotstatus pulse" : "dotstatus"} style={{ width: "8px", height: "8px", background: engOn ? T.green : T.faint }} />
+            <span className="t-foot" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               Agent engine {engOn ? "running" : "paused"} · {agentRoster.filter(a => a.enabled).length}/{agentRoster.length} agents on{lastAct ? ` · last call ${ago(new Date(lastAct.ts).getTime())}` : ""}
             </span>
-            <span style={{ fontSize: "10px", color: T.gold, fontWeight: 700, flexShrink: 0 }}>Open System ›</span>
+            <span className="t-cap" style={{ color: T.gold, fontWeight: 600, flexShrink: 0 }}>Open System ›</span>
           </div>
         );
       })()}

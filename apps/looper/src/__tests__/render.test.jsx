@@ -99,11 +99,20 @@ describe("Looper renders on the kit", () => {
   });
 
   it("keeps every control that existed before the restyle", () => {
+    // toContain() over the whole document is not a control check: the prose
+    // "Runs while this tab is open…" contains "Run", so deleting the Run tab
+    // outright left this green. Each label has to be the accessible name of an
+    // actual <button>/<a>, so only a real control can satisfy it.
     seed();
     const out = html();
-    for (const label of ["Pause", "Settings", "Answer", "Run", "Mission", "Chat", "Log"]) {
-      expect(out, `lost the ${label} control`).toContain(label);
-    }
+    const controls = [...out.matchAll(/<(button|a)\b[^>]*>([\s\S]*?)<\/\1>/g)]
+      .map((m) => m[2].replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    expect(controls.length, "no controls were found at all — the scan is broken").toBeGreaterThanOrEqual(3);
+    const missing = ["Pause", "Settings", "Answer", "Run", "Mission", "Chat", "Log"]
+      .filter((label) => !controls.some((t) => t === label || t.startsWith(`${label} `)));
+    expect(missing, `lost these controls: ${missing.join(", ")} — controls on screen: ${controls.join(" | ")}`)
+      .toEqual([]);
   });
 
   it("emits no NaN and no literal 'undefined' into markup", () => {

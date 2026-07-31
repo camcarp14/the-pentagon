@@ -67,13 +67,15 @@ function SendModePill() {
     return () => clearTimeout(t);
   }, [confirming]);
   return (
-    <button onClick={flip}
+    // The kit's .pill, with the kit's .dotstatus for the state light. The pill
+    // was a hand-rolled 10px uppercase capsule with a 1px outline; live/safe is
+    // still never signalled by colour alone — the word is right there, and the
+    // dot pulses only while live.
+    <button onClick={flip} type="button" aria-pressed={live}
       title={live ? "Emails go to real prospects. Click to return to safe mode." : `Safe mode: every send reroutes to ${SAFE_SEND_ADDRESS}. Click twice to go live.`}
-      style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "5px 12px", borderRadius: T.rPill, cursor: "pointer", fontSize: "10px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", fontFamily: T.fontDisplay,
-        border: `1px solid ${live ? "rgba(248,113,113,0.4)" : "rgba(245,184,77,0.35)"}`,
-        background: live ? "rgba(248,113,113,0.1)" : "rgba(245,184,77,0.1)",
-        color: live ? T.red : T.amber }}>
-      <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: live ? T.red : T.amberHi, animation: live ? "pulse 2s infinite" : "none" }} />
+      className="pill"
+      style={{ background: live ? "rgba(248,113,113,0.12)" : "rgba(245,184,77,0.12)", color: live ? T.red : T.amber, fontWeight: 600 }}>
+      <span className={live ? "dotstatus pulse" : "dotstatus"} style={{ background: live ? T.red : T.amberHi }} />
       {confirming ? "Send real emails?" : live ? "Live sending" : "Safe mode"}
     </button>
   );
@@ -84,13 +86,20 @@ function SubNav({ tab, currentView, onNavigate }) {
   const items = SUB_NAVS[tab];
   if (!items) return null;
   return (
-    <div className="co-subnav" style={{ display: "flex", gap: "4px", padding: "10px 28px 0" }}>
-      {items.map(it => (
-        <button key={it.view} onClick={() => onNavigate(it.view)}
-          style={{ padding: "6px 16px", borderRadius: T.rPill, border: `1px solid ${currentView === it.view ? T.line : "transparent"}`, background: currentView === it.view ? T.raised : "transparent", color: currentView === it.view ? T.inkDeep : T.muted, fontSize: "11.5px", fontWeight: 700, cursor: "pointer", fontFamily: T.fontDisplay, boxShadow: currentView === it.view ? T.shadowTab : "none" }}>
-          {it.label}
-        </button>
-      ))}
+    // The kit's segmented control. Every sub-nav here is two-to-four options,
+    // which is exactly what .seg is for, and it replaces a per-item capsule that
+    // carried a border AND a shadow on the selected one.
+    <div className="co-subnav" style={{ display: "flex", padding: "10px 28px 0" }}>
+      <div className="seg" role="tablist" style={{ flex: "0 0 auto" }}>
+        {items.map(it => (
+          <button key={it.view} type="button" role="tab" aria-selected={currentView === it.view}
+            onClick={() => onNavigate(it.view)}
+            className={currentView === it.view ? "seg-opt active" : "seg-opt"}
+            style={{ flex: "0 0 auto", padding: "4px 16px" }}>
+            {it.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -101,15 +110,22 @@ function BottomBar({ activeTab, onTab, inboundNew }) {
     // Canonical bottom-bar geometry — must stay identical to ZTS, Runway and
     // Macro (see the note on ZTS's BottomNav) or the bar changes height when you
     // switch tools.
-    <div className="co-bottombar" style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 400, display: "none", background: "rgba(11,15,26,0.92)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: `1px solid ${T.line}`, boxShadow: "0 -2px 16px rgba(0,0,0,0.4)", padding: "4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))" }}>
+    <div className="co-bottombar" style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 400, display: "none", background: "rgba(11,15,26,0.92)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: `1px solid ${T.line}`, padding: "4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))" }}>
       <div style={{ display: "flex" }}>
         {NAV_TABS.map(t => {
           const on = activeTab === t.key;
           return (
-            <button key={t.key} onClick={() => onTab(t)} title={t.label} aria-label={t.label} style={{ flex: 1, minHeight: 46, padding: "8px 2px 7px", background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px", position: "relative" }}>
-              <span style={{ fontSize: "21px", lineHeight: 1, color: on ? T.gold : T.faint }}>{t.icon}</span>
-              <span style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", fontFamily: T.fontDisplay, color: on ? T.gold : T.faint }}>{t.label}</span>
-              {t.key === "inbound" && inboundNew > 0 && <span style={{ position: "absolute", top: "4px", right: "50%", marginRight: "-18px", fontSize: "8px", fontWeight: 800, color: "#1A0A12", background: T.pink, borderRadius: T.rPill, padding: "1px 5px" }}>{inboundNew}</span>}
+            // The kit's .dock-tab for the grammar (and its press behaviour — the
+            // icon nudges, the tab does not scale). The inline padding STAYS and
+            // wins the cascade: .dock-tab adds env(safe-area-inset-bottom) of its
+            // own, and this bar's wrapper already pays that inset above, so
+            // taking the kit's padding would double it.
+            <button key={t.key} type="button" onClick={() => onTab(t)} title={t.label} aria-label={t.label} className={on ? "dock-tab active" : "dock-tab"} style={{ flex: 1, minHeight: 46, padding: "8px 2px 7px", background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px", position: "relative" }}>
+              <span className="dock-icon" style={{ fontSize: "21px", lineHeight: 1, color: on ? T.gold : T.faint }}>{t.icon}</span>
+              {/* The kit's .dock-label: 10.5px, sentence case. It was 9px
+                  uppercase — under the floor, and uppercase outside .t-label. */}
+              <span className="dock-label" style={{ color: on ? T.gold : T.faint }}>{t.label}</span>
+              {t.key === "inbound" && inboundNew > 0 && <span style={{ position: "absolute", top: "4px", right: "50%", marginRight: "-18px", fontSize: "10.5px", fontWeight: 800, color: "#1A0A12", background: T.pink, borderRadius: T.rPill, padding: "1px 5px" }}>{inboundNew}</span>}
             </button>
           );
         })}
@@ -236,7 +252,9 @@ export default function App({ embedded = false }) {
     style.textContent = `
       *, *::before, *::after { box-sizing: border-box; }
       * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
-      html, body { margin: 0; font-family: 'Inter', system-ui, sans-serif; }
+      /* The platform's stack, not a face of our own — --font-body is set by the
+         shell and falls back to the system stack in @cc/design's tokens. */
+      html, body { margin: 0; font-family: var(--font-body); }
       /* Midnight canvas — deep blue-black with the brand's dual "desk lamp"
          radial glow: brass top-left, cool blue top-right. The dark cut of the
          same signature the light era had. */
@@ -252,7 +270,7 @@ export default function App({ embedded = false }) {
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
       ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); background-clip: padding-box; }
-      textarea, input, select, button { font-family: 'Inter', system-ui, sans-serif; }
+      textarea, input, select, button { font-family: var(--font-body); }
       ::selection { background: rgba(201,165,87,0.32); color: #F7F9FC; }
       /* Global micro-interactions — everything interactive eases */
       button, a, [role="button"], input, select, textarea { transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, transform 0.12s ease, opacity 0.16s ease; }
@@ -261,9 +279,15 @@ export default function App({ embedded = false }) {
       button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(201,165,87,0.45); }
       input::placeholder, textarea::placeholder { color: #5A6780; }
       select, option { background-color: #0F1626; color: #E9EDF5; }
-      @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
-      @keyframes fadein { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
-      @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+      /* pulse, fadein and shimmer are the KIT's (packages/ui/components.css) and
+         are referenced, never redefined here. Keyframe names are
+         document-global — no attribute, class or scope can contain them — and
+         this sheet is appended to document.head and never removed, so it lands
+         after the shell's kit import and wins for every tool on screen, not just
+         Clarify. The shimmer copy was the sharpest edge: it was a
+         background-position sweep, and it silently froze the kit's
+         transform-driven .sk::after skeleton loader everywhere. Only
+         Clarify-owned names live below. See DESIGN.md §6. */
       @keyframes toastIn { from { opacity: 0; transform: translateX(18px) scale(0.97); } to { opacity: 1; transform: none; } }
       @keyframes toastOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(18px) scale(0.97); } }
       @keyframes toastShrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
@@ -340,7 +364,11 @@ export default function App({ embedded = false }) {
            floating as a letterboxed card with wasted margin on every side. */
         .co-modal-overlay { align-items: flex-end !important; padding: 0 !important; }
         .co-modal-sheet { width: 100% !important; max-width: 100% !important; max-height: 88vh !important; margin: 0 !important; border-radius: 20px 20px 0 0 !important; padding-bottom: max(16px, var(--safe-bottom)) !important; animation: sheetup 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-        @keyframes sheetup { from { transform: translateY(28px); opacity: 0.5; } to { transform: translateY(0); opacity: 1; } }
+        /* sheetup is the kit's. Defining it here would have been worse than
+           the usual shadow, not better for being nested in a @media: a
+           conditional @keyframes still registers document-globally the moment
+           the query matches, so on a phone this copy replaced the kit's for
+           every tool. See DESIGN.md §6. */
 
         /* Every input gets a real 16px+ so iOS Safari doesn't zoom the page on focus */
         input, textarea, select { font-size: 16px !important; }
@@ -795,35 +823,49 @@ export default function App({ embedded = false }) {
     return acts;
   })();
 
+  // data-kit on the standalone auth gate too — it is a separate root, so the
+  // opt-in on the main tree below does not reach it.
   if (!embedded && !authChecked) return (
-    <div style={{ minHeight: "100vh", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ width: "32px", height: "32px", border: `2px solid ${T.lineSoft}`, borderTopColor: T.gold, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    <div data-kit style={{ minHeight: "100vh", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      {/* The kit's .spinner — a drawn arc, and the one that stops iterating
+          rather than spinning at 100k rpm under prefers-reduced-motion. */}
+      <div className="spinner" style={{ width: "32px", height: "32px", borderWidth: "2px" }} />
     </div>
   );
   if (!embedded && !authToken) return <LoginScreen onLogin={(token) => { setAuthToken(token); setAuthChecked(true); }} />;
 
   return (
-    <div style={{ minHeight: "100vh", background: "transparent", color: T.ink, fontFamily: "'Inter', system-ui, sans-serif" }}>
+    // data-kit: Clarify opts into the shared kit on ITS OWN root. Every rule in
+    // packages/ui/components.css is scoped [data-kit], so this reaches this app
+    // and nothing else — the shell deliberately keeps the attribute off the
+    // wrapper that holds every tool, and nothing here touches document.body.
+    <div data-kit style={{ minHeight: "100vh", background: "transparent", color: T.ink, fontFamily: T.fontBody }}>
       {/* Nav — five tabs, one product */}
-      <div className="co-nav" style={{ borderBottom: `1px solid ${T.lineSoft}`, padding: "0 24px", height: "52px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: embedded ? "52px" : 0, background: "rgba(11,15,26,0.78)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", boxShadow: "0 1px 0 rgba(255,255,255,0.03), 0 4px 16px rgba(0,0,0,0.35)", zIndex: 50 }}>
+      <div className="co-nav" style={{ borderBottom: `1px solid ${T.lineSoft}`, padding: "0 24px", height: "52px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: embedded ? "52px" : 0, background: "rgba(11,15,26,0.78)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "18px", minWidth: 0 }}>
           {!embedded && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
             <span style={{ width: "18px", height: "18px", borderRadius: "5px", background: T.goldGrad, boxShadow: "0 1px 3px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.35), 0 0 12px rgba(201,165,87,0.25)", display: "inline-block" }} />
-            <span style={{ fontSize: "13px", fontWeight: 800, color: T.inkBrand, letterSpacing: "0.14em", textTransform: "uppercase", fontFamily: "'Syne', system-ui" }}>Clarify</span>
+            {/* Sentence case, sized rather than tracked: uppercase survives in
+                exactly one place in this language (.t-label) and a wordmark is
+                not it. */}
+            <span className="t-head" style={{ color: T.inkBrand }}>Clarify</span>
           </span>
           )}
-          <div ref={tabRowRef} className="co-nav-tabs" style={{ display: "flex", gap: "2px", alignItems: "center", background: "rgba(255,255,255,0.045)", borderRadius: T.rMd, padding: "3px", border: `1px solid ${T.lineSoft}`, position: "relative" }}>
+          {/* The kit's segmented control, including its .seg-thumb — the sliding
+              indicator this row measured by hand is exactly what .seg-thumb is,
+              so the measurement stays and the styling comes from the kit. */}
+          <div ref={tabRowRef} role="tablist" className="co-nav-tabs seg" style={{ alignItems: "center", position: "relative" }}>
             {tabIndicator.ready && (
-              <div style={{ position: "absolute", top: "3px", bottom: "3px", left: `${tabIndicator.left}px`, width: `${tabIndicator.width}px`, background: T.raised, borderRadius: "7px", boxShadow: `${T.shadowTab}, inset 0 1px 0 rgba(255,255,255,0.06)`, transition: `left ${T.durBase} ${T.easeSpring}, width ${T.durBase} ${T.easeSpring}`, zIndex: 0 }} />
+              <div className="seg-thumb" style={{ left: `${tabIndicator.left}px`, width: `${tabIndicator.width}px`, zIndex: 0 }} />
             )}
             {NAV_TABS.map(tab => {
               const on = activeTab === tab.key;
               return (
-                <button key={tab.key} ref={el => { tabRefs.current[tab.key] = el; }} onClick={() => setCurrentView(tab.views[0])} style={{ position: "relative", zIndex: 1, padding: "5px 14px", background: "transparent", border: "none", borderRadius: "7px", color: on ? T.inkDeep : T.ghost, fontSize: "11.5px", fontWeight: 700, cursor: "pointer", letterSpacing: "0.05em", fontFamily: T.fontDisplay, transition: `color ${T.durBase} ${T.easeStd}` }}>
+                <button key={tab.key} type="button" role="tab" aria-selected={on} ref={el => { tabRefs.current[tab.key] = el; }} onClick={() => setCurrentView(tab.views[0])}
+                  className={on ? "seg-opt active" : "seg-opt"} style={{ flex: "0 0 auto", padding: "4px 14px", whiteSpace: "nowrap" }}>
                   {tab.label}
-                  {tab.key === "inbound" && inboundNew > 0 ? <span style={{ marginLeft: "6px", fontSize: "9px", fontWeight: 800, color: "#1A0A12", background: T.pink, borderRadius: T.rPill, padding: "1px 6px", verticalAlign: "middle" }}>{inboundNew}</span> : null}
+                  {tab.key === "inbound" && inboundNew > 0 ? <span style={{ marginLeft: "6px", fontSize: "10.5px", fontWeight: 700, color: "#1A0A12", background: T.pink, borderRadius: T.rPill, padding: "1px 6px", verticalAlign: "middle" }}>{inboundNew}</span> : null}
                 </button>
               );
             })}
@@ -832,15 +874,15 @@ export default function App({ embedded = false }) {
         <div className="co-nav-actions" style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
           <SendModePill />
           {!embedded && (
-          <button onClick={() => setPaletteOpen(true)} title="Command palette (⌘K)" className="co-signout" style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 10px", background: "transparent", border: `1px solid ${T.lineSoft}`, borderRadius: "8px", color: T.faint, fontSize: "11px", cursor: "pointer", fontFamily: T.fontMono }}>
+          <button onClick={() => setPaletteOpen(true)} type="button" title="Command palette (⌘K)" aria-label="Command palette" className="co-signout btn sm quiet" style={{ fontFamily: T.fontMono }}>
             ⌘K
           </button>
           )}
-          <button onClick={handleRefresh} disabled={refreshing} title="Refresh" style={{ padding: "6px 10px", background: "transparent", border: `1px solid ${T.lineSoft}`, borderRadius: "8px", color: T.faint, fontSize: "13px", cursor: refreshing ? "not-allowed" : "pointer" }}>
+          <button onClick={handleRefresh} type="button" disabled={refreshing} title="Refresh" aria-label="Refresh" className="btn sm quiet">
             {refreshing ? "…" : "↺"}
           </button>
           {!embedded && (
-          <button className="co-signout" onClick={handleLogout} title="Sign out" style={{ padding: "6px 12px", background: "transparent", border: `1px solid ${T.line}`, borderRadius: "8px", color: T.muted, fontSize: "11px", cursor: "pointer" }}>
+          <button className="co-signout btn sm quiet" type="button" onClick={handleLogout} title="Sign out">
             ↪ Out
           </button>
           )}
@@ -853,7 +895,12 @@ export default function App({ embedded = false }) {
       <AgentEngine cards={cards} />
       <DnaWorker cards={cards} toneMemory={toneMemory} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} actions={paletteActions} />
-      <style>{`@keyframes fadeup { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } } @keyframes fadein { from { opacity: 0; } to { opacity: 1; } } @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
+      {/* `fadeup` is Clarify's own — it carries the translateX(-50%) that keeps
+          a centred bar centred, which the kit's entrances cannot. The `fadein`
+          and `pulse` that used to sit beside it were THIRD copies of kit names
+          (the injected sheet above held a second pair) and are gone; both are
+          referenced from the kit now. See DESIGN.md §6. */}
+      <style>{`@keyframes fadeup { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }`}</style>
       {currentView === "outreach" && (
         <BulkActionsBar
           count={selectedCards.size}
@@ -874,11 +921,15 @@ export default function App({ embedded = false }) {
 
           {/* Actions row — outreach's tools live with outreach, not in the global header */}
           <div className="co-toolbar" style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap", alignItems: "center" }}>
+            {/* The kit's .field — one well, no outline, and a focus ring from
+                the kit rather than a border that only appears when focused. */}
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by name, email, location…"
-              style={{ flex: 1, minWidth: "180px", background: T.subtle, border: `1px solid ${T.line}`, borderRadius: "8px", padding: "7px 12px", fontSize: "12px", color: T.ink, outline: "none" }}
+              aria-label="Search prospects"
+              className="field"
+              style={{ flex: 1, minWidth: "180px", width: "auto", minHeight: 36, padding: "7px 12px", fontSize: "13px" }}
             />
             <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} style={selectStyle}>
               <option value="adsFirst">⚡ Ads live first</option>
@@ -894,17 +945,21 @@ export default function App({ embedded = false }) {
                 <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
-            <button onClick={handleCheckReplies} disabled={checkingReplies} style={{ padding: "7px 14px", background: "rgba(244,114,182,0.09)", border: "1px solid rgba(244,114,182,0.25)", borderRadius: "8px", color: checkingReplies ? T.faint : T.pink, fontSize: "11px", fontWeight: 700, cursor: checkingReplies ? "not-allowed" : "pointer", letterSpacing: "0.04em", fontFamily: "'Syne', system-ui", whiteSpace: "nowrap" }}>
+            {/* Every control in this row is the kit's .btn now: one geometry, one
+                press physics, and 34px targets instead of five different paddings.
+                Check Replies keeps its pink because pink IS the reply colour on
+                the board — it is data, not decoration. */}
+            <button onClick={handleCheckReplies} type="button" disabled={checkingReplies} className="btn sm" style={{ background: `${T.pink}17`, color: checkingReplies ? T.faint : T.pink, whiteSpace: "nowrap" }}>
               {checkingReplies ? "Checking…" : "💬 Check Replies"}
             </button>
-            <button onClick={handleProspect} disabled={prospecting} style={{ padding: "7px 14px", background: T.subtle, border: `1px solid ${T.line}`, borderRadius: "8px", color: T.muted, fontSize: "11px", fontWeight: 700, cursor: prospecting ? "not-allowed" : "pointer", letterSpacing: "0.04em", fontFamily: "'Syne', system-ui", whiteSpace: "nowrap" }}>
+            <button onClick={handleProspect} type="button" disabled={prospecting} className="btn sm quiet" style={{ whiteSpace: "nowrap" }}>
               {prospecting ? prospectStatus || "Prospecting…" : "⟳ Find Prospects"}
             </button>
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{ padding: "7px 12px", background: sidebarOpen ? T.goldSoft : "transparent", border: `1px solid ${sidebarOpen ? T.goldLine : T.lineSoft}`, borderRadius: "8px", color: sidebarOpen ? T.gold : T.muted, fontSize: "11px", fontWeight: 700, cursor: "pointer", letterSpacing: "0.04em", fontFamily: "'Syne', system-ui", whiteSpace: "nowrap" }}>
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} type="button" aria-pressed={sidebarOpen} className={sidebarOpen ? "btn sm tinted" : "btn sm quiet"} style={{ whiteSpace: "nowrap" }}>
               🧠 {toneMemory.length > 0 ? `Tone (${toneMemory.length})` : "Tone"}
             </button>
             {hasActiveFilters && (
-              <button onClick={() => { setSearchQuery(""); setCategoryFilter("all"); setSortBy("adsFirst"); setQuickFilters({ adsLive: false, hot: false, untouched: false }); }} style={{ padding: "5px 10px", background: "transparent", border: `1px solid ${T.red}40`, borderRadius: "6px", color: T.red, fontSize: "11px", cursor: "pointer", whiteSpace: "nowrap" }}>
+              <button onClick={() => { setSearchQuery(""); setCategoryFilter("all"); setSortBy("adsFirst"); setQuickFilters({ adsLive: false, hot: false, untouched: false }); }} type="button" className="btn sm danger" style={{ whiteSpace: "nowrap" }}>
                 Clear
               </button>
             )}
@@ -922,7 +977,10 @@ export default function App({ embedded = false }) {
               { key: "snoozed", label: `Snoozed (${totalByStatus("snoozed")})` },
               { key: "rejected", label: `Rejected (${totalByStatus("rejected")})` },
             ].map((tab) => (
-              <button key={tab.key} onClick={() => setActiveFilter(tab.key)} style={{ padding: "5px 12px", background: activeFilter === tab.key ? "rgba(255,255,255,0.08)" : "transparent", border: `1px solid ${activeFilter === tab.key ? T.line : T.lineSoft}`, borderRadius: "20px", color: activeFilter === tab.key ? T.ink : T.muted, fontSize: "11px", fontWeight: 600, cursor: "pointer", letterSpacing: "0.02em", whiteSpace: "nowrap" }}>
+              // The kit's .pill: monochrome filters, selected by inversion rather
+              // than by an outline that changed weight. Each label carries its own
+              // count, so the selected one is never signalled by fill alone.
+              <button key={tab.key} type="button" aria-pressed={activeFilter === tab.key} onClick={() => setActiveFilter(tab.key)} className={activeFilter === tab.key ? "pill active" : "pill"}>
                 {tab.label}
               </button>
             ))}
@@ -936,10 +994,14 @@ export default function App({ embedded = false }) {
             const adsLiveCount = activeForChips.filter(c => c.prospect?.ads_detected).length;
             const hotCount = activeForChips.filter(c => getProspectPriority(c).tier === "Hot").length;
             const untouchedCount = activeForChips.filter(c => c.status === "prospected").length;
+            // Also the kit's .pill. The segment colour survives as a dot, which
+            // is the honest use of it: the label and the count already say which
+            // filter this is and whether it is on.
             const Chip = ({ on, onClick, color, children, count }) => (
-              <button onClick={onClick} style={{ display: "inline-flex", alignItems: "center", gap: "7px", padding: "7px 13px", borderRadius: "20px", border: `1px solid ${on ? color : T.line}`, background: on ? color + "1C" : T.surface, color: on ? color : T.muted, fontSize: "12px", fontWeight: 700, cursor: "pointer", fontFamily: "'Syne', system-ui", transition: "all 0.12s" }}>
+              <button onClick={onClick} type="button" aria-pressed={on} className={on ? "pill active" : "pill"}>
+                <span className="dotstatus" style={{ background: color }} />
                 {children}
-                {count != null && <span style={{ fontSize: "11px", fontWeight: 600, opacity: 0.8, fontFamily: "'DM Mono', monospace" }}>{count}</span>}
+                {count != null && <span className="t-num" style={{ fontSize: "12px", opacity: 0.8, fontFamily: T.fontMono }}>{count}</span>}
               </button>
             );
             const toggle = (k) => setQuickFilters(q => ({ ...q, [k]: !q[k] }));
@@ -970,7 +1032,7 @@ export default function App({ embedded = false }) {
             <EmptyState
               icon="radar" title="No prospects yet"
               sub={'Click "Find Prospects" to search Chicago businesses and start building your pipeline.'}
-              action={<button onClick={handleProspect} disabled={prospecting} style={{ padding: "9px 18px", background: T.goldGrad, border: "none", borderRadius: T.rSm, color: T.textOnBrand, fontSize: "12px", fontWeight: 700, cursor: prospecting ? "not-allowed" : "pointer", fontFamily: T.fontDisplay, letterSpacing: "0.02em", boxShadow: `0 2px 12px rgba(201,165,87,0.25), ${T.glowBrass}` }}>{prospecting ? "Searching…" : "⟳ Find Prospects"}</button>}
+              action={<button onClick={handleProspect} type="button" disabled={prospecting} className="btn md primary">{prospecting ? "Searching…" : "⟳ Find Prospects"}</button>}
             />
           ) : activeFilter === "all" ? (
             <>
@@ -1026,7 +1088,7 @@ export default function App({ embedded = false }) {
               {displayCards.length === 0 ? (
                 <EmptyState compact icon={hasActiveFilters ? "search" : "inbox"} tint={T.faint}
                   title={hasActiveFilters ? "No results match your filters" : "Nothing here yet"}
-                  sub={hasActiveFilters ? "Try clearing a filter or search term." : undefined}
+                  sub={hasActiveFilters ? "Try clearing a filter or search term." : "Nothing has reached this stage yet — run Find Prospects, or pick another status above."}
                 />
               ) : (
                 displayCards.map((card, idx) => (
