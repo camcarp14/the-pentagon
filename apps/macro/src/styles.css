@@ -1010,7 +1010,15 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .alt-ident { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
 .alt-ident-sym { font-size: 17px; font-weight: 800; letter-spacing: -0.2px; color: var(--ink); }
 .alt-ident-name { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.alt-ident-spark { display: none; }
+/* The detail header's 7-day shape. It used to be `display: none` here and
+   `block` only at 768px, while AltBoard drops the board's own `.c-spark` column
+   under 768 on the stated grounds that the shape "is still drawn full size at
+   the top of the detail pane". That sentence had no call site: on a phone the
+   sparkline was drawn in neither place, which is the one platform it was
+   dropped from the board FOR. It is visible at every width now, and the 768
+   rule below only resizes it. */
+.alt-ident-spark { display: block; flex: none; }
+.alt-ident-spark .alt-spark { width: 96px; height: 24px; }
 .alt-tags { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0 2px; }
 .alt-tail { margin: 0 0 10px; font-size: 12.5px; color: var(--good); line-height: 1.45; }
 .alt-degraded .factlist li { color: var(--ink-2); }
@@ -1067,7 +1075,6 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
   .alt-controls { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); }
   .alt-bars { grid-template-columns: 1fr 1fr; }
   .alt-two { grid-template-columns: 1fr 1fr; }
-  .alt-ident-spark { display: block; flex: none; }
 
   /* The eleven-column shape. It is wider than a 620px pane on purpose — the
      board is a dense instrument and `.tbl-wrap` is the one place in this app
