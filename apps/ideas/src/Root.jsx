@@ -84,8 +84,11 @@ const readSaved = () => {
 
 /* ── chrome ───────────────────────────────────────────────────────────────── */
 
-const Card = ({ children, style }) => (
-  <div style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: T.rLg, padding: 16, minWidth: 0, ...style }}>
+// The kit's card, not a local one. It separates by tone and a soft shadow with
+// NO outline — the language forbids a border and a shadow on the same element,
+// and this had both.
+const Card = ({ children, style, pad = "md" }) => (
+  <div className={`card pad-${pad}`} style={{ minWidth: 0, ...style }}>
     {children}
   </div>
 );
@@ -95,18 +98,20 @@ const Card = ({ children, style }) => (
 // other two shared one. Three narrow tiles read as one group; two-plus-one
 // reads as a mistake.
 const Stat = ({ label, children, sub }) => (
-  <Card style={{ flex: 1, minWidth: 96, padding: 14 }}>
-    <div style={{ fontSize: 10, fontWeight: 700, color: T.faint, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 7, fontFamily: T.fontDisplay }}>{label}</div>
-    <div style={{ fontSize: 22, fontWeight: 800, color: T.ink, fontFamily: T.fontDisplay, lineHeight: 1 }}>{children}</div>
-    {sub && <div style={{ fontSize: 11, color: T.muted, marginTop: 5 }}>{sub}</div>}
-  </Card>
+  // The kit's stattile. The label was 10px uppercase tracked at 0.1em — under
+  // the 10.5px floor, and doing by hand exactly what .t-label does at 12px.
+  <div className="stattile" style={{ flex: 1, minWidth: 96 }}>
+    <div className="stattile-label">{label}</div>
+    <div className="stattile-value">{children}</div>
+    {sub && <div className="t-foot" style={{ color: "var(--sub)", marginTop: 5 }}>{sub}</div>}
+  </div>
 );
 
 // One control grammar for all three rows, so tab / sort / range never read as
 // three different kinds of switch.
 function Segment({ value, onChange, options, style }) {
   return (
-    <div role="tablist" style={{ display: "inline-flex", background: T.subtle, border: `1px solid ${T.line}`, borderRadius: T.rPill, padding: 3, gap: 2, ...style }}>
+    <div role="tablist" className="seg" style={style}>
       {options.map(([key, label]) => {
         const on = key === value;
         return (
@@ -116,14 +121,7 @@ function Segment({ value, onChange, options, style }) {
             role="tab"
             aria-selected={on}
             onClick={() => onChange(key)}
-            style={{
-              appearance: "none", border: "none", cursor: "pointer",
-              background: on ? T.accentSoft : "transparent",
-              color: on ? T.accent : T.muted,
-              font: "inherit", fontSize: 12, fontWeight: on ? 700 : 600,
-              padding: "7px 13px", borderRadius: T.rPill, whiteSpace: "nowrap",
-              transition: `background ${T.M.durFast} ${T.M.easeStd}, color ${T.M.durFast} ${T.M.easeStd}`,
-            }}
+            className={on ? "seg-opt active" : "seg-opt"}
           >
             {label}
           </button>
@@ -327,12 +325,15 @@ export default function IdeasRoot() {
   const pad = isMobile ? 14 : 24;
 
   return (
-    <div style={{ padding: `${pad}px ${pad}px 64px`, maxWidth: 940, margin: "0 auto", fontFamily: T.fontBody }}>
+    // data-kit: Ideas opts into the shared kit. It renders inside the shell's
+    // tool slot, so this reaches this app and nothing else — the same rule the
+    // shell follows by keeping data-kit off the wrapper that holds every tool.
+    <div data-kit style={{ padding: `${pad}px ${pad}px 64px`, maxWidth: 940, margin: "0 auto" }}>
       <header style={{ marginBottom: 16 }}>
-        <h1 style={{ margin: 0, fontSize: isMobile ? 22 : 27, fontWeight: 800, fontFamily: T.fontDisplay, color: T.ink, letterSpacing: "-0.01em" }}>
-          Ideas
-        </h1>
-        <p style={{ margin: "5px 0 0", fontSize: 13, color: T.muted }}>
+        {/* One large title per page, with a one-line sub under it — the page
+            grammar every surface in this language shares. */}
+        <h1 className="t-ltitle" style={{ margin: 0, color: "var(--ink)" }}>Ideas</h1>
+        <p className="t-foot" style={{ margin: "5px 0 0", color: "var(--sub)" }}>
           What showed up on GitHub, worth a look
         </p>
       </header>
