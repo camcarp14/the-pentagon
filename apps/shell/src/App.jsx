@@ -19,6 +19,7 @@ import { appMeta, cssVars } from "@cc/design";
 import { SkeletonBoard, EmptyIcon, M, useIsMobile } from "@cc/ui";
 import { auth, isConfigured } from "@cc/supabase";
 import { loadTabPrefs, saveTabPrefs, visibleTabs, resolveActive, TAB_PREFS_KEY } from "./tabPrefs.js";
+import { parseRoute, formatRoute, sameRoute } from "./route.js";
 
 // Lazily-mounted tools. Wired in per Phase-C increment; a tool without an entry
 // here renders the "coming in this build" panel so the toggle always works.
@@ -296,8 +297,36 @@ export default function Shell() {
   const tabs = visibleTabs(tabPrefs);
   // Open on the first visible tool rather than a hardcoded "zts", which would
   // land on a tab the operator has hidden.
-  const [active, setActive] = useState(() => visibleTabs(loadTabPrefs())[0]);
-  const [systemOpen, setSystemOpen] = useState(false);
+  // Seeded from the URL when there is one. An empty hash still resolves to the
+  // first visible tool, which is the documented behaviour above — the hash only
+  // decides anything when it is actually present.
+  const [active, setActive] = useState(
+    () => parseRoute(typeof location !== "undefined" ? location.hash : "", visibleTabs(loadTabPrefs())).tool);
+  const [systemOpen, setSystemOpen] = useState(
+    () => parseRoute(typeof location !== "undefined" ? location.hash : "", visibleTabs(loadTabPrefs())).system);
+
+  // One writer for the URL, driven by state rather than by every call site, so
+  // a destination reached by keyboard shortcut, by toggle, or by the tool being
+  // hidden underneath you all leave the same address behind.
+  useEffect(() => {
+    const dest = { tool: active, system: systemOpen };
+    if (sameRoute(location.hash, dest)) return;
+    // replace, not push: switching tools is changing WHERE YOU ARE, not
+    // navigating within a page. Pushing would make the back button walk the
+    // history of every tool you glanced at.
+    history.replaceState(null, "", formatRoute(dest));
+  }, [active, systemOpen]);
+
+  // The back button, and a hash typed or pasted into the address bar.
+  useEffect(() => {
+    const onHash = () => {
+      const r = parseRoute(location.hash, visibleTabs(loadTabPrefs()));
+      setActive(r.tool);
+      setSystemOpen(r.system);
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   const pick = useCallback((a) => {
     setActive(a);
