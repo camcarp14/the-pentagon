@@ -6,15 +6,20 @@
 // media query. Two trees means a `useState` on a breakpoint (wrong on the server
 // and wrong for one frame after every resize), a duplicate row for screen
 // readers, and — the reason this rule exists in the first place — two places to
-// fix the next column that renders the wrong number. Four columns that do not
-// earn a phone's width — RANK, 30d, RS and turnover — are `display: none` under
-// 768px (`.c-rank, .c-rs, .c-turn, .c-30` in styles.css) and live in the detail
-// pane, one tap away. The BAND
+// fix the next column that renders the wrong number. Five columns that do not
+// earn a phone's width — RANK, 30d, RS, turnover and the 7d SHAPE — are
+// `display: none` under 768px (`.c-rank, .c-rs, .c-turn, .c-30, .c-spark` in
+// styles.css) and live in the detail pane, one tap away. The BAND
 // stays: it is the state word the score is inked from, and it carries the `par`
 // and `thin` flags, which are the two marks that decide whether a row is
 // tradeable at all. This comment named the wrong four for a while — it claimed
 // the band was dropped and never mentioned rank — which is how those two flags
-// reached the phone with nothing on that screen explaining them.
+// reached the phone with nothing on that screen explaining them. The sparkline
+// joined the list because on a phone it sat in the same 62px track that the
+// band needed to hold its pill and both flags on one line: a shape cue beside
+// the 7-day number it draws, against the two marks that say the row cannot be
+// traded. It is still a column at 768 and up, and still drawn full size at the
+// top of the detail pane.
 //
 // THE ROW IS A BUTTON, THE STAR IS ITS SIBLING. A button cannot legally contain
 // a button, and nesting them makes the star's click bubble into "open this
@@ -107,9 +112,10 @@ const FILTERS = [
 ]
 
 const PAGE = 50
+const EMPTY = new Set()
 
 export default function AltBoard({
-  rows = [], watched, onSelect, selectedId = null, onToggleWatch, savingId = null,
+  rows = [], watched, onSelect, selectedId = null, onToggleWatch, pendingIds = EMPTY,
 }) {
   const [sort, setSort] = useState('score')
   const [filter, setFilter] = useState('all')
@@ -183,9 +189,20 @@ export default function AltBoard({
               {/* Presentational: every value is repeated in each row's own
                   aria-label, so a screen reader gets the pairing without having
                   to walk a header it cannot associate with grid cells. */}
+              {/* DOM ORDER IS READING ORDER, AND READING ORDER IS THE COLUMN
+                  BUDGET. The board is ranked by score, and score, band and the
+                  star used to be the last three cells of an 831px row inside a
+                  576-670px scroller — 0px visible at 1020/1180/1280/1440/1920,
+                  with or without a coin selected. Identity, the ranking and the
+                  state word now come FIRST, and the twelve columns of evidence
+                  (price, the three returns, RS, turnover, the shape) are what
+                  runs off the right edge into `.tbl-wrap`. Reading the score
+                  can no longer cost you the coin's name. */}
               <div className="alt-head" aria-hidden="true">
                 <span className="alt-c c-rank">#</span>
                 <span className="alt-c c-coin">Coin</span>
+                <span className="alt-c c-score">Score</span>
+                <span className="alt-c c-band">Band</span>
                 <span className="alt-c c-price">Price</span>
                 <span className="alt-c c-24">24h</span>
                 <span className="alt-c c-7">7d</span>
@@ -195,8 +212,6 @@ export default function AltBoard({
                 <span className="alt-c c-rs">RS 7d · pts</span>
                 <span className="alt-c c-turn">Turnover</span>
                 <span className="alt-c c-spark">7d shape</span>
-                <span className="alt-c c-score">Score</span>
-                <span className="alt-c c-band">Band</span>
               </div>
               {visible.map((r) => (
                 <BoardRow
@@ -204,16 +219,12 @@ export default function AltBoard({
                   r={r}
                   selected={r.id === selectedId}
                   starred={!!watched?.has(r.id)}
-                  saving={savingId === r.id}
-                  // EVERY star locks while ANY star is saving, not just the one
-                  // being saved. `/api/alt-watchlist` PUTs the whole array and
-                  // is last-write-wins on it, so two stars a moment apart both
-                  // send a list built from the same starting point and the
-                  // second one can be dropped by the first's response — after
-                  // its toast has said it saved. Locking only the saving row
-                  // left exactly the case that races open: the next tap is on a
-                  // DIFFERENT row.
-                  locked={savingId != null}
+                  // ONLY the rows whose own change has not landed. A single
+                  // in-flight PUT used to disable all 26 stars plus the detail
+                  // pane's, with no timeout, no toast and no way back; the
+                  // writer in AltsPanel now queues instead of locking, so a
+                  // second tap on a different row is a write, not a refusal.
+                  saving={!!pendingIds?.has(r.id)}
                   onSelect={onSelect}
                   onToggleWatch={onToggleWatch}
                 />
@@ -275,7 +286,7 @@ function FlagLegend({ rows }) {
   )
 }
 
-function BoardRow({ r, selected, starred, saving, locked, onSelect, onToggleWatch }) {
+function BoardRow({ r, selected, starred, saving, onSelect, onToggleWatch }) {
   // The two flags are read out in full rather than as "par"/"thin": a screen
   // reader gets no legend, and an abbreviation is exactly what it cannot expand.
   const caveats = [
@@ -301,15 +312,6 @@ function BoardRow({ r, selected, starred, saving, locked, onSelect, onToggleWatc
           <span className="alt-sym">{r.symbol}</span>
           <span className="alt-name">{r.name}</span>
         </span>
-        <span className="alt-c c-price num">{fmtAltPx(r.price)}</span>
-        <span className={`alt-c c-24 num ${toneOf(r.chg24h)}`}>{pctText(r.chg24h)}</span>
-        <span className={`alt-c c-7 num ${toneOf(r.chg7d)}`}>{pctText(r.chg7d)}</span>
-        <span className={`alt-c c-30 num ${toneOf(r.chg30d)}`}>{pctText(r.chg30d)}</span>
-        <span className={`alt-c c-rs num ${toneOf(r.rsVsBtc7d)}`}>{ptsText(r.rsVsBtc7d)}</span>
-        <span className="alt-c c-turn num">{turnText(r.turnover)}</span>
-        <span className="alt-c c-spark">
-          <Sparkline data={r.sparkline7d} label={`${r.symbol} 7-day shape`} />
-        </span>
         <span className={`alt-c c-score num band-${r.band}`}>{r.score}</span>
         <span className="alt-c c-band">
           <span className={`alt-band b-${r.band}`}>{r.band}</span>
@@ -322,12 +324,21 @@ function BoardRow({ r, selected, starred, saving, locked, onSelect, onToggleWatc
           {r.flags?.parabolic && <span className="alt-flag warn" title="already parabolic — this is a chase, not an entry">par</span>}
           {r.flags?.thinLiquidity && <span className="alt-flag bad" title="under $250k of 24h volume — you can get in and not out">thin</span>}
         </span>
+        <span className="alt-c c-price num">{fmtAltPx(r.price)}</span>
+        <span className={`alt-c c-24 num ${toneOf(r.chg24h)}`}>{pctText(r.chg24h)}</span>
+        <span className={`alt-c c-7 num ${toneOf(r.chg7d)}`}>{pctText(r.chg7d)}</span>
+        <span className={`alt-c c-30 num ${toneOf(r.chg30d)}`}>{pctText(r.chg30d)}</span>
+        <span className={`alt-c c-rs num ${toneOf(r.rsVsBtc7d)}`}>{ptsText(r.rsVsBtc7d)}</span>
+        <span className="alt-c c-turn num">{turnText(r.turnover)}</span>
+        <span className="alt-c c-spark">
+          <Sparkline data={r.sparkline7d} label={`${r.symbol} 7-day shape`} />
+        </span>
       </button>
       <button
         type="button"
         className={`alt-star${starred ? ' on' : ''}${saving ? ' saving' : ''}`}
         onClick={() => onToggleWatch?.(r)}
-        disabled={saving || locked}
+        disabled={saving}
         aria-pressed={starred}
         aria-label={starred ? `Remove ${r.symbol} from the watchlist` : `Add ${r.symbol} to the watchlist`}
         title={starred ? 'On your watchlist — the sentinel screens it every two hours' : 'Add to the watchlist'}

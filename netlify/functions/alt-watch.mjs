@@ -80,11 +80,19 @@ export default async (req) => {
     // could reach the deploy could hold that quota in 429 and pin the whole Alts
     // tab on its stale cache.
     //
-    // altWatchGate admits a signed-in operator without limit, or one POST per
-    // 2-hour cron slot — see its header in alts.mjs for why a slot rather than a
-    // rate limit (a limiter can sit in front of the cron's own fire and starve
-    // the dominance series, and a missed day of that series is permanent).
-    // Blobs failures fail open there, for the same reason.
+    // THE POLICY LIVES IN altWatchGate, NOT HERE, and this comment deliberately
+    // does not restate it — it did, and the policy changed underneath it. What
+    // this file depends on is the gate's CONTRACT, which is four fields:
+    //   allowed    may this pass spend the quota at all
+    //   reason     why not, in words that go straight into the 200 body
+    //   authed     may the response carry the operator-only detail
+    //   scheduled  is this the schedule, or a hand-run rescue — read exactly
+    //              once, by recordDominance, to decide whether a day that
+    //              already has a row may be restamped at a different hour
+    // Read alts.mjs's header for who is admitted and why. A gate that fails open
+    // on infrastructure trouble is deliberate there for the reason the top of
+    // this file gives: a missed day of the dominance series is permanent, and no
+    // quota saving is worth a hole in it.
     const s = store()
     const now = Date.now()
     const gate = await altWatchGate(req, s, now)
@@ -385,10 +393,21 @@ export function alertLine(entry, row, why, curr, directive) {
   // levels are the WEAKER ones — a 6-day high, not the 20-day high the tab draws
   // off candles — and a user comparing this line against the card deserves to
   // know which one fired.
+  //
+  // BOTH SIDES OF THE COMPARISON, NOT JUST THE LEVEL. This line said "lost
+  // $50.00" while $50.00 WAS the live price: directive.js's sparkline fallback
+  // took its low from a window that included the current point, so the level
+  // equalled the price on every row making its own 7-day low and the alert was
+  // the series testing itself. That is fixed at the source (screen.js publishes
+  // `priorLow`, today excluded, and the fallback reads it) — but the price is
+  // printed here too, because it is the other half of a comparison this line is
+  // reporting the result of, it is a number this pass already computed, and if
+  // the two ever collapse onto each other again the phone shows it instead of
+  // hiding it. `price` is the same field the directive compared against.
   const level = changes.includes('trigger fired')
-    ? levelText('cleared', directive?.levels?.trigger, directive?.levels?.triggerBasis)
+    ? levelText('cleared', directive?.levels?.trigger, directive?.levels?.triggerBasis, row_.price)
     : changes.includes('invalidation hit')
-      ? levelText('lost', directive?.levels?.invalidation, directive?.levels?.invalidationBasis)
+      ? levelText('lost', directive?.levels?.invalidation, directive?.levels?.invalidationBasis, row_.price)
       : null
   if (level) lines.push(`  ${level}`)
   if (directive?.headline) lines.push(`  ${directive.headline}`)
@@ -397,10 +416,16 @@ export function alertLine(entry, row, why, curr, directive) {
 
 /** Em-dash rather than brackets: directive.js's own basis strings already carry
  *  a parenthetical ("…(no candle history)"), and nesting them reads as noise on
- *  a lock screen, which is the only place this string is ever seen. */
-function levelText(verb, level, basis) {
+ *  a lock screen, which is the only place this string is ever seen.
+ *
+ *  `price` leads because it is what MOVED; the level is what it moved through.
+ *  It is omitted rather than faked when the row carried no price — though a row
+ *  without one produces NO_DATA and a null level flag upstream, so no edge can
+ *  fire and this branch is unreachable from the live call site. */
+function levelText(verb, level, basis, price) {
   if (!Number.isFinite(level)) return null
-  return `${verb} ${px(level)}${basis ? ` — ${basis}` : ''}`
+  const lead = Number.isFinite(price) ? `price ${px(price)} ` : ''
+  return `${lead}${verb} ${px(level)}${basis ? ` — ${basis}` : ''}`
 }
 
 function digest(lines) {

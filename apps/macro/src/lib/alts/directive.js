@@ -98,7 +98,13 @@ export function altDirective(raw = {}) {
   if (size?.liquidityUnknown) guardrails.push('24h volume is missing, so the liquidity cap could not be applied — the size below is unchecked against what this coin actually trades')
   if (size?.capped === 'liquidity') guardrails.push(`size is capped by LIQUIDITY, not by risk: ${money(size.notional)} is ${size.advPct}% of a day's volume`)
   if (screened?.flags?.newListing) guardrails.push('no 30-day history — every longer-window read on this row is absent, not zero')
-  if (hostileSeason(season)) guardrails.push(`the regime is ${season.label} (${season.score}/100) — alt risk is fighting the tape today`)
+  if (hostileSeason(season)) {
+    // `score` is null on a read season.js declined to publish, and "(null/100)"
+    // on the one guardrail that says the tape is against you is exactly the kind
+    // of number this file is not allowed to print.
+    guardrails.push(`the regime is ${season.label ?? 'hostile'}${Number.isFinite(season?.score) ? ` (${season.score}/100)` : ''} — alt risk is fighting the tape today`)
+    if (bandHostile(season)) guardrails.push(seasonBandVetoText(season))
+  }
   // `else if`: a hostile regime is a measured verdict and outranks the note that
   // it might not have been measured. They are mutually exclusive by construction
   // anyway (a phase only exists above the coverage floor), but stating the
@@ -214,7 +220,12 @@ export function altDirective(raw = {}) {
       blocked, rLine(r), pnlLine(openPct), stopLine(stop, price),
       `band ${screened.band} · score ${screened.score}/100`,
       phaseLine(phase),
-      season?.phase ? `regime: ${season.label} (${season.score}/100)` : null,
+      // The score is null on a read season.js declined to publish, and this
+      // printed "regime: Not enough measured (null/100)" — the one rung a held
+      // position lands on most days, quoting a number nothing computed. Every
+      // other rung already guarded it; this one did not, and no test swept the
+      // held-position rungs against a refused season read.
+      season?.phase ? `regime: ${season.label}${Number.isFinite(season.score) ? ` (${season.score}/100)` : ''}` : null,
     ], 'info')
   }
 
@@ -245,9 +256,14 @@ export function altDirective(raw = {}) {
       ], 'info')
     }
     if (hostileSeason(season)) {
-      return out('WATCH', `${sym} broke out into a ${season.label} tape — the setup is real, the regime is not.`, [
+      return out('WATCH', `${sym} broke out into a ${season?.label ?? 'hostile'} tape — the setup is real, the regime is not.`, [
         `price ${px(price)} cleared ${px(levels.trigger)}`,
-        `regime ${season.score}/100: ${season.plain}`,
+        Number.isFinite(season?.score) ? `regime ${season.score}/100: ${season.plain}` : (season?.plain ?? null),
+        // Which of the two vetoes this is. A read that named `btc_only` and a
+        // read whose whole band sits under it are both hostile, and a reader
+        // comparing this card against the season header has to be able to tell
+        // that the header says "no regime named" for an honest reason.
+        bandHostile(season) ? seasonBandVetoText(season) : null,
         'Breakouts in this regime fail more often than they run. Wait for the tape or take it far smaller than the plan below.',
       ], 'info')
     }
@@ -353,8 +369,9 @@ export function altDirective(raw = {}) {
  * on the day it matters.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * BOTH LEVELS COME OUT OF THE SAME WINDOW OF CLOSED BARS, AND THE WINDOW
- * EXCLUDES TODAY.
+ * BOTH LEVELS COME OUT OF THE SAME WINDOW OF SETTLED BARS, AND THE WINDOW
+ * EXCLUDES TODAY. THIS IS TRUE OF BOTH SOURCES, WHICH IS THE SECOND HALF OF THE
+ * FIX AND THE HALF THAT WAS MISSED.
  *
  * They drifted apart once — the trigger excluded the current bar and the
  * invalidation included it — and the invalidation is the half where that is
@@ -365,6 +382,28 @@ export function altDirective(raw = {}) {
  * rendered on the card walked down with price every day, so the level a user
  * wrote down could never be broken. A level that moves with price is not a
  * level. One window, computed once, and the test pins both ends of it.
+ *
+ * THAT WAS FIXED ON THE CANDLE PATH AND LEFT STANDING ON THE SPARKLINE PATH,
+ * WHICH IS THE ONE THAT REACHES THE PHONE. The fallback took its high from
+ * `range7d.priorHigh` (prior six days, today excluded) and its low from
+ * `range7d.low` — a minimum over the WHOLE 7-day series, today included. So the
+ * invalidation equalled the current price on every row making its own 7-day low,
+ * and it fired the other way round from the candle bug: not unreachable but
+ * ALWAYS reachable, on a test of the series against itself. netlify/functions/
+ * alt-watch.mjs passes `candles: null` on every pass, so EVERY level the
+ * scheduled sentinel alerts on comes from this path, and it sent
+ * "FOO invalidation hit · lost $50.00 — 7-day low from the sparkline" with
+ * $50.00 the live price. Over 20,000 random 7-day tapes it fired 1,276 times and
+ * on exactly the 1,276 where price was its own minimum.
+ *
+ * screen.js now publishes `range7d.priorLow` beside `range7d.priorHigh` — one
+ * `prior` slice, two ends, today excluded — and the fallback reads that pair and
+ * nothing else. `range7d.low`/`.high` remain the 7-day RANGE and are still the
+ * right denominator for `pos`; they are simply not levels. A row that carries a
+ * range but no `priorLow` (a hand-built object, or a blob written by an older
+ * deploy) yields NO invalidation rather than the old self-referential one: the
+ * level degrades to null, `invalidated` degrades to null with it, and the ladder
+ * reads that as "never measured" rather than as "not broken".
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * THE COMPARISON IS CROSS-SOURCE, AND THE TOLERANCE FOR THAT IS ZERO —
@@ -430,9 +469,14 @@ function buildLevels({ screened, precedent, candles, price, stop }) {
   if (window) {
     invalidation = lowestLow(bars, window.from, window.to)
     invalidationBasis = `${LEVEL_WINDOW}-day base low`
-  } else if (Number.isFinite(screened?.range7d?.low)) {
-    invalidation = screened.range7d.low
-    invalidationBasis = '7-day low from the sparkline'
+  } else if (Number.isFinite(screened?.range7d?.priorLow)) {
+    // `priorLow`, NOT `low` — the other end of the same prior-six-day slice
+    // `priorHigh` comes from, so the fallback pair excludes today exactly the way
+    // the candle window does. `low` is the 7-day range's floor and includes the
+    // live point; using it here made the invalidation equal the price. See the
+    // block above.
+    invalidation = screened.range7d.priorLow
+    invalidationBasis = 'prior 6-day low from the 7-day sparkline (no candle history)'
   }
 
   const entry = Number.isFinite(price) && Number.isFinite(trigger) && price > trigger ? price : (trigger ?? price ?? null)
@@ -544,30 +588,87 @@ function detectQuality(candles) {
   return flat ? 'close-only' : 'ohlcv'
 }
 
+/**
+ * THE TAPE IS HOSTILE — and there are two ways to know that, because season.js
+ * now publishes a BAND as well as a phase.
+ *
+ * The first is the phase it named: `risk_off` or `btc_only`. That is the case
+ * this rung was written for and it is unchanged.
+ *
+ * The second is new, and it is a hole this file had. season.js only names a
+ * phase when its `bounds` — the same market with every unread gauge at zero
+ * (`low`) and with every one of them at its max (`high`) — fall inside a single
+ * rung. When they straddle a boundary it publishes `phase: 'unknown'` and lets
+ * the number stand, because naming either side would be a claim it cannot make.
+ * But a band can straddle a boundary and still be hostile at BOTH ENDS: measured
+ * on a real read — 20% breadth, dominance rising, ETH losing both legs, fear &
+ * greed 429ing — `seasonRead` returned score 13, `bounds {low: 12, high: 22}`,
+ * label "Risk off to BTC only", `phase: 'unknown'`. Every point of that band is a
+ * tape alt risk is fighting; the fully measured read of that market is hostile
+ * whatever the unread gauge turns out to say. Yet `phase === 'unknown'` sent it
+ * down the unmeasured path and a live break bought a HALF SIZE into it, while the
+ * same market with fear & greed answering got the veto. Less information, more
+ * risk taken. So the veto is keyed on the band where the band settles it, which
+ * is exactly what season.js published `bounds` for.
+ *
+ * THE 40 IS A DUPLICATED CONSTANT AND IT IS DELIBERATE, LIKE THE LEVEL
+ * ARITHMETIC AT THE BOTTOM OF THIS FILE. This module imports nothing (contract),
+ * so it cannot read season.js's ladder — it already duplicates the two phase IDs
+ * above for the same reason. `HOSTILE_CEILING` is the bottom of `btc_leads`, the
+ * first rung on which this file will act: `high < 40` means the complete read
+ * lands in `btc_only` or `risk_off` however the missing gauges fall. The coupling
+ * is held by a test that drives the REAL seasonRead through this gate rather than
+ * a hand-built season object, so moving that boundary one file over turns this
+ * file's tests red instead of quietly widening what ENTER will buy into.
+ */
+const HOSTILE_CEILING = 40
+
 function hostileSeason(season) {
-  return season?.phase === 'risk_off' || season?.phase === 'btc_only'
+  if (season?.phase === 'risk_off' || season?.phase === 'btc_only') return true
+  const high = season?.bounds?.high
+  return Number.isFinite(high) && high < HOSTILE_CEILING
+}
+
+/** True only when the veto above came from the BAND rather than from a named
+ *  phase — so the rung can say which of the two it is standing down on. */
+function bandHostile(season) {
+  return season?.phase !== 'risk_off' && season?.phase !== 'btc_only' && hostileSeason(season)
+}
+
+/** The band, spelled out, for the rung that vetoed on it. Every number in it is
+ *  a field season.js published; nothing here is re-derived. */
+function seasonBandVetoText(season) {
+  const { low, high } = season?.bounds ?? {}
+  if (!Number.isFinite(low) || !Number.isFinite(high)) return null
+  return `no regime was named — but the ${high - low} unread point${high - low === 1 ? '' : 's'} put the fully measured read of this same market between ${low} and ${high} out of 100, and every point of that band is a tape alt risk is fighting`
 }
 
 /**
- * THE REGIME WAS NOT MEASURED — which is a third state, not a synonym for either
- * of the two above, and the ladder has to say which of them it is treated as.
+ * THE REGIME WAS NOT NAMED — which is a third state, not a synonym for either of
+ * the two above, and the ladder has to say which of them it is treated as.
  *
- * season.js reports `phase: 'unknown'` in two cases: it could not count breadth
- * at all (`NO_READ`, score null), or it counted some of the regime and fewer
- * than half of the 100 points had an input (`THIN`) — which is the day-one state
- * of a fresh deploy, because the dominance trend needs seven days of history the
- * alt-watch cron has not accumulated yet. In the THIN case the score is still
- * real arithmetic over the part that was measured, and it can be a HIGH number:
- * 74/100 off the 7-day breadth count alone, with the label reading "Not enough
- * measured".
+ * season.js reports `phase: 'unknown'` in THREE cases now, and this file has to
+ * consume all three without asserting anything about which one it got:
  *
- * That is the shape that walked straight through the gate. `hostileSeason` is
- * false for 'unknown', so at the ENTER rung an unmeasured regime was
- * indistinguishable from a measured `majors_rotating` — reproduced on day one
- * with no dominance history, no ETH row and a failed fear & greed call: a
- * full-size ENTER whose own reason line read "regime Not enough measured
- * (74/100)". An absent input was being scored as a friendly tape, which is the
- * exact failure season.js was rewritten one file over to stop committing.
+ *   NO_READ  breadth could not be counted at all. `score: null`, no bounds.
+ *   THIN     under half the 100 points had an input, so no score is published
+ *            (`score: null`) — the day-one state of a fresh deploy, because the
+ *            dominance trend needs seven days of history the alt-watch cron has
+ *            not accumulated yet.
+ *   SPAN     the score STANDS — real arithmetic over the parts that answered,
+ *            and it can be a high number — but the unread points put the fully
+ *            measured read on both sides of a rung boundary, so no regime is
+ *            named off it. `bounds` says where the two ends land.
+ *
+ * SPAN is the one that walked straight through this gate, and it is the common
+ * one: on day one BOTH breadth windows resolve, so `of` is 60 of 100 and the
+ * score is published. `hostileSeason` is false for 'unknown', so at the ENTER
+ * rung a regime nobody could name was indistinguishable from a measured
+ * `majors_rotating` — reproduced through the real seasonRead at 80% day-one
+ * breadth: `score 80, bounds {48, 88}, label "BTC leads to Alt season"`, and a
+ * full-size ENTER off it. An absent input was being scored as a friendly tape,
+ * which is the exact failure season.js was rewritten one file over to stop
+ * committing.
  *
  * So it is deliberately NEITHER:
  *   - NOT a green light. It joins the `missing` list at the ENTER gate, so the
@@ -597,12 +698,35 @@ function unmeasuredSeason(season) {
   return !season || season.phase === 'unknown' || season.score == null
 }
 
+/**
+ * WHY the regime has no name — in season.js's own arithmetic, and only ever the
+ * reason that actually applies.
+ *
+ * This shipped as one sentence for all three refusals: "only ${of} of its 100
+ * points had an input, too little to name a phase off". On the SPAN case that is
+ * a false statement of fact wearing a real number. Measured: a read with `of: 90`
+ * and a published score of 13 printed "only 90 of its 100 points had an input,
+ * too little to name a phase off" — 90% coverage, a score published off it, and
+ * "too little" is not remotely why the phase was refused. The card said a
+ * measurement was missing while the card above it rendered the measurement.
+ *
+ * So each branch states its own shortfall, out of fields season.js publishes —
+ * `measured.of`, `score`, `bounds`, `label`. Nothing here is re-derived, and the
+ * unread-point count is `high − low` rather than `100 − of`: the same number by
+ * season.js's construction, but read off the two numbers being quoted rather
+ * than off an assumption about its denominator.
+ */
 function seasonUnmeasuredText(season) {
   const of = Number.isFinite(season?.measured?.of) && season.measured.of > 0 ? season.measured.of : null
-  return `the regime was not measured — ${of == null
-    ? 'no rotation read came back at all'
-    : `only ${of} of its 100 points had an input, too little to name a phase off`
-  }, so this setup has a tape behind it that nobody has read`
+  const { low, high } = season?.bounds ?? {}
+  const banded = Number.isFinite(low) && Number.isFinite(high) && high > low
+  const span = banded ? `the ${high - low} nobody could read put the full read anywhere from ${low} to ${high} out of 100` : null
+
+  if (of == null) return 'the regime was not measured — no rotation read came back at all, so this setup has a tape behind it that nobody has read'
+  if (!Number.isFinite(season?.score)) {
+    return `the regime was not measured — only ${of} of its 100 points had an input, under the half a regime score needs${span ? `, and ${span}` : ''}, so this setup has a tape behind it that nobody has read`
+  }
+  return `the regime was not named — ${of} of its 100 points had an input and score ${season.score}/100, but ${span ?? 'the rest went unread'}${season?.label ? ` (${season.label})` : ''}, so this setup has a tape nobody has read to the end`
 }
 
 /* ══ copy helpers ═══════════════════════════════════════════════════════════ */

@@ -296,6 +296,75 @@ describe('structure7d', () => {
     expect(range.label).toMatch(/sparkline missing/)
     expect(brk.label).toMatch(/too short/)
   })
+
+  /* ── the RANGE and the LEVELS are two different pairs ─────────────────────
+   *
+   * `low`/`high` describe where the series has been, today included, and they
+   * are the only correct denominator for `pos`. `priorLow`/`priorHigh` are what
+   * price has to lose or clear, today EXCLUDED.
+   *
+   * They were not two pairs. `priorHigh` excluded today and `low` did not, and
+   * directive.js's sparkline fallback used `low` as the invalidation level — so
+   * the level equalled the price on every row making its own 7-day low, which is
+   * a test of the series against itself. Every level the scheduled sentinel
+   * alerts on comes from that fallback (alt-watch.mjs passes `candles: null`),
+   * so this asymmetry was the one that reached the phone.
+   */
+  it('takes both levels from the SAME prior-six-day slice, today excluded', () => {
+    // 168 points: the first 144 are the prior six days, the last 24 are today.
+    const prior = ramp(144, 10.0, 10.3)
+    for (const today of [
+      ramp(24, 10.2, 9.0),                      // today makes the whole week's low
+      ramp(24, 10.2, 30),                       // today makes the whole week's high
+      [...ramp(12, 10.2, 1e-6), ...ramp(12, 1e-6, 10.2)],  // today spikes both ways
+    ]) {
+      const s = structure7d([...prior, ...today])
+      expect(s.priorHigh).toBeCloseTo(10.3, 9)
+      expect(s.priorLow).toBeCloseTo(10.0, 9)
+      // Neither level saw today, however extreme today was — the same property
+      // directive.js's 20-bar candle window is held to.
+      expect(s.priorLow).toBeLessThanOrEqual(s.priorHigh)
+    }
+  })
+
+  it('does not let the low be the live price, which is what made it a level and not a reading', () => {
+    // A tape that ends at its own minimum — the shape the sentinel fired on.
+    const s = structure7d([...ramp(144, 10.3, 10.0), ...ramp(24, 9.98, 9.0)])
+    expect(s.last).toBe(9)
+    expect(s.low).toBe(9)               // the RANGE floor IS the live point, correctly
+    expect(s.priorLow).toBeCloseTo(10.0, 9)   // the LEVEL is not
+    expect(s.priorLow).toBeGreaterThan(s.last)
+  })
+
+  it('keeps `low`/`high` as the range `pos` is measured in, unchanged', () => {
+    // The other half of the bargain: fixing the level must not move the reading.
+    // pos has to include today or it can exceed 1.
+    const s = structure7d([...ramp(144, 1.0, 1.05), ...ramp(24, 1.06, 1.2)])
+    expect(s.low).toBeCloseTo(1.0, 6)
+    expect(s.high).toBeCloseTo(1.2, 6)
+    expect(s.pos).toBeCloseTo(1.0, 6)
+    expect(s.pos).toBeLessThanOrEqual(1)
+  })
+
+  it('publishes priorLow as null on every path that publishes priorHigh as null', () => {
+    // The pair is total: a consumer that has one always has the other, so the
+    // fallback can never take a level off one end of a window and not the other.
+    for (const bad of [null, undefined, [], [1, 2, 3], 'nope', [NaN, NaN, NaN]]) {
+      const s = structure7d(bad)
+      expect(s.priorHigh).toBeNull()
+      expect(s.priorLow).toBeNull()
+    }
+    // …and on the excluded-row stub, which is a hand-written literal.
+    const stub = screenCoin(row({ symbol: 'USDT', name: 'Tether', price: 1, mcap: 5e10 }), { btcRow: BTC })
+    expect(stub.score).toBeNull()
+    expect(stub.range7d).toHaveProperty('priorLow', null)
+    // Every real series long enough for a high is long enough for a low.
+    for (const n of [8, 9, 13, 20, 40, 70, 100, 168]) {
+      const s = structure7d(ramp(n, 1, 2))
+      expect(Number.isFinite(s.priorHigh)).toBe(Number.isFinite(s.priorLow))
+      expect(Number.isFinite(s.priorLow)).toBe(true)
+    }
+  })
 })
 
 /* ── turnover, tier, kind ─────────────────────────────────────────────────── */

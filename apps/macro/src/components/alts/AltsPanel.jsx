@@ -119,69 +119,131 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
 
   const serverIds = watchlistSrc.data?.watchlist?.ids ?? null
   const [localIds, setLocalIds] = useState(null)
-  const [savingId, setSavingId] = useState(null)
-  useEffect(() => { if (serverIds) setLocalIds(serverIds) }, [serverIds])
+  /* The rows whose change has not been acknowledged yet. A SET, not a single
+   * id, and it is the only thing that disables a star — see the writer below. */
+  const [pendingIds, setPendingIds] = useState(() => new Set())
 
-  /* ONE WRITE IN FLIGHT AT A TIME. `alt-watchlist` PUTs the WHOLE array and the
-   * function is last-write-wins on it, so two stars a moment apart raced: the
-   * second request was built from the same `prev` the first had, and whichever
-   * response landed last decided the list. The star that lost was still lit, and
-   * its toast had already said it saved — the sentinel would then never watch
-   * that coin. Disabling only the row being saved (`savingId === r.id`) did not
-   * prevent it, because the second tap was a DIFFERENT row.
+  /* ── the writer: coalescing, not locking ──────────────────────────────────
    *
-   * A ref, not state: it is read and written inside the same async turn as the
-   * request, and a state update would not be visible to a second toggle fired
-   * before the re-render. */
+   * THE RACE. `alt-watchlist` PUTs the WHOLE array and the function is
+   * last-write-wins on it, so two stars a moment apart used to race: the second
+   * request was built from the same `prev` the first had, and whichever
+   * response landed last decided the list. The star that lost was still lit and
+   * its toast had already said it saved — the sentinel would then never watch
+   * that coin.
+   *
+   * WHAT THAT COST THE FIRST TIME. Closing it by refusing every toggle while a
+   * write was in flight traded a one-row race for a whole-tab lockout: one
+   * in-flight PUT disabled all 26 stars plus the detail pane's, `api()` had no
+   * timeout, and five rapid taps landed one write and dropped four with no
+   * toast, no spinner and no recovery. The rejection toast that was supposed to
+   * name the drop could not fire at all, because every path into it sat behind
+   * a disabled button. A lock is the wrong instrument: the user's intent is
+   * never invalid, it is just later than the wire.
+   *
+   * WHAT IS HERE NOW. Intent and transport are separated. Every tap updates
+   * `desired` immediately — the optimistic list the UI renders — and the writer
+   * drains `desired` in a loop: it sends the current one, and when the response
+   * lands it checks whether a newer intent arrived while it was on the wire. If
+   * one did, it sends THAT instead of settling. So a superseded write is never
+   * dropped, it is superseded by a request that carries it; and because every
+   * request carries the whole array, the coin the user tapped third is in the
+   * list the first request already sent if it was still on the wire. The race
+   * cannot reopen: there is only ever one request in flight, and its body is
+   * always built from the latest intent rather than from a stale snapshot.
+   *
+   * Refs, not state, for `desired`/`inFlight`: they are read and written inside
+   * the same async turn as the request, and a state update would not be visible
+   * to a second toggle fired before the re-render.
+   */
   const inFlight = useRef(false)
+  const desiredRef = useRef(null)         // latest intent; null when settled
+  const confirmedRef = useRef(null)       // last list the server acknowledged
+  const queuedRef = useRef([])            // {symbol,on} per unsettled tap, in order
+  const pendingRef = useRef(new Set())
+
+  useEffect(() => {
+    if (!serverIds) return
+    confirmedRef.current = serverIds
+    // A refetch must not clobber taps that have not been acknowledged yet.
+    if (!inFlight.current && !desiredRef.current) setLocalIds(serverIds)
+  }, [serverIds])
 
   const ids = localIds ?? serverIds ?? []
   const watched = useMemo(() => new Set(ids.map((e) => e.id)), [ids])
 
-  const toggleWatch = useCallback(async (row) => {
-    if (!row?.id || !row?.symbol) return
-    if (inFlight.current) {
-      // Named, not silent. A star that does nothing reads as a broken button,
-      // and the wait is one request long.
-      toast('One watchlist save at a time — the last one is still in flight', { err: true })
-      return
+  // One object in both places: the ref is what the next tap builds from and the
+  // state is what the board renders, and two empty sets that are not the same
+  // empty set is the kind of drift that only shows up under a fast finger.
+  const settle = useCallback(() => {
+    pendingRef.current = new Set()
+    queuedRef.current = []
+    setPendingIds(pendingRef.current)
+  }, [])
+
+  const drain = useCallback(async () => {
+    inFlight.current = true
+    try {
+      while (desiredRef.current) {
+        const sending = desiredRef.current
+        // Only the four keys the validator allows, and `addedAt` is deliberately
+        // NOT sent: the server owns "when did I star this", and re-sending it on
+        // every toggle would reset every date in the list to now.
+        const body = { ids: sending.map((e) => ({ id: e.id, symbol: e.symbol, name: e.name ?? '', note: e.note ?? '' })) }
+        const res = await api('alt-watchlist', { method: 'PUT', body: JSON.stringify(body) })
+        const saved = res?.watchlist?.ids ?? sending
+        confirmedRef.current = saved
+        // A newer intent arrived while this was on the wire: loop, do not settle.
+        if (desiredRef.current !== sending) continue
+        desiredRef.current = null
+        setLocalIds(saved)
+        const q = queuedRef.current
+        toast(q.length === 1
+          ? (q[0].on ? `${q[0].symbol} off the watchlist` : `${q[0].symbol} on the watchlist`)
+          : `${q.length} watchlist changes saved`)
+        settle()
+      }
+    } catch (e) {
+      // ROLLBACK, TO THE LAST LIST THE SERVER ACKNOWLEDGED. A star that is lit
+      // but did not save is the worst outcome here: the sentinel never watches
+      // that coin, and the UI has already told you it does. The toast names the
+      // server's own first complaint, because "validation failed" on its own is
+      // not actionable — and it says how many taps went back, because with
+      // coalescing one failed request can carry several.
+      const n = queuedRef.current.length
+      desiredRef.current = null
+      setLocalIds(confirmedRef.current ?? serverIds ?? [])
+      settle()
+      const detail = e?.body?.errors?.[0] || e?.message || 'the request failed'
+      toast(`Watchlist not saved — ${detail}${n > 1 ? ` (${n} changes rolled back)` : ''}`, { err: true })
+    } finally {
+      inFlight.current = false
     }
-    const prev = localIds ?? serverIds ?? []
-    const on = prev.some((e) => e.id === row.id)
+  }, [serverIds, settle, toast])
+
+  const toggleWatch = useCallback((row) => {
+    if (!row?.id || !row?.symbol) return
+    // The list this tap is a change TO: the outstanding intent if there is one,
+    // otherwise the last list the server acknowledged. Reading `localIds` first
+    // would read a state value from before the settling render on a tap fired
+    // in that gap, which is how the whole-array PUT loses a coin.
+    const base = desiredRef.current ?? confirmedRef.current ?? localIds ?? serverIds ?? []
+    const on = base.some((e) => e.id === row.id)
     // 60 is the sentinel's budget, enforced server-side. Catching it here means
     // the 61st star fails as a sentence rather than as a validation array.
-    if (!on && prev.length >= MAX_WATCH) {
+    if (!on && base.length >= MAX_WATCH) {
       toast(`Watchlist is full at ${MAX_WATCH} coins — unstar something first`, { err: true })
       return
     }
-    const next = on
-      ? prev.filter((e) => e.id !== row.id)
-      : [...prev, { id: row.id, symbol: row.symbol, name: String(row.name ?? '').slice(0, 100), note: '' }]
-
-    setLocalIds(next)          // optimistic: the star lights immediately
-    setSavingId(row.id)
-    inFlight.current = true
-    try {
-      // Only the five keys the validator allows, and `addedAt` is deliberately
-      // NOT sent: the server owns "when did I star this", and re-sending it on
-      // every toggle would reset every date in the list to now.
-      const body = { ids: next.map((e) => ({ id: e.id, symbol: e.symbol, name: e.name ?? '', note: e.note ?? '' })) }
-      const res = await api('alt-watchlist', { method: 'PUT', body: JSON.stringify(body) })
-      setLocalIds(res?.watchlist?.ids ?? next)
-      toast(on ? `${row.symbol} off the watchlist` : `${row.symbol} on the watchlist`)
-    } catch (e) {
-      // ROLLBACK. A star that is lit but did not save is the worst outcome here:
-      // the sentinel never watches that coin, and the UI has already told you it
-      // does. The toast names the server's own first complaint, because
-      // "validation failed" on its own is not actionable.
-      setLocalIds(prev)
-      const detail = e?.body?.errors?.[0] || e?.message || 'the request failed'
-      toast(`Watchlist not saved — ${detail}`, { err: true })
-    } finally {
-      inFlight.current = false
-      setSavingId(null)
-    }
-  }, [localIds, serverIds, toast])
+    desiredRef.current = on
+      ? base.filter((e) => e.id !== row.id)
+      : [...base, { id: row.id, symbol: row.symbol, name: String(row.name ?? '').slice(0, 100), note: '' }]
+    setLocalIds(desiredRef.current)   // optimistic: the star lights immediately
+    pendingRef.current = new Set(pendingRef.current).add(row.id)
+    queuedRef.current = [...queuedRef.current, { symbol: row.symbol, on }]
+    setPendingIds(pendingRef.current)
+    if (!inFlight.current) void drain()
+  }, [drain, localIds, serverIds, toast])
 
   /* ── gates ───────────────────────────────────────────────────────────────── */
 
@@ -242,7 +304,10 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
                 rows={rows}
                 watched={watched}
                 selectedId={sel?.id ?? null}
-                savingId={savingId}
+                // The rows with an unacknowledged change — and ONLY those rows
+                // are disabled. See the writer above for why this is a set and
+                // not a lock.
+                pendingIds={pendingIds}
                 onSelect={onSelect}
                 onToggleWatch={toggleWatch}
               />
@@ -277,10 +342,12 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
               trendingRank={trendingRank}
               trendingChecked={trendingChecked}
               starred={watched.has(sel.id)}
-              // Any write in flight, not just this coin's — the whole-array PUT
-              // is last-write-wins, so a second star from the detail pane races
-              // one started on the board. Same lock, both surfaces.
-              saving={savingId != null}
+              // THIS coin's write, not any write. The two surfaces share one
+              // writer, so a star started on the board and one started here
+              // cannot race — they queue into the same intent. Disabling this
+              // star because some other row is saving is the 26-row lockout in
+              // miniature, and it was measured dead at t+15s.
+              saving={pendingIds.has(sel.id)}
               onToggleWatch={toggleWatch}
             />
           ) : (

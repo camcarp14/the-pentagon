@@ -17,15 +17,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Blobs is mocked, not reached: sourceHandler records source health through it,
 // and the stale-serve case below is a claim about what that record SAYS.
-vi.mock('@netlify/blobs', () => {
-  const blobs = new Map();
-  return {
-    getStore: () => ({
-      get: async (k) => (blobs.has(k) ? JSON.parse(JSON.stringify(blobs.get(k))) : null),
-      setJSON: async (k, v) => { blobs.set(k, JSON.parse(JSON.stringify(v))); },
-    }),
-  };
-});
+const BLOBS = new Map();
+vi.mock('@netlify/blobs', () => ({
+  getStore: () => ({
+    get: async (k) => (BLOBS.has(k) ? JSON.parse(JSON.stringify(BLOBS.get(k))) : null),
+    setJSON: async (k, v) => { BLOBS.set(k, JSON.parse(JSON.stringify(v))); },
+    delete: async (k) => { BLOBS.delete(k); },
+  }),
+}));
 
 import {
   parseCoinGeckoMarkets,
@@ -44,19 +43,25 @@ import {
   cacheIsFresh,
   attemptBudget,
   MIN_ATTEMPT_MS,
+  requestDeadline,
+  PLATFORM_KILL_MS,
+  RESPONSE_RESERVE_MS,
   altCandles,
   altDerivs,
   altCoinMeta,
   altWatchGate,
-  ALT_WATCH_SLOT_MS,
-  ALT_WATCH_GATE_KEY,
   mergeDominanceSample,
   isDominanceRow,
   DOM_HISTORY_CAP,
 } from '../alts.mjs';
-import { sourceHandler, store, checkAuth, SOURCE_ERROR } from '../util.mjs';
+import {
+  sourceHandler, store, checkAuth, authVerdict, AUTH_TIMEOUT_MS,
+  CHECKAUTH_CALLERS, SOURCE_ERROR, SOURCE_CACHED,
+} from '../util.mjs';
 import { validateWatchlist } from '../../functions/alt-watchlist.mjs';
-import { coinCacheKey } from '../../functions/alt-coin.mjs';
+import altCoinHandler, { coinCacheKey } from '../../functions/alt-coin.mjs';
+import altScanHandler from '../../functions/alt-scan.mjs';
+import journalHandler from '../../functions/journal.mjs';
 
 /* ---------------- fixtures, written from the documented shapes ---------------- */
 
@@ -820,8 +825,28 @@ describe('altDerivs distinguishes "not listed" from "did not answer"', () => {
   it('returns null when Binance answers 400 — the definitive "invalid symbol"', async () => {
     stub(400);
     expect(await altDerivs('SOL')).toBeNull();
+  });
+
+  // 404 WAS ON THE "NOT LISTED" LIST AND IT IS A DIFFERENT ANSWER. Binance
+  // futures says 400 (-1121) for an unlisted SYMBOL; a 404 from fapi is about
+  // the PATH. If /fapi/v1/premiumIndex ever moves, a 404-accepting gate makes
+  // every probe return null and every coin on the board render "has no listed
+  // Binance perpetual" — the exact positive false claim this function exists to
+  // prevent, told about 250 coins at once, with nothing on screen able to say
+  // the endpoint moved.
+  it('throws on 404 — that is the path answering, not the symbol', async () => {
     stub(404);
-    expect(await altDerivs('SOL')).toBeNull();
+    const err = await altDerivs('SOL').catch((e) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).toMatch(/could not establish whether SOL has a listed perpetual/);
+    expect(err.message).toMatch(/404/);
+  });
+
+  // The host is pinned too: only the FUTURES API's own 400 is evidence about a
+  // futures listing. A 400 from anywhere else is somebody else's complaint.
+  it('will not read a 400 from another host as "this coin has no perp"', async () => {
+    globalThis.fetch = vi.fn(async () => { throw new Error('HTTP 400 from api.binance.com'); });
+    await expect(altDerivs('SOL')).rejects.toThrow(/could not establish/);
   });
 
   it.each([429, 418, 451, 500, 503])('throws on HTTP %i rather than claiming the coin has no futures market', async (status) => {
@@ -850,68 +875,154 @@ describe('altDerivs distinguishes "not listed" from "did not answer"', () => {
 
 /* ---------------- who may spend the sentinel's quota ---------------- */
 
-// /api/alt-watch is a public path that costs two CoinGecko calls per hit
-// against a keyless tier of ~10-30 calls/min. Unauthenticated, anyone who can
-// reach the deploy holds that quota in 429 and pins the whole Alts tab on its
-// stale cache — the four-calls-per-pass discipline defeated from outside the
-// code that enforces it.
-describe('altWatchGate', () => {
+// NOTHING HERE MAY CAUSE THE SCHEDULER TO SKIP A DOMINANCE SAMPLE. That series
+// is the only reason a dominance trend exists to be read — CoinGecko's free
+// tier has no history endpoint — and no later fix can backfill a day.
+//
+// The previous gate admitted one unauthenticated POST per 2-hour slot and
+// claimed the slot in Blobs BEFORE doing any work, which meant a bare
+// `curl -X POST` was admitted as `scheduled: true`, took the slot, and — if it
+// then hit a routine CoinGecko 429 — wrote nothing while the real cron skipped
+// with a 200 OK that Netlify recorded as a successful invocation. It also could
+// not survive clock skew: a fire landing one second early computed the PREVIOUS
+// slot, which the previous fire had claimed. Meanwhile the threat it defended
+// against is not reachable — Netlify's docs say a scheduled function published
+// as part of a deploy cannot be invoked with a URL, and netlify.toml declares
+// alt-watch scheduled (pinned below). Certain lockout, hypothetical attack.
+//
+// So the tests below assert the ABSENCE of a mechanism, which is the only kind
+// of assertion that can hold this invariant: no slot, no claim, no Blobs, no
+// clock arithmetic, and no refusal of anything that could be the scheduler.
+describe('altWatchGate cannot starve the cron', () => {
+  // A REAL STORE THAT ALSO COUNTS. It has to actually persist, or a gate that
+  // claims a slot would look identical to one that does not and every test
+  // below would pass against the code they exist to refuse. (It did, briefly,
+  // when this was a spy returning null — caught by running these against the
+  // pre-fix source, which is the only thing that can catch it.)
   const mkStore = () => {
     const blob = new Map();
+    const calls = [];
     return {
       blob,
-      get: async (k) => blob.get(k) ?? null,
-      setJSON: async (k, v) => { blob.set(k, v); },
+      calls,
+      get: async (k) => { calls.push(['get', k]); return blob.get(k) ?? null; },
+      setJSON: async (k, v) => { calls.push(['setJSON', k, v]); blob.set(k, v); },
+      delete: async (k) => { calls.push(['delete', k]); blob.delete(k); },
     };
   };
-  const req = (method) => new Request('https://pentagon.test/api/alt-watch', method === 'GET'
-    ? {}
-    : { method, headers: { 'content-type': 'application/json' }, body: '{"next_run":"2026-07-31T20:00:00.000Z"}' });
+  const post = (init = {}) => new Request('https://pentagon.test/api/alt-watch', { method: 'POST', ...init });
+  const cron = () => post({ headers: { 'content-type': 'application/json' }, body: '{"next_run":"2026-07-31T20:00:00.000Z"}' });
+  const bare = () => post();
 
-  // Slot boundaries land on even UTC hours because 2h divides 24h and the epoch
-  // starts at a UTC midnight — the same instants "0 */2 * * *" fires at.
-  const slotTop = Math.floor(Date.UTC(2026, 6, 31, 18) / ALT_WATCH_SLOT_MS) * ALT_WATCH_SLOT_MS;
+  const realFetch = globalThis.fetch;
+  beforeEach(() => {
+    // No token on any of these, so Supabase answers 401: this is the
+    // unauthenticated path in every case below.
+    globalThis.fetch = vi.fn(async () => ({ ok: false, status: 401, json: async () => ({}) }));
+  });
+  afterEach(() => { globalThis.fetch = realFetch; });
 
-  it('turns away the bare GET a browser, a crawler or a curl sends', async () => {
-    const g = await altWatchGate(req('GET'), mkStore(), slotTop + 60_000);
-    expect(g.allowed).toBe(false);
+  // The old boundary: 2h slots aligned to even UTC hours.
+  const SLOT = 2 * 3600 * 1000;
+  const slotTop = Math.floor(Date.UTC(2026, 6, 31, 18) / SLOT) * SLOT;
+
+  it('admits the scheduler every single time, forever, whatever else has run', async () => {
+    const s = mkStore();
+    for (let i = 0; i < 25; i++) {
+      const g = await altWatchGate(cron(), s, slotTop + i * 60_000);
+      expect(g).toMatchObject({ allowed: true, authed: false, scheduled: true, reason: null });
+    }
+  });
+
+  // The forgery that used to burn the slot. It is still admitted — but it can
+  // no longer take anything away from the fire behind it.
+  it('a forged bare POST cannot deny the cron behind it', async () => {
+    const s = mkStore();
+    expect((await altWatchGate(bare(), s, slotTop + 5_000)).allowed).toBe(true);
+    expect((await altWatchGate(cron(), s, slotTop + 6_000)).allowed).toBe(true);
+  });
+
+  // THE SKEW CASE, EXACTLY AS REPRODUCED. A fire that lands one second EARLY —
+  // container clock ahead of the scheduler — computed the PREVIOUS slot, which
+  // the previous fire had already claimed. Measured on the old gate:
+  //   on-time      allowed=true  slot=247989
+  //   1s early     allowed=FALSE slot=247989  "already had its pass"
+  //   then on-time allowed=true  slot=247991
+  // A skipped pass, with a 200 OK, on a series nothing can backfill.
+  it('admits a fire that lands a second early after an on-time one', async () => {
+    const s = mkStore();
+    expect((await altWatchGate(cron(), s, slotTop)).allowed).toBe(true);
+    expect((await altWatchGate(cron(), s, slotTop + SLOT - 1000)).allowed).toBe(true);
+    expect((await altWatchGate(cron(), s, slotTop + 2 * SLOT)).allowed).toBe(true);
+  });
+
+  it('admits every fire in a jittery schedule, early and late', async () => {
+    const s = mkStore();
+    const jitter = [0, -1000, 500, -1, 2000, -1500, 0, -60_000, 60_000];
+    for (let n = 0; n < jitter.length; n++) {
+      const at = slotTop + n * SLOT + jitter[n];
+      expect({ n, allowed: (await altWatchGate(cron(), s, at)).allowed }).toEqual({ n, allowed: true });
+    }
+  });
+
+  it('claims nothing and reads nothing — there is no state left to lock', async () => {
+    const s = mkStore();
+    await altWatchGate(cron(), s, slotTop);
+    await altWatchGate(cron(), s, slotTop + 1000);
+    expect(s.calls).toEqual([]);
+  });
+
+  it('is unbreakable by Blobs, because it never asks Blobs anything', async () => {
+    const broken = {
+      get: async () => { throw new Error('blobs down'); },
+      setJSON: async () => { throw new Error('blobs down'); },
+      delete: async () => { throw new Error('blobs down'); },
+    };
+    expect((await altWatchGate(cron(), broken, slotTop)).allowed).toBe(true);
+    expect((await altWatchGate(cron(), undefined, slotTop)).allowed).toBe(true);
+  });
+
+  // "I did not recognise the invocation shape" must never be why a dominance
+  // row is missing. The old gate refused anything that was not exactly POST —
+  // the same fragility its own header worried about for the `next_run` body,
+  // one field over.
+  it.each([['PUT'], ['PATCH'], ['DELETE'], ['OPTIONS']])('admits %s rather than guessing about the platform', async (method) => {
+    const s = mkStore();
+    const g = await altWatchGate(new Request('https://pentagon.test/api/alt-watch', { method }), s, slotTop);
+    expect(g.allowed).toBe(true);
+  });
+
+  it('admits a request that carries no method at all', async () => {
+    expect((await altWatchGate({ headers: { get: () => '' } }, mkStore(), slotTop)).allowed).toBe(true);
+  });
+
+  // The one refusal that survives, and the only one that cannot be the
+  // scheduler: Netlify invokes a scheduled function with a POST, and a browser,
+  // a crawler and a bare curl send GET.
+  it.each([['GET'], ['HEAD']])('still turns away the bare %s a browser or a crawler sends', async (method) => {
+    const g = await altWatchGate(new Request('https://pentagon.test/api/alt-watch', { method }), mkStore(), slotTop);
+    expect(g).toMatchObject({ allowed: false, scheduled: false });
     expect(g.reason).toMatch(/CoinGecko quota/);
   });
 
-  it('lets the scheduler through — it cannot carry a token, and the row it writes is irreplaceable', async () => {
-    const s = mkStore();
-    const g = await altWatchGate(req('POST'), s, slotTop);
-    expect(g).toMatchObject({ allowed: true, authed: false, scheduled: true });
-    // Claimed before the caller spends a call, so a burst cannot all pass.
-    expect(s.blob.get(ALT_WATCH_GATE_KEY)).toEqual({ slot: g.slot, at: slotTop });
+  it('lets a signed-in operator through as an operator, not as the schedule', async () => {
+    globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ email: 'op@pentagon.test' }) }));
+    const authed = new Request('https://pentagon.test/api/alt-watch', { headers: { authorization: 'Bearer t' } });
+    expect(await altWatchGate(authed, mkStore(), slotTop))
+      .toMatchObject({ allowed: true, authed: true, scheduled: false });
   });
 
-  it('admits one unauthenticated pass per cron slot and no more', async () => {
-    const s = mkStore();
-    expect((await altWatchGate(req('POST'), s, slotTop)).allowed).toBe(true);
-    for (const offset of [1, 60_000, 45 * 60_000, ALT_WATCH_SLOT_MS - 1]) {
-      const g = await altWatchGate(req('POST'), s, slotTop + offset);
-      expect(g.allowed).toBe(false);
-      expect(g.reason).toMatch(/already had its pass/);
-    }
-    expect((await altWatchGate(req('POST'), s, slotTop + ALT_WATCH_SLOT_MS)).allowed).toBe(true);
-  });
-
-  // THE PROPERTY THE SLOT EXISTS FOR. A "one pass per N minutes" limiter would
-  // sit in front of the cron's own fire and starve the dominance series, which
-  // is a worse outcome than the quota it protects — a day the sentinel does not
-  // run is a day nothing can backfill. Slot-aligned, a forger can only ever
-  // consume a slot the scheduler has already had.
-  it('cannot be used to starve the cron of its own slot', async () => {
-    const s = mkStore();
-    const forgedAt = slotTop + 119 * 60_000; // one minute before the next fire
-    expect((await altWatchGate(req('POST'), s, forgedAt)).allowed).toBe(true);
-    expect((await altWatchGate(req('POST'), s, slotTop + ALT_WATCH_SLOT_MS)).allowed).toBe(true);
-  });
-
-  it('fails OPEN when Blobs is down, because the dominance row costs more than the quota', async () => {
-    const broken = { get: async () => { throw new Error('blobs down'); }, setJSON: async () => { throw new Error('blobs down'); } };
-    expect((await altWatchGate(req('POST'), broken, slotTop)).allowed).toBe(true);
+  // THE EVIDENCE THE THREAT IS UNREACHABLE, PINNED. The reasoning above rests
+  // on alt-watch being a scheduled function, which Netlify does not expose by
+  // URL. Delete the schedule block and it becomes an ordinary /api/* route —
+  // at which point this gate's posture needs re-deciding, not silently
+  // inheriting. So the config is part of the argument and part of the test.
+  it('rests on alt-watch actually being scheduled in netlify.toml', () => {
+    const { readFileSync } = require('node:fs');
+    const { fileURLToPath } = require('node:url');
+    const { dirname, join } = require('node:path');
+    const toml = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'netlify.toml'), 'utf8');
+    expect(toml).toMatch(/\[functions\."alt-watch"\]\s*\n\s*schedule\s*=\s*"0 \*\/2 \* \* \*"/);
   });
 
   // THE GUARD HAS TO BE CALLED, AND FOR A WHILE IT WAS NOT.
@@ -1149,5 +1260,621 @@ describe('validateWatchlist', () => {
     const dupe = validateWatchlist({ ids: [entry({ id: 'pepe' }), entry({ id: 'PEPE' })] });
     expect(dupe.ok).toBe(false);
     expect(dupe.errors[0]).toMatch(/duplicate id "pepe"/);
+  });
+});
+
+/* ================= the request's time budget, per endpoint ================= */
+
+// A 7500ms deadline measured from arrival was written for alt-coin's genuinely
+// serial 11-second chain and then applied to alt-scan, which never had that
+// problem: four calls in PARALLEL whose longest hop is 6000ms. With checkAuth
+// and the Blobs read now inside that window, the >1MB universe fetch could be
+// handed as little as ~4400ms — so a healthy CoinGecko was aborted, the board
+// went stale, and /api/status was told the source was down. Each endpoint's
+// budget now comes out of its own chain.
+
+describe('requestDeadline', () => {
+  const WALL = PLATFORM_KILL_MS - RESPONSE_RESERVE_MS;
+
+  it('lets the CHAIN clock bind when the invocation still has life left', () => {
+    // alt-scan shape: 2000ms of auth already spent, 6000ms of chain to run.
+    expect(requestDeadline({ arrivedAt: 0, chainMs: 6000, now: 2050 })).toBe(8050);
+    // and that leaves the universe fetch its whole 6000ms, which is the number
+    // altUniverse says the payload needs. Pre-fix this was 7500 - 2050 = 5450.
+    expect(attemptBudget(6000, 8050, MIN_ATTEMPT_MS, 2050)).toBe(6000);
+  });
+
+  it('lets the WALL bind once the chain would outlive the function', () => {
+    // alt-coin shape: an 11s chain against a ~10s kill. The wall always wins,
+    // which is exactly why alt-coin needs one and alt-scan did not.
+    expect(requestDeadline({ arrivedAt: 0, chainMs: 11_000, now: 100 })).toBe(WALL);
+    expect(requestDeadline({ arrivedAt: 0, chainMs: 11_000, now: 6000 })).toBe(WALL);
+  });
+
+  it('takes whichever clock is tighter, always', () => {
+    for (const now of [0, 500, 2000, 4000, 7000, 9000]) {
+      for (const chain of [3000, 6000, 11_000]) {
+        const d = requestDeadline({ arrivedAt: 0, chainMs: chain, now });
+        expect(d).toBe(Math.min(WALL, now + chain));
+        expect(d).toBeLessThanOrEqual(WALL);
+      }
+    }
+  });
+
+  it('leaves the platform enough room to actually send the answer', () => {
+    // The reserve is not a rounding allowance: alt-scan serialises a >1MB
+    // payload and writes the cache after the deadline has passed.
+    expect(PLATFORM_KILL_MS - WALL).toBe(RESPONSE_RESERVE_MS);
+    expect(RESPONSE_RESERVE_MS).toBeGreaterThanOrEqual(1000);
+  });
+
+  it('degrades to null rather than a fabricated instant on missing inputs', () => {
+    expect(requestDeadline({ arrivedAt: null, chainMs: 6000 })).toBeNull();
+    expect(requestDeadline({ arrivedAt: 0, chainMs: null })).toBeNull();
+    expect(requestDeadline({})).toBeNull();
+  });
+});
+
+/* ---------------- the handlers, driven end to end on a fake clock ---------------- */
+
+// Fake timers, so an 8-second budget costs the suite nothing and the assertions
+// are about arithmetic rather than about how loaded the machine is. Every delay
+// below is a setTimeout the fake clock drives; the abort controllers inside
+// getJson and verifySession are driven by the same clock.
+function upstreams({ authMs = 20, authStatus = 200, cgMarketsMs = 200, cgMarketsHangs = false, fapiStatus = null } = {}) {
+  const calls = [];
+  const wait = (ms, signal) => new Promise((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    if (!signal) return;
+    const onAbort = () => { clearTimeout(t); reject(signal.reason || new Error('aborted')); };
+    if (signal.aborted) onAbort(); else signal.addEventListener('abort', onAbort);
+  });
+  const fn = vi.fn(async (url, opts = {}) => {
+    const u = String(url);
+    calls.push(u);
+    if (u.includes('supabase.co')) {
+      await wait(authMs, opts.signal);
+      return { ok: authStatus >= 200 && authStatus < 300, status: authStatus, json: async () => ({ email: 'op@pentagon.test' }) };
+    }
+    if (u.includes('coins/markets')) {
+      await wait(cgMarketsHangs ? 60_000 : cgMarketsMs, opts.signal);
+      return { ok: true, status: 200, json: async () => Array.from({ length: 250 }, (_, i) => marketRow({ id: `c${i}`, symbol: `c${i}`, market_cap: 1e9 - i })) };
+    }
+    if (u.includes('/global')) {
+      await wait(50, opts.signal);
+      return { ok: true, status: 200, json: async () => ({ data: { market_cap_percentage: { btc: 54.2, eth: 12.1 }, total_market_cap: { usd: 2.4e12 }, total_volume: { usd: 9.1e10 }, market_cap_change_percentage_24h_usd: 1.4 } }) };
+    }
+    if (u.includes('alternative.me')) {
+      await wait(50, opts.signal);
+      return { ok: true, status: 200, json: async () => ({ data: [{ value: '39', value_classification: 'Fear', timestamp: '1700000000' }] }) };
+    }
+    if (u.includes('search/trending')) {
+      await wait(50, opts.signal);
+      return { ok: true, status: 200, json: async () => ({ coins: [{ item: { id: 'pepe', symbol: 'pepe', name: 'Pepe', market_cap_rank: 32 } }] }) };
+    }
+    if (u.includes('fapi.binance.com')) {
+      await wait(20, opts.signal);
+      if (fapiStatus === 'timeout') throw new Error('fapi.binance.com did not answer inside the 3000ms this request had left for it');
+      return { ok: false, status: fapiStatus, json: async () => ({}) };
+    }
+    if (u.includes('api.binance.com')) {
+      await wait(20, opts.signal);
+      return { ok: true, status: 200, json: async () => Array.from({ length: 300 }, (_, i) => [1700000000000 + i * 86400000, '1', '2', '0.5', '1.5', '10', 0, '0', 0, '0', '0', '0']) };
+    }
+    await wait(20, opts.signal);
+    return { ok: true, status: 200, json: async () => ({ id: 'solana', symbol: 'sol', name: 'Solana', categories: [], community_data: {} }) };
+  });
+  fn.calls = calls;
+  return fn;
+}
+
+// `wall` is stamped WHEN THE PROMISE SETTLES, not after the clock is advanced —
+// advanceTimersByTimeAsync moves the fake clock the whole way regardless, so
+// reading Date.now() afterwards would report the advance, not the handler.
+async function onFakeClock(run) {
+  vi.useFakeTimers();
+  try {
+    const started = Date.now();
+    let wall = null;
+    const p = Promise.resolve(run()).then(
+      (v) => { wall ??= Date.now() - started; return v; },
+      (e) => { wall ??= Date.now() - started; throw e; },
+    );
+    await vi.advanceTimersByTimeAsync(120_000);
+    return { out: await p, wall };
+  } finally {
+    vi.useRealTimers();
+  }
+}
+
+const authedGet = (path) => new Request(`https://pentagon.test${path}`, { headers: { authorization: 'Bearer test-token' } });
+const healthOf = async (name) => (await store().get('source_status', { type: 'json' }))?.[name] ?? null;
+
+describe('alt-scan gets a budget derived from its own chain', () => {
+  const realFetch = globalThis.fetch;
+  let allowed;
+  beforeEach(() => {
+    BLOBS.clear();
+    allowed = process.env.ALLOWED_EMAIL;
+    delete process.env.ALLOWED_EMAIL;
+  });
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    if (allowed === undefined) delete process.env.ALLOWED_EMAIL; else process.env.ALLOWED_EMAIL = allowed;
+  });
+
+  // THE REGRESSION, ON THE ENDPOINT THE WHOLE TAB POLLS. Everything is healthy:
+  // Supabase answers in 2s and CoinGecko returns the markets payload in 5.6s,
+  // both well inside their own budgets. Under the shared arrival-based 7500ms
+  // this produced a hard 502 on a cold cache.
+  it('serves a live board when a slow auth hop is followed by a healthy 5.6s CoinGecko', async () => {
+    globalThis.fetch = upstreams({ authMs: 2000, cgMarketsMs: 5600 });
+    const { out: res, wall } = await onFakeClock(() => altScanHandler(authedGet('/api/alt-scan'), {}));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.universe).toHaveLength(250);
+    expect(body.stale).toBe(false);
+    expect(body.cached).toBe(false);
+    expect(body.degraded).toEqual([]);
+    // And the source is recorded as what it was: up.
+    expect(await healthOf('alt_scan')).toMatchObject({ ok: true, lastError: null });
+    expect(wall).toBeLessThan(PLATFORM_KILL_MS);
+  });
+
+  // The same latencies with a cache to fall back on: the board went stale, the
+  // user was told the refetch failed, and /api/status was told CoinGecko was
+  // down — three claims about an upstream that answered correctly.
+  it('does not report a healthy CoinGecko as down, or a live board as stale', async () => {
+    BLOBS.set('alt_scan_cache', {
+      at: Date.now() - 200_000,
+      payload: { universe: [{ id: 'old' }], degraded: [], sourceDetail: 'coingecko', asOf: Date.now() - 200_000 },
+    });
+    globalThis.fetch = upstreams({ authMs: 2500, cgMarketsMs: 5500 });
+    const { out: res } = await onFakeClock(() => altScanHandler(authedGet('/api/alt-scan'), {}));
+    const body = await res.json();
+
+    expect(body.stale).toBe(false);
+    expect(body.universe).toHaveLength(250);
+    expect(body.degraded.join(' ')).not.toMatch(/refetch failed/);
+    const h = await healthOf('alt_scan');
+    expect(h.ok).toBe(true);
+    expect(h.detail).toBe('coingecko + alternative.me');
+  });
+
+  // The other half of the same rule, and the guard against the fix: the wall
+  // must still bind when the invocation is genuinely running out of life, so
+  // the stale fallback stays reachable instead of meeting the platform kill.
+  it('still degrades to a labelled stale board inside the platform budget when CoinGecko really is gone', async () => {
+    BLOBS.set('alt_scan_cache', {
+      at: Date.now() - 200_000,
+      payload: { universe: [{ id: 'old' }], degraded: [], sourceDetail: 'coingecko', asOf: Date.now() - 200_000 },
+    });
+    globalThis.fetch = upstreams({ authMs: 2900, cgMarketsHangs: true });
+    const { out: res, wall } = await onFakeClock(() => altScanHandler(authedGet('/api/alt-scan'), {}));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.stale).toBe(true);
+    expect(wall).toBeLessThan(PLATFORM_KILL_MS);
+    expect(wall).toBeLessThanOrEqual(PLATFORM_KILL_MS - RESPONSE_RESERVE_MS + 50);
+    expect(await healthOf('alt_scan')).toMatchObject({ ok: false });
+  });
+
+  // "timeout after 4400ms" reads as the host being slow when the 4400 was OUR
+  // remaining budget. A clipped hop and a dead upstream are different
+  // incidents; the sentence /api/status stores has to say which one happened.
+  it('says whose clock ran out when it gives up on a hop', async () => {
+    globalThis.fetch = upstreams({ authMs: 20, cgMarketsHangs: true });
+    const { out: res } = await onFakeClock(() => altScanHandler(authedGet('/api/alt-scan'), {}));
+    const body = await res.json();
+    expect(res.status).toBe(502);
+    expect(body.error).toMatch(/api\.coingecko\.com did not answer inside the \d+ms this request had left for it/);
+  });
+});
+
+/* ---------------- "no perp" is a claim, and the payload has to carry which ---------------- */
+
+// altDerivs already told "Binance said not listed" apart from "Binance did not
+// answer" — and alt-coin.mjs collapsed both back into `derivs: null`, which is
+// the only field crowdRead reads. So a 451 geo-block, the EXPECTED response
+// from a datacenter IP, rendered the positive claim that the coin has no
+// futures market, verbatim. The reason lived in `degraded`, which is not the
+// sentence a reader believes.
+describe('alt-coin publishes WHY derivs is null', () => {
+  const realFetch = globalThis.fetch;
+  let allowed;
+  beforeEach(() => {
+    BLOBS.clear();
+    allowed = process.env.ALLOWED_EMAIL;
+    delete process.env.ALLOWED_EMAIL;
+  });
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    if (allowed === undefined) delete process.env.ALLOWED_EMAIL; else process.env.ALLOWED_EMAIL = allowed;
+  });
+
+  // Cleared per read: this endpoint caches per id+symbol for 300s, so a second
+  // read in the same test would answer out of the first one's payload.
+  const read = async (fapiStatus) => {
+    BLOBS.clear();
+    globalThis.fetch = upstreams({ fapiStatus });
+    const { out: res } = await onFakeClock(() => altCoinHandler(authedGet('/api/alt-coin?id=solana&symbol=SOL'), {}));
+    return res.json();
+  };
+
+  it('calls it a measurement only when Binance measured it', async () => {
+    const b = await read(400);
+    expect(b.derivs).toBeNull();
+    expect(b.derivsStatus).toBe('not_listed');
+    expect(b.derivsUnavailable).toBeNull();
+    expect(b.degraded.join(' ')).toMatch(/SOL has no listed Binance perpetual/);
+  });
+
+  // The three shapes that are NOT evidence about the coin. 451 is the one that
+  // matters most: status.mjs's own probe list says a datacenter IP collects it
+  // from fapi.binance.com as a matter of course.
+  it.each([[451, 'geo-block'], [429, 'quota bump'], ['timeout', 'no answer at all']])(
+    'refuses to turn a %s (%s) into a claim about the coin', async (fapiStatus) => {
+      const b = await read(fapiStatus);
+      expect(b.derivs).toBeNull();
+      expect(b.derivsStatus).toBe('unavailable');
+      expect(typeof b.derivsUnavailable).toBe('string');
+      expect(b.derivsUnavailable.length).toBeGreaterThan(0);
+      // and nothing in the payload states the coin has no perp.
+      expect(JSON.stringify(b)).not.toMatch(/has no listed Binance perpetual/);
+    });
+
+  it('gives the three cases three different statuses, so a consumer can branch', async () => {
+    expect((await read(400)).derivsStatus).toBe('not_listed');
+    expect((await read(451)).derivsStatus).toBe('unavailable');
+    globalThis.fetch = upstreams({ fapiStatus: 200 });
+    // a 200 whose body parses is the only 'ok' — this stub's premiumIndex body
+    // is unparseable, so it lands in 'unavailable', which is the honest answer
+    // for an unreadable response and is asserted by altDerivs' own tests above.
+    expect(['ok', 'unavailable']).toContain((await read(200)).derivsStatus);
+  });
+});
+
+/* ================= the auth check, and the eight handlers it was changed under ================= */
+
+describe('checkAuth: the blast radius is written down and pinned', () => {
+  const fnDir = () => {
+    const { fileURLToPath } = require('node:url');
+    const { dirname, join } = require('node:path');
+    return join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'functions');
+  };
+
+  // A shared auth change reaches every one of these, and until now the list of
+  // them lived nowhere. Grep for the IMPORT, not a mention: claude-stream.mjs
+  // discusses checkAuth in prose and does not use it.
+  it('CHECKAUTH_CALLERS is every function that actually imports the gate', () => {
+    const { readFileSync, readdirSync } = require('node:fs');
+    const { join } = require('node:path');
+    const dir = fnDir();
+    const found = readdirSync(dir)
+      .filter((f) => f.endsWith('.mjs'))
+      .filter((f) => {
+        const src = readFileSync(join(dir, f), 'utf8')
+          .replace(/^\s*\/\/.*$/gm, '')
+          .replace(/\/\*[\s\S]*?\*\//g, '');
+        const imports = src.match(/import\s*\{[^}]*\}\s*from\s*'\.\.\/shared\/util\.mjs'/g) || [];
+        return imports.some((i) => /\bcheckAuth\b|\bauthVerdict\b/.test(i));
+      })
+      .sort();
+    expect(found).toEqual([...CHECKAUTH_CALLERS].sort());
+  });
+
+  it('the timeout is documented as a constant, not a magic number in a fetch call', () => {
+    expect(AUTH_TIMEOUT_MS).toBeGreaterThanOrEqual(5000);
+    expect(AUTH_TIMEOUT_MS).toBeLessThan(PLATFORM_KILL_MS);
+  });
+});
+
+describe('checkAuth: a refusal and an outage are different answers', () => {
+  const realFetch = globalThis.fetch;
+  let allowed;
+  beforeEach(() => {
+    BLOBS.clear();
+    allowed = process.env.ALLOWED_EMAIL;
+    delete process.env.ALLOWED_EMAIL;
+  });
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    if (allowed === undefined) delete process.env.ALLOWED_EMAIL; else process.env.ALLOWED_EMAIL = allowed;
+  });
+  const withToken = () => new Request('https://pentagon.test/api/journal', { headers: { authorization: 'Bearer t' } });
+
+  it.each([[401], [403]])('Supabase answering %i is a definitive refusal', async (status) => {
+    globalThis.fetch = vi.fn(async () => ({ ok: false, status, json: async () => ({}) }));
+    expect(await authVerdict(withToken())).toMatchObject({ ok: false, indeterminate: false });
+  });
+
+  it('a missing token is a refusal, and costs Supabase nothing', async () => {
+    globalThis.fetch = vi.fn(async () => { throw new Error('should not be called'); });
+    expect(await authVerdict(new Request('https://pentagon.test/api/journal')))
+      .toMatchObject({ ok: false, indeterminate: false });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([[500], [502], [429]])('Supabase answering %i is an OUTAGE, not a verdict about the token', async (status) => {
+    globalThis.fetch = vi.fn(async () => ({ ok: false, status, json: async () => ({}) }));
+    const v = await authVerdict(withToken());
+    expect(v).toMatchObject({ ok: false, indeterminate: true });
+    expect(v.reason).toMatch(String(status));
+  });
+
+  it('a network failure is an outage too, and still fails closed', async () => {
+    globalThis.fetch = vi.fn(async () => { throw new Error('ECONNRESET'); });
+    expect(await authVerdict(withToken())).toMatchObject({ ok: false, indeterminate: true });
+  });
+
+  // A SUPABASE COLD START IS NOT A BAD TOKEN. 3000ms sat inside the range one
+  // legitimately takes, and the old code turned it into a bare `false` — which
+  // every caller renders as 401 "unauthorized" — on eight handlers that had
+  // never opted into that trade.
+  it('a 3.5s Supabase cold start verifies rather than 401-ing a working token', async () => {
+    globalThis.fetch = upstreams({ authMs: 3500 });
+    const { out } = await onFakeClock(() => authVerdict(withToken()));
+    expect(out).toMatchObject({ ok: true, indeterminate: false });
+  });
+
+  // ONLY THE HEADER WAIT WAS BOUNDED. fetchWithTimeout clears its timer the
+  // moment the headers land, so res.json() ran completely unbounded — a stalled
+  // response stream held the function past the platform kill while the comment
+  // above it said it could not.
+  it('bounds the body read with the same timer as the handshake', async () => {
+    process.env.ALLOWED_EMAIL = 'op@pentagon.test';
+    globalThis.fetch = vi.fn(async (url, opts = {}) => ({
+      ok: true,
+      status: 200,
+      json: () => new Promise((resolve, reject) => {
+        const t = setTimeout(() => resolve({ email: 'op@pentagon.test' }), 60_000);
+        opts.signal?.addEventListener('abort', () => { clearTimeout(t); reject(opts.signal.reason); });
+      }),
+    }));
+    const { out, wall } = await onFakeClock(() => authVerdict(withToken()));
+    expect(wall).toBeLessThanOrEqual(AUTH_TIMEOUT_MS + 50);
+    expect(out).toMatchObject({ ok: false, indeterminate: true });
+  });
+
+  it('memoises a verdict it actually reached, so the double check costs one round-trip', async () => {
+    globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ email: 'op@pentagon.test' }) }));
+    const req = withToken();
+    expect(await checkAuth(req)).toBe(true);
+    expect(await checkAuth(req)).toBe(true);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('memoises a definitive refusal too — a bad token does not get retried', async () => {
+    globalThis.fetch = vi.fn(async () => ({ ok: false, status: 401, json: async () => ({}) }));
+    const req = withToken();
+    expect(await checkAuth(req)).toBe(false);
+    expect(await checkAuth(req)).toBe(false);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  // A VERDICT WE NEVER REACHED IS NOT A VERDICT. alt-coin checks before it
+  // validates its params and sourceHandler checks again, so memoising a
+  // transient 500 from the first hop 401'd a request whose second hop would
+  // have succeeded.
+  it('does not memoise an outage — the second call site gets a real answer', async () => {
+    let n = 0;
+    globalThis.fetch = vi.fn(async () => {
+      n += 1;
+      return n === 1
+        ? { ok: false, status: 500, json: async () => ({}) }
+        : { ok: true, status: 200, json: async () => ({ email: 'op@pentagon.test' }) };
+    });
+    const req = withToken();
+    expect(await checkAuth(req)).toBe(false);
+    expect(await checkAuth(req)).toBe(true);
+    expect(n).toBe(2);
+  });
+
+  it('still collapses concurrent checks on one request to a single round-trip', async () => {
+    globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ email: 'op@pentagon.test' }) }));
+    const req = withToken();
+    expect(await Promise.all([checkAuth(req), checkAuth(req), checkAuth(req), checkAuth(req)]))
+      .toEqual([true, true, true, true]);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not carry a verdict across requests', async () => {
+    globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ email: 'op@pentagon.test' }) }));
+    expect(await checkAuth(withToken())).toBe(true);
+    expect(await checkAuth(withToken())).toBe(true);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('degrades rather than throwing on something that is not a Request', async () => {
+    globalThis.fetch = vi.fn(async () => { throw new Error('should not be called'); });
+    for (const bad of [null, undefined, 42, 'req', {}, { headers: {} }]) {
+      expect(await checkAuth(bad)).toBe(false);
+    }
+  });
+});
+
+// The eight handlers that predate the Alts work and had no test for any of
+// this. Six of them refuse an unauthenticated request before touching storage
+// or an upstream; that is the property a shared auth change can silently break,
+// and it is now pinned per handler rather than assumed from util.mjs.
+describe('every checkAuth caller refuses an unauthenticated request first', () => {
+  const realFetch = globalThis.fetch;
+  let allowed;
+  beforeEach(() => {
+    BLOBS.clear();
+    allowed = process.env.ALLOWED_EMAIL;
+    delete process.env.ALLOWED_EMAIL;
+    globalThis.fetch = vi.fn(async () => ({ ok: false, status: 401, json: async () => ({}) }));
+  });
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    if (allowed === undefined) delete process.env.ALLOWED_EMAIL; else process.env.ALLOWED_EMAIL = allowed;
+  });
+
+  const cases = [
+    ['journal.mjs', '/api/journal'],
+    ['settings.mjs', '/api/settings'],
+    ['position.mjs', '/api/position'],
+    ['candles.mjs', '/api/candles?symbol=MSTR'],
+    ['status.mjs', '/api/status'],
+    ['alt-watchlist.mjs', '/api/alt-watchlist'],
+    ['alt-coin.mjs', '/api/alt-coin?id=solana&symbol=SOL'],
+  ];
+
+  it.each(cases)('%s answers 401 with no token, and spends nothing', async (file, path) => {
+    const mod = await import(`../../functions/${file}`);
+    const res = await mod.default(new Request(`https://pentagon.test${path}`), {});
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: 'unauthorized' });
+    // Not even the Supabase round-trip: there was no token to check. No
+    // upstream, no Blobs write, nothing recorded against any source.
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(BLOBS.size).toBe(0);
+  });
+
+  it.each(cases)('%s answers 401 when Supabase refuses the token, not when it is merely slow', async (file, path) => {
+    globalThis.fetch = upstreams({ authMs: 3500 });
+    const mod = await import(`../../functions/${file}`);
+    const { out: res } = await onFakeClock(() => mod.default(
+      new Request(`https://pentagon.test${path}`, { headers: { authorization: 'Bearer t' } }), {},
+    ));
+    // 200, or a 502 from an upstream this stub cannot satisfy — anything but the
+    // 401 a 3000ms cap used to produce on a token that was perfectly good.
+    expect([200, 502]).toContain(res.status);
+  });
+
+  // journal.mjs is the representative for the boolean contract: it calls
+  // checkAuth and unauthorized() directly and must keep behaving exactly as it
+  // did, including on the outage path, because it was never given the richer
+  // verdict and must not silently change shape.
+  it('journal.mjs still 401s on a Supabase outage — the boolean contract is unchanged', async () => {
+    globalThis.fetch = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) }));
+    const res = await journalHandler(
+      new Request('https://pentagon.test/api/journal', { headers: { authorization: 'Bearer t' } }), {},
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it('journal.mjs serves a signed-in operator whose Supabase hop took 3.5s', async () => {
+    globalThis.fetch = upstreams({ authMs: 3500 });
+    const { out: res } = await onFakeClock(() => journalHandler(
+      new Request('https://pentagon.test/api/journal', { headers: { authorization: 'Bearer t' } }), {},
+    ));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ trades: [] });
+  });
+});
+
+// sourceHandler is the one caller that CAN tell the two apart, and it is the
+// one whose clients render the difference.
+describe('sourceHandler separates "we refused you" from "we could not ask"', () => {
+  const realFetch = globalThis.fetch;
+  let allowed;
+  beforeEach(() => {
+    BLOBS.clear();
+    allowed = process.env.ALLOWED_EMAIL;
+    delete process.env.ALLOWED_EMAIL;
+  });
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    if (allowed === undefined) delete process.env.ALLOWED_EMAIL; else process.env.ALLOWED_EMAIL = allowed;
+  });
+  const req = () => new Request('https://pentagon.test/api/alt-scan', { headers: { authorization: 'Bearer t' } });
+
+  it('401s a token Supabase rejected', async () => {
+    globalThis.fetch = vi.fn(async () => ({ ok: false, status: 401, json: async () => ({}) }));
+    const res = await sourceHandler('probe_401', async () => ({ ok: 1 }))(req(), {});
+    expect(res.status).toBe(401);
+    expect(await healthOf('probe_401')).toBeNull();
+  });
+
+  it('503s with the reason when Supabase never answered, so a hiccup is not "your login expired"', async () => {
+    globalThis.fetch = vi.fn(async () => ({ ok: false, status: 503, json: async () => ({}) }));
+    const res = await sourceHandler('probe_503', async () => ({ ok: 1 }))(req(), {});
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.error).toMatch(/auth check could not complete/);
+    expect(body.retryable).toBe(true);
+    // The SOURCE was never asked, so it is neither up nor down.
+    expect(await healthOf('probe_503')).toBeNull();
+  });
+});
+
+/* ---------------- a fresh cache hit is not evidence about an upstream ---------------- */
+
+// The smaller sibling of the stale-serve lie: a fresh hit reached nothing and
+// still recorded `ok: true, lastSuccessAt: now`, so /api/status reported the
+// time a browser last polled us as the time we last reached CoinGecko.
+describe('SOURCE_CACHED', () => {
+  const realFetch = globalThis.fetch;
+  let allowed;
+  beforeEach(() => {
+    BLOBS.clear();
+    allowed = process.env.ALLOWED_EMAIL;
+    delete process.env.ALLOWED_EMAIL;
+    globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ email: 'op@pentagon.test' }) }));
+  });
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    if (allowed === undefined) delete process.env.ALLOWED_EMAIL; else process.env.ALLOWED_EMAIL = allowed;
+  });
+
+  it('writes no health record at all — the previous one is the truth', async () => {
+    const res = await sourceHandler('probe_cachehit', async () => ({ rows: 1, [SOURCE_CACHED]: true }))(
+      new Request('https://pentagon.test/api/x', { headers: { authorization: 'Bearer t' } }), {},
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()).rows).toBe(1);
+    expect(await healthOf('probe_cachehit')).toBeNull();
+  });
+
+  it('never puts the marker on the wire', async () => {
+    const res = await sourceHandler('probe_cachewire', async () => ({ a: 1, [SOURCE_CACHED]: true }))(
+      new Request('https://pentagon.test/api/x', { headers: { authorization: 'Bearer t' } }), {},
+    );
+    expect(Object.keys(await res.json())).toEqual(['a', 'meta']);
+  });
+
+  it('alt-scan serves its fresh cache without touching alt_scan health', async () => {
+    BLOBS.set('alt_scan_cache', {
+      at: Date.now() - 5_000,
+      payload: { universe: [{ id: 'x' }], degraded: [], sourceDetail: 'coingecko', asOf: Date.now() - 5_000 },
+    });
+    const res = await altScanHandler(authedGet('/api/alt-scan'), {});
+    const body = await res.json();
+    expect(body.cached).toBe(true);
+    expect(body.stale).toBe(false);
+    expect(await healthOf('alt_scan')).toBeNull();
+    // one fetch: the auth check. Zero upstream calls.
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+/* ---------------- the blobs the key change orphaned ---------------- */
+
+describe('the pre-symbol alt_coin cache entries', () => {
+  const realFetch = globalThis.fetch;
+  let allowed;
+  beforeEach(() => {
+    BLOBS.clear();
+    allowed = process.env.ALLOWED_EMAIL;
+    delete process.env.ALLOWED_EMAIL;
+  });
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    if (allowed === undefined) delete process.env.ALLOWED_EMAIL; else process.env.ALLOWED_EMAIL = allowed;
+  });
+
+  // Nothing lists them and nothing can read them, so they are storage that can
+  // never be reclaimed. Cleared on the one pass that identifies them for free:
+  // a request for a coin with no entry under the new key at all.
+  it('are deleted the first time the new key misses, and not looked for again', async () => {
+    BLOBS.set('alt_coin_solana', { at: Date.now(), payload: { legacy: true } });
+    globalThis.fetch = upstreams({ fapiStatus: 400 });
+    await onFakeClock(() => altCoinHandler(authedGet('/api/alt-coin?id=solana&symbol=SOL'), {}));
+    expect(BLOBS.has('alt_coin_solana')).toBe(false);
+    expect(BLOBS.has('alt_coin_solana_sol')).toBe(true);
   });
 });

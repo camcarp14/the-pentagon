@@ -13,33 +13,52 @@
 // `stale: true` rather than 502-ing. A 502 blanks the board; stale-and-labelled
 // lets the freshness ladder age the numbers out on screen, which is the honest
 // version of the same information.
-import { sourceHandler, store, SOURCE_ERROR } from '../shared/util.mjs'
-import { altUniverse, altGlobal, fearGreed, trendingCoins, cacheGet, cachePut, cacheEnvelope, cacheIsFresh, isDominanceRow } from '../shared/alts.mjs'
+import { sourceHandler, store, SOURCE_ERROR, SOURCE_CACHED } from '../shared/util.mjs'
+import { altUniverse, altGlobal, fearGreed, trendingCoins, cacheGet, cachePut, cacheEnvelope, cacheIsFresh, isDominanceRow, requestDeadline } from '../shared/alts.mjs'
 
 const CACHE_KEY = 'alt_scan_cache'
 const DOM_HISTORY_KEY = 'alt_dom_history'
 const TTL_SEC = 90
 
-// Everything upstream has to be FINISHED by this many ms after the request
-// arrived, leaving the rest of Netlify's ~10s synchronous budget for the Blobs
-// round-trips and the response. The clock starts at arrival rather than at the
-// first fetch because the auth check and the cache read are spent out of the
-// same ten seconds — see attemptBudget in alts.mjs for why a chain of honoured
-// per-attempt timeouts is not the same thing as a budget.
-const DEADLINE_MS = 7500
+/**
+ * THIS ENDPOINT'S CHAIN IS FOUR CALLS IN PARALLEL AND ITS LONGEST HOP IS 6s.
+ * That is the whole chain — see `scan`, and altUniverse in alts.mjs for why the
+ * >1MB markets payload gets 6000ms rather than the file's usual 3000ms.
+ *
+ * It used to carry alt-coin's 7500ms, measured from arrival, with the auth
+ * round-trip and the Blobs read inside it — a budget written for a genuinely
+ * serial 11-second chain, applied to an endpoint that never had one. What that
+ * cost, reproduced against this handler with every upstream healthy: a 2.5s
+ * Supabase hop plus a 5.5s CoinGecko response left the universe fetch ~4.4s,
+ * aborted it, served a stale board saying "refetch failed: alt universe", and
+ * recorded CoinGecko DOWN on /api/status. Cold cache, same inputs: a hard 502.
+ * Wall was 7.5s against a ~10s kill either way, so the abort bought nothing.
+ *
+ * The wall still exists — `requestDeadline` takes whichever of the two clocks
+ * is tighter — but it now binds only when the invocation is genuinely running
+ * out of life, not because auth was slow. This is the endpoint the whole tab
+ * polls; it does not get to inherit another endpoint's problem.
+ */
+const CHAIN_MS = 6000
 
 export default async (req, context) => {
-  const deadlineAt = Date.now() + DEADLINE_MS
-  return sourceHandler('alt_scan', () => served(deadlineAt))(req, context)
+  // Arrival, not fetch start: the wall half of the budget has to cover the auth
+  // hop and the Blobs read, because the platform kill does.
+  const arrivedAt = Date.now()
+  return sourceHandler('alt_scan', () => served(arrivedAt))(req, context)
 }
 
-async function served(deadlineAt) {
+async function served(arrivedAt) {
   const s = store()
   const cached = await cacheGet(s, CACHE_KEY)
-  if (cacheIsFresh(cached, TTL_SEC)) return cacheEnvelope(cached, { ttlSec: TTL_SEC })
+  // SOURCE_CACHED: zero upstream calls happened, so nothing is recorded against
+  // alt_scan's health. See util.mjs — stamping `lastSuccessAt: now` off a cache
+  // hit reports the time a browser polled us as the time we last reached
+  // CoinGecko.
+  if (cacheIsFresh(cached, TTL_SEC)) return { ...cacheEnvelope(cached, { ttlSec: TTL_SEC }), [SOURCE_CACHED]: true }
 
   try {
-    const payload = await scan(s, deadlineAt)
+    const payload = await scan(s, arrivedAt)
     await cachePut(s, CACHE_KEY, payload, payload.asOf)
     return { ...payload, cached: false, stale: false, cacheAgeSec: 0 }
   } catch (err) {
@@ -62,7 +81,10 @@ async function served(deadlineAt) {
  * 5 minutes) or in the sentinel — not in a fifth call here. The Blobs read at
  * the bottom is local storage, not an upstream, and does not count.
  */
-async function scan(s, deadlineAt) {
+async function scan(s, arrivedAt) {
+  // Computed HERE, at the top of the fetch phase — auth and the cache read are
+  // already behind us, so the chain clock starts where the chain does.
+  const deadlineAt = requestDeadline({ arrivedAt, chainMs: CHAIN_MS })
   const [uni, glob, fng, trend] = await Promise.allSettled([
     altUniverse(250, { deadlineAt }),
     altGlobal({ deadlineAt }),

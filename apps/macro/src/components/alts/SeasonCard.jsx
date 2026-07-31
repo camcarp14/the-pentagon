@@ -228,13 +228,41 @@ export default function SeasonCard({
  * plain English with the reason in them ("fear & greed unavailable"), so this
  * component never has to keep a second copy of what the components are called.
  *
- * Under half coverage the line takes `--warn`: below that season.js refuses to
- * name a phase at all, so the number is standing on its own.
+ * Under half coverage the line takes `--warn`. That treatment is about the
+ * COVERAGE and nothing else, and the docstring used to justify it with "below
+ * that season.js refuses to name a phase" — true of the season card and not of
+ * the crowd card, which is the other caller. sentiment.js has no such refusal:
+ * a coin whose only measured input is its trending rank still reads `euphoric`
+ * off 20 points, with this line in --warn beneath it. Two consumers, one rule,
+ * and the rule is the one this component can actually see.
  */
 export function MeasuredScore({ score, measured, parts = [], max = 100 }) {
   const of = Number.isFinite(measured?.of) ? measured.of : null
   const earned = Number.isFinite(measured?.earned) ? measured.earned : null
-  if (score == null || of == null || earned == null || of <= 0) return null
+  if (of == null || earned == null || of <= 0) return null
+
+  // A REFUSED SCORE STILL OWES THE DENOMINATOR — it owes it MORE. This
+  // component used to bail on `score == null` along with the two genuinely
+  // empty cases, which was harmless while a refused phase still carried a
+  // number. It is not harmless now that season.js returns `score: null` under
+  // half coverage: the one state where the reader most needs to know how thin
+  // the evidence was is the state where the whole line disappeared, leaving a
+  // dash and a label with nothing behind them. `parts` still names what went
+  // unmeasured, so say it.
+  if (score == null) {
+    const unmeasured = parts.filter((p) => p?.points == null).map((p) => p?.label).filter(Boolean)
+    return (
+      <div className={`alt-cover${of < max / 2 ? ' thin' : ''}`} data-testid="measured-score">
+        <p>
+          No score: only <span className="num">{of}</span> of the <span className="num">{max}</span>{' '}
+          points had an input{unmeasured.length ? ', and what is missing is named rather than assumed:' : '.'}
+        </p>
+        {unmeasured.length > 0 && (
+          <ul className="factlist">{unmeasured.map((m, i) => <li key={i}>{m}</li>)}</ul>
+        )}
+      </div>
+    )
+  }
 
   if (of >= max) {
     return (

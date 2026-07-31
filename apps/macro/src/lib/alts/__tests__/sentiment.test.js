@@ -98,8 +98,10 @@ describe('the 100 points, verified by hand', () => {
 
 describe('a missing sub-read is never a neutral middle', () => {
   it('no listed perp ⇒ crowding null, three unscored parts, and a fact that says so', () => {
-    const r = crowdRead({ trendingRank: 5, community: community(), derivs: null, screened: screened(), now: NOW })
+    // `derivsStatus` is what licenses the claim — see the pair below.
+    const r = crowdRead({ trendingRank: 5, community: community(), derivs: null, derivsStatus: 'not_listed', screened: screened(), now: NOW })
     expect(r.crowding).toBeNull()
+    expect(r.perp).toEqual({ status: 'not_listed', reason: null })
     for (const key of ['funding', 'oi', 'divergence']) {
       expect(points(r, key)).toBeNull()
       expect(r.parts.find((p) => p.key === key).label).toMatch(/no listed perp/)
@@ -108,6 +110,50 @@ describe('a missing sub-read is never a neutral middle', () => {
     expect(r.measured.of).toBe(55)
     expect(r.facts.join(' ')).toMatch(/no listed Binance perp/)
     expect(r.facts.join(' ')).toMatch(/none has been assumed/)
+  })
+
+  /* ── "no perp" and "could not tell" are different sentences ──────────────
+   *
+   * Both arrive as `derivs: null`. This file used to print the first for both,
+   * which states a FACT ABOUT THE MARKET that nothing measured — reachable on
+   * the ordinary case, since fapi.binance.com 451s from a datacentre IP.
+   * alt-coin.mjs publishes `derivsStatus`; this is where it has to bind.
+   */
+  it('refuses to claim there is no perp when the feed simply did not answer', () => {
+    const r = crowdRead({
+      trendingRank: 5, community: community(), derivs: null,
+      derivsStatus: 'unavailable', derivsUnavailable: 'binance futures: HTTP 451 from fapi.binance.com',
+      screened: screened(), now: NOW,
+    })
+    expect(r.perp).toEqual({ status: 'unavailable', reason: 'binance futures: HTTP 451 from fapi.binance.com' })
+    expect(r.facts.join(' ')).not.toMatch(/no listed Binance perp/)
+    expect(r.facts.join(' ')).toMatch(/did not answer for TEST/)
+    expect(r.facts.join(' ')).toMatch(/HTTP 451/)
+    expect(r.facts.join(' '), 'the reader must be told the listing itself is unknown')
+      .toMatch(/was NOT established/)
+    for (const key of ['funding', 'oi', 'divergence']) {
+      // Identical POINTS to the not_listed case — unmeasured is unmeasured, and
+      // neither is a neutral 50. Only the sentence differs.
+      expect(points(r, key)).toBeNull()
+      expect(r.parts.find((p) => p.key === key).label).not.toMatch(/no listed perp/)
+    }
+    expect(r.measured.of).toBe(55)
+  })
+
+  it('treats an unstated status as unknown rather than as a claim', () => {
+    // The old default WAS the claim. A caller who did not say has established
+    // nothing, and the vaguer answer is the only one that is always true.
+    const r = crowdRead({ trendingRank: 5, community: community(), derivs: null, screened: screened(), now: NOW })
+    expect(r.perp.status).toBe('unavailable')
+    expect(r.facts.join(' ')).not.toMatch(/no listed Binance perp/)
+  })
+
+  it('reports a live perp read as ok, off the data rather than off the label', () => {
+    // A status that contradicts the payload must not win: `derivs` is present,
+    // so the read is ok whatever a caller claims.
+    const r = crowdRead({ trendingRank: 5, community: community(), derivs: derivs(), derivsStatus: 'not_listed', screened: screened(), now: NOW })
+    expect(r.perp.status).toBe('ok')
+    expect(r.facts.join(' ')).not.toMatch(/no listed Binance perp/)
   })
 
   it('the same coin scores the same heat with and without a perp read', () => {
@@ -188,6 +234,12 @@ describe('funding', () => {
     const r = crowdRead({ derivs: derivs({ nextFundingTime: NOW - 30 * 3_600_000 }), screened: screened(), now: NOW })
     expect(points(r, 'funding')).toBeNull()
     expect(r.facts.join(' ')).toMatch(/funding snapshot for TESTUSDT is stale/)
+    // ...and does not then publish the rate it just declined to score. This is
+    // the half that was missing: the points were suppressed and the number went
+    // out on `crowding` anyway, where contrarianOf read it, directive.js quoted
+    // it in a guardrail and the crowd card printed it as a measurement.
+    expect(r.crowding.fundingAnnualPct).toBeNull()
+    expect(r.crowding.fundingRatePer8h).toBeNull()
   })
 })
 
@@ -217,11 +269,103 @@ describe('open interest is read in contracts, not in dollars', () => {
 
   it('drops a stale series rather than relabelling old data as a 24h change', () => {
     const r = crowdRead({
-      derivs: derivs({ openInterest: [{ t: at(9), oi: 100, oiValueUsd: 1 }, { t: at(8), oi: 130, oiValueUsd: 1 }] }),
+      derivs: derivs({ openInterest: [{ t: at(9), oi: 100, oiValueUsd: 4e8 }, { t: at(8), oi: 130, oiValueUsd: 5e8 }] }),
       screened: screened(), now: NOW,
     })
     expect(points(r, 'oi')).toBeNull()
     expect(r.facts.join(' ')).toMatch(/too old to call a 24h change/)
+    // Dropped from the OUTPUT too, not just from the score — the change and the
+    // notional level both come off a nine-day-old sample, and CoinDetail renders
+    // whatever is on this object beside a live price.
+    expect(r.crowding.oiChange24hPct).toBeNull()
+    expect(r.crowding.oiLatestUsd).toBeNull()
+    // The count of samples is not a measurement of the market, so it stays.
+    expect(r.crowding.oiSamples).toBe(2)
+  })
+
+  // The gate is on AGE, and a single fresh sample is not old — it just cannot be
+  // differenced. Refusing the level there as well would be the over-correction.
+  it('keeps the notional outstanding when the only problem is that there is one sample', () => {
+    const r = crowdRead({ derivs: derivs({ openInterest: [{ t: at(0), oi: 100, oiValueUsd: 9e7 }] }), screened: screened(), now: NOW })
+    expect(points(r, 'oi')).toBeNull()
+    expect(r.crowding.oiChange24hPct).toBeNull()
+    expect(r.crowding.oiLatestUsd).toBe(9e7)
+  })
+})
+
+/* ── a number this file refused to score does not leave this file ─────────── */
+
+// THE DEFECT THIS BLOCK EXISTS FOR. The staleness gates suppressed the POINTS
+// and published the values anyway. Measured on one coin, one pass: the funding
+// part read "funding snapshot is stale — not scored" while `crowding` carried
+// 131.4, `contrarianOf` turned it into `contrarian: 'headwind'`, directive.js
+// read that to downgrade ENTER to STARTER and printed "funding is 131%/yr" in a
+// guardrail, and the crowd card rendered "Funding +131%/yr" as a measurement.
+// Identical inputs with the snapshot merely absent read `neutral`.
+describe('a refused number cannot change the action or reach the screen', () => {
+  const hot = { lastFundingRate: 0.0012, globalLongShort: ls(69), topLongShort: ls(46) }   // 131%/yr, +23pts
+  const ctx = { screened: screened({ band: 'running', chg7d: 12 }), community: community(), trendingRank: 8, now: NOW }
+
+  it('reads a STALE funding snapshot exactly as it reads an ABSENT one', () => {
+    // The re-review's own fixture: one coin, no community stats, not trending —
+    // so the funding extreme is the one that decides the rung. With it the pair
+    // ["funding at 131%/yr", "retail 23 points longer…"] is two extremes and a
+    // headwind; without it, one extreme on a coin under 62 is a curiosity.
+    const cold = { screened: screened({ band: 'igniting', chg7d: 12, rsVsBtc7d: 4 }), trendingRank: null, now: NOW }
+    const stale = crowdRead({ ...cold, derivs: derivs({ ...hot, nextFundingTime: NOW - 9 * 24 * 3_600_000 }) })
+    const absent = crowdRead({ ...cold, derivs: derivs({ ...hot, lastFundingRate: null, nextFundingTime: null }) })
+    expect(stale.contrarian).toBe(absent.contrarian)
+    expect(stale.extremes).toEqual(absent.extremes)
+    expect(stale.score).toBe(absent.score)
+    expect(stale.crowding.fundingAnnualPct).toBe(absent.crowding.fundingAnnualPct)
+    // and specifically: no headwind off a snapshot nine days past due
+    expect(stale.contrarian).toBe('neutral')
+    expect(stale.extremes).not.toContain('funding at 131%/yr')
+  })
+
+  it('still calls the headwind when the snapshot IS live — the gate is on staleness, not on the warning', () => {
+    const live = crowdRead({ ...ctx, derivs: derivs({ ...hot }) })
+    expect(live.crowding.fundingAnnualPct).toBeCloseTo(131.4, 6)
+    expect(live.extremes).toContain('funding at 131%/yr')
+    expect(live.contrarian).toBe('headwind')
+  })
+
+  // The general rule, swept rather than spot-checked: for every combination of
+  // the gates, a published crowding value implies its own part was scored.
+  it('publishes no value whose part was left unscored, in any combination', () => {
+    const FUND = { live: NOW + 3_600_000, stale: NOW - 9 * 24 * 3_600_000 }
+    const RATE = { some: 0.0012, none: null }
+    const OI = {
+      live: [{ t: at(1), oi: 100, oiValueUsd: 1e8 }, { t: at(0), oi: 130, oiValueUsd: 1.4e8 }],
+      stale: [{ t: at(9), oi: 100, oiValueUsd: 1e8 }, { t: at(8), oi: 130, oiValueUsd: 1.4e8 }],
+      one: [{ t: at(0), oi: 100, oiValueUsd: 1e8 }],
+      none: [],
+    }
+    let seen = 0
+    for (const f of Object.keys(FUND)) {
+      for (const rate of Object.keys(RATE)) {
+        for (const oi of Object.keys(OI)) {
+          const r = crowdRead({
+            ...ctx,
+            derivs: derivs({ lastFundingRate: RATE[rate], nextFundingTime: FUND[f], openInterest: OI[oi] }),
+          })
+          seen++
+          const k = r.crowding
+          if (k == null) continue
+          const scoredFunding = points(r, 'funding') != null
+          const scoredOi = points(r, 'oi') != null
+          if (!scoredFunding) {
+            expect(k.fundingAnnualPct, `${f}/${rate}/${oi}`).toBeNull()
+            expect(k.fundingRatePer8h, `${f}/${rate}/${oi}`).toBeNull()
+          }
+          if (!scoredOi && oi === 'stale') expect(k.oiChange24hPct, `${f}/${rate}/${oi}`).toBeNull()
+          // Nothing a refused part produced can reach the two extremes the
+          // directive downgrades on.
+          if (!scoredFunding) expect(r.extremes.join(' ')).not.toMatch(/funding at/)
+        }
+      }
+    }
+    expect(seen).toBe(16)
   })
 })
 

@@ -23,8 +23,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import App from "../App.jsx";
 import AltsPanel from "../components/alts/AltsPanel.jsx";
+import AltBoard from "../components/alts/AltBoard.jsx";
 import CoinDetail from "../components/alts/CoinDetail.jsx";
 import SeasonCard from "../components/alts/SeasonCard.jsx";
+import { api, API_TIMEOUT_MS } from "../lib/api.js";
 import { sparkPoints, sparkDirection } from "../components/alts/sparkline.jsx";
 import { screenCoin, screenUniverse } from "../lib/alts/screen.js";
 import { seasonRead } from "../lib/alts/season.js";
@@ -325,8 +327,38 @@ describe("The Alts tab renders against a real payload shape", () => {
     expect(/Match to the archetype|No base rate for SOL/.test(out)).toBe(true);
     // the divergence is the whole reason derivatives are in this app
     expect(out).toContain("Divergence");
-    // a median is never shown without its worst case beside it
-    if (out.includes("Match to the archetype")) expect(out).toContain("worst ");
+  });
+
+  it("puts a worst case under EVERY median, not under one of the three", () => {
+    // The rule precedent.js states — "the worst case is reported beside the
+    // median everywhere the median is shown" — is a rule about three tiles, and
+    // the version of this test it replaces was
+    //
+    //     if (out.includes("Match to the archetype")) expect(out).toContain("worst ")
+    //
+    // one substring over the entire document, satisfied by the single tile that
+    // had one. `worstFwd7` and `worstFwd60` existed in the lib and appeared
+    // nowhere on screen, under a comment claiming they did, and that assertion
+    // was green the whole time. So: split the ticket into its tiles and check
+    // each one on its own.
+    const out = detail();
+    const ticket = out.match(/<div class="ticket alt-rates">([\s\S]*?)<\/div><div class="stats/);
+    expect(ticket, "the base-rate ticket must be on screen at all").toBeTruthy();
+    const tiles = ticket[1].split('<div class="tk">').slice(1);
+    expect(tiles).toHaveLength(3);
+
+    for (const [i, label] of ["7d after", "21d after", "60d after"].entries()) {
+      const tile = tiles[i];
+      expect(tile, `tile ${i} is not ${label}`).toContain(label);
+      // the median, then the worst case, then the sample both were counted from
+      expect(tile, `${label} has no worst case under its median`).toMatch(/worst [+-]\d/);
+      expect(tile, `${label} does not say how many episodes it counted`).toMatch(/\d+ episodes?/);
+      expect(tile).not.toMatch(/undefined|NaN|worst —/);
+    }
+    // …and the three worst cases are three different readings of the archetype,
+    // not the 21-day one printed three times.
+    const worsts = tiles.map((t) => t.match(/worst ([+-][\d.]+)%/)[1]);
+    expect(new Set(worsts).size, `all three tiles printed the same worst case: ${worsts}`).toBeGreaterThan(1);
   });
 
   it("states the refusal when there is not enough history for a base rate", () => {
@@ -336,8 +368,51 @@ describe("The Alts tab renders against a real payload shape", () => {
   });
 
   it("says a coin has no perp instead of scoring it neutral", () => {
-    const out = detail({ payload: { ...COIN_PAYLOAD, derivs: null } });
+    // `derivsStatus` is REQUIRED to make this claim, and the fixture states it
+    // rather than leaving `derivs: null` to be read as whichever case the
+    // reader assumes. That ambiguity is the bug the pair below pins.
+    const out = detail({ payload: { ...COIN_PAYLOAD, derivs: null, derivsStatus: "not_listed", derivsUnavailable: null } });
     expect(out).toContain("No listed perpetual");
+  });
+
+  /* ── THE SEAM: "no perp" vs "could not tell" ────────────────────────────────
+   *
+   * alt-coin.mjs publishes `derivsStatus`/`derivsUnavailable` because
+   * `derivs: null` cannot distinguish "Binance answered and the symbol does not
+   * exist" (a measurement) from "Binance did not answer" (nothing at all). The
+   * producer had tests; the CONSUMER had none, so the card kept printing the
+   * first sentence for both — stating as fact that a coin has no futures market
+   * on the 451 geo-block that status.mjs documents as the EXPECTED response
+   * from a datacentre IP.
+   *
+   * Driven through the real CoinDetail → real crowdRead, from the real payload
+   * field names, because a hand-built crowd object is how this was missed.
+   */
+  it("never claims a coin has no perp when the feed merely did not answer", () => {
+    const out = detail({
+      payload: {
+        ...COIN_PAYLOAD, derivs: null, derivsStatus: "unavailable",
+        derivsUnavailable: "binance futures: HTTP 451 from fapi.binance.com",
+      },
+    });
+    // The positive claim must be absent in every form it is written in.
+    expect(out, "a feed that did not answer establishes nothing about the market")
+      .not.toMatch(/No listed perpetual/);
+    expect(out).not.toMatch(/no listed perp/);
+    expect(out).not.toMatch(/has no Binance perp/);
+    // …and the truth is stated, with the reason the reader needs to act on it.
+    expect(out).toContain("No perp read this pass");
+    expect(out).toMatch(/HTTP 451 from fapi\.binance\.com/);
+    // Still unmeasured, not neutral — the points must not come back.
+    expect(out).toMatch(/points that had an input/);
+  });
+
+  it("falls back to the non-claiming answer when nobody said which it was", () => {
+    // A caller that does not pass the status has not established anything. The
+    // old default was the CLAIM, which is how the false sentence shipped.
+    const out = detail({ payload: { ...COIN_PAYLOAD, derivs: null } });
+    expect(out).not.toMatch(/No listed perpetual/);
+    expect(out).toContain("No perp read this pass");
   });
 
   it("names the denominator wherever a rescaled score is printed, not behind a disclosure", () => {
@@ -348,7 +423,7 @@ describe("The Alts tab renders against a real payload shape", () => {
     //
     // A coin with no perp is the measured case: sentiment.js scores it out of the
     // 55 attention points and says so.
-    const noPerp = detail({ payload: { ...COIN_PAYLOAD, derivs: null } });
+    const noPerp = detail({ payload: { ...COIN_PAYLOAD, derivs: null, derivsStatus: "not_listed", derivsUnavailable: null } });
     expect(noPerp).toContain('data-testid="measured-score"');
     expect(noPerp).toMatch(/points that had an input/);
     expect(noPerp, "the missing half must be named, not just counted")
@@ -388,14 +463,23 @@ describe("The Alts tab renders against a real payload shape", () => {
     ];
     const season = seasonRead({ universe: rows, btcRow: rows[0], ethRow: null, global: null, fearGreed: null, domHistory: null, now: NOW });
     expect(season.phase).toBe("unknown");
-    expect(season.score).toBeGreaterThan(70);   // a high number under a refused label
     expect(season.coverage).toBeLessThan(0.5);
 
     const html = renderToStaticMarkup(createElement(SeasonCard, { season }));
+    // NO CONFIDENT NUMERAL UNDER A REFUSED LABEL. This line used to assert
+    // `season.score > 70` — it pinned the behaviour where 35 of 100 measured
+    // points rendered as a big "74" over "Not enough measured", which is the
+    // one thing a reader takes from the top of the tab. The card must print the
+    // refusal in the numeral too, not only in the label beneath it.
+    expect(html).toMatch(/data-testid="season-score"[^>]*>—</);
+    expect(html).not.toMatch(/data-testid="season-score"[^>]*>\d/);
     // The phase maps to a band the stylesheet actually owns.
     expect(html).toContain("tc-head band-unknown");
-    // Under half coverage the denominator line takes the warning treatment.
+    // …and a refused score still owes the denominator. It is the state where
+    // the reader most needs to know how thin the evidence was, so the coverage
+    // line must survive the refusal rather than disappearing with the number.
     expect(html).toMatch(/class="alt-cover thin"/);
+    expect(html).toMatch(/only <span class="num">35<\/span> of the <span class="num">100<\/span>/);
     expect(html).toContain("Not enough measured");
     // An unmeasured part says so in words. `{p.points} / {p.max}` rendered a
     // null as " / 25", which reads as a zero that was scored.
@@ -459,6 +543,67 @@ describe("The Alts tab renders against a real payload shape", () => {
     panel(); detail(); detail({ payload: { ...COIN_PAYLOAD, derivs: null, candles: null } });
     const react = warnings.slice(before).filter((w) => !w.startsWith("[@cc/"));
     expect(react, `React warned:\n${react.join("\n")}`).toEqual([]);
+  });
+
+  it("disables only the star whose own write is outstanding", () => {
+    // A single in-flight PUT used to disable EVERY star on the tab — 26 rows
+    // plus the detail pane's — because the board was handed `locked={savingId
+    // != null}`. With `api()` unbounded, a stalled request left the whole
+    // watchlist control surface dead with no toast and no way back (measured
+    // still dead at t+15s in a real browser). The writer now queues instead of
+    // locking, so the lock is per row and nothing else on the board notices.
+    const season = seasonRead({
+      universe: UNIVERSE, btcRow: UNIVERSE[0], ethRow: UNIVERSE[1],
+      global: SCAN_PAYLOAD.global, fearGreed: SCAN_PAYLOAD.fearGreed,
+      trending: SCAN_PAYLOAD.trending, domHistory: null, now: NOW,
+    });
+    const rows = screenUniverse(UNIVERSE, { btcRow: UNIVERSE[0], ethRow: UNIVERSE[1], season, now: NOW });
+    const out = renderToStaticMarkup(createElement(AltBoard, {
+      rows, watched: new Set(), selectedId: null,
+      pendingIds: new Set(["solana"]),
+      onSelect: () => {}, onToggleWatch: () => {},
+    }));
+    const stars = out.match(/<button[^>]*class="alt-star[^"]*"[^>]*>/g) ?? [];
+    expect(stars.length, "the board rendered no stars at all").toBeGreaterThan(2);
+    const off = stars.filter((s) => /\sdisabled\b/.test(s));
+    expect(off, `${off.length} of ${stars.length} stars are disabled for one row's write`).toHaveLength(1);
+    expect(off[0]).toContain("SOL");
+    // …and the row that is saving says so with more than an opacity change
+    expect(off[0]).toMatch(/class="alt-star[^"]*saving/);
+  });
+
+  it("gives up on a stalled request instead of hanging the control that started it", async () => {
+    // `fetch` has no timeout. Nothing noticed while every caller was a poll,
+    // but the watchlist star disables while its write is in flight, so an
+    // unbounded request is a dead button until the browser's own socket
+    // timeout. The bound lives in api() so all eleven call sites get it.
+    const realFetch = globalThis.fetch;
+    const realStore = globalThis.sessionStorage;
+    globalThis.sessionStorage = { getItem: () => "" };
+    let seen = null;
+    try {
+      // A stub that behaves like the real thing: it stalls, and it honours the
+      // signal. Against the source this replaces there IS no signal, so this
+      // throws before the stall and the rejection is the missing bound itself.
+      globalThis.fetch = (_url, init) => {
+        seen = init;
+        if (!init?.signal) throw new Error("api() sent no AbortSignal — a stalled request cannot be given up on");
+        return new Promise((_ok, fail) => {
+          init.signal.addEventListener("abort", () => fail(Object.assign(new Error("aborted"), { name: "AbortError" })));
+        });
+      };
+      const started = Date.now();
+      await expect(api("alt-watchlist", { method: "PUT", body: "{}", timeoutMs: 60 }))
+        .rejects.toMatchObject({ code: "timeout" });
+      expect(Date.now() - started, "the bound did not fire").toBeLessThan(2000);
+      expect(seen.signal, "no AbortSignal ever reached fetch").toBeTruthy();
+      expect(seen.signal.aborted, "the socket was left open after giving up").toBe(true);
+      // and the default is a real bound, not Infinity and not absent
+      expect(Number.isFinite(API_TIMEOUT_MS) && API_TIMEOUT_MS > 0).toBe(true);
+    } finally {
+      globalThis.fetch = realFetch;
+      globalThis.sessionStorage = realStore;
+    }
   });
 });
 
@@ -847,6 +992,33 @@ describe("Macro obeys the language", () => {
     expect(deps[1]).toContain("coinState");
     expect(deps[1], "a freshness OBJECT in the deps is a per-tick recompute")
       .not.toMatch(/freshScan|freshCoin/);
+  });
+
+  it("keeps identity, the ranking and the star ahead of the columns that scroll away", () => {
+    // The board is 885px of min-content inside a 576-670px pane, so ~215px of
+    // table is always past the right edge of `.tbl-wrap`. That is what a dense
+    // table's scroller is for. WHICH columns are past the edge is not a detail:
+    // with score and band written last, the number the board is sorted by, the
+    // state word it is inked from and the star were all 0px visible at 1020,
+    // 1180, 1280, 1440 and 1920 — with and without a coin selected — and the
+    // only way to read the score was to scroll the coin's name off the screen.
+    //
+    // No DOM here, so this pins the two declarations that decide it. Against
+    // the source this replaces the template reads "rank coin price c24 c7 c30
+    // rs turn spark score band" and there is no star rule at all, so both
+    // assertions fail.
+    const areas = /grid-template-areas:\s*"rank ([^"]+)"/.exec(css);
+    expect(areas, "the desktop table template moved or was renamed").toBeTruthy();
+    const order = `rank ${areas[1]}`.trim().split(/\s+/);
+    expect(order).toContain("price");
+    for (const name of ["coin", "score", "band"]) {
+      expect(order, `${name} is not in the desktop table`).toContain(name);
+      expect(order.indexOf(name), `${name} sits behind the fold, after price`)
+        .toBeLessThan(order.indexOf("price"));
+    }
+    // and the star is the first cell of the row from 768 up, not the last
+    expect(css, "the star is still parked past the right edge of the scroller")
+      .toMatch(/\.alt-row > \.alt-star \{ grid-column: 1; \}/);
   });
 
   it("explains the board's two flags somewhere touch can read them", () => {

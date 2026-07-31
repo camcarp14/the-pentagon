@@ -28,12 +28,22 @@
 //   DOMINANCE ...... 0–20   falling 20 · flat 10 · rising 0
 //                           trend from domHistory ALONE, and only when ≥7 of
 //                           its samples fall inside the last 30 days
-//   ETH/BTC ........ 0–10   +5 per window ETH gains on BTC — and out of 5, not
-//                           out of 10, when only one of the two windows resolved
+//   ETH/BTC 7d ..... 0–5    5 when ETH gained on BTC over the window
+//   ETH/BTC 30d .... 0–5    same, and a SEPARATE part — see below
 //   FEAR & GREED ... 0–10   round(value ÷ 10), clamped 0–10
 //
 // So 63% breadth over 7d is 22 points, and you can check that with a phone
 // calculator, which is the whole standard this file is held to.
+//
+// SIX PARTS WITH FIXED MAXES THAT SUM TO EXACTLY 100, ALWAYS. The two ETH/BTC
+// windows are two parts rather than one part whose max shrinks. A shrinking max
+// broke the only arithmetic anyone can check by eye: with one leg resolved the
+// achievable total was 95, so `coverage` (which divides by 100) topped out at
+// 0.95, the card's "every input was measured" line became unreachable, and its
+// "the other N are in neither half of the fraction" claimed 30 dropped points
+// when the one part it could name was worth 25. Two parts, two names, two fives
+// — and `100 − of` is now always exactly the sum of the maxes of the parts that
+// had no input, every one of which is named in the fact below.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 // AN UNMEASURED COMPONENT IS DROPPED FROM BOTH SIDES AND THE SCORE IS
@@ -56,19 +66,48 @@
 // no better in the other direction — the absence of an ETH row is not evidence
 // that alts are weak.
 //
-// A market REGIME read is the one place renormalising is right. The question is
-// "is the median alt outperforming?", and every gauge here answers that same
-// question from a different angle, so any honest subset of them still answers
-// it. Renormalising assumes the gauges we could not read look like the ones we
-// could; the midpoint assumed they were neutral, which is a stronger claim off
-// less evidence. Note what it costs the alarming end too: a market with 0%
-// breadth now scores 0 rather than the 20 the midpoints used to hand it.
+// ─────────────────────────────────────────────────────────────────────────────
+// RENORMALISING IS AN EXTRAPOLATION, AND IT IS NOT ALLOWED TO NAME A REGIME.
 //
-// AND UNDER HALF COVERAGE THERE IS NO PHASE. The score is still arithmetic over
-// measured points and is still reported; `phase` is 'unknown'. "Alt season" off
-// the 7-day breadth count alone is a claim about the market that 35 of the 100
-// points cannot support, and the phase is what directive.js reads. A fact names
-// exactly which inputs were unavailable.
+// This is the correction the round before got wrong, so it is worth being exact
+// about what was wrong with it. Renormalising assumes the gauges we could not
+// read look like the ones we could. At the cold end that is harmless — 0%
+// breadth renormalises to 0 either way. At the HOT end it manufactures
+// confidence out of an absence: with breadth alone measured the arithmetic
+// reduces to `100 × (0.35b + 0.25b) ÷ 60 = b`, so the score IS the breadth
+// percentage, and 72% breadth read `alt_season` on day one while the same
+// market with all five gauges fetched at neutral read `majors_rotating` (58).
+// A THINNER read was scoring HOTTER, and directive.js gates ENTER on the phase.
+//
+// The guard written for it — refuse the phase under 50% coverage — never bound,
+// because the day-one state leaves BOTH breadth windows measured: 35 + 25 = 60
+// of 100, coverage 0.60, over the line. A phase was named on day one every time.
+//
+// SO THE READ IS A BAND, AND THE PHASE IS ONLY NAMED WHERE THE BAND CANNOT MOVE:
+//
+//     low  = earned                         every unread gauge at zero
+//     high = earned + (100 − of)            every unread gauge at its max
+//
+// The fully measured read of the SAME market is inside [low, high] by
+// construction — measuring a part can only add somewhere between 0 and its max —
+// so when the whole band falls inside one rung of the ladder, the phase named
+// here is EXACTLY the phase the complete read would have named, whatever the
+// missing gauges turn out to say. When the band straddles a boundary, no phase
+// is named: not the hot one (which would be permission we did not earn) and not
+// the cold one either (which would be a veto we did not measure — the mirror of
+// the same bug, and the reason this is not simply "score the unread parts at
+// zero"). Day one is a 40-point band, which cannot fit inside any rung, so day
+// one never names a regime — which is what the STARTER downgrade in
+// directive.js was built for and never received.
+//
+// AND UNDER HALF THE POINTS THERE IS NO SCORE AT ALL. `score: null`, the same
+// refusal this file already makes when breadth cannot be counted. A renormalised
+// number off fewer than 50 of the 100 points is more extrapolation than
+// measurement, and the number is the thing a reader sizes off: 7-day breadth
+// alone at 100% used to render `100 / 100` with all ten pips lit under the label
+// "Not enough measured". Since no single part is worth 50, no single input can
+// ever publish a score. The breadth bars are measured and still render, the
+// bounds are stated in `plain`, and the arithmetic is in the facts.
 //
 // FEAR & GREED IS MONOTONE, NOT CONTRARIAN, on purpose. This score measures
 // whether risk appetite is present, not whether it is well-founded. The
@@ -76,9 +115,12 @@
 // `euphoric` phase below — putting it here too would have greed both raise and
 // lower the same number.
 //
-// PHASE IS A PURE FUNCTION OF THE SCORE (plus the euphoria overlay and the
-// coverage gate above), so the label and the number can never disagree — the
-// same rule window.js is built on.
+// PHASE IS A PURE FUNCTION OF THE SCORE (plus the euphoria overlay and the band
+// gate above), so the label and the number can never disagree — the same rule
+// window.js is built on. `score` lands inside [low, high] by construction, so
+// where the band pins a rung, the published number is in that rung too. And a
+// phase is never named without a number: a regime we would not print a score for
+// is not a regime we will put a name on either.
 //   risk_off <22 · btc_only <40 · btc_leads <55 · majors_rotating <72 ·
 //   alt_season ≥72 · euphoric = alt_season AND the crowd is already all-in.
 import { isExcluded } from './screen.js'
@@ -87,17 +129,21 @@ const MIN_DOM_SAMPLES = 7      // below this we say 'unknown' and mean it
 const DOM_FLAT_PTS = 0.5       // rule of thumb: dominance moves ±0.5pp on noise
 const DOM_WINDOW_DAYS = 30
 
-// 35 + 25 + 20 + 10 + 10. The score a read with every input measured is out of,
-// and the denominator `coverage` is expressed against.
+// 35 + 25 + 20 + 5 + 5 + 10. Every part keeps a FIXED max whether or not its
+// input arrived, so the six always sum to exactly this — which is what makes
+// `coverage`, `100 − of` and the card's "what was dropped" line agree.
 const MAX_POINTS = 100
-// Under this share of the 100 points the number stands and the LABEL refuses.
-const MIN_COVERAGE_FOR_PHASE = 0.5
+// Under this many measured points the renormalisation is mostly extrapolation
+// and no score is published. Half, and it is half of the whole ladder rather
+// than of some other denominator: see the header.
+const MIN_POINTS_FOR_SCORE = MAX_POINTS / 2
 
 // What each part is called in the fact that names what went missing. The keys
 // are the wire names; a user reads "the dominance trend", not "dominance".
 const PART_NAMES = {
   breadth7: '7d breadth', breadth30: '30d breadth',
-  dominance: 'the dominance trend', ethbtc: 'ETH/BTC', feargreed: 'fear & greed',
+  dominance: 'the dominance trend', ethbtc7: 'ETH/BTC over 7d',
+  ethbtc30: 'ETH/BTC over 30d', feargreed: 'fear & greed',
 }
 
 const PHASES = [
@@ -113,13 +159,27 @@ const EUPHORIC = {
   plain: 'Everything is up and the crowd is all-in. Late-cycle: tighten stops and take profit — this is not where new positions get opened.',
 }
 
-// The coverage gate's label. It is a different refusal from `NO_READ` below:
-// there we could not count breadth at all, here we counted something and it is
-// not enough of the picture to name a regime off.
-const THIN = {
+/**
+ * THREE REFUSALS, THREE DIFFERENT SENTENCES. All of them report `phase:
+ * 'unknown'`, which directive.js treats as a downgrade rather than a veto, and
+ * all of them state their own arithmetic — a refusal that does not say what it
+ * refused is indistinguishable from a bug.
+ *
+ *   NO_READ  breadth could not be counted at all. No score, no bounds.
+ *   THIN     fewer than half the points had an input. The bounds are reported
+ *            and the number is not — see the header.
+ *   SPAN     the number stands, but the unread points straddle a rung boundary,
+ *            so naming either side would be a claim we cannot make.
+ */
+const THIN = (of, low, high) => ({
   id: 'unknown', label: 'Not enough measured',
-  plain: 'Less than half of the regime read came back. The score below is real arithmetic over the part that did — it is not a call on the market, and nothing should be sized off it.',
-}
+  plain: `Under half of this read had an input — ${of} of its 100 points. Depending on the ${MAX_POINTS - of} that did not, the same market reads anywhere from ${low} to ${high} out of 100, so no score and no regime are published off it. The breadth bars below are the part that was measured.`,
+})
+
+const SPAN = (score, of, low, high, lowRung, highRung) => ({
+  id: 'unknown', label: `${lowRung.label} to ${highRung.label}`,
+  plain: `${score} out of 100 assumes the ${MAX_POINTS - of} points we could not read look like the ${of} we could. They could land the full read anywhere from ${low} to ${high} — ${lowRung.label} through ${highRung.label} — so the number stands and no regime is named off it.`,
+})
 
 const NO_READ = {
   id: 'unknown', label: 'No read',
@@ -154,7 +214,7 @@ export function seasonRead({
     return {
       score: null, phase: NO_READ.id, label: NO_READ.label, plain: NO_READ.plain,
       breadth, dominance, ethBtc, fearGreed: fg, parts: [],
-      measured: { earned: 0, of: 0 }, coverage: 0, facts,
+      measured: { earned: 0, of: 0 }, coverage: 0, bounds: { low: null, high: null }, facts,
     }
   }
 
@@ -175,18 +235,21 @@ export function seasonRead({
       ? `dominance trend unknown (${dominance.days} of ${MIN_DOM_SAMPLES} stored days needed) — not scored`
       : `BTC dominance ${dominance.trend}${dominance.changePctPts == null ? '' : ` (${signed(dominance.changePctPts, 2)} pts across ${dominance.spanDays}d, ${dominance.samples} samples)`}`))
 
-  // Per WINDOW, not per read. A coin listed last week has a 7d ETH/BTC leg and
-  // no 30d one; scoring the leg we cannot see at anything at all — 0 or the 2.5
-  // this used to use — is a claim about a month nobody measured. The part's max
-  // shrinks to 5 instead, so the leg that did resolve carries its full weight
-  // and the denominator says out loud that it was scored out of 5.
-  const ethLegs = ethBtc == null ? []
-    : [['7d', ethBtc.chg7dPct], ['30d', ethBtc.chg30dPct]].filter(([, c]) => Number.isFinite(c))
-  parts.push(part('ethbtc', ethLegs.length === 0 ? 10 : 5 * ethLegs.length,
-    ethLegs.length === 0 ? null : ethLegs.reduce((s, [, c]) => s + (c > 0 ? 5 : 0), 0),
-    ethLegs.length === 0
-      ? 'ETH/BTC unavailable — not scored'
-      : `ETH/BTC ${ethBtc.trend} (${ethLegs.map(([w, c]) => `${w} ${signed(c)}%`).join(', ')})${ethLegs.length === 1 ? ' — one window only, scored out of 5' : ''}`))
+  // ONE PART PER WINDOW. A coin listed last week has a 7d ETH/BTC leg and no 30d
+  // one; scoring the leg we cannot see at anything at all — 0, or the 2.5 this
+  // once used — is a claim about a month nobody measured. This shipped as one
+  // part whose max shrank from 10 to 5, which fixed the claim and broke the
+  // arithmetic around it: the achievable total became 95, so the "every input
+  // was measured" line could never fire and the "N points dropped" line was
+  // over by 5 with nothing to name it. Two parts of 5 keep the maxes summing to
+  // 100 and give the missing leg a NAME in the same list as everything else.
+  const ethLeg = (key, window, chg) => part(key, 5,
+    Number.isFinite(chg) ? (chg > 0 ? 5 : 0) : null,
+    Number.isFinite(chg)
+      ? `ETH/BTC ${window} ${signed(chg)}%`
+      : `ETH/BTC over ${window} unavailable — not scored`)
+  parts.push(ethLeg('ethbtc7', '7d', ethBtc?.chg7dPct))
+  parts.push(ethLeg('ethbtc30', '30d', ethBtc?.chg30dPct))
 
   parts.push(part('feargreed', 10,
     fg == null ? null : Math.max(0, Math.min(10, Math.round(fg.value / 10))),
@@ -197,13 +260,24 @@ export function seasonRead({
   const scored = parts.filter((p) => p.measured)
   const earned = scored.reduce((s, x) => s + x.points, 0)
   const of = scored.reduce((s, x) => s + x.max, 0)
+  const unread = MAX_POINTS - of
   const coverage = of / MAX_POINTS
-  const score = Math.max(0, Math.min(100, Math.round((100 * earned) / of)))
+
+  // THE BAND. `low` is this market with every unread gauge at zero, `high` with
+  // every one of them at its max — so the fully measured read of the same market
+  // is inside it, always. Both are point totals on the same 0–100 scale the
+  // ladder's boundaries are written in, which is the only reason comparing them
+  // to a rung means anything.
+  const low = earned
+  const high = earned + unread
+
+  const publish = of >= MIN_POINTS_FOR_SCORE
+  const score = publish ? Math.max(0, Math.min(100, Math.round((100 * earned) / of))) : null
 
   const missing = parts.filter((x) => !x.measured)
   if (missing.length > 0) {
     facts.push(
-      `${earned} of the ${of} points on offer were earned, renormalised to ${score} out of 100: ` +
+      `${earned} of the ${of} points on offer were earned${publish ? `, renormalised to ${score} out of 100` : ''}: ` +
       `${list(missing.map((x) => PART_NAMES[x.key]))} ${missing.length === 1 ? 'was' : 'were'} not measured, ` +
       `so nothing was scored for ${missing.length === 1 ? 'it' : 'them'} in either the numerator or the denominator — ` +
       'an input we could not read is not evidence about the market in either direction',
@@ -214,16 +288,27 @@ export function seasonRead({
   // from outside the score: a high score alone is alt season, which is a good
   // thing. Alt season with the crowd already maxed out is the late innings.
   const crowdMaxed = (fg != null && fg.value >= 80) || (breadth.beatBtc7dPct != null && breadth.beatBtc7dPct >= 85)
-  const ladder = score >= EUPHORIC.min && crowdMaxed ? EUPHORIC : PHASES.find((x) => score >= x.min)
-  const thin = coverage < MIN_COVERAGE_FOR_PHASE
-  const p = thin ? THIN : ladder
-  if (thin) {
-    // Name the phase we are declining to print. "Unknown" on its own tells a
-    // reader nothing about what was withheld or how close the call was.
+  const lowRung = rungAt(low)
+  const highRung = rungAt(high)
+  // Both ends in the same rung, and a number worth printing. Only then is the
+  // phase this file names guaranteed to be the phase the complete read names.
+  const pinned = publish && lowRung === highRung
+  const ladder = pinned && lowRung.min >= EUPHORIC.min && crowdMaxed ? EUPHORIC : lowRung
+
+  const p = !publish ? THIN(of, low, high)
+    : !pinned ? SPAN(score, of, low, high, lowRung, highRung)
+      : ladder
+
+  if (unread > 0) {
+    facts.push(pinned
+      ? `the ${unread} unread point${unread === 1 ? '' : 's'} put the fully measured read of this same market between ${low} and ${high} out of 100 — ${ladder.label} at both ends, so the regime below holds whatever those gauges would have said`
+      : `the ${unread} unread points put the fully measured read of this same market between ${low} and ${high} out of 100 — ${lowRung.label} at the bottom and ${highRung.label} at the top — so no regime is named: the hot end would be permission this read did not earn and the cold end a warning it did not measure`)
+  }
+  if (!publish) {
     facts.push(
-      `only ${of} of the ${MAX_POINTS} points were measurable (${Math.round(coverage * 100)}% coverage), ` +
-      `so the regime is reported as unknown rather than as "${ladder.label}" — ` +
-      'a phase is a claim about the market and this is not enough of one to make it',
+      `only ${of} of the ${MAX_POINTS} points had an input (${Math.round(coverage * 100)}% coverage), which is under half — ` +
+      'so the renormalised number is more extrapolation than measurement and is not published as the regime score. ' +
+      'The breadth bars are measured and stand on their own',
     )
   }
 
@@ -234,8 +319,15 @@ export function seasonRead({
   return {
     score, phase: p.id, label: p.label, plain: p.plain,
     breadth, dominance, ethBtc, fearGreed: fg, parts,
-    measured: { earned, of }, coverage, facts,
+    measured: { earned, of }, coverage, bounds: { low, high }, facts,
   }
+}
+
+/** The rung a point total on the 0–100 scale falls in. Used on `low` and `high`
+ *  as well as on the published score, so the three can never be read off three
+ *  different ladders. */
+function rungAt(points) {
+  return PHASES.find((x) => points >= x.min)
 }
 
 /**

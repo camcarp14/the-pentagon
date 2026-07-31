@@ -398,12 +398,19 @@ describe('the coincident-to-late signals', () => {
       ],
     })
     const { crowd, rows } = bothReads(stale)
-    // The crowd read computed the change and then declined to score it — and it
-    // still CARRIES the number on `crowding`. That is the trap: reading the
-    // value alone gets you a stale 12% with no hint that it was refused, which
-    // is what this row used to print. The verdict lives on the part, so the gate
-    // is the part.
-    expect(crowd.crowding.oiChange24hPct).toBeCloseTo(12, 6)
+    // The crowd read computed the change, declined to score it, and NO LONGER
+    // publishes it. This used to assert `oiChange24hPct` was still 12 — the
+    // trap being that reading the value alone got you a stale 12% with no hint
+    // it had been refused. sentiment.js closed that at the source
+    // (`scoredOrNull`): the points and the number are now the same boolean, so
+    // a consumer that reads only the value cannot be misled either.
+    expect(crowd.crowding.oiChange24hPct).toBeNull()
+    // The notional pile goes with it — same stale sample, one field over.
+    expect(crowd.crowding.oiLatestUsd).toBeNull()
+    // But the SAMPLE COUNT survives: it is a count of what the feed returned,
+    // not a measurement of the market, and the reader needs it to tell "stale"
+    // from "never fetched".
+    expect(crowd.crowding.oiSamples).toBe(2)
     expect(partOf(crowd, 'oi').points).toBeNull()
     expect(partOf(crowd, 'oi').label).toMatch(/stale/)
 
@@ -439,11 +446,31 @@ describe('the coincident-to-late signals', () => {
   })
 
   it('says a coin has no perp instead of scoring it neutral', () => {
-    const { crowd, rows } = bothReads(null)
+    // `derivsStatus` is what licenses the claim — `derivs: null` alone cannot
+    // tell "Binance says it is not listed" from "Binance did not answer", and
+    // these rows quote the crowd read's label verbatim, so the distinction has
+    // to survive the trip. See the sibling test below.
+    const { crowd, rows } = bothReads(null, { derivsStatus: 'not_listed' })
     expect(crowd.crowding).toBeNull()
     for (const [row, key] of [['funding_flip', 'funding'], ['oi_expansion', 'oi']]) {
       expect(byId(rows, row).pass).toBeNull()
       expect(byId(rows, row).note).toContain('no listed perp')
+      expect(byId(rows, row).note).toContain(partOf(crowd, key).label)
+      expect(byId(rows, row).note).toMatch(/not counted as neutral/)
+    }
+  })
+
+  it('does not tell the checklist a coin has no perp when the feed just failed', () => {
+    // The checklist row is downstream of sentiment.js's part LABEL, so the
+    // false claim reached this card too. Same refusal, honest reason.
+    const { crowd, rows } = bothReads(null, {
+      derivsStatus: 'unavailable', derivsUnavailable: 'binance futures: HTTP 451 from fapi.binance.com',
+    })
+    expect(crowd.crowding).toBeNull()
+    for (const [row, key] of [['funding_flip', 'funding'], ['oi_expansion', 'oi']]) {
+      expect(byId(rows, row).pass).toBeNull()
+      expect(byId(rows, row).note).not.toContain('no listed perp')
+      // Still the crowd read's own words, so the two cards cannot disagree.
       expect(byId(rows, row).note).toContain(partOf(crowd, key).label)
       expect(byId(rows, row).note).toMatch(/not counted as neutral/)
     }

@@ -1,7 +1,7 @@
 // First-deploy diagnostic: live-pings every upstream and reports the Blobs
 // health map. If a number on the cockpit looks wrong, this endpoint says
 // which upstream to blame — facts before theories.
-import { json, checkAuth, unauthorized, store, fetchWithTimeout } from '../shared/util.mjs'
+import { json, authVerdict, authRefusal, store, fetchWithTimeout } from '../shared/util.mjs'
 
 const PROBES = [
   ['yahoo', 'https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1d&range=1d'],
@@ -21,7 +21,13 @@ const PROBES = [
 ]
 
 export default async (req) => {
-  if (!(await checkAuth(req))) return unauthorized()
+  // THE DIAGNOSTIC ENDPOINT IS THE LAST ONE THAT SHOULD LIE ABOUT WHY IT SAID
+  // NO. "If a number on the cockpit looks wrong, this endpoint says which
+  // upstream to blame" — and when the thing to blame was Supabase being slow,
+  // the answer used to be a 401 that reads as "your login expired". It now says
+  // which of the two happened. See authVerdict in util.mjs.
+  const verdict = await authVerdict(req)
+  if (!verdict.ok) return authRefusal(verdict)
 
   const pings = {}
   await Promise.all(PROBES.map(async ([name, url]) => {

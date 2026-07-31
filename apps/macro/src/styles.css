@@ -855,6 +855,8 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
    scroll. With a min-content minimum the row's real width reaches the board,
    and `.alt-board { min-width: min-content }` below carries it to the wrap. */
 .alt-row { display: grid; grid-template-columns: minmax(min-content, 1fr) 44px; background: var(--card-2); min-width: 0; }
+.alt-row > .alt-row-main { grid-column: 1; grid-row: 1; }
+.alt-row > .alt-star { grid-column: 2; grid-row: 1; }
 .alt-row.on { box-shadow: inset 3px 0 0 var(--accent); }
 .alt-row-main {
   display: grid; min-width: 0; width: 100%; text-align: left;
@@ -864,9 +866,19 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
      column it clipped to "igniti…", which is the one label that has to be read
      whole. */
   grid-template-columns: 34px minmax(0, 1fr) auto auto;
+  /* The band spans BAND+SPARK on the phone, and the phone sparkline is dropped
+     to pay for it. Measured on the clean fixture: the band cell was 67px at 360
+     against 128px of content (pill + `par` + `thin`), so every flagged row
+     wrapped onto a second line and stood 81px tall next to 61px neighbours —
+     a board with no row rhythm, and the raggedness landed on exactly the rows
+     that carry the two flags. Spanning gives the cell 137px at 360, 167 at 390,
+     191 at 414, which holds the widest combination this screen can produce
+     (`extended` + `par` + `thin`) on one line. What is given up is a 7-day
+     shape drawn 8px from the 7-day percentage it is a picture of; what is
+     bought is that `par` and `thin` are legible without a taller row. */
   grid-template-areas:
     "score coin price c24"
-    "score band  spark c7";
+    "score band  band  c7";
   /* 8px, not 9: three column gaps plus the 44px star plus two auto tracks left
      the coin 49px at 360 once the pane stopped bursting — and 49px is the symbol
      with 9px of name behind it. The pixels came from here and from the phone
@@ -887,17 +899,33 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .c-turn { grid-area: turn; text-align: right; color: var(--ink-2); }
 .c-spark { grid-area: spark; overflow: visible; display: flex; align-items: center; }
 .c-score { grid-area: score; font-family: var(--mono); font-size: 17px; font-weight: 500; color: var(--ink-2); align-self: center; }
-/* Wraps rather than clips: a row can carry the pill AND both flags, and at 768
-   that was 95px of content in a 74px cell with `par` cut in half — the two marks
-   that say the row is not tradeable were the ones being trimmed. */
-.c-band { grid-area: band; display: flex; align-items: center; flex-wrap: wrap; gap: 3px 4px; }
-/* Phone: rank, the 30-day return, RS and turnover live in the detail pane, one
-   tap away. They must be display:none rather than merely left out of the
-   template — an item whose named area is absent falls back to auto-placement
-   and grows a third row of orphans. */
-.c-rank, .c-rs, .c-turn, .c-30 { display: none; }
+/* `flex-wrap: wrap` is the SAFETY VALVE, not the layout: the track is budgeted
+   at both breakpoints to hold the pill and both flags on one line (see the phone
+   template above and the 136px band track at 768), so nothing wraps on any
+   combination this board can produce. If a future band word is longer than
+   `extended`, the row grows by a line rather than trimming `par` — at 768 that
+   used to be 95px of content in a 74px cell with `par` cut in half, and the two
+   marks that say the row is not tradeable were the ones being trimmed. */
+.c-band { grid-area: band; display: flex; align-items: center; flex-wrap: wrap; gap: 3px 4px; min-width: 0; }
+/* Phone: rank, the 30-day return, RS, turnover and the 7d shape live in the
+   detail pane, one tap away. They must be display:none rather than merely left
+   out of the template — an item whose named area is absent falls back to
+   auto-placement and grows a third row of orphans. */
+.c-rank, .c-rs, .c-turn, .c-30, .c-spark { display: none; }
 
-.alt-sym { font-weight: 700; font-size: 13px; color: var(--ink); flex: none; }
+/* THE SYMBOL MAY NOT EAT THE CELL. `flex: none` is deliberate — it is what
+   keeps `Dogecoin` from being trimmed to `DOG…` on a 360px phone, which is the
+   whole of the coin-column fix — but with nothing capping it, a symbol wider
+   than the cell simply overran: `symbol` is validated to 20 characters
+   server-side, and a 20-character one measured 177px inside the 148px cell,
+   cut mid-glyph with no ellipsis and `.alt-name` at clientWidth 0. `max-width`
+   caps the used width without letting the name's length shrink it, so a normal
+   symbol is still whole and an absurd one ellipsises. At 768 and up the cell is
+   at least 148px wide, so 42px of it can be reserved for the name outright. */
+.alt-sym {
+  font-weight: 700; font-size: 13px; color: var(--ink); flex: none;
+  min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .alt-name { font-size: 11.5px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* The score is inked by BAND, so the ranking number and the state word can never
@@ -953,10 +981,14 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
    the GLYPH — ☆ becomes ★ — so nothing is signalled by colour alone and the
    contrast against an unstarred row is a filled shape, not a hue. */
 .alt-star.on { color: var(--ink); }
-/* Locked (some other row is mid-write) reads differently from saving (this row
-   is the one in flight): both are unusable, only one is waiting on itself. */
-.alt-star:disabled { opacity: 0.6; cursor: not-allowed; }
-.alt-star.saving:disabled { opacity: 0.45; cursor: progress; }
+/* THE ONLY DISABLED STAR IS THE ONE WAITING ON ITS OWN WRITE. There used to be
+   a second state here — "locked", meaning some other row was mid-write — and it
+   applied to all 26 stars plus the detail pane's for as long as one unbounded
+   request stayed open. A star that is dead because a different star is busy is
+   not a state worth styling; it is a bug worth removing, and the writer in
+   AltsPanel queues now instead of locking. `cursor: progress`, not
+   `not-allowed`: this row is not refused, it is on the wire. */
+.alt-star:disabled { opacity: 0.45; cursor: progress; }
 .alt-star:active:not(:disabled) { transform: scale(0.9); }
 
 /* ---- the sparkline ----
@@ -1045,26 +1077,54 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
      the star measured 781px, so the board sat inside its own content and
      `.alt-board`'s overflow:hidden clipped the 77px difference at 768 instead of
      handing it to the wrap, which is why the wrap never scrolled at any width.
-     Written this way the floor is derived from the tracks (831px on the budget
+     Written this way the floor is derived from the tracks (885px on the budget
      below), so re-budgeting a column cannot leave a stale number behind. */
   .alt-board { min-width: min-content; }
-  /* THE BUDGET. Every fixed track is its widest measured content plus a hair:
-     rank 19, price 73, the three returns 50, RS's header 58, turnover's 47,
-     score's header 34, the sparkline 60. What is left over goes to the coin,
-     which used to sit at a 70px floor at EVERY width from 768 to 1920 — the ten
-     fixed tracks already exceed the pane, so its 1.2fr never grew and names
-     clipped to 2-4 characters (Dogecoin 26px of 49, Avalanche 30 of 54), worse
-     on a 1440 desktop than on a 390 phone. A 148px floor is a symbol plus ~13
-     characters of name; longer names still ellipsise, which is honest, and the
-     50px the rebudget adds to the table is 50px of `.tbl-wrap` scroll, which is
-     what that scroller is for. */
+  /* THE STAR MOVES TO THE LEFT EDGE AT 768 AND UP, and it is not decoration.
+     `.alt-row` is `1fr 44px`, so on a table whose min-content (885px) exceeds
+     its track (576px at 1020, 670px at 1180-1920) the star sat at x=787 and was
+     0px visible at every desktop width — a watchlist control you could only
+     reach by discovering a horizontal scroller. Pinned to column 1 it is the
+     first thing on the row at any scroll position. On a phone it stays on the
+     right, where a thumb is. */
+  .alt-row { grid-template-columns: 44px minmax(min-content, 1fr); }
+  .alt-row > .alt-row-main { grid-column: 2; }
+  .alt-row > .alt-star { grid-column: 1; }
+
+  /* THE BUDGET, AND THE ORDER, WHICH IS THE SAME DECISION.
+     Every fixed track is its widest measured content plus a hair: rank 19,
+     score's header 34, the band pill with both flags 128, price 73, the three
+     returns 50, RS's header 58, turnover's 47, the sparkline 60. What is left
+     over goes to the coin, which used to sit at a 70px floor at EVERY width
+     from 768 to 1920 — the ten fixed tracks already exceed the pane, so its
+     1.2fr never grew and names clipped to 2-4 characters (Dogecoin 26px of 49,
+     Avalanche 30 of 54), worse on a 1440 desktop than on a 390 phone. A 148px
+     floor is a symbol plus ~13 characters of name; longer names still
+     ellipsise, which is honest.
+
+     ORDER. These eleven tracks total 885px and the pane is 576-670px, so ~215px
+     of table is always past the right edge of `.tbl-wrap`. That is fine — a
+     dense board is allowed to scroll — but WHICH columns are past the edge is
+     not a detail. With score and band last, the ranking the board is sorted by
+     and the state word it is inked from were 0px visible at 1020/1180/1280/
+     1440/1920, with and without a coin selected, and reading the score by
+     scrolling cost you the coin's name. Identity and the ranking now sit at the
+     left, and the evidence — price, the three returns, RS, turnover, the shape
+     — is what runs off the edge. Ordered this way the first 419px of the row
+     carries the star, the rank, the coin, the score and the band, so all of it
+     is on screen at the narrowest desktop with 157px to spare.
+
+     BAND 136, not 76. `extended` + `par` + `thin` measures 128px; at 76 it
+     wrapped to a second line and stood those rows at 55px against 44px
+     neighbours. 136 is the widest content plus 8, and the 60px it adds is 60px
+     of scroll extent in the half of the table that is already scrolling. */
   .alt-head, .alt-row-main {
-    grid-template-columns: 22px minmax(148px, 1.4fr) 76px 54px 54px 54px 58px 50px 62px 38px 76px;
-    grid-template-areas: "rank coin price c24 c7 c30 rs turn spark score band";
+    grid-template-columns: 22px minmax(148px, 1.4fr) 38px 136px 76px 54px 54px 54px 58px 50px 62px;
+    grid-template-areas: "rank coin score band price c24 c7 c30 rs turn spark";
     gap: 0 8px;
   }
   .alt-head {
-    display: grid; align-items: end; padding: 8px 48px 8px 11px;
+    display: grid; align-items: end; padding: 8px 4px 8px 55px;
     background: var(--card); color: var(--ink-3);
   }
   .alt-head .alt-c { font-size: 11px; font-weight: 600; color: var(--ink-3); }
@@ -1072,7 +1132,13 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
   .alt-head .c-rs, .alt-head .c-turn { text-align: right; }
   .alt-row-main { min-height: 44px; padding: 7px 4px 7px 11px; }
   .c-rank, .c-rs, .c-turn, .c-30 { display: block; }
+  .c-spark { display: flex; }
   .c-rank { text-align: right; }
+  /* 42px of the coin cell belongs to the name. The cell is at least 148px here,
+     so a symbol long enough to need this is already absurd — it ellipsises and
+     the name still reads, instead of the name being squeezed to clientWidth 0
+     while the symbol overruns the cell. */
+  .alt-sym { max-width: calc(100% - 42px); }
   .c-score { font-size: 14px; align-self: auto; }
   /* 60, inside a 62px track: the shape is a direction cue, and the 6px it gives
      back went to the coin column, where the characters are. */

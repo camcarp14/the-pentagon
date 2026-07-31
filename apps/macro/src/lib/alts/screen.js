@@ -239,10 +239,35 @@ function step(value, table) {
  * young coins, so "one day" is derived as len/7 rather than hard-coded to 24.
  * Hard-coding it made the fresh-break test compare the last 24 points of a
  * 40-point series against the other 16 and call three days "the prior six".
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * TWO PAIRS OF NUMBERS, TWO DIFFERENT JOBS, AND THEY ARE NOT INTERCHANGEABLE.
+ *
+ *   low / high      the 7-day RANGE, today INCLUDED. A description of where the
+ *                   series has been, and the only correct denominator for `pos`
+ *                   ("how far up its own week is price now") — a range that
+ *                   excluded the newest point could put `pos` above 1.
+ *   priorLow /      the 7-day LEVELS, today EXCLUDED. What price has to clear or
+ *   priorHigh       lose to have DONE something. Both are taken over the same
+ *                   `prior` slice, so they are one window with two ends.
+ *
+ * `priorLow` exists because directive.js's sparkline fallback used `low` as the
+ * invalidation level, and `low` is a minimum over a window that contains the
+ * price it was then compared against. So invalidation EQUALLED the current price
+ * on every row that was making its own 7-day low, `price <= invalidation` was
+ * true by construction, and the scheduled sentinel sent "FOO invalidation hit …
+ * lost $50.00" where $50.00 was the live price. Measured over 20,000 random
+ * 7-day tapes it fired on 1,276 of them, and on exactly the 1,276 where price was
+ * its own minimum — a test of the series against itself, not of price against a
+ * level. `priorHigh` never had the bug (it always excluded the last day), which
+ * is what made the pair asymmetric and the asymmetry invisible.
+ *
+ * A level that moves with price is not a level. Both ends are now drawn from the
+ * bars that are DONE, which is the same rule directive.js's candle window keeps.
  */
 export function structure7d(sparkline) {
   const s = Array.isArray(sparkline) ? sparkline.filter(Number.isFinite) : []
-  const out = { low: null, high: null, last: null, pos: null, freshBreak: false, priorHigh: null, points: s.length }
+  const out = { low: null, high: null, last: null, pos: null, freshBreak: false, priorHigh: null, priorLow: null, points: s.length }
   if (s.length < 8) return out
   const low = Math.min(...s)
   const high = Math.max(...s)
@@ -256,10 +281,14 @@ export function structure7d(sparkline) {
 
   const day = Math.max(2, Math.round(s.length / 7))
   if (s.length >= day * 2) {
+    // ONE slice, read by both levels — the same shape directive.js's candle
+    // window has, for the same reason. Two slices is how the two ends came
+    // apart, and nothing failed when they did.
     const prior = s.slice(0, s.length - day)
     const lastDay = s.slice(s.length - day)
     const priorHigh = Math.max(...prior)
     out.priorHigh = priorHigh
+    out.priorLow = Math.min(...prior)
     out.freshBreak = Math.max(...lastDay) > priorHigh
   }
   return out
@@ -308,7 +337,7 @@ export function screenCoin(row, ctx = {}) {
       turnover, rsVsBtc7d: null, rsVsBtc30d: null,
       accel: { d24VsWeek: null, weekVsMonth: null, daily7d: null, daily30d: null },
       drawdownFromAthPct: null,
-      range7d: { low: null, high: null, last: null, pos: null, freshBreak: false, priorHigh: null, points: 0 },
+      range7d: { low: null, high: null, last: null, pos: null, freshBreak: false, priorHigh: null, priorLow: null, points: 0 },
     }
   }
 

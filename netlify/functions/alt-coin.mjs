@@ -14,9 +14,11 @@
 //
 // Everything here runs against one deadline rather than a stack of per-attempt
 // timeouts, because the stale fallback is only a fallback if the function is
-// still alive to reach it. See DEADLINE_MS.
-import { sourceHandler, json, checkAuth, unauthorized, store, SOURCE_ERROR } from '../shared/util.mjs'
-import { altCandles, altCoinMeta, altDerivs, cacheGet, cachePut, cacheEnvelope, cacheIsFresh } from '../shared/alts.mjs'
+// still alive to reach it. See CHAIN_MS — and note that the deadline is derived
+// from THIS endpoint's chain, not shared with alt-scan, whose chain is a
+// different shape entirely.
+import { sourceHandler, json, authVerdict, authRefusal, store, SOURCE_ERROR, SOURCE_CACHED } from '../shared/util.mjs'
+import { altCandles, altCoinMeta, altDerivs, cacheGet, cachePut, cacheEnvelope, cacheIsFresh, requestDeadline } from '../shared/alts.mjs'
 
 // The same patterns the watchlist validates against. `id` is a CoinGecko slug
 // and `symbol` a ticker; both are interpolated into upstream URLs and into a
@@ -25,13 +27,20 @@ const ID_RE = /^[a-z0-9-]{1,64}$/i
 const SYMBOL_RE = /^[a-zA-Z0-9]{1,20}$/
 const TTL_SEC = 300
 
-// Everything upstream must be FINISHED by this many ms after the request
-// arrived. Netlify kills a synchronous function at ~10s and a kill runs no
-// catch block, so an 11-second worst case (see altCandles) does not degrade to
-// the stale cache below — it degrades to the bare platform 502 the contract
-// says must never happen. Measured from arrival, because the auth round-trip
-// and two Blobs hops come out of the same ten seconds.
-const DEADLINE_MS = 7500
+/**
+ * THIS ENDPOINT'S CHAIN IS SERIAL AND LONGER THAN THE FUNCTION'S LIFE: Binance
+ * plain 3s → Binance 1000× 3s → CoinGecko market_chart 5s is 11 seconds (see
+ * altCandles), against a ~10s platform kill that runs no catch block — so the
+ * stale-cache fallback below would never execute in exactly the situation it
+ * exists for, and the client would get the bare platform 502 the contract says
+ * must not happen.
+ *
+ * So on this endpoint the WALL is what binds, always, and `requestDeadline`
+ * says so in one line instead of leaving it implicit in a single constant that
+ * alt-scan then inherited and was wrong for. Measured from arrival, because the
+ * auth round-trip and two Blobs hops come out of the same ten seconds.
+ */
+const CHAIN_MS = 11_000
 
 /**
  * The cache key is every input the payload depends on, not just the one in the
@@ -52,15 +61,35 @@ export function coinCacheKey(id, symbol) {
   return `alt_coin_${String(id).toLowerCase()}_${String(symbol).toLowerCase()}`
 }
 
-async function served(id, symbol, deadlineAt) {
+/**
+ * The pre-symbol key this coin's payload used to live under. Keyed on `id`
+ * alone, those blobs are now unreadable by anything and unlisted by anything,
+ * so they are storage nobody pays attention to and nobody can clear. Deleted
+ * on the one pass that can identify them for free: a request for a coin with no
+ * entry under the NEW key at all, which happens once per coin per cache
+ * lifetime and never again. Best-effort — a failed delete costs a dead blob,
+ * and no request may fail over housekeeping.
+ */
+async function purgeLegacyCoinCache(s, id) {
+  try {
+    await s.delete?.(`alt_coin_${String(id).toLowerCase()}`)
+  } catch {
+    /* dead storage is not worth a 502 */
+  }
+}
+
+async function served(id, symbol, arrivedAt) {
   const s = store()
   const cacheKey = coinCacheKey(id, symbol)
 
   const cached = await cacheGet(s, cacheKey)
-  if (cacheIsFresh(cached, TTL_SEC)) return cacheEnvelope(cached, { ttlSec: TTL_SEC })
+  // Zero upstream calls on this path, so alt_coin's health record is left
+  // exactly where the last real fetch left it. See SOURCE_CACHED in util.mjs.
+  if (cacheIsFresh(cached, TTL_SEC)) return { ...cacheEnvelope(cached, { ttlSec: TTL_SEC }), [SOURCE_CACHED]: true }
+  if (!cached) await purgeLegacyCoinCache(s, id)
 
   try {
-    const payload = await readCoin(id, symbol, deadlineAt)
+    const payload = await readCoin(id, symbol, requestDeadline({ arrivedAt, chainMs: CHAIN_MS }))
     await cachePut(s, cacheKey, payload, payload.asOf)
     return { ...payload, cached: false, stale: false, cacheAgeSec: 0 }
   } catch (err) {
@@ -97,21 +126,44 @@ async function readCoin(id, symbol, deadlineAt) {
   if (metaRes.status === 'fulfilled') coin = stripSource(metaRes.value)
   else degraded.push(`coin metadata: ${reason(metaRes)}`)
 
+  // DERIVS HAS THREE ANSWERS AND THE PAYLOAD CARRIES ALL THREE.
+  //
+  // altDerivs already distinguishes "Binance said this symbol is not listed"
+  // (returns null) from "Binance did not answer" (throws) — but this function
+  // collapsed both back into `derivs: null`, and `crowdRead` reads only that
+  // field. So a 451 geo-block, which is the EXPECTED response from a datacenter
+  // IP (see status.mjs's probe list), rendered the crowd card's positive claim
+  // that the coin has no futures market, verbatim and indistinguishably from
+  // the case where that is true. The reason lived in `degraded`, which is not
+  // the sentence a reader believes.
+  //
+  //   derivsStatus: 'ok'          derivs is an object; funding/OI/positioning present.
+  //   derivsStatus: 'not_listed'  derivs is null AND that is a measurement. The
+  //                               only status that licenses "this coin has no
+  //                               listed perpetual". derivsUnavailable is null.
+  //   derivsStatus: 'unavailable' derivs is null and NOTHING is known. Say the
+  //                               read failed, never that the market is absent.
+  //                               derivsUnavailable carries the reason, already
+  //                               prefixed with its source.
+  //
+  // `derivs` keeps its old shape so nothing that reads it breaks; the status is
+  // what a consumer must branch on before it writes a sentence about the coin.
   let derivs = null
+  let derivsStatus = 'unavailable'
+  let derivsUnavailable = null
   if (derivsRes.status === 'fulfilled') {
     derivs = derivsRes.value
-    // null here is the normal answer, not a failure: no listed perpetual. It is
-    // still worth stating, because the crowding read goes dark without one and
-    // the UI has to say why rather than showing a neutral 50.
-    //
-    // This sentence is a positive claim about the coin, so altDerivs only
-    // returns null when Binance's futures API actually SAID the symbol is not
-    // listed (HTTP 400 / -1121). A 429, a geo-block or a timeout arrives on the
-    // rejected branch below and prints as what it is.
-    if (!derivs) degraded.push(`${symbol} has no listed Binance perpetual — funding, open interest and positioning are unavailable`)
-    else degraded.push(...(derivs.degraded || []).map((d) => `derivatives ${d}`))
+    if (derivs) {
+      derivsStatus = 'ok'
+      degraded.push(...(derivs.degraded || []).map((d) => `derivatives ${d}`))
+    } else {
+      derivsStatus = 'not_listed'
+      degraded.push(`${symbol} has no listed Binance perpetual — funding, open interest and positioning are unavailable`)
+    }
   } else {
-    degraded.push(`derivatives: ${reason(derivsRes)}`)
+    derivsStatus = 'unavailable'
+    derivsUnavailable = reason(derivsRes)
+    degraded.push(`derivatives: ${derivsUnavailable}`)
   }
 
   const sources = [c.sourceDetail]
@@ -131,6 +183,8 @@ async function readCoin(id, symbol, deadlineAt) {
     priceMultiplier: c.priceMultiplier,
     coin,
     derivs,
+    derivsStatus,
+    derivsUnavailable,
     degraded,
     sourceDetail: sources.join(' + '),
     // See the long note in alt-scan.mjs: meta.fetchedAt is when this RESPONSE
@@ -149,11 +203,14 @@ function reason(res) {
 
 export default async (req, context) => {
   // The budget clock starts on arrival, before the auth hop it has to pay for.
-  const deadlineAt = Date.now() + DEADLINE_MS
-  // checkAuth memoises its verdict per Request, so sourceHandler's own check
-  // below reuses this one — auth-before-validation costs one Supabase hop, not
-  // two out of a ten-second budget.
-  if (!(await checkAuth(req))) return unauthorized()
+  const arrivedAt = Date.now()
+  // authVerdict memoises a DEFINITIVE verdict per Request, so sourceHandler's
+  // own check below reuses this one — auth-before-validation costs one Supabase
+  // hop, not two out of a ten-second budget. A verdict we could not reach is
+  // deliberately not memoised (see util.mjs), and it comes back as a 503 naming
+  // the outage rather than a 401 telling the operator their login is bad.
+  const verdict = await authVerdict(req)
+  if (!verdict.ok) return authRefusal(verdict)
   const url = new URL(req.url)
   const raw = url.searchParams.get('id') || ''
   const rawSymbol = url.searchParams.get('symbol') || ''
@@ -170,5 +227,5 @@ export default async (req, context) => {
   // while being structurally unable to ever populate it.
   const id = raw.toLowerCase()
   const symbol = rawSymbol.toUpperCase()
-  return sourceHandler('alt_coin', () => served(id, symbol, deadlineAt))(req, context)
+  return sourceHandler('alt_coin', () => served(id, symbol, arrivedAt))(req, context)
 }

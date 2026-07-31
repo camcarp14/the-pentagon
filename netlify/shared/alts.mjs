@@ -45,11 +45,20 @@ const BINANCE_FAPI = 'https://fapi.binance.com'
 // unbounded wait in the middle of a budget the stale-cache fallback is counting
 // on. A timeout that only covers the handshake is not a timeout.
 async function getJson(url, opts = {}, timeoutMs = 3000) {
+  const host = new URL(url).host
   const ctl = new AbortController()
-  const t = setTimeout(() => ctl.abort(new Error(`timeout after ${timeoutMs}ms`)), timeoutMs)
+  // NAMES WHOSE CLOCK RAN OUT. This string is what `degraded` renders and what
+  // /api/status stores as `lastError`, and "timeout after 4400ms" reads as the
+  // host being down when the 4400 was OUR remaining budget, not their latency.
+  // A clipped hop and a genuinely dead upstream are different incidents and the
+  // sentence has to say which one happened.
+  const t = setTimeout(
+    () => ctl.abort(new Error(`${host} did not answer inside the ${timeoutMs}ms this request had left for it`)),
+    timeoutMs,
+  )
   try {
     const res = await fetch(url, { ...opts, headers: { ...UA, ...(opts.headers || {}) }, signal: ctl.signal })
-    if (!res.ok) throw new Error(`HTTP ${res.status} from ${new URL(url).host}`)
+    if (!res.ok) throw new Error(`HTTP ${res.status} from ${host}`)
     return await res.json()
   } finally {
     clearTimeout(t)
@@ -414,6 +423,49 @@ export function attemptBudget(perAttemptMs, deadlineAt, minMs = MIN_ATTEMPT_MS, 
   return ms >= minMs ? ms : null
 }
 
+// Netlify kills a synchronous function at ~10s, and the kill runs no catch
+// block. Everything upstream has to be FINISHED before then with enough left
+// over to write the cache and serialise the answer — on alt-scan that answer is
+// a >1MB payload, so the reserve is not a rounding allowance.
+export const PLATFORM_KILL_MS = 10_000
+export const RESPONSE_RESERVE_MS = 1200
+
+/**
+ * EACH ENDPOINT'S DEADLINE COMES OUT OF ITS OWN CHAIN. Two clocks, and the
+ * tighter one wins:
+ *
+ *   • the WALL — `arrivedAt + wallMs` — how long this invocation may live at
+ *     all, measured from arrival because auth and the Blobs read are spent out
+ *     of the same ten seconds. This is the one that keeps the stale-cache
+ *     fallback reachable.
+ *   • the CHAIN — `now + chainMs` — how long this endpoint's own upstream chain
+ *     can legitimately need. Called at the top of the fetch phase, so `now` is
+ *     already past auth and the cache read.
+ *
+ * ONE SHARED ARRIVAL-BASED NUMBER WAS THE BUG. alt-coin's chain is genuinely
+ * serial — Binance plain 3s → Binance 1000× 3s → CoinGecko 5s is 11 seconds
+ * against a 10-second kill — so it needs a hard wall and nothing else will do.
+ * alt-scan's chain is four calls in PARALLEL whose longest hop is 6s; it never
+ * had that problem. Giving it alt-coin's arrival-based 7500ms handed the >1MB
+ * universe fetch whatever was left after auth, which on a 2.9s Supabase
+ * round-trip is ~4.4s. Measured, with every upstream healthy: a 5.5s CoinGecko
+ * response and a 2.5s auth hop produced a stale board, "refetch failed: alt
+ * universe", and /api/status told the operator CoinGecko was down. On a cold
+ * cache the same inputs produced a hard 502. The abort bought nothing — the
+ * wall was 7.5s against a 10s kill either way.
+ *
+ * So the chain clock is what normally binds on alt-scan (a slow auth no longer
+ * comes out of CoinGecko's budget), the wall still binds when the invocation is
+ * genuinely running out of life, and alt-coin — whose chain is longer than the
+ * wall — is unchanged in behaviour and now says so in one line.
+ */
+export function requestDeadline({ arrivedAt, chainMs, wallMs = PLATFORM_KILL_MS - RESPONSE_RESERVE_MS, now = Date.now() }) {
+  const at = fin(arrivedAt)
+  const chain = fin(chainMs)
+  if (at == null || chain == null) return null
+  return Math.min(at + (fin(wallMs) ?? 0), now + chain)
+}
+
 // The line every skipped hop reports. Named rather than inlined so a reader
 // grepping a degraded string lands on the budget rule that produced it.
 function outOfBudget(what) {
@@ -609,9 +661,18 @@ export async function altDerivs(symbol, { deadlineAt = null } = {}) {
  * IP collects, a 5xx is theirs and a timeout is nobody's — none of them are
  * evidence about the coin. Matched against the message getJson throws so the
  * status classification lives in exactly one place.
+ *
+ * 404 USED TO BE ON THIS LIST AND IT IS A DIFFERENT ANSWER. Binance says 400
+ * for an unlisted SYMBOL; a 404 from fapi.binance.com is about the PATH. If
+ * `/fapi/v1/premiumIndex` ever moves, every probe 404s, every coin returns
+ * null, and the whole board renders "has no listed Binance perpetual" — the
+ * exact positive false claim this function was written to prevent, told about
+ * 250 coins at once. The host is pinned for the same reason: only the futures
+ * API's own 400 is evidence about a futures listing.
  */
+const FAPI_HOST = new URL(BINANCE_FAPI).host
 function notListed(message) {
-  return /HTTP (?:400|404) from /.test(String(message || ''))
+  return String(message || '').includes(`HTTP 400 from ${FAPI_HOST}`)
 }
 
 /** Categories + community stats for one coin. Optional to every caller. */
@@ -737,84 +798,82 @@ export function cacheEnvelope(cached, { ttlSec = 0, refetchError = null } = {}) 
 
 /* ================= who may spend the sentinel's quota ================= */
 
-// The scheduled sentinel's cron period, and the width of one admission slot.
-// MUST match `[functions."alt-watch"] schedule = "0 */2 * * *"` in netlify.toml.
-// 2h divides 24h and the epoch begins at a UTC midnight, so `floor(now / SLOT)`
-// puts every slot boundary exactly on an even UTC hour — the same instants the
-// cron fires at. That alignment is the whole mechanism; see altWatchGate.
-export const ALT_WATCH_SLOT_MS = 2 * 3600 * 1000
-export const ALT_WATCH_GATE_KEY = 'alt_watch_gate'
-
 /**
  * MAY THIS REQUEST RUN THE SENTINEL PASS?
  *
- * /api/alt-watch is a public path (netlify.toml maps /api/* straight through)
- * that spends two CoinGecko calls per hit against a keyless tier of roughly
- * 10-30 calls/min. Left open, anyone who can reach the deploy holds that quota
- * in 429 and pins the entire Alts tab on its stale cache — defeating, from
- * outside the code, the four-calls-per-pass discipline alt-scan.mjs enforces
- * inside it. watch-snapshot.mjs runs open for the same structural reason (the
- * scheduler cannot carry a token) and gets away with it because its upstreams
- * are not the constrained quota. Here they are, so this goes further.
+ * THE ANSWER IS ALMOST ALWAYS YES, AND THAT IS THE FIX, NOT A CONCESSION.
  *
- * Two ways in, and neither is a secret in the request:
+ * The previous version admitted one unauthenticated POST per 2-hour slot and
+ * claimed the slot in Blobs before doing any work. It had three failures, all
+ * reproduced:
  *
- *   1. A VALID OPERATOR TOKEN. Unlimited, and it never consumes a slot — the
- *      operator must not be able to lock the cron out of its own schedule.
+ *   • FORGEABLE. A bare `curl -X POST` — no headers, no body — was admitted
+ *     with `scheduled: true`, identical to the cron. The header claimed "a
+ *     forged POST can only ever consume a slot the scheduler has already used";
+ *     it could not, because nothing distinguished the two.
+ *   • THE FORGERY DENIED THE SCHEDULER. The slot was claimed before the work,
+ *     so a forged POST that then hit a CoinGecko 429 — which this file calls a
+ *     routine event on the keyless tier — burned the slot and wrote nothing.
+ *     The real cron then skipped, returned HTTP 200, and Netlify recorded a
+ *     successful invocation. A day of dominance history gone, reported green.
+ *   • IT COULD NOT SURVIVE CLOCK SKEW. Slots are `floor(now / 2h)` and the cron
+ *     fires on the same boundary, so a fire landing one second early computed
+ *     the PREVIOUS slot, which the previous fire had already claimed. Measured:
+ *     on-time slot 247989 admitted, 1s early slot 247989 refused. A persistent
+ *     skew skips every other pass, 200 OK each time.
  *
- *   2. A POST, at most once per cron slot. Netlify invokes a scheduled function
- *      with a POST (carrying `{ next_run }`); a browser, a crawler and a bare
- *      `curl` all send GET, so the method alone turns away every casual hit.
- *      Deliberately NOT a `next_run` body check: if Netlify ever changes that
- *      payload, a body-shaped gate would silently lock out the cron, and a day
- *      the cron does not run is a day of dominance history nothing can rebuild.
- *      A weak marker plus a hard rate limit is the safer pair of the two.
+ * AND THE THREAT IS NOT REACHABLE ON THIS PLATFORM. Netlify's own docs, on
+ * scheduled functions: "scheduled functions that are published as part of a
+ * deploy cannot be invoked directly with a URL" — they only run on published
+ * deploys, and the manual escape hatch is the Run now button in the UI, not an
+ * HTTP request. `alt-watch` is declared scheduled in netlify.toml, so the
+ * `/api/*` rewrite does not expose it. The quota this gate was rationing cannot
+ * be spent by a stranger, and the operator escape hatch it documented (`authed
+ * → unlimited`) did not exist either, because the operator cannot reach the
+ * endpoint by URL any more than an attacker can.
+ *   https://docs.netlify.com/build/functions/scheduled-functions/
+ *   https://github.com/netlify/labs/blob/main/features/scheduled-functions/documentation/README.md
  *
- * THE SLOT IS WHY THE WEAK MARKER IS ENOUGH. Admission is one unauthenticated
- * pass per 2-hour slot, and the cron fires at the TOP of each slot — so a
- * forged POST can only ever consume a slot the scheduler has already used, and
- * the worst case for an attacker hammering this endpoint is the same two
- * CoinGecko calls every two hours the schedule already spends. A per-request or
- * "N minutes since the last pass" limiter would not have that property: it
- * could sit in front of the cron's own fire and starve the dominance series,
- * which is a far worse outcome than the quota it was protecting.
+ * So the lockout was certain and the attack was not. The invariant this file
+ * has asserted since it was written — a day the sentinel does not run is a day
+ * nothing can backfill, which is "a far worse outcome than the quota it was
+ * protecting" — decides it: NOTHING HERE MAY CAUSE THE SCHEDULER TO SKIP A
+ * DOMINANCE SAMPLE. So there is no slot, no claim, no Blobs read, no clock
+ * arithmetic and no state of any kind. There is nothing left that can fail
+ * closed.
  *
- * Blobs failures FAIL OPEN. The lock protects a quota; the dominance row it
- * would block is irreplaceable. A Blobs outage costing us the pre-existing
- * behaviour for its duration is the cheaper of the two mistakes.
+ * What survives is the one refusal that cannot possibly be the scheduler: a
+ * GET or a HEAD with no operator token. Netlify invokes a scheduled function
+ * with a POST; a browser, a crawler and a bare `curl` send GET. That refusal
+ * costs an unauthenticated reader nothing they were entitled to and is the
+ * cheapest possible answer to a crawler — and it is deliberately narrow. Every
+ * other shape, including a method this code does not recognise or a request
+ * that carries none at all, is ADMITTED, because "I did not recognise the
+ * invocation shape" must never be the reason a dominance row is missing. The
+ * old gate's own header worried about exactly this for the `next_run` body and
+ * then took the risk one field over.
+ *
+ * `s` is still accepted so alt-watch.mjs's call site does not have to change
+ * shape, and is deliberately unused: a gate that reads a blob is a gate that
+ * can be broken by a blob.
  */
-export async function altWatchGate(req, s, now = Date.now()) {
-  const authed = await checkAuth(req)
-  if (authed) return { allowed: true, authed: true, scheduled: false, slot: null, reason: null }
+export async function altWatchGate(req, _s, _now = Date.now()) {
+  const admit = (over) => ({ allowed: true, authed: false, scheduled: true, slot: null, reason: null, ...over })
+  if (await checkAuth(req)) return admit({ authed: true, scheduled: false })
 
+  // `scheduled` stays true on this path for the reason alt-watch.mjs reads it:
+  // it gates the "an off-schedule run does not restamp a day that already has a
+  // row" rule, and an unauthenticated invocation of a scheduled-only function
+  // IS the schedule.
   const method = str(req?.method).toUpperCase()
-  if (method !== 'POST') {
+  if (method === 'GET' || method === 'HEAD') {
     return {
       allowed: false,
       authed: false,
       scheduled: false,
       slot: null,
-      reason: `alt-watch runs on its schedule or for a signed-in operator; a bare ${method || 'GET'} spends CoinGecko quota the Alts tab needs`,
+      reason: `alt-watch runs on its schedule or for a signed-in operator; a bare ${method} spends CoinGecko quota the Alts tab needs`,
     }
   }
-
-  const slot = Math.floor(now / ALT_WATCH_SLOT_MS)
-  try {
-    const prev = await s.get(ALT_WATCH_GATE_KEY, { type: 'json' })
-    if (prev?.slot === slot) {
-      return {
-        allowed: false,
-        authed: false,
-        scheduled: true,
-        slot,
-        reason: 'this cron slot has already had its pass — one unauthenticated pass per slot is the whole quota budget',
-      }
-    }
-    // Claimed BEFORE the expensive work, so a burst of requests cannot all read
-    // an unclaimed slot and then each spend the quota it was meant to ration.
-    await s.setJSON(ALT_WATCH_GATE_KEY, { slot, at: now })
-  } catch {
-    /* see the fail-open note above */
-  }
-  return { allowed: true, authed: false, scheduled: true, slot, reason: null }
+  return admit()
 }

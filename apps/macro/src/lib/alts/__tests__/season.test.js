@@ -55,13 +55,50 @@ describe('the 100 points, verified by hand', () => {
       fearGreed: { value: 65, label: 'Greed' }, domHistory: domHist(30, 56, 54),
     })
     expect(s.parts.map((p) => [p.key, p.points])).toEqual([
-      ['breadth7', 22], ['breadth30', 12], ['dominance', 20], ['ethbtc', 10], ['feargreed', 7],
+      ['breadth7', 22], ['breadth30', 12], ['dominance', 20], ['ethbtc7', 5], ['ethbtc30', 5], ['feargreed', 7],
     ])
     expect(s.parts.every((p) => p.measured)).toBe(true)
     expect(s.measured).toEqual({ earned: 71, of: 100 })
     expect(s.coverage).toBe(1)
     expect(s.score).toBe(71)
     expect(s.phase).toBe('majors_rotating')
+    // Nothing is unread, so the band has no width and the phase is the phase.
+    expect(s.bounds).toEqual({ low: 71, high: 71 })
+  })
+
+  // The maxes are FIXED, so they add to 100 whatever answered — which is the
+  // only reason `100 − of` can be trusted to equal the points that went
+  // unmeasured. It shipped with an ETH/BTC part whose max shrank from 10 to 5
+  // when one leg resolved: the achievable total became 95, the card's "every
+  // input was measured" line could never fire again, and its "the other N are in
+  // neither half of the fraction" said 30 while the parts it could name were
+  // worth 25.
+  it('always offers exactly 100 points, and never claims to have dropped more than it can name', () => {
+    for (const ethRow of [null, eth(9, null), eth(9, 12), eth(-9, -12)]) {
+      for (const btc30 of [7, null]) {
+        for (const dom of [domHist(30, 56, 54), null]) {
+          for (const fgv of [65, null]) {
+            const s = seasonRead({
+              universe: makeUniverse({ beat7: 60, beat30: 60 }), btcRow: { ...BTC, chg30d: btc30 },
+              ethRow, domHistory: dom, fearGreed: fgv == null ? null : { value: fgv },
+            })
+            expect(s.parts.reduce((a, p) => a + p.max, 0)).toBe(100)
+            const unnamed = s.parts.filter((p) => !p.measured).reduce((a, p) => a + p.max, 0)
+            expect(100 - s.measured.of).toBe(unnamed)
+            expect(s.coverage).toBeCloseTo(s.measured.of / 100, 9)
+          }
+        }
+      }
+    }
+  })
+
+  it('can still say "every input was measured" — the branch the shrinking max made unreachable', () => {
+    const s = seasonRead({
+      universe: makeUniverse({ beat7: 60, beat30: 60 }), btcRow: BTC, ethRow: eth(9, 12),
+      fearGreed: { value: 62 }, domHistory: domHist(30, 56, 54),
+    })
+    expect(s.measured.of).toBe(100)          // was 100 only when BOTH ETH legs resolved AND the part was one part
+    expect(s.parts.every((p) => p.measured)).toBe(true)
   })
 
   it('the measured parts sum to measured.earned, and the score is that sum renormalised', () => {
@@ -77,10 +114,18 @@ describe('the 100 points, verified by hand', () => {
           const scored = s.parts.filter((p) => p.measured)
           expect(scored.reduce((a, p) => a + p.points, 0)).toBe(s.measured.earned)
           expect(scored.reduce((a, p) => a + p.max, 0)).toBe(s.measured.of)
+          expect(s.measured.of).toBeGreaterThanOrEqual(50)   // every case here publishes
           expect(s.score).toBe(Math.round((100 * s.measured.earned) / s.measured.of))
           expect(s.coverage).toBeCloseTo(s.measured.of / 100, 9)
           expect(s.score).toBeGreaterThanOrEqual(0)
           expect(s.score).toBeLessThanOrEqual(100)
+          // The band, and the reason the phase can be trusted: `low` is this
+          // market with every unread gauge at zero, `high` with every one of
+          // them maxed, and the published number sits between them.
+          expect(s.bounds.low).toBe(s.measured.earned)
+          expect(s.bounds.high).toBe(s.measured.earned + (100 - s.measured.of))
+          expect(s.score).toBeGreaterThanOrEqual(s.bounds.low)
+          expect(s.score).toBeLessThanOrEqual(s.bounds.high)
           // An unmeasured part is null on both sides — never a 0 that reads as a
           // measured zero, and never a max that pads the denominator.
           for (const p of s.parts.filter((x) => !x.measured)) expect(p.points).toBeNull()
@@ -173,14 +218,25 @@ describe('an unmeasured component is dropped from BOTH sides', () => {
     const s = dayOne(0, 0)
     expect(s.score).toBe(0)              // was 20, from three feeds that did not answer
     expect(s.measured).toEqual({ earned: 0, of: 60 })
-    expect(s.phase).toBe('risk_off')
+    // ...and it does NOT call that risk_off any more, which is a deliberate
+    // loss and worth stating: the 40 unread points could reach 40, which is
+    // btc_leads, so "nothing is rotating" is not established by this read even
+    // though 0% breadth is. directive.js's veto is keyed on the phase, so day
+    // one at zero breadth now downgrades to STARTER instead of refusing at
+    // WATCH. The alternative — naming the rung the unread points cannot reach —
+    // is the mirror of the bug this whole gate exists for: it manufactures a
+    // hostile tape out of three feeds that never answered. `bounds` is published
+    // so the veto can be rebuilt honestly one file over, on `high < 40`.
+    expect(s.phase).toBe('unknown')
+    expect(s.bounds).toEqual({ low: 0, high: 40 })
+    expect(s.label).toBe('Risk off to BTC leads')
   })
 
   it('renormalises breadth over the points that existed, and nothing else moves it', () => {
     const s = dayOne(50, 50)
     expect(s.parts.map((p) => [p.key, p.points, p.measured])).toEqual([
-      ['breadth7', 18, true], ['breadth30', 13, true],
-      ['dominance', null, false], ['ethbtc', null, false], ['feargreed', null, false],
+      ['breadth7', 18, true], ['breadth30', 13, true], ['dominance', null, false],
+      ['ethbtc7', null, false], ['ethbtc30', null, false], ['feargreed', null, false],
     ])
     // 31 points earned out of the 60 that were on offer → 52. Every one of those
     // 31 came off a counted row; the three feeds that did not answer are in
@@ -197,15 +253,22 @@ describe('an unmeasured component is dropped from BOTH sides', () => {
       universe: makeUniverse({ beat7: 50, beat30: 50 }), btcRow: BTC,
       ethRow: eth(4, 7), fearGreed: { value: 50, label: 'Neutral' }, domHistory: domHist(30, 56, 56.2),
     })
-    expect(full.parts.map((p) => p.points)).toEqual([18, 13, 10, 5, 5])
+    expect(full.parts.map((p) => p.points)).toEqual([18, 13, 10, 5, 0, 5])
     expect(full.score).toBe(51)
+    // ...and 52 vs 51 is the ONE breadth level where the two agree. That is why
+    // the phase above is refused rather than named off the 52: at 72% breadth
+    // the same pair reads 72 (alt season) against 58 (majors rotating), and the
+    // thinner read was the hotter one. See 'the band' below.
+    expect(s.phase).toBe('unknown')
   })
 
   it('names every input it could not measure, in the same fact as the arithmetic', () => {
     const f = dayOne(50, 50).facts.join('\n')
     expect(f).toMatch(/31 of the 60 points on offer were earned, renormalised to 52 out of 100/)
-    expect(f).toMatch(/the dominance trend, ETH\/BTC and fear & greed were not measured/)
+    expect(f).toMatch(/the dominance trend, ETH\/BTC over 7d, ETH\/BTC over 30d and fear & greed were not measured/)
     expect(f).toMatch(/not evidence about the market in either direction/)
+    // and the band, in the same voice, in the fact right after it
+    expect(f).toMatch(/the 40 unread points put the fully measured read of this same market between 31 and 71 out of 100/)
   })
 
   it('drops the part label into "not scored", never into a midpoint', () => {
@@ -216,33 +279,203 @@ describe('an unmeasured component is dropped from BOTH sides', () => {
     }
   })
 
-  // A score is arithmetic over what was measured; a PHASE is a claim about the
-  // market. Under half the points the number stands and the label refuses.
-  it('refuses to name a phase under half coverage, while still reporting the score', () => {
+  // UNDER HALF THE POINTS THERE IS NO NUMBER EITHER. This used to publish the
+  // renormalised score and refuse only the label, which is how "100 / 100 with
+  // all ten pips lit" arrived under the words "Not enough measured" — off the
+  // 7-day breadth count and nothing else.
+  it('refuses to publish a score at all under half the points, and says what it refused', () => {
     const only7 = makeUniverse({ beat7: 80, beat30: 80 }).map((r) => ({ ...r, chg30d: null }))
     const s = seasonRead({ universe: only7, btcRow: { ...BTC, chg30d: null }, domHistory: null })
     expect(s.measured).toEqual({ earned: 28, of: 35 })
     expect(s.coverage).toBe(0.35)
-    expect(s.score).toBe(80)             // real arithmetic over the 35 points that existed
-    expect(s.phase).toBe('unknown')      // ...but 35 of 100 does not name a regime
-    expect(s.plain).toMatch(/not a call on the market/)
-    expect(s.facts.join('\n')).toMatch(/only 35 of the 100 points were measurable \(35% coverage\)/)
-    expect(s.facts.join('\n')).toMatch(/rather than as "Alt season"/)
+    expect(s.score).toBeNull()           // was 80, from 35 of the 100 points
+    expect(s.phase).toBe('unknown')
+    expect(s.label).toBe('Not enough measured')
+    expect(s.bounds).toEqual({ low: 28, high: 93 })
+    // The arithmetic is not lost, it is just not a score: the plain text carries
+    // the band, because the card's coverage line only renders beside a number.
+    expect(s.plain).toMatch(/35 of its 100 points/)
+    expect(s.plain).toMatch(/anywhere from 28 to 93 out of 100/)
+    expect(s.facts.join('\n')).toMatch(/only 35 of the 100 points had an input \(35% coverage\), which is under half/)
+    expect(s.facts.join('\n')).toMatch(/more extrapolation than measurement/)
   })
 
-  it('names a phase the moment coverage reaches half', () => {
-    // Breadth alone is 60 of the 100 points, which is over the line.
-    const s = seasonRead({ universe: makeUniverse({ beat7: 80, beat30: 80 }), btcRow: BTC, domHistory: null })
-    expect(s.coverage).toBe(0.6)
-    expect(s.phase).not.toBe('unknown')
+  // The exact reading the re-review measured off one gauge, and the one below it.
+  it('cannot print a maxed-out numeral off a single input, at either end of it', () => {
+    const all = (v) => makeUniverse({ beat7: 100, beat30: 100 }).map((r) => ({ ...r, chg30d: v }))
+    const only7 = seasonRead({ universe: all(null), btcRow: { ...BTC, chg30d: null }, domHistory: null })
+    expect(only7.score).toBeNull()       // was 100 / 100, ten pips, "Not enough measured"
+    const only30 = seasonRead({
+      universe: makeUniverse({ beat7: 90, beat30: 90 }).map((r) => ({ ...r, chg7d: null })),
+      btcRow: { ...BTC, chg7d: null }, domHistory: null,
+    })
+    expect(only30.score).toBeNull()      // was 92 / 100 off 25 points
+    // It is arithmetic, not a list of cases: the largest single part is 35 and
+    // the floor is 50, so no one gauge can reach it.
+    const maxes = seasonRead({
+      universe: makeUniverse({}), btcRow: BTC, ethRow: eth(9, 12),
+      fearGreed: { value: 62 }, domHistory: domHist(30, 56, 54),
+    }).parts.map((p) => p.max)
+    expect(Math.max(...maxes)).toBeLessThan(50)
   })
 
-  it('scores ETH/BTC per window, out of 5 when only one window resolved', () => {
+  it('scores each ETH/BTC window as its own part, so the missing one has a name', () => {
     const s = seasonRead({ universe: makeUniverse({}), btcRow: BTC, ethRow: eth(9, null) })
-    const p = s.parts.find((x) => x.key === 'ethbtc')
-    expect([p.points, p.max, p.measured]).toEqual([5, 5, true])
-    expect(p.label).toMatch(/one window only, scored out of 5/)
+    const p7 = s.parts.find((x) => x.key === 'ethbtc7')
+    const p30 = s.parts.find((x) => x.key === 'ethbtc30')
+    expect([p7.points, p7.max, p7.measured]).toEqual([5, 5, true])
+    expect([p30.points, p30.max, p30.measured]).toEqual([null, 5, false])
+    expect(p30.label).toBe('ETH/BTC over 30d unavailable — not scored')
     expect(s.measured.of).toBe(65)       // 35 + 25 + 5 — the 30d leg is not in the denominator
+    // ...and the 35 points it says are missing are all named, which is the whole
+    // repair: with one part whose max shrank, 5 of them belonged to nobody.
+    expect(100 - s.measured.of).toBe(s.parts.filter((x) => !x.measured).reduce((a, x) => a + x.max, 0))
+  })
+})
+
+/* ── the band, and what it is allowed to name ─────────────────────────────── */
+
+// THE DEFECT THIS BLOCK EXISTS FOR. Renormalising a partial read makes the hot
+// end hotter off less evidence: with breadth alone the arithmetic reduces to the
+// breadth percentage, so 72% breadth read `alt_season` (72) on day one and
+// `majors_rotating` (58) once the same market's tilts were actually fetched at
+// neutral. The 50%-coverage gate written to stop it never bound, because day one
+// leaves BOTH breadth windows measured — 35 + 25 = 60 of 100 — so a phase was
+// named every time and the STARTER downgrade in directive.js never ran.
+//
+// Every test below fails against that source.
+describe('the band: a phase is only named where the unread points cannot move it', () => {
+  // The values each tilt can take, INCLUDING the extremes. `rising` is 0 points
+  // and `falling` is 20, `down` is 0+0 and `up` is 5+5, `cold` is 0 and `hot` is
+  // 10 — so the all-lowest completion earns exactly `bounds.low` and the
+  // all-highest exactly `bounds.high`. That is what makes the biconditional at
+  // the bottom of this block a proof rather than a spot check.
+  const DOM = { rising: domHist(30, 54, 57), flat: domHist(30, 56, 56.2), falling: domHist(30, 56, 54) }
+  const ETH = { down: eth(-10, -20), split: eth(12, -20), up: eth(12, 30) }
+  const FG = { cold: { value: 0 }, mid: { value: 50 }, hot: { value: 100 } }
+
+  const read = (b, dom, ethK, fgK) => seasonRead({
+    universe: makeUniverse({ beat7: b, beat30: b }), btcRow: BTC,
+    domHistory: dom == null ? null : DOM[dom],
+    ethRow: ethK == null ? null : ETH[ethK],
+    fearGreed: fgK == null ? null : FG[fgK],
+  })
+  // `euphoric` is an overlay on alt_season that needs the fear & greed VALUE
+  // rather than its points, so a read with the index missing cannot fire it.
+  // That is a warning we cannot make, never a permission we granted, so the
+  // comparison below is on the rung.
+  const rung = (s) => (s.phase === 'euphoric' ? 'alt_season' : s.phase)
+  // Derived from `measured` rather than read off `bounds`, so these tests fail
+  // on the BEHAVIOUR against a source that has no bounds field rather than on a
+  // missing property. `bounds` is pinned against the same arithmetic above.
+  const band = (s) => ({ low: s.measured.earned, high: s.measured.earned + (100 - s.measured.of) })
+
+  it('never names a regime on day one, at any breadth', () => {
+    for (let b = 0; b <= 100; b += 5) {
+      const s = read(b, null, null, null)
+      expect(s.measured.of).toBe(60)
+      expect(s.coverage).toBe(0.6)
+      expect(s.phase, `breadth ${b}% named a phase off two of five gauges`).toBe('unknown')
+      // 40 unread points against a ladder whose widest rung on the 0–100 scale
+      // is 28 (alt season, 72→100) — the band cannot fit inside any of them at
+      // any breadth, which is why this is arithmetic and not a threshold
+      // anyone picked.
+      expect(band(s).high - band(s).low).toBe(40)
+      expect(s.bounds).toEqual(band(s))
+    }
+  })
+
+  it('is never hotter than the same market fully measured — it is IDENTICAL or unknown', () => {
+    const opts = [
+      [null, 'rising', 'flat', 'falling'],
+      [null, 'down', 'split', 'up'],
+      [null, 'cold', 'mid', 'hot'],
+    ]
+    let named = 0; let refused = 0
+    for (const b of [0, 20, 40, 50, 60, 72, 80, 95, 100]) {
+      for (const dom of opts[0]) {
+        for (const e of opts[1]) {
+          for (const fg of opts[2]) {
+            const partial = read(b, dom, e, fg)
+            if (partial.phase === 'unknown') { refused++; continue }
+            named++
+            // Every way this read could have been completed, bracketed by its
+            // two extremes — which are the completions that produce exactly
+            // bounds.low and bounds.high.
+            const lowest = read(b, dom ?? 'rising', e ?? 'down', fg ?? 'cold')
+            const highest = read(b, dom ?? 'falling', e ?? 'up', fg ?? 'hot')
+            expect(lowest.measured.of).toBe(100)
+            expect(highest.measured.of).toBe(100)
+            expect(lowest.score).toBe(band(partial).low)
+            expect(highest.score).toBe(band(partial).high)
+            expect(rung(partial), `breadth ${b} dom=${dom} eth=${e} fg=${fg}`).toBe(rung(lowest))
+            expect(rung(partial), `breadth ${b} dom=${dom} eth=${e} fg=${fg}`).toBe(rung(highest))
+          }
+        }
+      }
+    }
+    expect(named).toBeGreaterThan(200)     // the guarantee is not vacuous
+    expect(refused).toBeGreaterThan(20)    // ...and neither is the refusal
+  })
+
+  it('does not refuse a phase the unread points could not have changed', () => {
+    // The other half of the same rule: no over-refusal. A read that names
+    // nothing must be one whose completions genuinely disagree.
+    for (const b of [0, 30, 50, 65, 78, 90]) {
+      for (const dom of [null, 'flat']) {
+        for (const e of [null, 'split']) {
+          for (const fg of [null, 'mid']) {
+            const s = read(b, dom, e, fg)
+            const lowest = read(b, dom ?? 'rising', e ?? 'down', fg ?? 'cold')
+            const highest = read(b, dom ?? 'falling', e ?? 'up', fg ?? 'hot')
+            const agree = rung(lowest) === rung(highest)
+            const publishable = s.measured.of >= 50
+            expect(s.phase !== 'unknown', `breadth ${b} dom=${dom} eth=${e} fg=${fg}`)
+              .toBe(agree && publishable)
+          }
+        }
+      }
+    }
+  })
+
+  it('never names a phase without a number, or prints a number outside the phase it named', () => {
+    for (const b of [0, 25, 45, 60, 75, 90]) {
+      for (const dom of [null, 'rising', 'falling']) {
+        for (const e of [null, 'down', 'up']) {
+          for (const fg of [null, 'cold', 'hot']) {
+            const s = read(b, dom, e, fg)
+            if (s.phase === 'unknown') continue
+            expect(s.score).not.toBeNull()
+            // Every phase named here is the phase the ladder gives the printed
+            // number — window.js's law, which is the reason the card can put a
+            // numeral and a label side by side at all.
+            expect(rung(s)).toBe(rung(read(b, dom ?? 'rising', e ?? 'down', fg ?? 'cold')))
+            expect(s.score).toBeGreaterThanOrEqual(band(s).low)
+            expect(s.score).toBeLessThanOrEqual(band(s).high)
+          }
+        }
+      }
+    }
+  })
+
+  it('names the phase again the moment every gauge answers', () => {
+    // The gate must not be a permanent refusal — the normal, fully-fetched pass
+    // is the one this app spends most of its life in.
+    const s = read(78, 'falling', 'up', 'mid')
+    expect(s.coverage).toBe(1)
+    expect(s.bounds).toEqual({ low: s.score, high: s.score })
+    expect(s.phase).toBe('alt_season')
+  })
+
+  it('names it on a partial read too, when the missing points cannot reach a boundary', () => {
+    // Fear & greed 404s and nothing else: 10 unread points, 90% breadth. The
+    // read is 84 at worst and 94 at best — alt season either way, so it is
+    // named, and the fact says so rather than hedging.
+    const s = read(90, 'falling', 'up', null)
+    expect(s.measured).toEqual({ earned: 84, of: 90 })
+    expect(s.bounds).toEqual({ low: 84, high: 94 })
+    expect(s.phase).toBe('euphoric')     // ≥72 with breadth over 85 — the overlay
+    expect(s.facts.join('\n')).toMatch(/at both ends, so the regime below holds whatever those gauges would have said/)
   })
 })
 
@@ -443,17 +676,21 @@ describe('ETH/BTC is the pair return, not a subtraction', () => {
     // 5 for the leg that resolved, and the leg that did not is worth nothing out
     // of nothing. It used to take the midpoint 2.5 and print 8 of 10, which is a
     // claim about a month of ETH/BTC that was never fetched.
-    const p = s.parts.find((x) => x.key === 'ethbtc')
-    expect([p.points, p.max]).toEqual([5, 5])
+    expect(s.parts.filter((x) => x.key.startsWith('ethbtc')).map((x) => [x.points, x.max]))
+      .toEqual([[5, 5], [null, 5]])
   })
 
   it('returns null with a stated reason when there is no ETH row', () => {
     const s = seasonRead({ universe: makeUniverse({}), btcRow: BTC, ethRow: null })
     expect(s.ethBtc).toBeNull()
     expect(s.facts.join('\n')).toMatch(/ETH\/BTC unavailable/)
-    const p = s.parts.find((x) => x.key === 'ethbtc')
-    expect(p.points).toBeNull()
-    expect(p.measured).toBe(false)
+    for (const p of s.parts.filter((x) => x.key.startsWith('ethbtc'))) {
+      expect(p.points).toBeNull()
+      expect(p.measured).toBe(false)
+      // Two rows, two distinct sentences: the card lists these labels verbatim
+      // and "ETH/BTC unavailable" twice reads like a rendering bug.
+      expect(p.label).toMatch(/^ETH\/BTC over (7d|30d) unavailable/)
+    }
   })
 })
 
@@ -564,17 +801,28 @@ describe('facts carry the numbers', () => {
   // 'unknown' arrives two ways and they are different refusals: nothing to
   // count at all, and something counted that is not enough of the picture. Both
   // need a sentence, because both are rendered as the top-of-tab answer.
-  it('gives both flavours of unknown their own sentence', () => {
-    const nothing = seasonRead({})
-    const thin = seasonRead({
+  it('gives all three flavours of unknown their own sentence', () => {
+    const nothing = seasonRead({})                       // nothing to count at all
+    const thin = seasonRead({                            // counted, under half the points
       universe: makeUniverse({ beat7: 60, beat30: 60 }).map((r) => ({ ...r, chg30d: null })),
       btcRow: { ...BTC, chg30d: null }, domHistory: null,
     })
-    expect(nothing.phase).toBe('unknown')
-    expect(thin.phase).toBe('unknown')
-    expect(nothing.label).not.toBe(thin.label)
-    expect(nothing.plain).not.toBe(thin.plain)
+    const span = seasonRead({                            // a number, straddling a boundary
+      universe: makeUniverse({ beat7: 60, beat30: 60 }), btcRow: BTC, domHistory: null,
+    })
+    for (const s of [nothing, thin, span]) {
+      expect(s.phase).toBe('unknown')
+      expect(s.plain.length).toBeGreaterThan(30)
+    }
+    expect(new Set([nothing.label, thin.label, span.label]).size).toBe(3)
+    expect(new Set([nothing.plain, thin.plain, span.plain]).size).toBe(3)
     expect(nothing.score).toBeNull()
-    expect(thin.score).not.toBeNull()
+    expect(thin.score).toBeNull()
+    expect(span.score).toBe(60)
+    // The one that still carries a number says what the number does and does not
+    // establish, in the sentence printed beside it.
+    expect(span.label).toBe('BTC only to Alt season')
+    expect(span.plain).toMatch(/60 out of 100 assumes the 40 points we could not read/)
+    expect(span.plain).toMatch(/anywhere from 36 to 76/)
   })
 })

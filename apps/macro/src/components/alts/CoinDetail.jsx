@@ -108,7 +108,17 @@ export default function CoinDetail({
     // the key only when the scan actually got a trending list, or every coin on
     // the board reads "nobody is looking" — the most bullish attention value
     // there is — on the days CoinGecko rate-limits us.
-    const crowdInput = { fearGreed, community: payload?.coin?.community ?? null, derivs, screened, now }
+    // `derivs: null` alone cannot tell "Binance says this coin has no perp"
+    // from "Binance did not answer", and the crowd card used to print the first
+    // for both — stating as measured fact that a coin has no futures market
+    // when fapi had merely 451'd us, which is the expected result from a
+    // datacentre IP. alt-coin.mjs publishes which one it was; pass it through,
+    // or sentiment.js falls back to the non-claiming answer.
+    const crowdInput = {
+      fearGreed, community: payload?.coin?.community ?? null, derivs, screened, now,
+      derivsStatus: payload?.derivsStatus ?? null,
+      derivsUnavailable: payload?.derivsUnavailable ?? null,
+    }
     if (trendingChecked) crowdInput.trendingRank = trendingRank
     const crowd = crowdRead(crowdInput)
 
@@ -410,25 +420,20 @@ function PrecedentCard({ read, screened, sym }) {
         </div>
       ) : (
         <>
+          {/* THE WORST CASE SITS UNDER THE MEDIAN ON EVERY TILE, WITH THE
+              SAMPLE SIZE. That is precedent.js's rule and this is the surface it
+              exists to police — and for two rounds this comment was the only
+              place it was true. `worstFwd7` and `worstFwd60` were computed,
+              exported and covered in the lib; the 7-day and 60-day tiles here
+              printed a bare median and a count, so two of the three headline
+              numbers on the differentiator card shipped as a highlight reel.
+              `Tile` renders one shape, so a fourth horizon cannot be added
+              without its worst case: there is nowhere to put a median that does
+              not also take one. */}
           <div className="ticket alt-rates">
-            <div className="tk">
-              <div className="k t-label">7d after</div>
-              <div className={`v num ${toneOf(br.medianFwd7)}`}>{pctText(br.medianFwd7)}</div>
-              <div className="tk-sub num">{br.nFwd7} episodes</div>
-            </div>
-            <div className="tk">
-              <div className="k t-label">21d after</div>
-              <div className={`v num ${toneOf(br.medianFwd21)}`}>{pctText(br.medianFwd21)}</div>
-              {/* The worst case sits under the median EVERYWHERE the median is
-                  shown. That is precedent.js's rule and this is the surface it
-                  exists to police. */}
-              <div className="tk-sub num">worst {pctText(br.worstFwd21)}</div>
-            </div>
-            <div className="tk">
-              <div className="k t-label">60d after</div>
-              <div className={`v num ${toneOf(br.medianFwd60)}`}>{pctText(br.medianFwd60)}</div>
-              <div className="tk-sub num">{br.nFwd60} episodes</div>
-            </div>
+            <Tile label="7d after" median={br.medianFwd7} worst={br.worstFwd7} n={br.nFwd7} />
+            <Tile label="21d after" median={br.medianFwd21} worst={br.worstFwd21} n={br.nFwd21} />
+            <Tile label="60d after" median={br.medianFwd60} worst={br.worstFwd60} n={br.nFwd60} />
           </div>
 
           <div className="stats stats-2up alt-stats">
@@ -476,6 +481,38 @@ function PrecedentCard({ read, screened, sym }) {
         </>
       )}
     </section>
+  )
+}
+
+/**
+ * One base-rate tile: the median, the worst case under it, and the sample both
+ * were counted from.
+ *
+ * It is a component and not three hand-written blocks because that is what made
+ * the omission possible in the first place — two of the three tiles were
+ * written without a worst case and the third carried the comment claiming all
+ * of them had one. With the shape in one place there is nowhere to put a median
+ * that does not also take a worst case.
+ *
+ * A horizon with no closed episodes is said out loud rather than printed as
+ * three dashes: `precedentRead` counts each horizon separately, so a coin whose
+ * last ignition was 30 days ago genuinely has a 7-day sample and no 60-day one.
+ */
+function Tile({ label, median, worst, n }) {
+  const counted = Number.isFinite(n) && n > 0
+  return (
+    <div className="tk">
+      <div className="k t-label">{label}</div>
+      <div className={`v num ${toneOf(median)}`}>{pctText(median)}</div>
+      {counted ? (
+        <>
+          <div className="tk-sub num">worst {pctText(worst)}</div>
+          <div className="tk-sub num">{n} episode{n === 1 ? '' : 's'}</div>
+        </>
+      ) : (
+        <div className="tk-sub">no closed sample</div>
+      )}
+    </div>
   )
 }
 
@@ -589,13 +626,32 @@ function CrowdCard({ read, sym }) {
               <KV k="Level" v={k.level} />
             </dl>
           ) : (
-            <div className="empty">
-              <div className="empty-title">No listed perpetual</div>
-              <div className="empty-sub">
-                {sym} has no Binance perp, so funding, open interest and positioning do not exist for it —
-                they are absent, not neutral. Judge this one on the chart and the checklist alone.
+            /* TWO DIFFERENT EMPTY STATES, because they are two different facts.
+               "No listed perpetual" is a measurement — Binance answered and said
+               the symbol does not exist. A feed that did not answer establishes
+               nothing, and printing the first sentence for it told the reader a
+               coin has no futures market on the days fapi geo-blocks us. The
+               status comes from the payload via crowdRead; when nobody said, it
+               is the non-claiming one. */
+            c?.perp?.status === 'not_listed' ? (
+              <div className="empty">
+                <div className="empty-title">No listed perpetual</div>
+                <div className="empty-sub">
+                  {sym} has no Binance perp, so funding, open interest and positioning do not exist for it —
+                  they are absent, not neutral. Judge this one on the chart and the checklist alone.
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="empty">
+                <div className="empty-title">No perp read this pass</div>
+                <div className="empty-sub">
+                  The Binance derivatives feed did not answer for {sym}
+                  {c?.perp?.reason ? ` (${c.perp.reason})` : ''} — so funding, open interest and positioning
+                  are unmeasured on this pass, and whether {sym} has a listed perpetual at all was not
+                  established either. Nothing has been assumed from the silence.
+                </div>
+              </div>
+            )
           )}
         </div>
       </div>

@@ -19,6 +19,10 @@ import { altDirective } from '../directive.js'
 // The real regime read, so the 'unknown' phase this file now handles is the one
 // season.js actually emits rather than a string a test invented.
 import { seasonRead } from '../season.js'
+// The real 7-day structure, for the same reason. Every `range7d` in this file is
+// computed by structure7d over a real series instead of being hand-authored —
+// see the note on `tape()` below.
+import { structure7d, screenCoin } from '../screen.js'
 // Imported only to pin the level definition against the shared one. directive.js
 // itself imports nothing, on purpose — see the note at the top of that file.
 import { highestHigh } from '../../ta.js'
@@ -45,6 +49,28 @@ const bars = (n = 60, base = 10) =>
 const flatBars = (n = 60, base = 10) =>
   Array.from({ length: n }, (_, i) => ({ t: T0 + i * DAY, o: base, h: base, l: base, c: base, v: 0 }))
 
+/* ── the 7-day sparkline, built the way CoinGecko sends it ─────────────────
+ *
+ * NO HAND-AUTHORED `range7d` LITERALS IN THIS FILE. The fallback test that
+ * covered these levels pinned one — `{ low: 9.5, high: 11.2, last: 11, pos: 0.9,
+ * priorHigh: 10.4 }` — and it is a shape structure7d cannot produce (that low,
+ * high and last give pos 0.882, not 0.9) whose `low` sat comfortably under its
+ * `last`. The bug it was guarding only shows up when the newest point IS the
+ * series minimum, so the fixture could not express it and the test passed for
+ * two rounds while the sentinel sent the price back as the level.
+ *
+ * `cents` ramps in whole cents so the ends of the window are exactly the numbers
+ * the assertions name; `tape` runs the REAL structure7d over 168 hourly points,
+ * the last 24 of which are today.
+ */
+const cents = (fromC, toC, n) => Array.from({ length: n }, (_, i) => (fromC + Math.round(((toC - fromC) * i) / (n - 1))) / 100)
+const tape = (prior, today) => structure7d([...prior, ...today])
+
+/** The default: prior six days 9.50–10.40, today up to 11.20 and back to 11.00.
+ *  priorHigh 10.40, priorLow 9.50, low 9.50, high 11.20, last 11.00. */
+const SPARK_UP = tape(cents(950, 1040, 144), [...cents(1050, 1120, 20), ...cents(1120, 1100, 4)])
+const NO_SPARK = structure7d(null)
+
 const screened = (over = {}) => ({
   id: 'test-coin', symbol: 'TEST', name: 'Test Coin', price: 11, mcap: 3e8, vol24h: 2e7,
   chg24h: 4, chg7d: 9, chg30d: 12, score: 72, band: 'igniting', tier: 'small', kind: 'utility',
@@ -52,7 +78,7 @@ const screened = (over = {}) => ({
   flags: { stablecoin: false, wrapper: false, parabolic: false, thinLiquidity: false, freshBreak: true, newListing: false },
   turnover: 0.066, rsVsBtc7d: 6, rsVsBtc30d: 5,
   accel: { d24VsWeek: 2.7, weekVsMonth: 0.9 }, drawdownFromAthPct: 62,
-  range7d: { low: 9.5, high: 11.2, last: 11, pos: 0.9, freshBreak: true, priorHigh: 10.4, points: 168 },
+  range7d: SPARK_UP,
   ...over,
 })
 
@@ -309,69 +335,217 @@ describe('ENTER', () => {
     expect(d.guardrails.join(' ')).toMatch(/alt risk is fighting the tape today/)
   })
 
-  // THE THREE-WAY SPLIT ON THE REGIME, pinned end-to-end through the real
-  // seasonRead rather than a hand-written phase string — the integration seam
-  // between the two files, and the one that drifted.
-  //
-  // season.js gained a 'unknown' phase for coverage below half. hostileSeason()
-  // only knows 'risk_off' and 'btc_only', so an unmeasured regime read as
-  // FRIENDLY at this gate and bought at full size. It must be neither: a
-  // downgrade, not a veto.
-  describe('an unmeasured regime is neither a green light nor a block', () => {
-    // The day-one state: the cron has never run, so there is no dominance
-    // history; no ETH row; fear & greed failed. Only the 7d breadth window
-    // resolves — 35 of the 100 points — and the score it produces is HIGH.
-    const dayOne = () => {
-      const rows = [
-        { id: 'bitcoin', symbol: 'BTC', name: 'Bitcoin', rank: 1, price: 6e4, mcap: 1.2e12, chg7d: 3, chg30d: null },
-        ...Array.from({ length: 60 }, (_, i) => ({
+  /* ── THE THREE-WAY SPLIT ON THE REGIME ──────────────────────────────────────
+   *
+   * thin / measured-friendly / measured-hostile, pinned end to end through the
+   * REAL seasonRead. Not one hand-built season object in this block, because
+   * that is exactly how the last version of it missed: it named a "day-one
+   * state" and then quietly supplied a fourth condition (`chg30d: null` on BTC
+   * and on all 60 rows) that the prose never mentions. Strip that one line and
+   * the fixture returned a named phase and every assertion in the block flipped.
+   * The real day one leaves BOTH breadth windows measured — 60 of 100 points —
+   * so it is the SPAN refusal that fires there, not the thin one.
+   *
+   * season.js reports `phase: 'unknown'` for all three of its refusals, and
+   * `hostileSeason` only knew 'risk_off' and 'btc_only' — so a regime nobody
+   * could name read as FRIENDLY at this gate and bought at full size.
+   */
+  describe('a regime that was not named is neither a green light nor a block', () => {
+    /** A market: `beatPct` of 60 alt rows out-return BTC over both windows. */
+    const market = (beatPct, { alt30 = true, btc = { chg7d: 3, chg30d: 7 } } = {}) => {
+      const rows = [{ id: 'bitcoin', symbol: 'BTC', name: 'Bitcoin', rank: 1, price: 6e4, mcap: 1.2e12, ...btc }]
+      for (let i = 0; i < 60; i++) {
+        const beats = i < Math.round(0.6 * beatPct)
+        rows.push({
           id: `c${i}`, symbol: `C${i}`, name: `C${i}`, rank: i + 2, price: 1, mcap: 5e8,
-          chg7d: i < 45 ? 20 : -5, chg30d: null,
-        })),
-      ]
-      return seasonRead({ universe: rows, btcRow: rows[0], ethRow: null, global: null, fearGreed: null, trending: null, domHistory: null, now: NOW })
+          chg7d: beats ? 20 : -5, chg30d: alt30 ? (beats ? 30 : -10) : null,
+        })
+      }
+      return rows
+    }
+    const dom30 = (from, to) => Array.from({ length: 30 }, (_, i) => ({
+      d: new Date(NOW - (29 - i) * 86_400_000).toISOString().slice(0, 10),
+      btcDom: from + ((to - from) * i) / 29, ethDom: 12, totalMcap: 2e12,
+    }))
+
+    /** DAY ONE, exactly as documented: the cron has never run so there is no
+     *  dominance history, there is no ETH row, and fear & greed 429'd. Nothing
+     *  else is withheld — both breadth windows resolve, which is the state the
+     *  last fixture failed to be. */
+    const dayOne = (beatPct, over = {}) => {
+      const u = market(beatPct, over)
+      return seasonRead({ universe: u, btcRow: u[0], ethRow: null, global: null, fearGreed: null, trending: null, domHistory: null, now: NOW })
+    }
+    /** The same market a month later, with every gauge answering. */
+    const wholeRead = (beatPct, over = {}) => {
+      const u = market(beatPct, over)
+      // `in`, not `??` — `null` is a MEANINGFUL value for these two ("the feed
+      // answered with nothing"), and `??` silently replaced it with the default,
+      // which is how the hostile-band case below first read as fully measured.
+      return seasonRead({
+        universe: u, btcRow: u[0],
+        ethRow: 'ethRow' in over ? over.ethRow : { symbol: 'ETH', chg7d: 4, chg30d: 8 },
+        global: { btcDominancePct: 56 },
+        fearGreed: 'fearGreed' in over ? over.fearGreed : { value: 50, label: 'Neutral' },
+        trending: null, domHistory: over.dom ?? dom30(58, 54), now: NOW,
+      })
     }
 
-    it('produces a high score under a refused phase — the shape that walked the gate', () => {
-      const s = dayOne()
+    /* 1 — MEASURED AND FRIENDLY: the regime has a name and the name is not
+     *     hostile. Full size. If the refusals below had been given the hostile
+     *     veto, this rung would be unreachable for the first week of every
+     *     deploy's life. */
+    it('takes the full size when the regime was measured and named', () => {
+      const s = wholeRead(80)
+      expect(s.phase).toBe('alt_season')
+      expect(s.coverage).toBe(1)
+      expect(s.bounds).toEqual({ low: s.score, high: s.score })
+      const d = altDirective(ready({ season: s }))
+      expect(d.action).toBe('ENTER')
+      expect(d.guardrails.join(' ')).not.toMatch(/regime was not/)
+    })
+
+    /* 2 — MEASURED AND HOSTILE: named risk_off / btc_only. Veto, unchanged. */
+    it('vetoes a live break when the named regime is hostile', () => {
+      const s = wholeRead(5, { ethRow: { symbol: 'ETH', chg7d: -4, chg30d: -8 }, fearGreed: { value: 20 }, dom: dom30(54, 58) })
+      expect(['risk_off', 'btc_only']).toContain(s.phase)
+      const d = altDirective(ready({ season: s }))
+      expect(d.action).toBe('WATCH')
+      expect(d.headline).toMatch(/the setup is real, the regime is not/)
+    })
+
+    /* 3 — MEASURED AND HOSTILE AT BOTH ENDS OF THE BAND, but not NAMED.
+     *
+     * The hole. season.js only names a phase when its bounds fall inside one
+     * rung; a band can straddle a boundary and still be hostile everywhere along
+     * it. Reproduced: score 13, bounds {12, 22}, label "Risk off to BTC only",
+     * phase 'unknown' — and a live break took a HALF SIZE into it, while the
+     * same market with fear & greed answering got the veto. Less information,
+     * more risk taken. */
+    it('vetoes when the phase was refused but every point of the band is hostile', () => {
+      const s = wholeRead(20, { ethRow: { symbol: 'ETH', chg7d: -4, chg30d: -9 }, fearGreed: null, dom: dom30(54, 58) })
+      expect(s.phase).toBe('unknown')                 // no name…
+      expect(s.bounds.high).toBeLessThan(40)          // …but the top of the band is still btc_only
+      expect(s.score).not.toBeNull()
+
+      const d = altDirective(ready({ season: s }))
+      expect(d.action).toBe('WATCH')                  // not STARTER
+      expect(d.reasons.join(' ')).toMatch(new RegExp(`between ${s.bounds.low} and ${s.bounds.high} out of 100`))
+      expect(d.reasons.join(' ')).toMatch(/every point of that band is a tape alt risk is fighting/)
+      expect(d.guardrails.join(' ')).toMatch(/alt risk is fighting the tape today/)
+      // ARM is vetoed by the same gate, for the same reason.
+      expect(altDirective(ready({ season: s, screened: screened({ price: 9.95, band: 'waking' }) })).action).not.toBe('ARM')
+    })
+
+    it('does not veto a band that only reaches into the hostile rungs', () => {
+      // The other side of the same boundary: a band whose top is friendly is not
+      // a hostile tape, it is an unread one. Downgrade, never veto — vetoing on
+      // an absence is the mirror of the bug this gate exists for.
+      const s = dayOne(5)
       expect(s.phase).toBe('unknown')
-      expect(s.score).toBeGreaterThan(70)      // 74/100 off breadth alone
-      expect(s.coverage).toBeLessThan(0.5)
+      expect(s.bounds.high).toBeGreaterThanOrEqual(40)
+      expect(altDirective(ready({ season: s })).action).toBe('STARTER')
     })
 
-    it('downgrades a live break to a half-size STARTER instead of ENTER', () => {
-      const d = altDirective(ready({ season: dayOne() }))
+    /* 4 — THE SPAN REFUSAL: the real day one. The score STANDS and it is high;
+     *     the phase is refused because the unread points straddle a boundary. */
+    it('downgrades the real day-one read to a half-size STARTER, and says why in its own arithmetic', () => {
+      const s = dayOne(80)
+      expect(s.phase).toBe('unknown')
+      expect(s.score).toBe(80)                        // the score is published and it is HOT
+      expect(s.measured.of).toBe(60)                  // both breadth windows: this is not a thin read
+      expect(s.coverage).toBeGreaterThan(0.5)
+      expect(s.bounds).toEqual({ low: 48, high: 88 })
+
+      const d = altDirective(ready({ season: s }))
       expect(d.action).toBe('STARTER')
-      expect(d.reasons.join(' ')).toMatch(/the regime was not measured — only 35 of its 100 points had an input/)
-      // and it says so on the card whatever rung is reached
-      expect(d.guardrails.join(' ')).toMatch(/the regime was not measured/)
+      const said = `${d.reasons.join(' ')} ${d.guardrails.join(' ')}`
+      expect(said).toMatch(/the regime was not named — 60 of its 100 points had an input and score 80\/100/)
+      expect(said).toMatch(/put the full read anywhere from 48 to 88 out of 100 \(BTC leads to Alt season\)/)
+      // The reason it used to give, which was false at 60% coverage with a
+      // published score: "only 60 of its 100 points had an input, too little to
+      // name a phase off". 60 of 100 is not too little to score, and too little
+      // is not why the phase was refused.
+      expect(said).not.toMatch(/too little to name a phase off/)
+      expect(said).not.toMatch(/under the half a regime score needs/)
     })
 
-    it('does not block ENTER once the same regime is actually measured', () => {
-      // Same call, same everything, with a regime that came back whole. If the
-      // unmeasured case had been given hostileSeason's veto, ENTER would be
-      // unreachable for the first week of every deploy's life.
-      expect(altDirective(ready()).action).toBe('ENTER')
+    it('holds across the whole breadth ladder — a day-one read never takes the full size', () => {
+      let gap = 0
+      for (const b of [0, 20, 40, 50, 60, 72, 80, 95, 100]) {
+        const s = dayOne(b)
+        const thin = altDirective(ready({ season: s })).action
+        const whole = altDirective(ready({ season: wholeRead(b) })).action
+        // The property the gate exists for, and it was false at every breadth
+        // above 50%: a read with 40 of its 100 points missing never buys full.
+        expect(thin).not.toBe('ENTER')
+        expect(['WATCH', 'STARTER']).toContain(thin)
+        // Where the band settles the question it agrees with the complete read
+        // exactly — that is what makes the veto above a measurement.
+        if (s.bounds.high < 40) expect(thin).toBe(whole)
+        // And where it does not, the thin read can be BOLDER than the complete
+        // one: half size against a WATCH. Counted rather than waved past,
+        // because it is a deliberate loss and not drift — 0% breadth reads
+        // risk_off once measured, but day one's band is [0, 40], which reaches
+        // btc_leads. Vetoing there would manufacture a hostile tape out of 40
+        // points nobody read, which is the mirror of the bug this gate is for.
+        if (thin === 'STARTER' && whole === 'WATCH') gap++
+      }
+      expect(gap).toBeGreaterThan(0)
     })
 
-    it('keeps the hostile veto stronger than the unmeasured downgrade', () => {
-      expect(altDirective(ready({ season: HOSTILE })).action).toBe('WATCH')
+    /* 5 — THE THIN REFUSAL: under half the points had an input, so season.js
+     *     publishes no score at all. A different sentence, because it is a
+     *     different shortfall. */
+    it('handles the thin refusal, where there is no score to quote', () => {
+      // No row in the market carries a 30-day return, so only the 7d breadth
+      // window resolves: 35 of 100 points, under the half a score needs.
+      const s = dayOne(80, { alt30: false, btc: { chg7d: 3, chg30d: null } })
+      expect(s.phase).toBe('unknown')
+      expect(s.score).toBeNull()
+      expect(s.measured.of).toBe(35)
+      expect(s.coverage).toBeLessThan(0.5)
+
+      const d = altDirective(ready({ season: s }))
+      expect(d.action).toBe('STARTER')
+      const said = `${d.reasons.join(' ')} ${d.guardrails.join(' ')}`
+      expect(said).toMatch(/only 35 of its 100 points had an input, under the half a regime score needs/)
+      expect(said).not.toMatch(/score null|null\/100/)
     })
 
-    it('treats no season read at all the same as an unmeasured one', () => {
+    it('treats no season read at all the same as an unnamed one', () => {
       const d = altDirective(ready({ season: null }))
       expect(d.action).toBe('STARTER')
       expect(d.reasons.join(' ')).toMatch(/no rotation read came back at all/)
     })
 
-    // The NO_READ flavour: breadth could not be counted, so the score is null.
-    it('handles the score-null flavour without printing a null into the copy', () => {
+    // The NO_READ flavour: breadth could not be counted, so there is no score
+    // and no band either.
+    it('handles the no-read flavour without printing a null into the copy', () => {
       const blind = seasonRead({ universe: null, btcRow: null, now: NOW })
       expect(blind.phase).toBe('unknown')
       expect(blind.score).toBeNull()
       const d = altDirective(ready({ season: blind }))
       expect(d.action).toBe('STARTER')
       expect(`${d.headline} ${d.reasons.join(' ')} ${d.guardrails.join(' ')}`).not.toMatch(/null|NaN|undefined/)
+    })
+
+    it('prints no null, NaN or undefined on any rung of any of the five states', () => {
+      const reads = [
+        wholeRead(80), wholeRead(5, { ethRow: { symbol: 'ETH', chg7d: -4, chg30d: -8 }, fearGreed: { value: 20 }, dom: dom30(54, 58) }),
+        wholeRead(20, { ethRow: { symbol: 'ETH', chg7d: -4, chg30d: -9 }, fearGreed: null, dom: dom30(54, 58) }),
+        dayOne(80), dayOne(80, { alt30: false, btc: { chg7d: 3, chg30d: null } }),
+        seasonRead({ universe: null, btcRow: null, now: NOW }), null,
+      ]
+      for (const s of reads) {
+        for (const price of [9.1, 9.95, 11, 18]) {
+          for (const position of [null, { units: 120, avgEntry: 9.0 }]) {
+            const d = altDirective(ready({ season: s, screened: screened({ price }), position }))
+            const all = `${d.headline} ${d.reasons.join(' ')} ${d.guardrails.join(' ')}`
+            expect(all).not.toMatch(/null|NaN|undefined/)
+          }
+        }
+      }
     })
   })
 
@@ -532,15 +706,16 @@ describe('levels', () => {
     }
   })
 
-  it('falls back to the sparkline when there is no candle history, and labels the weaker level', () => {
+  it('falls back to the sparkline when there is no candle history, and labels BOTH weaker levels', () => {
     const d = altDirective(ready({ candles: bars(5) }))
     expect(d.levels.trigger).toBe(10.4)              // range7d.priorHigh
     expect(d.levels.triggerBasis).toMatch(/prior 6-day high from the 7-day sparkline/)
-    expect(d.levels.invalidation).toBe(9.5)          // range7d.low
+    expect(d.levels.invalidation).toBe(9.5)          // range7d.priorLow — NOT range7d.low
+    expect(d.levels.invalidationBasis).toMatch(/prior 6-day low from the 7-day sparkline/)
   })
 
   it('has no trigger at all when neither source has one', () => {
-    const d = altDirective(ready({ candles: null, screened: screened({ price: 11, range7d: { low: null, high: null, last: null, pos: null, freshBreak: false, priorHigh: null, points: 0 } }) }))
+    const d = altDirective(ready({ candles: null, screened: screened({ price: 11, range7d: NO_SPARK }) }))
     expect(d.levels.trigger).toBeNull()
     expect(d.levels.invalidation).toBeNull()
     expect(d.levels.entry).toBe(11)
@@ -566,10 +741,7 @@ describe('levels', () => {
     expect(under.levels.triggerLive).toBe(false)
     expect(under.levels.invalidated).toBe(true)
 
-    const blind = altDirective(ready({
-      candles: null,
-      screened: screened({ range7d: { low: null, high: null, last: null, pos: null, freshBreak: false, priorHigh: null, points: 0 } }),
-    }))
+    const blind = altDirective(ready({ candles: null, screened: screened({ range7d: NO_SPARK }) }))
     expect(blind.levels.triggerLive).toBeNull()
     expect(blind.levels.invalidated).toBeNull()
   })
@@ -635,7 +807,7 @@ describe('the level window is the same window for the trigger and the invalidati
     expect(short.triggerBasis).toMatch(/sparkline/)
     expect(short.invalidationBasis).toMatch(/sparkline/)
     expect(short.trigger).toBe(10.4)          // range7d.priorHigh
-    expect(short.invalidation).toBe(9.5)      // range7d.low
+    expect(short.invalidation).toBe(9.5)      // range7d.priorLow
 
     const enough = levelsOf(ramp(21))
     expect(enough.triggerBasis).toBe('prior 20-day high')
@@ -700,6 +872,125 @@ describe('the level window is the same window for the trigger and the invalidati
   })
 })
 
+/* ══ 6d — THE SAME WINDOW RULE, ON THE SPARKLINE PATH ══════════════════════
+ *
+ * Everything above pins the CANDLE path. The candle path is the one the tab
+ * draws when a coin has history; it is not the one that reaches the phone.
+ * netlify/functions/alt-watch.mjs passes `candles: null` on every pass, so EVERY
+ * level the scheduled sentinel alerts on comes out of the sparkline fallback —
+ * and the fallback kept the exact asymmetry the candle window had just lost:
+ * `priorHigh` excluded today, `low` did not.
+ *
+ * So invalidation EQUALLED the price on any row making its own 7-day low, and
+ * "price <= invalidation" was the series compared against itself. Over 20,000
+ * random 7-day tapes it fired on 1,276 and on exactly the 1,276 where price was
+ * its own minimum. The Telegram line read "FOO invalidation hit … lost $50.00 —
+ * 7-day low from the sparkline" with $50.00 the live price.
+ *
+ * Every fixture below goes through the REAL structure7d. The literal that used
+ * to guard this could not express the bug — see the note on `tape()`.
+ */
+
+describe('the sparkline fallback is one window too, and it excludes today', () => {
+  const fallback = (range7d, price) =>
+    altDirective(ready({ candles: null, screened: screened({ price, range7d }) })).levels
+
+  it('draws both fallback levels from the prior six days, never from today', () => {
+    // Prior six days 10.00–10.30. Today does whatever it likes; the two levels
+    // are the same two numbers every time. Exactly the assertion the candle
+    // window gets — if either end creeps onto today's points, one of these goes
+    // red.
+    const prior = cents(1000, 1030, 144)
+    for (const today of [
+      cents(1020, 900, 24),                                  // today takes out the week's low
+      cents(1020, 3000, 24),                                 // today takes out the week's high
+      [...cents(1020, 1, 12), ...cents(1, 1020, 12)],        // today spikes both ways and returns
+      cents(1010, 1010, 24),                                 // today does nothing
+    ]) {
+      const lv = fallback(tape(prior, today), 10.1)
+      expect(lv.trigger).toBe(10.3)
+      expect(lv.invalidation).toBe(10.0)
+      expect(lv.triggerBasis).toMatch(/prior 6-day high from the 7-day sparkline/)
+      expect(lv.invalidationBasis).toMatch(/prior 6-day low from the 7-day sparkline/)
+    }
+  })
+
+  it('never returns the live price as the invalidation level', () => {
+    // The reproduction, in full: a 7-day tape that ends at its own minimum.
+    const own = tape(cents(1030, 1000, 144), cents(998, 900, 24))
+    expect(own.last).toBe(9)
+    expect(own.low).toBe(9)                    // the RANGE floor is the live point
+    const lv = fallback(own, own.last)
+    expect(lv.invalidation).toBe(10)           // the LEVEL is the prior six days' low
+    expect(lv.invalidation).not.toBe(own.last) // <- this is the whole finding
+    expect(lv.invalidation).toBeGreaterThan(own.last)
+  })
+
+  it('makes the invalidation hit measurable rather than automatic', () => {
+    // 4,000 real tapes through the real structure7d. The old level was the
+    // series minimum INCLUDING the newest point, so `price <= invalidation` was
+    // true if and only if price happened to be that minimum — a property of the
+    // series, not a comparison against a level. Both halves are asserted: the
+    // flag must not be that property, and it must be the honest comparison.
+    let seed = 7
+    const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648
+    let ownMin = 0; let hit = 0; let disagree = 0
+    for (let k = 0; k < 4000; k++) {
+      const pts = []
+      let p = 100
+      for (let i = 0; i < 168; i++) { p *= 1 + (rnd() - 0.5) * 0.04; pts.push(p) }
+      const r = structure7d(pts)
+      const lv = fallback(r, r.last)
+      expect(lv.invalidated).toBe(r.last <= r.priorLow)   // the honest comparison
+      if (r.last === r.low) ownMin++
+      if (lv.invalidated) hit++
+      if (lv.invalidated !== (r.last === r.low)) disagree++
+    }
+    // The self-referential test and the real one are now different questions,
+    // and both populations are non-trivial — so this is a measurement rather
+    // than a coincidence about the generator.
+    expect(ownMin).toBeGreaterThan(50)
+    expect(hit).toBeGreaterThan(50)
+    expect(disagree).toBeGreaterThan(hit / 4)
+  })
+
+  it('sees a base loss the old level could not see at all', () => {
+    // The safety half. Prior six days floor at 10.00; today breaks to 9.50 and
+    // bounces to 9.80. The base IS lost. Against `low` (9.50, today included)
+    // price 9.80 sat ABOVE the level and the EXIT-on-invalidation rung — a
+    // SAFETY rung — never fired.
+    const broke = tape(cents(1000, 1030, 144), [...cents(1020, 950, 12), ...cents(950, 980, 12)])
+    expect(broke.low).toBe(9.5)
+    expect(broke.priorLow).toBe(10)
+    expect(broke.last).toBe(9.8)
+    expect(broke.last > broke.low).toBe(true)          // the old level said "not broken"
+
+    const d = altDirective(ready({
+      candles: null,
+      screened: screened({ price: broke.last, range7d: broke, band: 'dead', score: 20 }),
+      position: { units: 10, avgEntry: 10.2 },
+      plan: plan({ stop: { stop: 5, basis: 'pct', detail: '', warning: null, floored: false } }),
+    }))
+    expect(d.levels.invalidated).toBe(true)
+    expect(d.action).toBe('EXIT')
+    expect(d.severity).toBe('urgent')
+    expect(d.reasons.join(' ')).toMatch(/lost the base low \$10\.00 \(prior 6-day low from the 7-day sparkline \(no candle history\)\)/)
+  })
+
+  it('refuses a level rather than inventing one from the range it was handed', () => {
+    // A row carrying a 7-day range but no `priorLow` — a hand-built object, or a
+    // blob written by an older deploy. The old code would take `low` and hand
+    // back a level; there is no honest level here, so there is none, and
+    // `invalidated` degrades to null rather than to false.
+    const legacy = { ...SPARK_UP, priorLow: undefined }
+    const lv = fallback(legacy, 9.2)
+    expect(lv.trigger).toBe(10.4)          // the trigger still has a source
+    expect(lv.invalidation).toBeNull()
+    expect(lv.invalidationBasis).toBeNull()
+    expect(lv.invalidated).toBeNull()      // not false — never measured
+  })
+})
+
 /* ══ 6c — WHAT THE SCHEDULED SENTINEL CAN ACTUALLY EMIT ════════════════════
  *
  * netlify/functions/alt-watch.mjs alerts on a set of directive actions, and that
@@ -719,8 +1010,9 @@ describe('the level window is the same window for the trigger and the invalidati
 describe('the sentinel\'s call shape', () => {
   const BANDS = ['dead', 'basing', 'waking', 'igniting', 'running', 'extended']
   const SEASONS = ['risk_off', 'btc_only', 'btc_leads', 'majors_rotating', 'alt_season', 'euphoric', 'unknown']
-  const SPARK = { low: 9, high: 11, last: 10, pos: 0.5, freshBreak: true, priorHigh: 11, points: 168 }
-  const NO_SPARK = { low: null, high: null, last: null, pos: null, freshBreak: false, priorHigh: null, points: 0 }
+  // Real structure7d over a real series, like everything else in this file:
+  // prior six days 9.00–11.00, today 10.10 up to 11.50.
+  const SPARK = tape(cents(900, 1100, 144), cents(1010, 1150, 24))
 
   /** Every action the sentinel can produce, over every combination of the inputs
    *  a screened watchlist row can carry. */
@@ -833,14 +1125,79 @@ describe('the sentinel\'s call shape', () => {
     }
   })
 
-  it('names the level that fired, and which basis it came off', () => {
+  it('names the level that fired, which basis it came off, and the price it moved through', () => {
     // The sentinel has no candles, so this is the WEAKER sparkline level. A user
     // holding the alert next to the tab has to be able to tell which one moved.
-    const row = screened({ price: 12, range7d: { low: 9, high: 12, last: 12, pos: 1, freshBreak: true, priorHigh: 11, points: 168 } })
+    const row = screened({ price: 12, range7d: SPARK })
     const curr = { band: 'igniting', action: 'WATCH', triggerAbove: true, invalidated: false }
     const line = alertLine({ id: 'x' }, row, ['trigger fired'], curr, safeDirective(row, season(), NOW))
     expect(line).toContain('trigger fired')
-    expect(line).toContain('cleared $11.00 — prior 6-day high from the 7-day sparkline (no candle history)')
+    expect(line).toContain('price $12.00 cleared $11.00 — prior 6-day high from the 7-day sparkline (no candle history)')
+  })
+
+  /* ── THE LINE THAT REACHES THE PHONE ────────────────────────────────────────
+   *
+   * This pass alerts on the EDGES of levels the fallback computes, and the
+   * fallback's invalidation used to BE the price. So the sentinel sent
+   *
+   *   • FOO invalidation hit · WATCH · 24h -50.0% · 7d -50.0% · turnover 8.0%
+   *     of cap · score 18
+   *     lost $50.00 — 7-day low from the sparkline
+   *
+   * where $50.00 was the live price — a level nobody could act on, on the one
+   * surface where acting is all you can do. Driven end to end here: the real
+   * screenCoin over a real sparkline, the sentinel's own safeDirective, its own
+   * alertLine. Nothing in the chain is reconstructed.
+   */
+  it('never sends a level that is the price it is being compared against', () => {
+    // 168 hourly closes falling 103 → 50: the newest point is the week's low.
+    const spark = Array.from({ length: 168 }, (_, i) => 103 - i * (53 / 167))
+    const row = screenCoin({
+      id: 'foo', symbol: 'FOO', name: 'Foo', rank: 90, price: spark[spark.length - 1],
+      mcap: 1e8, vol24h: 8e6, chg24h: -50, chg7d: -50, chg30d: -60,
+      athChangePct: -90, sparkline7d: spark,
+    }, { btcRow: { symbol: 'BTC', chg7d: 1, chg30d: 2 } })
+
+    const d = safeDirective(row, season(), NOW)
+    expect(d.levels.invalidation).not.toBe(row.price)
+    expect(d.levels.invalidation).toBeGreaterThan(row.price)
+    expect(d.levels.invalidation).toBe(row.range7d.priorLow)
+
+    const curr = { band: row.band, action: d.action, triggerAbove: d.levels.triggerLive, invalidated: d.levels.invalidated }
+    const line = alertLine({ id: 'foo', symbol: 'FOO' }, row, ['invalidation hit'], curr, d)
+    expect(line).toContain('invalidation hit')
+    // The two numbers of the comparison, side by side and different — which is
+    // what makes the line checkable from a lock screen.
+    expect(line).toMatch(/price \$50\.00 lost \$57\.6\d/)
+    expect(line).not.toMatch(/lost \$50\.00/)
+    expect(line).toContain('prior 6-day low from the 7-day sparkline (no candle history)')
+  })
+
+  it('puts nothing on the phone that this pass did not compute', () => {
+    // Every number on the line, one at a time, against the fields it is drawn
+    // from. A missing input drops out of the line rather than arriving as a zero.
+    const row = screenCoin({
+      id: 'bar', symbol: 'BAR', name: 'Bar', rank: 60, price: 2.5, mcap: 4e8, vol24h: 3.2e7,
+      chg24h: 12.34, chg7d: 41.2, chg30d: 55, athChangePct: -70,
+      sparkline7d: [...cents(200, 240, 144), ...cents(241, 250, 24)],
+    }, { btcRow: { symbol: 'BTC', chg7d: 3, chg30d: 7 } })
+    const d = safeDirective(row, season(), NOW)
+    const curr = { band: row.band, action: d.action, triggerAbove: d.levels.triggerLive, invalidated: d.levels.invalidated }
+    const line = alertLine({ id: 'bar', symbol: 'BAR' }, row, ['basing → igniting'], curr, d)
+
+    expect(line).toContain('24h +12.3%')                                  // row.chg24h
+    expect(line).toContain('7d +41.2%')                                   // row.chg7d
+    expect(line).toContain(`turnover ${(row.turnover * 100).toFixed(1)}% of cap`)  // vol24h ÷ mcap
+    expect(line).toContain(`score ${Math.round(row.score)}`)              // screenCoin's own total
+    expect(row.score).toBe(row.parts.reduce((a, p) => a + p.points, 0))   // …which is its parts
+    expect(line).not.toMatch(/undefined|NaN|null/)
+
+    // Strip each input and the number it feeds leaves the line entirely.
+    for (const [field, pattern] of [['chg24h', /24h /], ['chg7d', /7d /], ['turnover', /turnover/], ['score', /score \d/]]) {
+      const gone = alertLine({ id: 'bar' }, { ...row, [field]: null }, [], curr, d)
+      expect(gone).not.toMatch(pattern)
+      expect(gone).not.toMatch(/undefined|NaN|null/)
+    }
   })
 
   it('treats an unmeasured level as unmeasured, not as an un-fired one', () => {

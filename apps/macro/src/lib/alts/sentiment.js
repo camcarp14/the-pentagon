@@ -124,7 +124,14 @@ const STATES = [
  *                      OMIT THE KEY ENTIRELY when the trending feed failed —
  *                      see the note in the body, it is load-bearing.
  * @param community     parseCoinGeckoCoin().community — every field null-safe
- * @param derivs        altDerivs() result, or null when the coin has no perp
+ * @param derivs        altDerivs() result, or null when there is no read
+ * @param derivsStatus  WHY `derivs` is null, from the alt-coin payload:
+ *                      'ok' | 'not_listed' | 'unavailable'. `derivs: null` on
+ *                      its own is AMBIGUOUS and saying "this coin has no perp"
+ *                      off it is a false claim — see readCrowding's header.
+ *                      Anything unrecognised, including an absent key, is
+ *                      treated as 'unavailable': the non-claiming answer.
+ * @param derivsUnavailable  the reason, when status is 'unavailable'
  * @param screened      screenCoin() result — used for the price context that
  *                      turns heat into a direction, never for points
  * @param now           ms epoch, for ageing the derivative samples
@@ -136,6 +143,7 @@ export function crowdRead(raw = {}) {
   const input = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}
   const {
     fearGreed = null, community = null, derivs = null, screened = null, now = null,
+    derivsStatus = null, derivsUnavailable = null,
   } = input
 
   // `null` and "absent" are DIFFERENT ANSWERS here and collapsing them is a real
@@ -152,7 +160,20 @@ export function crowdRead(raw = {}) {
   const sym = String(screened?.symbol ?? '').toUpperCase() || 'this coin'
 
   const attention = readAttention({ trendingChecked, trendingRank, community, parts, facts, sym })
-  const crowding = readCrowding({ derivs, now, parts, facts, sym })
+
+  // WHAT IS KNOWN ABOUT THE PERP, normalised once and published, so the card's
+  // empty state and this file's facts cannot describe the same silence
+  // differently. `derivs: null` is ambiguous on its own — see readCrowding —
+  // and anything the caller did not establish is 'unavailable', never a claim.
+  const perp = {
+    status: derivs && typeof derivs === 'object' ? 'ok' : derivsStatus === 'not_listed' ? 'not_listed' : 'unavailable',
+    reason: null,
+  }
+  if (perp.status === 'unavailable' && typeof derivsUnavailable === 'string' && derivsUnavailable.trim()) {
+    perp.reason = derivsUnavailable.trim()
+  }
+
+  const crowding = readCrowding({ derivs, perp, now, parts, facts, sym })
 
   // Fear & greed: context and the capitulation overlay only (see the header).
   const fg = normaliseFearGreed(fearGreed)
@@ -167,7 +188,7 @@ export function crowdRead(raw = {}) {
     facts.push(`no attention or positioning data for ${sym} — the crowd read is unavailable, not neutral`)
     return {
       score: null, state: 'unknown', contrarian: 'neutral',
-      attention, crowding, parts, facts,
+      attention, crowding, perp, parts, facts,
       measured: { earned: 0, of: 0 },
       extremes: [],
     }
@@ -178,7 +199,7 @@ export function crowdRead(raw = {}) {
 
   return {
     score, state, contrarian,
-    attention, crowding, parts, facts,
+    attention, crowding, perp, parts, facts,
     measured: { earned, of: available },
     extremes,
   }
@@ -270,16 +291,61 @@ function readAttention({ trendingChecked, trendingRank, community, parts, facts,
  * How much leverage is already on, and on which side. This is the half of the
  * file that is actually predictive, and it exists only where a perp is listed —
  * which is most majors, some mids and almost no micro caps.
+ *
+ * A NUMBER THIS FUNCTION REFUSED TO SCORE DOES NOT COME OUT OF IT.
+ *
+ * The staleness gates below used to suppress the POINTS and publish the value
+ * anyway, which is the worst of both: the part said "funding snapshot is stale —
+ * not scored" while `crowding.fundingAnnualPct` carried 131.4 straight into
+ * `contrarianOf` (→ `contrarian: 'headwind'`, which directive.js reads to
+ * downgrade ENTER to STARTER), into a directive guardrail quoting "funding is
+ * 131%/yr", and onto the crowd card as a measured KV. Identical inputs with the
+ * snapshot merely ABSENT read `neutral`. So a snapshot this file had explicitly
+ * declined to score was changing the action, and a page was calling the same
+ * number measurable and unmeasurable two sections apart.
+ *
+ * `scoredOrNull` is the single seam. Every value that reaches the returned
+ * object goes through it, so refusing a part and publishing its number cannot
+ * drift apart again: they are the same boolean. The reason still reaches the
+ * reader — it is in the part's label, which the crowd card renders in "how this
+ * scores", and in a fact, which it renders in "show the crowd read".
  */
-function readCrowding({ derivs, now, parts, facts, sym }) {
+function readCrowding({ derivs, perp: perpState, now, parts, facts, sym }) {
   if (!derivs || typeof derivs !== 'object') {
-    // Explicitly NOT a neutral 50. A coin with no perp has no crowding, and
-    // scoring the absence would move the state ladder on a number nobody
-    // measured — the exact failure this file's header refuses.
-    parts.push({ key: 'funding', max: 20, points: null, label: 'no listed perp — funding not scored' })
-    parts.push({ key: 'oi', max: 10, points: null, label: 'no listed perp — open interest not scored' })
-    parts.push({ key: 'divergence', max: 15, points: null, label: 'no listed perp — positioning not scored' })
-    facts.push(`${sym} has no listed Binance perp — there is no funding, open interest or positioning read for it, and none has been assumed`)
+    // ── "NO PERP" AND "COULD NOT TELL" ARE DIFFERENT SENTENCES ──────────────
+    //
+    // Both arrive here as `derivs: null`, and this branch used to print the
+    // first one for both. That is a POSITIVE FALSE CLAIM about the market —
+    // the one failure mode this file's header says is worse than saying
+    // nothing — and it was reachable on the ordinary case: `fapi.binance.com`
+    // 451s from a datacentre IP, which status.mjs documents as the EXPECTED
+    // result, and the crowd card then stated as a measured fact that SOL has
+    // no futures market.
+    //
+    // alts.mjs already distinguishes them (`altDerivs` returns null only on a
+    // 400 from fapi — Binance's "invalid symbol" — and throws on everything
+    // else) and alt-coin.mjs publishes which one it was as `derivsStatus`.
+    // This is where that distinction has to survive, because this is where the
+    // sentence gets written.
+    //
+    // ANYTHING UNRECOGNISED IS 'unavailable', INCLUDING AN ABSENT KEY. A caller
+    // who did not tell us has not established that the coin has no perp, and
+    // defaulting to the claim is how the bug got here. The vaguer answer is
+    // always true; the specific one is only sometimes true.
+    const notListed = perpState?.status === 'not_listed'
+    const why = perpState?.reason ?? null
+
+    // The POINTS are identical either way, and deliberately so: unmeasured is
+    // unmeasured, and neither case is a neutral 50. What changes is only what
+    // the reader is told about WHY — the labels below are quoted verbatim by
+    // playbook.js's checklist rows, so the two cards cannot drift apart.
+    const label = notListed ? 'no listed perp' : 'no perp read this pass'
+    parts.push({ key: 'funding', max: 20, points: null, label: `${label} — funding not scored` })
+    parts.push({ key: 'oi', max: 10, points: null, label: `${label} — open interest not scored` })
+    parts.push({ key: 'divergence', max: 15, points: null, label: `${label} — positioning not scored` })
+    facts.push(notListed
+      ? `${sym} has no listed Binance perp — there is no funding, open interest or positioning read for it, and none has been assumed`
+      : `the Binance derivatives feed did not answer for ${sym}${why ? ` (${why})` : ''} — so funding, open interest and positioning are unmeasured, and whether ${sym} has a listed perpetual at all was NOT established either. Nothing is assumed from the silence, in either direction`)
     return null
   }
 
@@ -297,7 +363,7 @@ function readCrowding({ derivs, now, parts, facts, sym }) {
     // the past is a cached read of a delisted or halted pair. Scoring it puts a
     // week-old crowding number beside a live price.
     parts.push({ key: 'funding', max: 20, points: null, label: 'funding snapshot is stale — not scored' })
-    facts.push(`the funding snapshot for ${perp} is stale (its next payment was due ${ago(now - derivs.nextFundingTime)} ago) — not scored`)
+    facts.push(`the funding snapshot for ${perp} is stale (its next payment was due ${ago(now - derivs.nextFundingTime)} ago) — it is not scored, and it is not reported as a rate either: nothing downstream gets to treat it as a measurement`)
   } else {
     parts.push({
       key: 'funding', max: 20, points: step(fundingAnnualPct, FUNDING),
@@ -325,7 +391,11 @@ function readCrowding({ derivs, now, parts, facts, sym }) {
     parts.push({ key: 'oi', max: 10, points: null, label: oiSeries.length ? 'only one open-interest sample — no 24h change' : 'no open-interest history — not scored' })
   } else if (oiStale) {
     parts.push({ key: 'oi', max: 10, points: null, label: 'open-interest series is stale — not scored' })
-    facts.push(`the newest open-interest sample for ${perp} is ${ago((now / 1000 - oiLast.t) * 1000)} old — too old to call a 24h change, so it is not scored`)
+    // The notional pile goes with it. The change is what the gate is about, but
+    // the LEVEL comes off the same sample: printing "$250M outstanding" from a
+    // ten-day-old series beside a live price is the same stale measurement one
+    // field over.
+    facts.push(`the newest open-interest sample for ${perp} is ${ago((now / 1000 - oiLast.t) * 1000)} old — too old to call a 24h change, so neither the change nor the notional outstanding is reported`)
   } else {
     parts.push({ key: 'oi', max: 10, points: step(oiChange24hPct, OI), label: `open interest ${signed(oiChange24hPct)}% in 24h` })
     facts.push(`open interest ${signed(oiChange24hPct)}% in 24h in contract terms${Number.isFinite(oiLast.oiValueUsd) ? ` (${usd(oiLast.oiValueUsd)} of notional outstanding)` : ''}`)
@@ -360,10 +430,25 @@ function readCrowding({ derivs, now, parts, facts, sym }) {
   const points = crParts.reduce((s, p) => s + p.points, 0)
   const max = crParts.reduce((s, p) => s + p.max, 0)
   const ratio = points / max
+
+  /** A value leaves this function only if its own part was scored. One boolean
+   *  for the points and the number, so they cannot disagree again. */
+  const scoredOrNull = (key, value) => {
+    const p = parts.find((x) => x.key === key)
+    return p && p.points != null && Number.isFinite(value) ? value : null
+  }
   return {
     perp,
-    fundingRatePer8h: rate, fundingAnnualPct,
-    oiChange24hPct, oiLatestUsd: Number.isFinite(oiLast?.oiValueUsd) ? oiLast.oiValueUsd : null,
+    fundingRatePer8h: scoredOrNull('funding', rate),
+    fundingAnnualPct: scoredOrNull('funding', fundingAnnualPct),
+    oiChange24hPct: scoredOrNull('oi', oiChange24hPct),
+    // The notional pile is context rather than a scored part, so it is gated on
+    // the one thing that actually makes it false — AGE. A series with a single
+    // fresh sample cannot produce a 24h change and its level is still true; a
+    // ten-day-old series is stale in both.
+    oiLatestUsd: !oiStale && Number.isFinite(oiLast?.oiValueUsd) ? oiLast.oiValueUsd : null,
+    // Not a measurement of the market — a count of what the feed returned — so
+    // it is reported whatever the gates did with the values inside it.
     oiSamples: oiSeries.length,
     retailLongPct, topLongPct, divergencePts,
     points, max,
