@@ -384,3 +384,7 @@
   [data-kit] .pagefade, [data-kit] .pageslide-l, [data-kit] .pageslide-r, [data-kit] .stagger > *, [data-kit] .toast, [data-kit] .sheet { animation: none !important; }
   [data-kit] .expand, [data-kit] .seg-thumb, [data-kit] .switch-knob { transition: none; }
   [data-kit] .sk::after { animation: none; }}
+/* The shell's tool row scrolls on a phone. A visible scrollbar inside a 51px
+   bar is chrome about chrome; the row's overflow is signalled by the fact that
+   a segment is cut off at the edge, which is the honest affordance. */
+[data-kit] .toolrow::-webkit-scrollbar { display: none; }

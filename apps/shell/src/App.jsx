@@ -110,7 +110,10 @@ function LoginScreen() {
       <form onSubmit={submit} style={{ width: "100%", maxWidth: 360, background: "#12151d", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 18, padding: "30px 26px", boxShadow: "0 24px 70px rgba(0,0,0,0.55)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 20 }}>
           <PentagonLogo size={26} />
-          <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", color: "#e9e7e0", fontFamily: "var(--font-body)" }}>The Pentagon</span>
+          // Same treatment as the bar's wordmark: sentence case at the scale, no
+              // tracking theatrics, and a token instead of a hardcoded #e9e7e0 —
+              // this screen is meant to be the quietest in the app.
+              <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--ink)" }}>The Pentagon</span>
         </div>
         <div style={{ fontSize: 12.5, color: "#9aa1ae", marginBottom: 18, lineHeight: 1.6 }}>One sign-in for ZTS, Clarify, and Runway.</div>
         <label style={{ fontSize: 11, color: "#9aa1ae", fontWeight: 600 }}>Email</label>
@@ -146,6 +149,13 @@ function AppToggle({ active, onPick, compact, apps }) {
       if (el) setInd({ left: el.offsetLeft, width: el.offsetWidth, ready: true });
     };
     measure();
+    // A scrolling row can put the active tool off-screen — after a keyboard
+    // shortcut, or when a hidden tool resolves the active one elsewhere. Bring
+    // it back without yanking the page.
+    const el = refs.current[active];
+    if (el && el.scrollIntoView) {
+      try { el.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" }); } catch { el.scrollIntoView(); }
+    }
     window.addEventListener("resize", measure);
     let alive = true;
     document.fonts?.ready?.then(() => { if (alive) measure(); });
@@ -161,6 +171,7 @@ function AppToggle({ active, onPick, compact, apps }) {
       // that does not exist. A labelled group of buttons is honest and complete.
       role="group"
       aria-label="Switch tool"
+      className="toolrow"
       style={{
         // 2px inset on mobile, not 3: a 44px segment + 3px padding + 2 borders
         // would be 52px inside a 51px row. At 2px the group is 50px and the
@@ -171,10 +182,15 @@ function AppToggle({ active, onPick, compact, apps }) {
         // harder --border edge the shell used to draw.
         border: "1px solid rgba(255,255,255,0.055)",
         ...(compact
-          // On mobile the toggle owns the row: four equal segments beat four
-          // unequal ones, and it can spend the horizontal room that was
-          // previously left empty.
-          ? { display: "flex", flex: "1 1 auto", minWidth: 0 }
+          // On a phone the toggle SCROLLS rather than dividing a fixed width
+          // between eight segments. The design language is explicit about this:
+          // a segmented control is for four or fewer, and five or more is a
+          // scrolling pill row. Dividing instead is what forced 9px labels,
+          // negative tracking, the dots off, a `short` form for Business, and
+          // ellipsis from 393px down — five separate concessions, all of them
+          // symptoms of using the wrong control for eight things.
+          ? { display: "flex", flex: "1 1 auto", minWidth: 0, overflowX: "auto", overflowY: "hidden",
+              scrollSnapType: "x proximity", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }
           : { display: "inline-flex" }),
       }}
     >
@@ -194,10 +210,12 @@ function AppToggle({ active, onPick, compact, apps }) {
             style={{
               position: "relative", zIndex: 1,
               display: "inline-flex", alignItems: "center", justifyContent: "center",
-              // The dot costs 15px per segment (8 + 7 gap). On mobile that room
-              // buys the label instead, and the accent moves onto the text —
-              // every tool stays identifiable without relying on colour alone.
-              gap: compact ? 0 : 7,
+              // The dot is back on mobile. It cost 15px per segment when the row
+              // had a fixed width to divide; a scrolling row has room, and the
+              // dot is what stops the active tool being signalled by colour
+              // alone — which is a thing this language forbids.
+              gap: 7,
+              scrollSnapAlign: compact ? "center" : undefined,
               // 1px inset, 9px, slightly negative tracking: SIX segments need
               // every pixel, and the sixth cost the other five their headroom.
               // Re-measured in Chromium at 430/393/390/375/360 after Business
@@ -208,23 +226,27 @@ function AppToggle({ active, onPick, compact, apps }) {
               // legible size, so they ellipsise rather than overlap (see the
               // label span below), and Business carries a `short` form for
               // exactly this reason.
-              padding: compact ? "0 1px" : "6px 14px",
+              padding: compact ? "0 13px" : "6px 14px",
               minHeight: compact ? 44 : 32,
-              ...(compact ? { flex: "1 1 0", minWidth: 0, overflow: "hidden" } : {}),
+              // flex: none — each segment takes the width its label needs, and
+              // the row scrolls. No ellipsis, no `short` form, no 360px cliff.
+              ...(compact ? { flex: "none" } : {}),
               border: "none", borderRadius: compact ? 9 : 8, cursor: "pointer", background: "transparent",
               color: on ? (compact ? m.accent : "var(--ink)") : "var(--faint)",
-              fontSize: compact ? 9 : 11.5, fontWeight: 700,
-              letterSpacing: compact ? "-0.01em" : "0.06em", textTransform: "uppercase", whiteSpace: "nowrap",
+              // 11.5 on both. 9px was under this language's 10.5px floor, and
+              // it only existed to make eight labels fit a width they never fit.
+              fontSize: 11.5, fontWeight: 700,
+              letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap",
               transition: `color ${M.durBase} ${M.easeStd}`,
             }}>
-            {!compact && (
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: m.accent, boxShadow: on ? `0 0 8px ${m.accent}` : "none", flexShrink: 0 }} />
-            )}
+            <span aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: m.accent, boxShadow: on ? `0 0 8px ${m.accent}` : "none", flexShrink: 0 }} />
             {/* The label needs its own block to truncate: `text-overflow` does
                 nothing on a flex container, so with the text as a direct child
                 of the button an over-wide label overflowed its segment and ran
                 into its neighbour instead of clipping. */}
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, display: "block" }}>{compact ? m.short : m.label}</span>
+            {/* Full label on both. The `short` form existed because eight words
+                did not fit a divided phone row; a scrolling one fits them. */}
+            <span style={{ whiteSpace: "nowrap", display: "block" }}>{m.label}</span>
           </button>
         );
       })}
