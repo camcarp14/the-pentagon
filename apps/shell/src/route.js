@@ -27,22 +27,35 @@ export const SYSTEM = "system";
 /**
  * Read a location hash into a shell destination.
  *
- * @param {string} hash   e.g. "#/sync" — anything unrecognised is ignored
+ * `known` says whether the hash actually NAMED a shell destination. It matters
+ * because the shell is not the only router on the page: Clarify (and Runway, and
+ * SYNC) route their own internal views through the same location.hash. When
+ * Clarify switched to its Analytics view it wrote `#/analytics`, the shell's
+ * hashchange listener read a segment that is not a tool, fell back to
+ * `visible[0]` — and threw the operator into Runway. Reported as "clicking
+ * Analytics takes me to the Runway tab".
+ *
+ * So: a fallback is right on FIRST LOAD (a bare or stale URL should land
+ * somewhere sensible) and wrong on a HASHCHANGE (an unrecognised hash belongs to
+ * whichever tool is open, and the shell must not act on it). Callers get to tell
+ * those two cases apart instead of the parser guessing.
+ *
+ * @param {string} hash   e.g. "#/sync" — anything unrecognised sets known:false
  * @param {string[]} tabs the tools currently visible in the toggle
- * @returns {{tool: string, system: boolean}}
+ * @returns {{tool: string, system: boolean, known: boolean}}
  */
 export function parseRoute(hash, tabs) {
   const visible = Array.isArray(tabs) && tabs.length ? tabs : [];
-  const fallback = { tool: visible[0], system: false };
+  const fallback = { tool: visible[0], system: false, known: false };
   if (typeof hash !== "string") return fallback;
 
   const seg = hash.replace(/^#\/?/, "").split(/[/?]/)[0].trim().toLowerCase();
   if (!seg) return fallback;
-  if (seg === SYSTEM) return { tool: visible[0], system: true };
+  if (seg === SYSTEM) return { tool: visible[0], system: true, known: true };
   // A hash naming a HIDDEN tool resolves to the fallback rather than forcing it
   // visible: the toggle is the operator's statement about what they want to see,
   // and a stale bookmark should not overrule it.
-  if (visible.includes(seg)) return { tool: seg, system: false };
+  if (visible.includes(seg)) return { tool: seg, system: false, known: true };
   return fallback;
 }
 
@@ -51,8 +64,17 @@ export function formatRoute({ tool, system }) {
   return system ? `#/${SYSTEM}` : `#/${tool || ""}`;
 }
 
-/** True when the hash already says this, so we never push a redundant entry. */
+/**
+ * True when the hash already points at this destination.
+ *
+ * FIRST SEGMENT ONLY, deliberately. The shell owns segment 0 (which tool);
+ * everything after it belongs to that tool. Comparing the whole hash meant
+ * `#/clarify/analytics` did not "match" `{tool: "clarify"}`, so the shell
+ * rewrote the URL back to `#/clarify` and stamped out the tool's own view —
+ * the two routers overwriting each other on every navigation.
+ */
 export function sameRoute(hash, dest) {
-  return typeof hash === "string" && hash.replace(/^#\/?/, "").toLowerCase()
-    === formatRoute(dest).replace(/^#\/?/, "").toLowerCase();
+  if (typeof hash !== "string") return false;
+  const seg = hash.replace(/^#\/?/, "").split(/[/?]/)[0].trim().toLowerCase();
+  return seg === formatRoute(dest).replace(/^#\/?/, "").toLowerCase();
 }

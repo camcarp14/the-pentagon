@@ -29,8 +29,17 @@ import { seqDb } from "./lib/sequenceDb.js";
 import { classifyReplyAI } from "./lib/classify.js";
 
 const ROUTABLE_VIEWS = ["mission", "analytics", "inbound", "outreach", "queue", "sequences", "analyst", "clients", "dna", "calendar", "settings"];
+// THE SHELL OWNS SEGMENT 0. Clarify runs inside The Pentagon, whose shell reads
+// the first hash segment to decide which TOOL is open. Clarify used to write its
+// view there too (`#/analytics`), so switching to Analytics made the shell read a
+// segment naming no tool, fall back to the first tool in the toggle, and throw
+// you into Runway. Clarify's views live one level down now: `#/clarify/<view>`.
+// Old-shape hashes are still READ, so an existing bookmark to `#/analytics` keeps
+// working — only what we write moved.
+export const CLARIFY_SEG = "clarify";
 const parseHash = () => {
-  const seg = (window.location.hash || "").replace(/^#\/?/, "").split("/");
+  const raw = (window.location.hash || "").replace(/^#\/?/, "").split("/");
+  const seg = raw[0] === CLARIFY_SEG ? raw.slice(1) : raw;
   return { view: ROUTABLE_VIEWS.includes(seg[0]) ? seg[0] : "mission", sub: seg[1] ? decodeURIComponent(seg[1]) : null };
 };
 
@@ -146,7 +155,7 @@ export default function App({ embedded = false }) {
   }, []);
   // state → hash: tab clicks; never stomps a same-view sub like /clients/<id>
   useEffect(() => {
-    if (parseHash().view !== currentView) window.location.hash = `/${currentView}`;
+    if (parseHash().view !== currentView) window.location.hash = `/${CLARIFY_SEG}/${currentView}`;
   }, [currentView]);
 
   // Synchronous on purpose: a useState initializer cannot await, and this only

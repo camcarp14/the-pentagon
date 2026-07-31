@@ -436,9 +436,15 @@ export function ClientsView({ deepClientId = null, onNavigate }) {
     // eslint-disable-next-line
   }, [deepClientId, clients]);
   // Selection → hash: pushes a history entry so Back returns to the client list.
+  // Under the shell's prefix (see App.jsx: the shell owns hash segment 0 and a
+  // bare `#/clients` reads to it as "no such tool", which bounced you out of
+  // Clarify entirely). Still recognises the old bare form so an existing deep
+  // link keeps working.
+  const base = window.location.hash.startsWith("#/clarify/clients") ? "#/clarify/clients"
+    : window.location.hash.startsWith("#/clients") ? "#/clients" : null;
   useEffect(() => {
-    if (!window.location.hash.startsWith("#/clients")) return;
-    const want = selectedClient ? `#/clients/${encodeURIComponent(selectedClient.id)}` : "#/clients";
+    if (!base) return;
+    const want = selectedClient ? `${base}/${encodeURIComponent(selectedClient.id)}` : base;
     if (window.location.hash !== want) window.location.hash = want;
     // eslint-disable-next-line
   }, [selectedClient]);

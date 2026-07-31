@@ -351,6 +351,11 @@ export default function Shell() {
   useEffect(() => {
     const onHash = () => {
       const r = parseRoute(location.hash, visibleTabs(loadTabPrefs()));
+      // A hash the shell does not recognise belongs to the tool that is open —
+      // Clarify, Runway and SYNC all route their own views through this same
+      // hash. Acting on it threw the operator out of Clarify and into whichever
+      // tool happened to be first in the toggle. Silence is the correct response.
+      if (!r.known) return;
       setActive(r.tool);
       setSystemOpen(r.system);
     };

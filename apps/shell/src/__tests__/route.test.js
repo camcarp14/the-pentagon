@@ -12,8 +12,41 @@ const TABS = ["zts", "clarify", "sync", "ideas"];
 
 describe("parseRoute", () => {
   it("reads a tool out of the hash", () => {
-    expect(parseRoute("#/sync", TABS)).toEqual({ tool: "sync", system: false });
-    expect(parseRoute("#/clarify", TABS)).toEqual({ tool: "clarify", system: false });
+    expect(parseRoute("#/sync", TABS)).toEqual({ tool: "sync", system: false, known: true });
+    expect(parseRoute("#/clarify", TABS)).toEqual({ tool: "clarify", system: false, known: true });
+  });
+
+  // ── the shell is not the only router on the page ───────────────────────────
+  //
+  // Clarify, Runway and SYNC all route their own internal views through the same
+  // location.hash. Clarify wrote `#/analytics` when you opened its Analytics
+  // view; the shell read a segment naming no tool, fell back to the first
+  // visible tool, and threw the operator into Runway. `known` is what lets the
+  // hashchange listener tell "go to this tool" apart from "this is not mine".
+
+  it("marks a hash that names no tool as not the shell's", () => {
+    for (const foreign of ["#/analytics", "#/clients/abc123", "#/queue", "#/nope"]) {
+      expect(parseRoute(foreign, TABS).known, foreign).toBe(false);
+    }
+    // …while still resolving somewhere sensible, because a FIRST LOAD on a stale
+    // URL has to land on something. Only hashchange consults `known`.
+    expect(parseRoute("#/analytics", TABS).tool).toBe("zts");
+  });
+
+  it("reads a tool through its own sub-route", () => {
+    // The shape Clarify writes now: shell owns segment 0, the tool owns the rest.
+    expect(parseRoute("#/clarify/analytics", TABS)).toEqual({ tool: "clarify", system: false, known: true });
+    expect(parseRoute("#/clarify/clients/abc123", TABS)).toEqual({ tool: "clarify", system: false, known: true });
+  });
+
+  it("treats a tool's own sub-route as already being on that tool", () => {
+    // sameRoute compares the FIRST SEGMENT ONLY. Comparing the whole hash made
+    // `#/clarify/analytics` look like the wrong place, so the shell rewrote the
+    // URL back to `#/clarify` and stamped out the tool's view on every nav.
+    expect(sameRoute("#/clarify/analytics", { tool: "clarify", system: false })).toBe(true);
+    expect(sameRoute("#/clarify/clients/abc123", { tool: "clarify", system: false })).toBe(true);
+    expect(sameRoute("#/zts", { tool: "clarify", system: false })).toBe(false);
+    expect(sameRoute("#/analytics", { tool: "clarify", system: false })).toBe(false);
   });
 
   it("leaves a bare load on the first visible tool", () => {
