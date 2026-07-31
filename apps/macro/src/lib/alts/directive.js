@@ -71,7 +71,12 @@ export function altDirective(raw = {}) {
 
   const quality = candleQuality ?? detectQuality(candles)
   const levels = buildLevels({ screened, precedent, candles, price, stop })
-  const triggerLive = Number.isFinite(price) && Number.isFinite(levels.trigger) && price > levels.trigger
+  // `levels.triggerLive` / `levels.invalidated` are the level tests themselves,
+  // computed once in buildLevels and published on the result — see the note
+  // above it. `=== true` because both are THREE-state: null means the level or
+  // the price was never measured, and treating that as false is how an absent
+  // input starts moving a rung.
+  const triggerLive = levels.triggerLive === true
 
   /* ── guardrails: everything the reader should know about the read itself,
    *    attached to EVERY rung including the good ones. A guardrail never
@@ -122,7 +127,7 @@ export function altDirective(raw = {}) {
         'The plan only works if the stop is real. Execute it.',
       ], 'urgent')
     }
-    if (Number.isFinite(levels.invalidation) && price <= levels.invalidation) {
+    if (levels.invalidated === true) {
       return out('EXIT', `Close ${sym} — the setup is invalidated.`, [
         `price ${px(price)} lost the base low ${px(levels.invalidation)}${levels.invalidationBasis ? ` (${levels.invalidationBasis})` : ''}`,
         'The reason you were in this is gone. What is left is a hope, not a thesis.',
@@ -339,19 +344,71 @@ export function altDirective(raw = {}) {
  * same number, and collapsing them is how a stop gets moved "just a bit lower"
  * on the day it matters.
  *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * BOTH LEVELS COME OUT OF THE SAME WINDOW OF CLOSED BARS, AND THE WINDOW
+ * EXCLUDES TODAY.
+ *
+ * They drifted apart once — the trigger excluded the current bar and the
+ * invalidation included it — and the invalidation is the half where that is
+ * fatal. Today's low is by construction ≤ every price that has traded today, so
+ * `price <= invalidation` could never be true on a live tape: the EXIT-on-
+ * invalidation rung, a SAFETY rung, was unreachable except when the candle feed
+ * was a day stale, which is exactly backwards. Worse, the "abandon it" price
+ * rendered on the card walked down with price every day, so the level a user
+ * wrote down could never be broken. A level that moves with price is not a
+ * level. One window, computed once, and the test pins both ends of it.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THE COMPARISON IS CROSS-SOURCE, AND THE TOLERANCE FOR THAT IS ZERO —
+ * DELIBERATELY, NOT BY OVERSIGHT.
+ *
+ * `screened.price` is CoinGecko's cross-exchange USD composite; these highs and
+ * lows come from Binance's <SYM>USDT daily klines. The two differ by the USDT
+ * peg and by one venue's spread against the composite — basis points, not
+ * percent, on anything liquid enough for this board to rank. Every alternative
+ * was worse:
+ *   - Comparing like against like would mean testing the last candle CLOSE
+ *     rather than the live price. That is a settled level against a settled
+ *     level, and it is up to 24 hours old: it answers "did yesterday break out",
+ *     which is not the question a directive card exists to answer.
+ *   - A tolerance band on the trigger would move the break off the exact level
+ *     precedent.js measured its base rates from — the drift the paragraph at the
+ *     top of this block forbids, arriving through the back door.
+ *   - A symmetric band would have to LOOSEN the invalidation by the same amount,
+ *     and a safety rung in this file never gets looser to buy tidiness on an
+ *     opportunity rung.
+ * So the accepted error is that a break or a base loss can register a few basis
+ * points early or late. Against a 20-day range that is a rounding error, and it
+ * is strictly smaller than the error introduced by moving the level. What is NOT
+ * accepted is a level drawn from the same still-forming bar as the price it is
+ * compared against: that is not basis noise, it is a self-referential test, and
+ * it is what the window above exists to prevent.
+ *
  * Every price here is assumed to be in the SAME UNITS as `screened.price`. The
  * 1000× Binance symbols (1000PEPE, 1000SHIB) are divided back upstream by
  * applyMultiplier; if that ever stops happening, every level on this page is
  * 1000× wrong and nothing here can tell.
  */
+
+/** Bars in the level window: the last N CLOSED daily bars, today excluded. */
+const LEVEL_WINDOW = 20
+
 function buildLevels({ screened, precedent, candles, price, stop }) {
   const bars = Array.isArray(candles) ? candles.filter((c) => c && Number.isFinite(c.h) && Number.isFinite(c.l) && Number.isFinite(c.c)) : []
 
+  // ONE half-open slice, read by both levels. `to` is exclusive, so it stops at
+  // the last closed bar and never reaches bars[len-1] — the bar still forming.
+  // N closed bars therefore need N+1 bars of history, and below that BOTH levels
+  // fall back together rather than one of them silently outliving the other.
+  const window = bars.length >= LEVEL_WINDOW + 1
+    ? { from: bars.length - (LEVEL_WINDOW + 1), to: bars.length - 1 }
+    : null
+
   let trigger = null
   let triggerBasis = null
-  if (bars.length >= 21) {
-    trigger = highestHigh(bars, bars.length - 21, bars.length - 1)
-    triggerBasis = 'prior 20-day high'
+  if (window) {
+    trigger = highestHigh(bars, window.from, window.to)
+    triggerBasis = `prior ${LEVEL_WINDOW}-day high`
   } else if (Number.isFinite(screened?.range7d?.priorHigh)) {
     // The sparkline fallback: the prior six days' high out of the 7-day series.
     // A shorter, weaker level than the 20-day high — labelled so, because a user
@@ -362,9 +419,9 @@ function buildLevels({ screened, precedent, candles, price, stop }) {
 
   let invalidation = null
   let invalidationBasis = null
-  if (bars.length >= 20) {
-    invalidation = lowestLow(bars, bars.length - 20, bars.length)
-    invalidationBasis = '20-day base low'
+  if (window) {
+    invalidation = lowestLow(bars, window.from, window.to)
+    invalidationBasis = `${LEVEL_WINDOW}-day base low`
   } else if (Number.isFinite(screened?.range7d?.low)) {
     invalidation = screened.range7d.low
     invalidationBasis = '7-day low from the sparkline'
@@ -375,8 +432,34 @@ function buildLevels({ screened, precedent, candles, price, stop }) {
   return {
     entry: fin(entry), trigger: fin(trigger), stop: fin(stop), invalidation: fin(invalidation),
     triggerBasis, invalidationBasis,
+    // THE LEVEL TESTS SHIP WITH THE LEVELS. Both are published because more than
+    // one consumer asks "did it break" — the ladder above, and the scheduled
+    // sentinel in netlify/functions/alt-watch.mjs, which alerts on the EDGES of
+    // exactly these two booleans. A second implementation of the comparison is a
+    // second answer, and the day they disagree the phone says a trigger fired
+    // while the card the user opens says ARM.
+    triggerLive: sideTest(price, trigger, 'above'),
+    invalidated: sideTest(price, invalidation, 'below'),
     targets: buildTargets(precedent, entry),
   }
+}
+
+/**
+ * A level test with THREE outcomes, not two.
+ *
+ * `null` is not `false`: it means the level or the price was never measured (no
+ * candles and no sparkline, or a row that arrived without a price). A consumer
+ * watching for a transition needs that distinction — unknown → true is a first
+ * measurement, not a break, and alerting on it fires on the day the data showed
+ * up rather than on the day price moved.
+ *
+ * The comparisons are strict-above for the trigger and at-or-below for the
+ * invalidation, matching the ladder's own reading of each: a break has to CLEAR
+ * the level, and a base low is lost by trading AT it.
+ */
+function sideTest(price, level, dir) {
+  if (!Number.isFinite(price) || !Number.isFinite(level)) return null
+  return dir === 'above' ? price > level : price <= level
 }
 
 /**

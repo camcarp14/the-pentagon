@@ -1,9 +1,18 @@
-// seasonRead has two properties worth defending with tests: the score is
-// arithmetic anyone can redo on a phone (so every case below states the sum),
-// and the dominance trend is the one number in the app that is allowed to say
-// "I don't know" — because it is fed by a cron that has not run yet on the day
-// this ships, and a fabricated trend there would move the phase label, which is
-// the first thing read on the tab.
+// seasonRead has three properties worth defending with tests: the score is
+// arithmetic anyone can redo on a phone (so every case below states the sum);
+// the dominance trend is the one number in the app that is allowed to say "I
+// don't know" — because it is fed by a cron that has not run yet on the day this
+// ships, and a fabricated trend there would move the phase label, which is the
+// first thing read on the tab; and NOTHING THAT WAS NOT MEASURED CONTRIBUTES A
+// POINT.
+//
+// That last one is why the whole midpoint block in this file was rewritten. The
+// scoring used to hand a missing dominance trend 10 points, a missing ETH row 5
+// and a failed fear & greed fetch 5, and the day-one state of this product is
+// all three at once: 20 points on a 22/40/55/72 ladder that no fetched value
+// produced, feeding a phase that directive.js gates ENTER on. The tests below
+// pin the replacement — drop the part from both sides and renormalise — at both
+// ends, because a rule that only fires on the flattering side is not a rule.
 import { describe, it, expect } from 'vitest'
 import { seasonRead } from '../season.js'
 
@@ -38,29 +47,44 @@ const eth = (chg7d, chg30d) => ({ id: 'ethereum', symbol: 'ETH', name: 'Ethereum
 describe('the 100 points, verified by hand', () => {
   // 63% over 7d → round(0.35×63) = 22
   // 48% over 30d → round(0.25×48) = 12
-  // dominance unknown → midpoint 10 · ETH/BTC absent → 5 · F&G absent → 5
-  //                                                              = 54
-  it('scores a plain breadth-only read at the sum of its parts', () => {
-    const s = seasonRead({ universe: makeUniverse({ beat7: 63, beat30: 48 }), btcRow: BTC })
+  // dominance falling → 20 · ETH/BTC up on both windows → 10 · F&G 65 → 7
+  //                                                              = 71 of 100
+  it('scores a fully measured read at the sum of its parts', () => {
+    const s = seasonRead({
+      universe: makeUniverse({ beat7: 63, beat30: 48 }), btcRow: BTC, ethRow: eth(12, 30),
+      fearGreed: { value: 65, label: 'Greed' }, domHistory: domHist(30, 56, 54),
+    })
     expect(s.parts.map((p) => [p.key, p.points])).toEqual([
-      ['breadth7', 22], ['breadth30', 12], ['dominance', 10], ['ethbtc', 5], ['feargreed', 5],
+      ['breadth7', 22], ['breadth30', 12], ['dominance', 20], ['ethbtc', 10], ['feargreed', 7],
     ])
-    expect(s.score).toBe(54)
-    expect(s.phase).toBe('btc_leads')
+    expect(s.parts.every((p) => p.measured)).toBe(true)
+    expect(s.measured).toEqual({ earned: 71, of: 100 })
+    expect(s.coverage).toBe(1)
+    expect(s.score).toBe(71)
+    expect(s.phase).toBe('majors_rotating')
   })
 
-  it('parts always sum to score, and score stays inside 0-100', () => {
+  it('the measured parts sum to measured.earned, and the score is that sum renormalised', () => {
     for (const beat7 of [0, 17, 50, 83, 100]) {
       for (const fgv of [0, 39, 65, 100, null]) {
-        const s = seasonRead({
-          universe: makeUniverse({ beat7, beat30: beat7 }),
-          btcRow: BTC, ethRow: eth(5, 5),
-          fearGreed: fgv == null ? null : { value: fgv, label: 'x' },
-          domHistory: domHist(30, 56, 54),
-        })
-        expect(s.parts.reduce((a, p) => a + p.points, 0)).toBe(s.score)
-        expect(s.score).toBeGreaterThanOrEqual(0)
-        expect(s.score).toBeLessThanOrEqual(100)
+        for (const dom of [domHist(30, 56, 54), null]) {
+          const s = seasonRead({
+            universe: makeUniverse({ beat7, beat30: beat7 }),
+            btcRow: BTC, ethRow: eth(5, 5),
+            fearGreed: fgv == null ? null : { value: fgv, label: 'x' },
+            domHistory: dom,
+          })
+          const scored = s.parts.filter((p) => p.measured)
+          expect(scored.reduce((a, p) => a + p.points, 0)).toBe(s.measured.earned)
+          expect(scored.reduce((a, p) => a + p.max, 0)).toBe(s.measured.of)
+          expect(s.score).toBe(Math.round((100 * s.measured.earned) / s.measured.of))
+          expect(s.coverage).toBeCloseTo(s.measured.of / 100, 9)
+          expect(s.score).toBeGreaterThanOrEqual(0)
+          expect(s.score).toBeLessThanOrEqual(100)
+          // An unmeasured part is null on both sides — never a 0 that reads as a
+          // measured zero, and never a max that pads the denominator.
+          for (const p of s.parts.filter((x) => !x.measured)) expect(p.points).toBeNull()
+        }
       }
     }
   })
@@ -132,6 +156,96 @@ describe('the 100 points, verified by hand', () => {
   })
 })
 
+/* ── nothing on screen is a number we did not compute ─────────────────────── */
+
+describe('an unmeasured component is dropped from BOTH sides', () => {
+  // THE DAY-ONE STATE, and the exact case that made this rewrite necessary: the
+  // dominance cron has never run, CoinGecko's markets call came back without an
+  // ETH row, and alternative.me 429'd. Under the midpoint rule this returned 20
+  // points — dominance 10 + ETH/BTC 5 + fear & greed 5 — from three feeds that
+  // never answered, which is a band and a half on a 22/40/55/72 ladder.
+  const dayOne = (beat7, beat30) => seasonRead({
+    universe: makeUniverse({ beat7, beat30 }), btcRow: BTC,
+    domHistory: null, ethRow: null, fearGreed: null,
+  })
+
+  it('scores zero for a market where nothing beat BTC and nothing else was fetched', () => {
+    const s = dayOne(0, 0)
+    expect(s.score).toBe(0)              // was 20, from three feeds that did not answer
+    expect(s.measured).toEqual({ earned: 0, of: 60 })
+    expect(s.phase).toBe('risk_off')
+  })
+
+  it('renormalises breadth over the points that existed, and nothing else moves it', () => {
+    const s = dayOne(50, 50)
+    expect(s.parts.map((p) => [p.key, p.points, p.measured])).toEqual([
+      ['breadth7', 18, true], ['breadth30', 13, true],
+      ['dominance', null, false], ['ethbtc', null, false], ['feargreed', null, false],
+    ])
+    // 31 points earned out of the 60 that were on offer → 52. Every one of those
+    // 31 came off a counted row; the three feeds that did not answer are in
+    // neither the numerator nor the denominator.
+    expect(s.measured).toEqual({ earned: 31, of: 60 })
+    expect(s.coverage).toBe(0.6)
+    expect(s.score).toBe(52)
+    // The same market with every input measured and every tilt sitting in the
+    // middle of its own range — dominance flat, ETH edging BTC over one window
+    // and level over the other, fear & greed at 50 — scores 51. Renormalising
+    // AGREES with the full read; the midpoint dragged the partial one toward the
+    // middle from wherever it actually was.
+    const full = seasonRead({
+      universe: makeUniverse({ beat7: 50, beat30: 50 }), btcRow: BTC,
+      ethRow: eth(4, 7), fearGreed: { value: 50, label: 'Neutral' }, domHistory: domHist(30, 56, 56.2),
+    })
+    expect(full.parts.map((p) => p.points)).toEqual([18, 13, 10, 5, 5])
+    expect(full.score).toBe(51)
+  })
+
+  it('names every input it could not measure, in the same fact as the arithmetic', () => {
+    const f = dayOne(50, 50).facts.join('\n')
+    expect(f).toMatch(/31 of the 60 points on offer were earned, renormalised to 52 out of 100/)
+    expect(f).toMatch(/the dominance trend, ETH\/BTC and fear & greed were not measured/)
+    expect(f).toMatch(/not evidence about the market in either direction/)
+  })
+
+  it('drops the part label into "not scored", never into a midpoint', () => {
+    for (const p of dayOne(50, 50).parts.filter((x) => !x.measured)) {
+      expect(p.label).toMatch(/not scored/)
+      expect(p.label).not.toMatch(/midpoint/)
+      expect(p.max).toBeGreaterThan(0)   // the UI still shows what it would have been worth
+    }
+  })
+
+  // A score is arithmetic over what was measured; a PHASE is a claim about the
+  // market. Under half the points the number stands and the label refuses.
+  it('refuses to name a phase under half coverage, while still reporting the score', () => {
+    const only7 = makeUniverse({ beat7: 80, beat30: 80 }).map((r) => ({ ...r, chg30d: null }))
+    const s = seasonRead({ universe: only7, btcRow: { ...BTC, chg30d: null }, domHistory: null })
+    expect(s.measured).toEqual({ earned: 28, of: 35 })
+    expect(s.coverage).toBe(0.35)
+    expect(s.score).toBe(80)             // real arithmetic over the 35 points that existed
+    expect(s.phase).toBe('unknown')      // ...but 35 of 100 does not name a regime
+    expect(s.plain).toMatch(/not a call on the market/)
+    expect(s.facts.join('\n')).toMatch(/only 35 of the 100 points were measurable \(35% coverage\)/)
+    expect(s.facts.join('\n')).toMatch(/rather than as "Alt season"/)
+  })
+
+  it('names a phase the moment coverage reaches half', () => {
+    // Breadth alone is 60 of the 100 points, which is over the line.
+    const s = seasonRead({ universe: makeUniverse({ beat7: 80, beat30: 80 }), btcRow: BTC, domHistory: null })
+    expect(s.coverage).toBe(0.6)
+    expect(s.phase).not.toBe('unknown')
+  })
+
+  it('scores ETH/BTC per window, out of 5 when only one window resolved', () => {
+    const s = seasonRead({ universe: makeUniverse({}), btcRow: BTC, ethRow: eth(9, null) })
+    const p = s.parts.find((x) => x.key === 'ethbtc')
+    expect([p.points, p.max, p.measured]).toEqual([5, 5, true])
+    expect(p.label).toMatch(/one window only, scored out of 5/)
+    expect(s.measured.of).toBe(65)       // 35 + 25 + 5 — the 30d leg is not in the denominator
+  })
+})
+
 /* ── dominance: the honest 'unknown' ──────────────────────────────────────── */
 
 describe('dominance trend comes only from domHistory', () => {
@@ -139,7 +253,7 @@ describe('dominance trend comes only from domHistory', () => {
     const s = seasonRead({ universe: makeUniverse({}), btcRow: BTC, domHistory: null })
     expect(s.dominance.trend).toBe('unknown')
     expect(s.dominance.days).toBe(0)
-    expect(s.dominance.changePctPts30d).toBeNull()
+    expect(s.dominance.changePctPts).toBeNull()
     expect(s.facts.join('\n')).toMatch(/0 days of dominance history stored — the trend needs 7/)
   })
 
@@ -158,8 +272,13 @@ describe('dominance trend comes only from domHistory', () => {
     })
     expect(s.dominance.pct).toBe(58.4)
     expect(s.dominance.trend).toBe('unknown')
-    expect(s.parts.find((p) => p.key === 'dominance').points).toBe(10)
-    expect(s.parts.find((p) => p.key === 'dominance').label).toMatch(/scored at the midpoint/)
+    // A LEVEL is not a trend, and an unknown trend is not worth points. It used
+    // to score 10 of 20 here and call that "no evidence either way" — but the
+    // ten points are evidence, they are just evidence of nothing.
+    const dom = s.parts.find((p) => p.key === 'dominance')
+    expect(dom.points).toBeNull()
+    expect(dom.measured).toBe(false)
+    expect(dom.label).toMatch(/dominance trend unknown \(0 of 7 stored days needed\) — not scored/)
   })
 
   it('classifies falling / rising / flat around a 0.5-point noise band', () => {
@@ -176,8 +295,32 @@ describe('dominance trend comes only from domHistory', () => {
     // so the reported change is the 30-day one (−4.92) and NOT the 60-day one.
     const s = seasonRead({ universe: makeUniverse({}), btcRow: BTC, domHistory: domHist(60, 60, 50) })
     expect(s.dominance.days).toBe(60)
-    expect(s.dominance.windowDays).toBe(30)
-    expect(s.dominance.changePctPts30d).toBeCloseTo(-4.915, 2)
+    expect(s.dominance.samples).toBe(30)
+    expect(s.dominance.spanDays).toBe(29)   // thirty consecutive daily samples span 29 days
+    expect(s.dominance.changePctPts).toBeCloseTo(-4.915, 2)
+  })
+
+  // A SAMPLE COUNT AND A LENGTH OF TIME ARE DIFFERENT NUMBERS, and this field
+  // used to be one name for both: `windowDays: window.length`, rendered on the
+  // card as "-1.20pts / 9d". Nine samples from a cron that has been missing two
+  // days in three cover most of a month, and the card claimed the move was nine
+  // days old.
+  it('separates how many samples were used from how long they span', () => {
+    const everyThirdDay = Array.from({ length: 10 }, (_, i) => ({ d: dstr(i * 3), btcDom: 58 - i * 0.2 }))
+    const s = seasonRead({ universe: makeUniverse({}), btcRow: BTC, domHistory: everyThirdDay })
+    expect(s.dominance.samples).toBe(10)
+    expect(s.dominance.spanDays).toBe(27)
+    expect(s.dominance.changePctPts).toBeCloseTo(-1.8, 6)
+    expect(s.facts.join('\n')).toMatch(/BTC dominance falling: -1\.80 points across 27 days \(10 stored samples\)/)
+    expect(s.parts.find((p) => p.key === 'dominance').label)
+      .toMatch(/BTC dominance falling \(-1\.80 pts across 27d, 10 samples\)/)
+  })
+
+  it('reports a span even for a window too thin to produce a trend', () => {
+    const s = seasonRead({ universe: makeUniverse({}), btcRow: BTC, domHistory: domHist(4, 57, 56) })
+    expect(s.dominance.trend).toBe('unknown')
+    expect(s.dominance.samples).toBe(4)
+    expect(s.dominance.spanDays).toBe(3)
   })
 
   it('sorts the samples by date, so an out-of-order blob does not flip the sign', () => {
@@ -186,7 +329,7 @@ describe('dominance trend comes only from domHistory', () => {
     const a = seasonRead({ universe: makeUniverse({}), btcRow: BTC, domHistory: asc })
     const b = seasonRead({ universe: makeUniverse({}), btcRow: BTC, domHistory: shuffled })
     expect(b.dominance.trend).toBe('falling')
-    expect(b.dominance.changePctPts30d).toBeCloseTo(a.dominance.changePctPts30d, 9)
+    expect(b.dominance.changePctPts).toBeCloseTo(a.dominance.changePctPts, 9)
   })
 
   it('prefers the live dominance level and falls back to the stored one, naming which', () => {
@@ -215,9 +358,9 @@ describe('dominance trend comes only from domHistory', () => {
     ]
     const s = seasonRead({ universe: makeUniverse({}), btcRow: BTC, domHistory: stale })
     expect(s.dominance.days).toBe(23)
-    expect(s.dominance.windowDays).toBe(3)
+    expect(s.dominance.samples).toBe(3)
     expect(s.dominance.trend).toBe('unknown')     // not "falling 7 points"
-    expect(s.dominance.changePctPts30d).toBeNull()
+    expect(s.dominance.changePctPts).toBeNull()
     expect(s.facts.join('\n')).toMatch(/only 3 of 23 stored dominance samples fall inside the last 30 days/)
   })
 
@@ -297,15 +440,20 @@ describe('ETH/BTC is the pair return, not a subtraction', () => {
     const s = seasonRead({ universe: makeUniverse({}), btcRow: BTC, ethRow: eth(9, null) })
     expect(s.ethBtc.chg7dPct).toBeCloseTo(5.825, 3)
     expect(s.ethBtc.chg30dPct).toBeNull()
-    // 5 for the leg that resolved, the midpoint 2.5 for the one that did not.
-    expect(s.parts.find((p) => p.key === 'ethbtc').points).toBe(8)
+    // 5 for the leg that resolved, and the leg that did not is worth nothing out
+    // of nothing. It used to take the midpoint 2.5 and print 8 of 10, which is a
+    // claim about a month of ETH/BTC that was never fetched.
+    const p = s.parts.find((x) => x.key === 'ethbtc')
+    expect([p.points, p.max]).toEqual([5, 5])
   })
 
   it('returns null with a stated reason when there is no ETH row', () => {
     const s = seasonRead({ universe: makeUniverse({}), btcRow: BTC, ethRow: null })
     expect(s.ethBtc).toBeNull()
     expect(s.facts.join('\n')).toMatch(/ETH\/BTC unavailable/)
-    expect(s.parts.find((p) => p.key === 'ethbtc').points).toBe(5)
+    const p = s.parts.find((x) => x.key === 'ethbtc')
+    expect(p.points).toBeNull()
+    expect(p.measured).toBe(false)
   })
 })
 
@@ -318,6 +466,8 @@ describe('degrade paths', () => {
       expect(s.score).toBeNull()
       expect(s.phase).toBe('unknown')
       expect(s.parts).toEqual([])
+      expect(s.measured).toEqual({ earned: 0, of: 0 })
+      expect(s.coverage).toBe(0)
       expect(s.facts.join('\n')).toMatch(/no universe rows fetched/)
     }
   })
@@ -348,7 +498,10 @@ describe('degrade paths', () => {
     for (const fg of [{}, { value: 'abc' }, { value: null }, 'nope', 0]) {
       const s = seasonRead({ universe: makeUniverse({}), btcRow: BTC, fearGreed: fg })
       expect(s.fearGreed).toBeNull()
-      expect(s.parts.find((p) => p.key === 'feargreed').points).toBe(5)
+      // Not 5 of 10. A feed that answered with junk measured nothing, and the
+      // index is the one input where a fabricated middle is also a fabricated
+      // "risk appetite is normal".
+      expect(s.parts.find((p) => p.key === 'feargreed').points).toBeNull()
     }
   })
 
@@ -378,7 +531,7 @@ describe('facts carry the numbers', () => {
     const f = s.facts.join('\n')
     expect(f).toMatch(/63 of 100 top-100 alts beat BTC over 7d \(63%\)/)
     expect(f).toMatch(/BTC dominance 54\.3%/)
-    expect(f).toMatch(/BTC dominance falling: -1\.80 points across 30 stored days — capital is leaving BTC/)
+    expect(f).toMatch(/BTC dominance falling: -1\.80 points across 29 days \(30 stored samples\) — capital is leaving BTC/)
     expect(f).toMatch(/ETH\/BTC \+8\.7% over 7d \(ETH \+12\.0% vs BTC \+3\.0%\)/)
     expect(f).toMatch(/fear & greed 39 \(Fear\)/)
     // No bare adjectives — every fact that makes a claim carries a figure.
@@ -390,11 +543,12 @@ describe('facts carry the numbers', () => {
     const cases = [
       { universe: makeUniverse({ beat7: 8, beat30: 5 }), btcRow: BTC, ethRow: eth(-10, -20), fearGreed: { value: 12 }, domHistory: domHist(30, 54, 57) },
       { universe: makeUniverse({ beat7: 35, beat30: 25 }), btcRow: BTC, ethRow: eth(-10, -20), fearGreed: { value: 60 }, domHistory: domHist(30, 54, 57) },
-      { universe: makeUniverse({ beat7: 63, beat30: 48 }), btcRow: BTC },
+      // btc_leads, fully measured: 18 + 13 + 10 + 0 + 5 = 46
+      { universe: makeUniverse({ beat7: 50, beat30: 50 }), btcRow: BTC, ethRow: eth(3, 7), fearGreed: { value: 50 }, domHistory: domHist(30, 56, 56.2) },
       { universe: makeUniverse({ beat7: 60, beat30: 55 }), btcRow: BTC, ethRow: eth(12, 2), fearGreed: { value: 65 }, domHistory: domHist(30, 56, 54) },
       { universe: makeUniverse({ beat7: 78, beat30: 72 }), btcRow: BTC, ethRow: eth(12, 30), fearGreed: { value: 65 }, domHistory: domHist(30, 56, 54) },
       { universe: makeUniverse({ beat7: 90, beat30: 80 }), btcRow: BTC, ethRow: eth(12, 30), fearGreed: { value: 85 }, domHistory: domHist(30, 56, 54) },
-      {},
+      {},   // nothing fetched at all — 'No read'
     ]
     for (const args of cases) {
       const s = seasonRead(args)
@@ -405,5 +559,22 @@ describe('facts carry the numbers', () => {
     expect(seen).toEqual(new Set([
       'risk_off', 'btc_only', 'btc_leads', 'majors_rotating', 'alt_season', 'euphoric', 'unknown',
     ]))
+  })
+
+  // 'unknown' arrives two ways and they are different refusals: nothing to
+  // count at all, and something counted that is not enough of the picture. Both
+  // need a sentence, because both are rendered as the top-of-tab answer.
+  it('gives both flavours of unknown their own sentence', () => {
+    const nothing = seasonRead({})
+    const thin = seasonRead({
+      universe: makeUniverse({ beat7: 60, beat30: 60 }).map((r) => ({ ...r, chg30d: null })),
+      btcRow: { ...BTC, chg30d: null }, domHistory: null,
+    })
+    expect(nothing.phase).toBe('unknown')
+    expect(thin.phase).toBe('unknown')
+    expect(nothing.label).not.toBe(thin.label)
+    expect(nothing.plain).not.toBe(thin.plain)
+    expect(nothing.score).toBeNull()
+    expect(thin.score).not.toBeNull()
   })
 })

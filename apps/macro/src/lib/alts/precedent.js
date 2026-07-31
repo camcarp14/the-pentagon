@@ -46,9 +46,17 @@
 // SURVIVORSHIP IS THE ENEMY. A median forward return with no drawdown beside it
 // is a highlight reel: it is the number you get by forgetting that four of the
 // five episodes traded 25% against you first, and that one of them never came
-// back. So `worstFwd21` and `medianMaxDDPct` are computed alongside every
-// median, the facts put the worst case in the SAME SENTENCE as the median, and
-// `matched` returns every episode rather than the flattering three.
+// back. So EVERY horizon carries a worst case — `worstFwd7`, `worstFwd21`,
+// `worstFwd60` — plus `medianMaxDDPct`, the facts put the worst case in the SAME
+// SENTENCE as the median, and `matched` returns every episode rather than the
+// flattering three. A median that ships without its worst case is a median the
+// UI has no honest way to render, whichever horizon it belongs to.
+//
+// AND THE DRAWDOWN IS MEASURED FROM THE ENTRY, NOT FROM THE IGNITION BAR'S HIGH.
+// See findEpisodes: the scan is seeded at the ignition CLOSE and starts on the
+// following bar, because that is the first bar a position could have been open
+// for. Charging an episode the ignition bar's own high-to-low range prints pain
+// that predates the trade.
 //
 // AND THE SELECTION IS CIRCULAR, WHICH THE READ SAYS OUT LOUD. An episode is
 // DEFINED as a bar that went on to gain minRunPct within `window` days, so any
@@ -246,10 +254,20 @@ export function findEpisodes(candles, opts = {}) {
     // the reward and the pain are on one clock. High-to-low, not close-to-close:
     // the drawdown that takes you out of the position is the one that trades,
     // not the one that closes.
+    //
+    // THE SCAN IS SEEDED FROM THE IGNITION CLOSE AND STARTS THE BAR AFTER, for
+    // the same reason every forward return in this file is measured from that
+    // close: it is the price a position would actually have been opened at.
+    // Seeding from the ignition bar's own HIGH and measuring against its own LOW
+    // charged every episode one bar of intrabar range that happened before the
+    // entry existed. On a tape where nothing ever traded below the entry, a +25%
+    // ignition bar that had dipped 8% intraday first still printed a 26.4%
+    // drawdown — a number for pain nobody could have felt, on the one column
+    // that exists to stop a median looking like a free ride.
     const end = Math.min(i + window, last)
-    let peakHigh = -Infinity
+    let peakHigh = bars[i].c
     let maxDD = 0
-    for (let j = i; j <= end; j++) {
+    for (let j = i + 1; j <= end; j++) {
       if (bars[j].h > peakHigh) peakHigh = bars[j].h
       if (peakHigh > 0) maxDD = Math.max(maxDD, ((peakHigh - bars[j].l) / peakHigh) * 100)
     }
@@ -362,8 +380,8 @@ export function precedentRead(candles, opts = {}) {
       `(${baseRates.nFwd21} of ${episodes.length} episodes have 21 days of tape after them)`,
     )
   }
-  if (baseRates.medianFwd7 != null) facts.push(`7 days after: median ${signed(baseRates.medianFwd7)}% (${baseRates.nFwd7} episodes)`)
-  if (baseRates.medianFwd60 != null) facts.push(`60 days after: median ${signed(baseRates.medianFwd60)}% (${baseRates.nFwd60} episodes)`)
+  if (baseRates.medianFwd7 != null) facts.push(`7 days after: median ${signed(baseRates.medianFwd7)}%, worst ${signed(baseRates.worstFwd7)}% (${baseRates.nFwd7} episodes)`)
+  if (baseRates.medianFwd60 != null) facts.push(`60 days after: median ${signed(baseRates.medianFwd60)}%, worst ${signed(baseRates.worstFwd60)}% (${baseRates.nFwd60} episodes)`)
   facts.push(
     `these episodes were SELECTED for gaining ${minRunPct}%+ within ${window} days, so the 7- and 21-day numbers ` +
     `are conditioned on the run happening — they describe the shape of this coin's runs, not the odds of getting one. ` +
@@ -430,9 +448,16 @@ function computeBaseRates(episodes) {
     medianFwd21: r1(median(f21)),
     medianFwd60: r1(median(f60)),
     bestRunPct: runs.length ? r1(Math.max(...runs)) : null,
-    // The worst case is a first-class field, not a footnote. It is reported
-    // beside the median everywhere the median is shown.
+    // The worst case is a first-class field, not a footnote, and EVERY horizon
+    // carries one. The rule this file states is "worstFwd21 is reported beside
+    // the median everywhere the median is shown" — but only the 21-day worst
+    // case existed, so the 7- and 60-day tiles shipped a bare median with no
+    // drawdown beside it. A median with no worst case next to it is the
+    // highlight reel this whole file is written against, and the horizon it
+    // happens to be missing on is not a defence.
+    worstFwd7: f7.length ? r1(Math.min(...f7)) : null,
     worstFwd21: f21.length ? r1(Math.min(...f21)) : null,
+    worstFwd60: f60.length ? r1(Math.min(...f60)) : null,
     hitRate21: f21.length ? r1((f21.filter((x) => x > 0).length / f21.length) * 100) : null,
     medianMaxDDPct: r1(median(dds)),
     n: episodes.length,

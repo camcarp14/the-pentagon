@@ -87,6 +87,35 @@ function buildSeries({ n = 780, ignitions = [150, 330, 510, 690], pendingAt = nu
   return bars
 }
 
+/**
+ * One planted ignition on a tape where NOTHING EVER TRADES BELOW THE ENTRY.
+ *
+ * The ignition bar closes +25% but wicked down 8% intraday first, and every bar
+ * after it opens at the previous close and only goes up. A position opened at
+ * the ignition close — the price every forward return in the file is measured
+ * from — is never once underwater by more than the intrabar of a rising bar, so
+ * this fixture isolates the seed-bar bug: any large drawdown it reports is the
+ * ignition bar's own high-to-low range, charged to a position that did not exist
+ * when that range traded.
+ */
+function buildNoAdverseMove() {
+  const bars = []
+  let c = 100
+  for (let i = 0; i < 400; i++) {
+    if (i === 120) {
+      const o = c; const close = o * 1.25
+      bars.push({ t: T0 + i * DAY, o, h: close, l: o * 0.92, c: close, v: 5e6 }); c = close
+    } else if (i > 120 && i <= 150) {
+      const o = c; const close = o * 1.03
+      bars.push({ t: T0 + i * DAY, o, h: close, l: o, c: close, v: 3e6 }); c = close
+    } else {
+      const o = c; const close = o * (1 + ((i % 7) - 3) * 0.0005)
+      bars.push({ t: T0 + i * DAY, o, h: Math.max(o, close) * 1.001, l: Math.min(o, close) * 0.999, c: close, v: 1e6 }); c = close
+    }
+  }
+  return bars
+}
+
 /** What CoinGecko's market_chart gives us: a price line wearing candle clothes. */
 function buildCloseOnly({ n = 780, seed = 3 } = {}) {
   const rand = rng(seed)
@@ -156,6 +185,36 @@ describe('findEpisodes', () => {
       expect(e.maxDrawdownDuringPct).toBeGreaterThan(0)
       expect(e.maxDrawdownDuringPct).toBeLessThan(100)
     }
+  })
+
+  // The drawdown column is the one number on the precedent card that exists to
+  // stop a median looking like a free ride, so it has to be the pain of holding
+  // the position and nothing else. The scan used to seed its running peak at the
+  // ignition bar's own HIGH and measure against that same bar's LOW, charging
+  // every episode one bar of intrabar range that traded BEFORE the entry price
+  // existed.
+  it('measures the drawdown from the ignition close, not from the ignition bar\'s high', () => {
+    const bars = buildNoAdverseMove()
+    const eps = findEpisodes(bars)
+    expect(eps).toHaveLength(1)
+    const e = eps[0]
+    expect(e.igniteIdx).toBe(120)
+
+    const entry = bars[120].c
+    const ownRangePct = ((bars[120].h - bars[120].l) / bars[120].h) * 100
+    expect(ownRangePct).toBeCloseTo(26.4, 1)                     // the wick the old scan charged
+    expect(Math.min(...bars.slice(121, 151).map((b) => b.l))).toBeGreaterThanOrEqual(entry)
+
+    // Recomputed here rather than snapshotted: running peak seeded at the entry,
+    // scan starting on the first bar the position could have been open for.
+    let peak = entry
+    let expected = 0
+    for (let j = 121; j <= 150; j++) {
+      if (bars[j].h > peak) peak = bars[j].h
+      expected = Math.max(expected, ((peak - bars[j].l) / peak) * 100)
+    }
+    expect(e.maxDrawdownDuringPct).toBeCloseTo(expected, 9)
+    expect(e.maxDrawdownDuringPct).toBeLessThan(4)               // was 26.4
   })
 
   it('degrades on short, empty and garbage input without throwing', () => {
@@ -328,6 +387,39 @@ describe('base rates', () => {
     expect(b.bestRunPct).toBeGreaterThanOrEqual(read.matched[0].runPct - 0.05)
   })
 
+  // The file's own rule is that the worst case is reported beside the median
+  // everywhere the median is shown — but only the 21-day worst case was ever
+  // computed, so the 7d and 60d tiles had a bare median and nothing to put next
+  // to it. A horizon that happens to be missing its worst case is not a horizon
+  // exempt from the rule.
+  it('gives every horizon a worst case, not just the 21-day one', () => {
+    const b = read.baseRates
+    const eps = findEpisodes(FOUR)
+    for (const [worst, median, values] of [
+      [b.worstFwd7, b.medianFwd7, eps.map((e) => e.fwd7)],
+      [b.worstFwd21, b.medianFwd21, eps.map((e) => e.fwd21)],
+      [b.worstFwd60, b.medianFwd60, eps.map((e) => e.fwd60)],
+    ]) {
+      expect(worst).not.toBeNull()
+      expect(worst).toBeLessThanOrEqual(median)
+      expect(worst).toBeCloseTo(Math.min(...values.filter(Number.isFinite)), 1)
+    }
+  })
+
+  it('draws each worst case from that window\'s own denominator', () => {
+    // The newest ignition has 21 days of tape after it and not 60. An episode we
+    // cannot see 60 days of must be ABSENT from the 60-day worst case, not a
+    // zero inside it — every measured fwd60 on this fixture is positive, so a
+    // missing observation counted as flat would take the worst case to 0.
+    const opts = { n: 620, ignitions: [150, 330, 570] }
+    const late = precedentRead(buildSeries(opts), { quality: 'ohlcv' })
+    const f60 = findEpisodes(buildSeries(opts)).map((e) => e.fwd60).filter(Number.isFinite)
+    expect(late.baseRates.nFwd60).toBe(2)
+    expect(f60).toHaveLength(2)
+    expect(late.baseRates.worstFwd60).toBeGreaterThan(0)
+    expect(late.baseRates.worstFwd60).toBeCloseTo(Math.min(...f60), 1)
+  })
+
   it('gives every forward window its own denominator', () => {
     const late = precedentRead(buildSeries({ n: 620, ignitions: [150, 330, 570] }), { quality: 'ohlcv' })
     expect(late.baseRates.nFwd21).toBe(3)
@@ -338,6 +430,8 @@ describe('base rates', () => {
   it('puts the worst case in the same sentence as the median, in the facts', () => {
     const f = read.facts.join('\n')
     expect(f).toMatch(/21 days after those ignitions: median \+[\d.]+%, worst [+-][\d.]+%/)
+    expect(f).toMatch(/7 days after: median \+[\d.]+%, worst [+-][\d.]+% \(\d+ episodes\)/)
+    expect(f).toMatch(/60 days after: median \+[\d.]+%, worst [+-][\d.]+% \(\d+ episodes\)/)
     expect(f).toMatch(/% of them higher than the ignition close/)
     expect(f).toMatch(/median return is not the experience of holding it/)
   })

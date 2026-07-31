@@ -21,26 +21,54 @@
 // question — "is the median alt outperforming?" — answered with no estimation
 // step anywhere in it.
 //
-// THE 100 POINTS — parts[] always sums to score.
+// THE 100 POINTS — parts[] always sums to `measured.earned`.
 //
 //   BREADTH 7d ..... 0–35   round(0.35 × % of the eligible top 100 beating BTC)
 //   BREADTH 30d .... 0–25   round(0.25 × same over 30d)
-//   DOMINANCE ...... 0–20   falling 20 · flat 10 · rising 0        (midpoint 10)
+//   DOMINANCE ...... 0–20   falling 20 · flat 10 · rising 0
 //                           trend from domHistory ALONE, and only when ≥7 of
 //                           its samples fall inside the last 30 days
-//   ETH/BTC ........ 0–10   +5 per window ETH gains on BTC          (midpoint 5)
-//   FEAR & GREED ... 0–10   round(value ÷ 10), clamped 0–10         (midpoint 5)
+//   ETH/BTC ........ 0–10   +5 per window ETH gains on BTC — and out of 5, not
+//                           out of 10, when only one of the two windows resolved
+//   FEAR & GREED ... 0–10   round(value ÷ 10), clamped 0–10
 //
 // So 63% breadth over 7d is 22 points, and you can check that with a phone
 // calculator, which is the whole standard this file is held to.
 //
-// THE THREE TILTS SIT AT THEIR MIDPOINT WHEN THEIR INPUT IS MISSING, and the
-// part label says so out loud. This is not the screener's rule (there, a missing
-// input scores zero) and the difference is deliberate: `domHistory` is empty for
-// the first seven days this product is ever deployed, and scoring that as
-// "dominance is rising" would print `btc_only` at a market that is nothing of
-// the kind. A midpoint here is "no evidence either way", which is true; a zero
-// would be a claim, which would not be.
+// ─────────────────────────────────────────────────────────────────────────────
+// AN UNMEASURED COMPONENT IS DROPPED FROM BOTH SIDES AND THE SCORE IS
+// RENORMALISED — the same treatment sentiment.js gives a coin with no perp:
+//
+//     score = round(100 × Σ points of measured parts ÷ Σ max of measured parts)
+//
+// `measured: { earned, of }` ships both sums and `coverage` is `of ÷ 100`, so a
+// reader can always see how much of the read was real. Every parts[] entry
+// carries `measured: boolean`, and the measured ones still sum to `earned` by
+// eye — which is the only way anyone ever checks this.
+//
+// This file used to score the three tilts at their MIDPOINT when their input was
+// missing. On day one — no dominance history (the cron has never run), no ETH
+// row, a failed fear & greed fetch — that put 20 points on the board that no
+// fetched value produced, on a ladder whose boundaries are 22/40/55/72. It was
+// defended as "no evidence either way", but a midpoint is not the absence of a
+// claim: it is a number, it moves the score, and directive.js gates ENTER on the
+// phase that score produces. Zero (screen.js's rule, and the right one there) is
+// no better in the other direction — the absence of an ETH row is not evidence
+// that alts are weak.
+//
+// A market REGIME read is the one place renormalising is right. The question is
+// "is the median alt outperforming?", and every gauge here answers that same
+// question from a different angle, so any honest subset of them still answers
+// it. Renormalising assumes the gauges we could not read look like the ones we
+// could; the midpoint assumed they were neutral, which is a stronger claim off
+// less evidence. Note what it costs the alarming end too: a market with 0%
+// breadth now scores 0 rather than the 20 the midpoints used to hand it.
+//
+// AND UNDER HALF COVERAGE THERE IS NO PHASE. The score is still arithmetic over
+// measured points and is still reported; `phase` is 'unknown'. "Alt season" off
+// the 7-day breadth count alone is a claim about the market that 35 of the 100
+// points cannot support, and the phase is what directive.js reads. A fact names
+// exactly which inputs were unavailable.
 //
 // FEAR & GREED IS MONOTONE, NOT CONTRARIAN, on purpose. This score measures
 // whether risk appetite is present, not whether it is well-founded. The
@@ -48,8 +76,9 @@
 // `euphoric` phase below — putting it here too would have greed both raise and
 // lower the same number.
 //
-// PHASE IS A PURE FUNCTION OF THE SCORE (plus one euphoria overlay), so the
-// label and the number can never disagree — the same rule window.js is built on.
+// PHASE IS A PURE FUNCTION OF THE SCORE (plus the euphoria overlay and the
+// coverage gate above), so the label and the number can never disagree — the
+// same rule window.js is built on.
 //   risk_off <22 · btc_only <40 · btc_leads <55 · majors_rotating <72 ·
 //   alt_season ≥72 · euphoric = alt_season AND the crowd is already all-in.
 import { isExcluded } from './screen.js'
@@ -57,6 +86,19 @@ import { isExcluded } from './screen.js'
 const MIN_DOM_SAMPLES = 7      // below this we say 'unknown' and mean it
 const DOM_FLAT_PTS = 0.5       // rule of thumb: dominance moves ±0.5pp on noise
 const DOM_WINDOW_DAYS = 30
+
+// 35 + 25 + 20 + 10 + 10. The score a read with every input measured is out of,
+// and the denominator `coverage` is expressed against.
+const MAX_POINTS = 100
+// Under this share of the 100 points the number stands and the LABEL refuses.
+const MIN_COVERAGE_FOR_PHASE = 0.5
+
+// What each part is called in the fact that names what went missing. The keys
+// are the wire names; a user reads "the dominance trend", not "dominance".
+const PART_NAMES = {
+  breadth7: '7d breadth', breadth30: '30d breadth',
+  dominance: 'the dominance trend', ethbtc: 'ETH/BTC', feargreed: 'fear & greed',
+}
 
 const PHASES = [
   { min: 72, id: 'alt_season', label: 'Alt season', plain: 'Broad alt outperformance. This is the regime alt risk is actually paid in — and it is the shortest one.' },
@@ -69,6 +111,19 @@ const PHASES = [
 const EUPHORIC = {
   id: 'euphoric', label: 'Euphoric', min: 72,
   plain: 'Everything is up and the crowd is all-in. Late-cycle: tighten stops and take profit — this is not where new positions get opened.',
+}
+
+// The coverage gate's label. It is a different refusal from `NO_READ` below:
+// there we could not count breadth at all, here we counted something and it is
+// not enough of the picture to name a regime off.
+const THIN = {
+  id: 'unknown', label: 'Not enough measured',
+  plain: 'Less than half of the regime read came back. The score below is real arithmetic over the part that did — it is not a call on the market, and nothing should be sized off it.',
+}
+
+const NO_READ = {
+  id: 'unknown', label: 'No read',
+  plain: 'Not enough of the market was fetched to judge whether anything is rotating.',
 }
 
 /**
@@ -97,52 +152,80 @@ export function seasonRead({
   // breadth; on their own they describe the weather, not the rotation.
   if (breadth.beatBtc7dPct == null && breadth.beatBtc30dPct == null) {
     return {
-      score: null, phase: 'unknown', label: 'No read',
-      plain: 'Not enough of the market was fetched to judge whether anything is rotating.',
-      breadth, dominance, ethBtc, fearGreed: fg, parts: [], facts,
+      score: null, phase: NO_READ.id, label: NO_READ.label, plain: NO_READ.plain,
+      breadth, dominance, ethBtc, fearGreed: fg, parts: [],
+      measured: { earned: 0, of: 0 }, coverage: 0, facts,
     }
   }
 
   const parts = []
 
-  parts.push({
-    key: 'breadth7', max: 35,
-    points: breadth.beatBtc7dPct == null ? 0 : Math.round(0.35 * breadth.beatBtc7dPct),
-    label: breadth.beatBtc7dPct == null ? 'no 7d breadth' : `${Math.round(breadth.beatBtc7dPct)}% of the top 100 beat BTC over 7d`,
-  })
-  parts.push({
-    key: 'breadth30', max: 25,
-    points: breadth.beatBtc30dPct == null ? 0 : Math.round(0.25 * breadth.beatBtc30dPct),
-    label: breadth.beatBtc30dPct == null ? 'no 30d breadth' : `${Math.round(breadth.beatBtc30dPct)}% beat BTC over 30d`,
-  })
-  parts.push({
-    key: 'dominance', max: 20,
-    points: dominance.trend === 'falling' ? 20 : dominance.trend === 'rising' ? 0 : 10,
-    label: dominance.trend === 'unknown'
-      ? `dominance trend unknown (${dominance.days} of ${MIN_DOM_SAMPLES} days needed) — scored at the midpoint`
-      : `BTC dominance ${dominance.trend}${dominance.changePctPts30d == null ? '' : ` (${signed(dominance.changePctPts30d, 2)} pts / ${dominance.windowDays}d)`}`,
-  })
-  // Per WINDOW, not per read: a market where only the 7d leg resolved gets its
-  // 5 points for that leg and the midpoint for the leg it cannot see.
-  const ethWindow = (c) => (c == null ? 2.5 : c > 0 ? 5 : 0)
-  parts.push({
-    key: 'ethbtc', max: 10,
-    points: ethBtc == null ? 5 : Math.round(ethWindow(ethBtc.chg7dPct) + ethWindow(ethBtc.chg30dPct)),
-    label: ethBtc == null ? 'ETH/BTC unavailable — scored at the midpoint' : `ETH/BTC ${ethBtc.trend} (7d ${signed(ethBtc.chg7dPct)}%, 30d ${signed(ethBtc.chg30dPct)}%)`,
-  })
-  parts.push({
-    key: 'feargreed', max: 10,
-    points: fg == null ? 5 : Math.max(0, Math.min(10, Math.round(fg.value / 10))),
-    label: fg == null ? 'fear & greed unavailable — scored at the midpoint' : `fear & greed ${fg.value} (${fg.label})`,
-  })
+  parts.push(part('breadth7', 35,
+    breadth.beatBtc7dPct == null ? null : Math.round(0.35 * breadth.beatBtc7dPct),
+    breadth.beatBtc7dPct == null ? 'no 7d breadth — not scored' : `${Math.round(breadth.beatBtc7dPct)}% of the top 100 beat BTC over 7d`))
 
-  const score = Math.max(0, Math.min(100, parts.reduce((s, p) => s + p.points, 0)))
+  parts.push(part('breadth30', 25,
+    breadth.beatBtc30dPct == null ? null : Math.round(0.25 * breadth.beatBtc30dPct),
+    breadth.beatBtc30dPct == null ? 'no 30d breadth — not scored' : `${Math.round(breadth.beatBtc30dPct)}% beat BTC over 30d`))
+
+  parts.push(part('dominance', 20,
+    dominance.trend === 'unknown' ? null
+      : dominance.trend === 'falling' ? 20 : dominance.trend === 'rising' ? 0 : 10,
+    dominance.trend === 'unknown'
+      ? `dominance trend unknown (${dominance.days} of ${MIN_DOM_SAMPLES} stored days needed) — not scored`
+      : `BTC dominance ${dominance.trend}${dominance.changePctPts == null ? '' : ` (${signed(dominance.changePctPts, 2)} pts across ${dominance.spanDays}d, ${dominance.samples} samples)`}`))
+
+  // Per WINDOW, not per read. A coin listed last week has a 7d ETH/BTC leg and
+  // no 30d one; scoring the leg we cannot see at anything at all — 0 or the 2.5
+  // this used to use — is a claim about a month nobody measured. The part's max
+  // shrinks to 5 instead, so the leg that did resolve carries its full weight
+  // and the denominator says out loud that it was scored out of 5.
+  const ethLegs = ethBtc == null ? []
+    : [['7d', ethBtc.chg7dPct], ['30d', ethBtc.chg30dPct]].filter(([, c]) => Number.isFinite(c))
+  parts.push(part('ethbtc', ethLegs.length === 0 ? 10 : 5 * ethLegs.length,
+    ethLegs.length === 0 ? null : ethLegs.reduce((s, [, c]) => s + (c > 0 ? 5 : 0), 0),
+    ethLegs.length === 0
+      ? 'ETH/BTC unavailable — not scored'
+      : `ETH/BTC ${ethBtc.trend} (${ethLegs.map(([w, c]) => `${w} ${signed(c)}%`).join(', ')})${ethLegs.length === 1 ? ' — one window only, scored out of 5' : ''}`))
+
+  parts.push(part('feargreed', 10,
+    fg == null ? null : Math.max(0, Math.min(10, Math.round(fg.value / 10))),
+    fg == null ? 'fear & greed unavailable — not scored' : `fear & greed ${fg.value} (${fg.label})`))
+
+  // `of` is at least 25 here: the early return above guarantees that at least
+  // one breadth window resolved, so there is never a divide by zero to guard.
+  const scored = parts.filter((p) => p.measured)
+  const earned = scored.reduce((s, x) => s + x.points, 0)
+  const of = scored.reduce((s, x) => s + x.max, 0)
+  const coverage = of / MAX_POINTS
+  const score = Math.max(0, Math.min(100, Math.round((100 * earned) / of)))
+
+  const missing = parts.filter((x) => !x.measured)
+  if (missing.length > 0) {
+    facts.push(
+      `${earned} of the ${of} points on offer were earned, renormalised to ${score} out of 100: ` +
+      `${list(missing.map((x) => PART_NAMES[x.key]))} ${missing.length === 1 ? 'was' : 'were'} not measured, ` +
+      `so nothing was scored for ${missing.length === 1 ? 'it' : 'them'} in either the numerator or the denominator — ` +
+      'an input we could not read is not evidence about the market in either direction',
+    )
+  }
 
   // Euphoria is the ONE overlay on the score ladder, and it needs corroboration
   // from outside the score: a high score alone is alt season, which is a good
   // thing. Alt season with the crowd already maxed out is the late innings.
   const crowdMaxed = (fg != null && fg.value >= 80) || (breadth.beatBtc7dPct != null && breadth.beatBtc7dPct >= 85)
-  const p = score >= EUPHORIC.min && crowdMaxed ? EUPHORIC : PHASES.find((x) => score >= x.min)
+  const ladder = score >= EUPHORIC.min && crowdMaxed ? EUPHORIC : PHASES.find((x) => score >= x.min)
+  const thin = coverage < MIN_COVERAGE_FOR_PHASE
+  const p = thin ? THIN : ladder
+  if (thin) {
+    // Name the phase we are declining to print. "Unknown" on its own tells a
+    // reader nothing about what was withheld or how close the call was.
+    facts.push(
+      `only ${of} of the ${MAX_POINTS} points were measurable (${Math.round(coverage * 100)}% coverage), ` +
+      `so the regime is reported as unknown rather than as "${ladder.label}" — ` +
+      'a phase is a claim about the market and this is not enough of one to make it',
+    )
+  }
 
   if (trending?.length) {
     facts.push(`trending right now: ${trending.slice(0, 3).map((t) => String(t?.symbol ?? '').toUpperCase()).filter(Boolean).join(', ')}`)
@@ -150,8 +233,23 @@ export function seasonRead({
 
   return {
     score, phase: p.id, label: p.label, plain: p.plain,
-    breadth, dominance, ethBtc, fearGreed: fg, parts, facts,
+    breadth, dominance, ethBtc, fearGreed: fg, parts,
+    measured: { earned, of }, coverage, facts,
   }
+}
+
+/**
+ * One row of the arithmetic. `measured` is derived from `points` rather than
+ * passed in, so the flag the renormalisation turns on and the number it sums
+ * can never disagree — the failure mode would be a part that says it was
+ * measured and contributes nothing, which reads on screen as a real zero.
+ *
+ * An unmeasured part keeps its FULL nominal max (what it would have been worth)
+ * for the "how this scores" table, and contributes nothing to either side of
+ * the renormalisation.
+ */
+function part(key, max, points, label) {
+  return { key, label, points, max, measured: points != null }
 }
 
 /**
@@ -236,8 +334,7 @@ function computeDominance(domHistory, global, now, facts) {
   // The window is bounded by DATES, not by a sample count. Taking "the last 30
   // samples" is the same thing only while the cron has never missed a day: one
   // outage and `slice(-30)` reaches back to a sample from two months ago and
-  // labels the result a 30-day move. The field is called changePctPts30d, so it
-  // has to actually be thirty days.
+  // labels the result a 30-day move.
   const newestMs = Date.parse(`${samples[days - 1]?.d}T00:00:00Z`)
   const window = Number.isFinite(newestMs)
     ? samples.filter((s) => {
@@ -253,22 +350,46 @@ function computeDominance(domHistory, global, now, facts) {
     facts.push(days === window.length
       ? `${days} day${days === 1 ? '' : 's'} of dominance history stored — the trend needs ${MIN_DOM_SAMPLES} and stays unknown until then`
       : `only ${window.length} of ${days} stored dominance samples fall inside the last ${DOM_WINDOW_DAYS} days — the trend needs ${MIN_DOM_SAMPLES} recent ones and stays unknown`)
-    return { pct, changePctPts30d: null, trend: 'unknown', days, windowDays: window.length }
+    return { pct, changePctPts: null, trend: 'unknown', days, samples: window.length, spanDays: spanDaysOf(window) }
   }
 
   const change = window[window.length - 1].btcDom - window[0].btcDom
   const trend = change < -DOM_FLAT_PTS ? 'falling' : change > DOM_FLAT_PTS ? 'rising' : 'flat'
-  facts.push(`BTC dominance ${trend}: ${signed(change, 2)} points across ${window.length} stored day${window.length === 1 ? '' : 's'}${trend === 'falling' ? ' — capital is leaving BTC' : ''}`)
+  const spanDays = spanDaysOf(window)
+  facts.push(
+    `BTC dominance ${trend}: ${signed(change, 2)} points across ${spanDays == null ? `${window.length} stored samples` : `${spanDays} day${spanDays === 1 ? '' : 's'} (${window.length} stored sample${window.length === 1 ? '' : 's'})`}` +
+    `${trend === 'falling' ? ' — capital is leaving BTC' : ''}`,
+  )
 
   if (Number.isFinite(now) && Number.isFinite(newestMs)) {
     const ageDays = Math.floor((now - newestMs) / 86_400_000)
     if (ageDays >= 2) facts.push(`dominance history has not been written for ${ageDays} days — the cron may be down`)
   }
 
-  // `days` always means "how many days of history exist"; `windowDays` is how
-  // many of them the change was measured across. Collapsing the two made the
-  // part label claim a 30-day move on a 9-day file.
-  return { pct, changePctPts30d: change, trend, days, windowDays: window.length }
+  // THREE DIFFERENT NUMBERS, THREE NAMES. `days` is how many days of history
+  // exist in the file at all; `samples` is how many of them fall inside the
+  // window; `spanDays` is the calendar distance the change was actually measured
+  // across. This shipped as `windowDays: window.length` — a SAMPLE COUNT that
+  // the card rendered as "-1.20pts / 9d". After a cron gap those nine samples
+  // can be spread over twenty-seven days, so the card understated the age of the
+  // move by two thirds; and the field was called `changePctPts30d` while
+  // measuring whatever span the samples happened to cover. A count of readings
+  // and a length of time are not interchangeable just because the cron usually
+  // writes one a day.
+  return { pct, changePctPts: change, trend, days, samples: window.length, spanDays }
+}
+
+/**
+ * Calendar days between the first and last sample of the window — the span the
+ * change was measured across. Null when either date is unparseable, because a
+ * span nobody can compute must not silently become a sample count again.
+ */
+function spanDaysOf(window) {
+  if (!Array.isArray(window) || window.length === 0) return null
+  const first = Date.parse(`${window[0]?.d}T00:00:00Z`)
+  const last = Date.parse(`${window[window.length - 1]?.d}T00:00:00Z`)
+  if (!Number.isFinite(first) || !Number.isFinite(last)) return null
+  return Math.round((last - first) / 86_400_000)
 }
 
 /**
@@ -327,4 +448,11 @@ function bandLabel(v) {
 function signed(x, d = 1) {
   if (!Number.isFinite(x)) return '—'
   return `${x >= 0 ? '+' : ''}${x.toFixed(d)}`
+}
+
+/** "a, b and c" — the facts are read as sentences, and "a, b, c were not
+ *  measured" reads as a list that has been truncated rather than one that ended. */
+function list(xs) {
+  if (xs.length <= 1) return xs.join('')
+  return `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`
 }

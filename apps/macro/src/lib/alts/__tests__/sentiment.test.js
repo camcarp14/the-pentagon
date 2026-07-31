@@ -292,8 +292,47 @@ describe('contrarian', () => {
       screened: screened({ band: 'waking', rsVsBtc7d: 6 }), now: NOW,
     })
     expect(r.score).toBeLessThanOrEqual(35)
+    expect(r.attention.max).toBe(55)     // all four attention gauges answered
     expect(r.contrarian).toBe('tailwind')
     expect(r.facts.join(' ')).toMatch(/price is moving before the attention is/)
+  })
+
+  // THE MEASUREMENT FLOOR. "Nobody has noticed yet, which is the only order that
+  // pays" is risk-INCREASING copy — it is quoted verbatim into the directive's
+  // STALK and ENTER reasons — and it is a claim about absence. A coin whose only
+  // measurable input is `trendingRank: null` scores 0 out of 20 and reads as the
+  // most ignored asset on the board, when all that was established is that it is
+  // not one of seven coins on a search list, which is true of almost every coin.
+  it('will not call a tailwind off a score that rests on one attention gauge', () => {
+    const r = crowdRead({ trendingRank: null, screened: screened({ band: 'basing' }), now: NOW })
+    expect(r.score).toBe(0)
+    expect(r.measured).toEqual({ earned: 0, of: 20 })
+    expect(r.attention.max).toBe(20)
+    expect(r.contrarian).toBe('neutral')
+    expect(r.facts.join(' ')).not.toMatch(/TAILWIND/)
+    expect(r.facts.join(' ')).toMatch(/rests on 20 of the 35 attention points this call needs/)
+    expect(r.facts.join(' ')).toMatch(/"we barely looked", not "nobody is looking"/)
+  })
+
+  it('calls it the moment enough of the attention block has actually answered', () => {
+    // The same cold coin, plus a subreddit we could measure: 35 attention points.
+    const r = crowdRead({
+      trendingRank: null,
+      community: { redditSubs: 40_000, redditActive48h: 30 },
+      screened: screened({ band: 'basing' }), now: NOW,
+    })
+    expect(r.attention.max).toBe(35)
+    expect(r.contrarian).toBe('tailwind')
+    expect(r.facts.join(' ')).toMatch(/measured across 35 points of attention/)
+  })
+
+  // The floor is on the tailwind rung only. A headwind fires on an extreme we
+  // DID measure, and suppressing a measured warning for want of other data would
+  // be the same failure pointing the other way.
+  it('does not put a floor on the headwind rungs', () => {
+    const r = crowdRead({ trendingRank: 1, screened: screened({ band: 'running' }), now: NOW })
+    expect(r.measured).toEqual({ earned: 20, of: 20 })
+    expect(r.contrarian).toBe('headwind')
   })
 
   it('is a tailwind when shorts pay longs into a flat chart', () => {

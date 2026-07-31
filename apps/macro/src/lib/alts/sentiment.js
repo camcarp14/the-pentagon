@@ -87,6 +87,26 @@ const REDDIT_MIN_SUBS = 500
 const OI_MAX_AGE_SEC = 3 * 86_400
 const FUNDING_MAX_AGE_MS = 8 * 3_600_000
 
+// THE MEASUREMENT FLOOR ON THE TAILWIND CALL. 35 of the attention block's 55
+// points — trending plus one substantial community gauge, or the community
+// block without trending.
+//
+// The low-score tailwind rung says "nobody has noticed yet, which is the only
+// order that pays". That is a claim about ABSENCE, and absence is the one thing
+// a renormalised score cannot evidence on its own: a coin whose only measurable
+// input is `trendingRank: null` scores 0 out of 20 and reads as the most ignored
+// asset on the board, when all we established is that it is not one of seven
+// coins on a search list — which is true of essentially every coin. Six absent
+// inputs must not generate risk-INCREASING copy, and this rung is quoted
+// verbatim into the directive's STALK and ENTER reasons.
+//
+// The floor is on the attention block specifically, not on the overall
+// denominator, because the claim is about attention. The headwind rungs get no
+// such floor and want none: they fire on measured extremes (funding at 100%/yr,
+// a 20-point retail skew, #1 trending), and a floor there would suppress a
+// warning we did in fact measure.
+const TAILWIND_MIN_ATTENTION_POINTS = 35
+
 /* ── state and level bands ─────────────────────────────────────────────────── */
 
 const STATES = [
@@ -412,7 +432,18 @@ function contrarianOf({ score, state, crowding, attention, trendingRank, screene
   const rsOk = !Number.isFinite(screened?.rsVsBtc7d) || screened.rsVsBtc7d >= 0
 
   if (score <= 35 && earlyBand && rsOk) {
-    facts.push(`TAILWIND: crowd score ${score}/100 while the chart is ${band} — price is moving before the attention is, which is the only order that pays`)
+    // The floor documented at the top of the file. A cold score off one gauge is
+    // not evidence that the crowd has not arrived; it is evidence that we only
+    // asked one question.
+    const attentionMeasured = Number.isFinite(attention?.max) ? attention.max : 0
+    if (attentionMeasured < TAILWIND_MIN_ATTENTION_POINTS) {
+      facts.push(
+        `crowd score ${score} rests on ${attentionMeasured} of the ${TAILWIND_MIN_ATTENTION_POINTS} attention points this call needs — ` +
+        'a low score off that little is "we barely looked", not "nobody is looking", so no tailwind is called from it',
+      )
+      return { contrarian: 'neutral', extremes }
+    }
+    facts.push(`TAILWIND: crowd score ${score}/100 measured across ${attentionMeasured} points of attention while the chart is ${band} — price is moving before the attention is, which is the only order that pays`)
     return { contrarian: 'tailwind', extremes }
   }
   if (Number.isFinite(crowding?.fundingAnnualPct) && crowding.fundingAnnualPct < 0 && band === 'basing') {

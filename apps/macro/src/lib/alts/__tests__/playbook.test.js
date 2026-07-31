@@ -4,8 +4,14 @@
 // copy never implies an attention spike is an entry, missing inputs come back as
 // null rather than as a failed signal, and there is not one invented statistic
 // anywhere in the exported prose.
+//
+// The two late derivative rows are tested against a REAL crowdRead rather than
+// against a stub, because the property under test is that the two reads agree:
+// the checklist and the crowd card sit on the same page, and they used to
+// disagree about whether the same open-interest number was measurable at all.
 import { describe, it, expect } from 'vitest'
 import { PHASES, EARLY_SIGNALS, signalChecklist, phaseOf } from '../playbook.js'
+import { crowdRead } from '../sentiment.js'
 
 /* ── fixtures ─────────────────────────────────────────────────────────────── */
 
@@ -94,18 +100,37 @@ const screened = (over = {}) => ({
   ...over,
 })
 
-// Shaped exactly as the contract's parsers emit, under two different envelope
-// key sets — the data layer owns the envelope, this file only knows the shapes.
-const DERIVS = {
-  funding: { symbol: 'TESTUSDT', markPrice: 1.2, lastFundingRate: '0.0001', nextFundingTime: 1 },
-  openInterest: [{ t: 1, oi: 100, oiValueUsd: 120 }, { t: 2, oi: 112, oiValueUsd: 134 }],
-}
-const DERIVS_OTHER_KEYS = {
-  premiumIndex: { symbol: 'TESTUSDT', markPrice: 1.2, lastFundingRate: '-0.0002', nextFundingTime: 1 },
-  oiHist: [{ t: 1, oi: 200, oiValueUsd: 240 }, { t: 2, oi: 180, oiValueUsd: 216 }],
+// Shaped exactly as netlify/shared/alts.mjs's altDerivs() emits it: ONE flat
+// envelope, funding at the top level and the three series beside it. That shape
+// matters here — sentiment.js reads it by key, and since the checklist now takes
+// sentiment's verdict rather than re-reading the feed, a fixture in a shape the
+// data layer never produces would prove nothing about either file.
+const NOW_MS = Date.UTC(2026, 6, 31)
+const NOW_SEC = NOW_MS / 1000
+
+const derivs = (over = {}) => ({
+  symbol: 'TESTUSDT', priceMultiplier: 1, markPrice: 1.2,
+  lastFundingRate: 0.0001,                       // +0.01% per 8h — Binance's own neutral
+  nextFundingTime: NOW_MS + 3_600_000,
+  openInterest: [
+    { t: NOW_SEC - DAY, oi: 100, oiValueUsd: 120 },
+    { t: NOW_SEC, oi: 112, oiValueUsd: 134 },
+  ],
+  globalLongShort: null, topLongShort: null, degraded: [],
+  sourceDetail: 'binance futures TESTUSDT',
+  ...over,
+})
+
+/** The pair the UI actually builds: one crowdRead over the derivatives, and a
+ *  checklist handed both. `derivs` is passed on purpose — the checklist must
+ *  ignore it and read the crowd read's verdict instead. */
+const bothReads = (d, over = {}) => {
+  const crowd = crowdRead({ derivs: d, screened: screened(), now: NOW_MS, ...over })
+  return { crowd, rows: signalChecklist(COILING, screened(), { crowd, derivs: d, now: NOW_MS }) }
 }
 
 const byId = (rows, id) => rows.find((r) => r.id === id)
+const partOf = (crowd, key) => crowd.parts.find((p) => p.key === key)
 
 /* ── the phases ───────────────────────────────────────────────────────────── */
 
@@ -322,61 +347,136 @@ describe('the coincident-to-late signals', () => {
     expect(unknown.note).not.toMatch(/good version of this row/)
   })
 
-  it('annualises funding the way Binance settles it, and calls +30% crowded', () => {
-    // 0.0001 per 8h × 3 settlements × 365 days = +10.95% a year.
-    const f = byId(signalChecklist(COILING, screened(), { derivs: DERIVS }), 'funding_flip')
+  it('prints the funding number sentiment.js annualised, not a second one of its own', () => {
+    // 0.0001 per 8h × 3 settlements × 365 days = +10.95% a year. That 3×365 used
+    // to exist in this file too, which netlify/shared/alts.mjs's parser comment
+    // already promised it did not. Two copies that agree today are one number
+    // that disagrees on the day either is corrected — so the row is asserted
+    // against the crowd read's value, not against a literal.
+    const { crowd, rows } = bothReads(derivs())
+    const f = byId(rows, 'funding_flip')
+    expect(crowd.crowding.fundingAnnualPct).toBeCloseTo(10.95, 6)
+    expect(f.value).toBe(Math.round(crowd.crowding.fundingAnnualPct * 10) / 10)
     expect(f.pass).toBe(true)
-    expect(f.value).toBeCloseTo(11, 0)
     expect(f.note).toMatch(/longs are paying shorts/)
     expect(f.note).toMatch(/Confirmation of a move already underway/)
-
-    const crowded = byId(signalChecklist(COILING, screened(), {
-      derivs: { funding: { lastFundingRate: '0.0005' } },
-    }), 'funding_flip')
-    expect(crowded.value).toBeCloseTo(54.75, 1)
-    expect(crowded.level).toBe('strong')
-    expect(crowded.note).toMatch(/crowding warning/)
   })
 
-  it('finds the payloads by SHAPE, so a different envelope key still resolves', () => {
-    // altDerivs' envelope keys belong to the data layer and are not pinned by
-    // the contract; the parser output shapes are. Guessing a key name and
-    // getting undefined would mark every coin "funding has not flipped".
-    const rows = signalChecklist(COILING, screened(), { derivs: DERIVS_OTHER_KEYS })
-    expect(byId(rows, 'funding_flip').value).toBeCloseTo(-21.9, 1)
-    expect(byId(rows, 'funding_flip').pass).toBe(false)
-    expect(byId(rows, 'funding_flip').note).toMatch(/shorts are paying longs/)
-    expect(byId(rows, 'oi_expansion').value).toBeCloseTo(-10, 6)
-    expect(byId(rows, 'oi_expansion').note).toMatch(/short covering or profit-taking/)
+  it('calls +30% annualised crowded, on the same arithmetic', () => {
+    const { crowd, rows } = bothReads(derivs({ lastFundingRate: 0.0005 }))
+    const f = byId(rows, 'funding_flip')
+    expect(crowd.crowding.fundingAnnualPct).toBeCloseTo(54.75, 6)
+    expect(f.value).toBeCloseTo(54.8, 1)
+    expect(f.level).toBe('strong')
+    expect(f.note).toMatch(/crowding warning/)
   })
 
   it('reads open interest as a 24h change and calls +5% expansion', () => {
-    const oi = byId(signalChecklist(COILING, screened(), { derivs: DERIVS }), 'oi_expansion')
+    const { crowd, rows } = bothReads(derivs())
+    const oi = byId(rows, 'oi_expansion')
+    expect(crowd.crowding.oiChange24hPct).toBeCloseTo(12, 6)
     expect(oi.value).toBeCloseTo(12, 6)
     expect(oi.pass).toBe(true)
     expect(oi.note).toMatch(/Confirmation, not an entry/)
   })
 
-  it('says a coin has no perp instead of scoring it neutral', () => {
-    const rows = signalChecklist(COILING, screened(), { derivs: null })
-    expect(byId(rows, 'funding_flip').pass).toBeNull()
-    expect(byId(rows, 'funding_flip').note).toMatch(/no listed perpetual/)
-    expect(byId(rows, 'funding_flip').note).toMatch(/not counted as neutral/)
-    expect(byId(rows, 'oi_expansion').pass).toBeNull()
-  })
+  // ── the shared gate ──────────────────────────────────────────────────────
+  //
+  // This checklist and the crowd card render on the SAME card. They used to
+  // disagree about whether the same number was measurable: crowdRead drops an
+  // open-interest series whose newest sample is older than three days, because a
+  // "24h change" measured across ten days is not a 24h change — and this file
+  // recomputed it anyway from the last two samples and printed it as measured.
+  // A page that says a number is both measurable and unmeasurable gives the
+  // reader no way to tell which half is lying. One gate, applied once.
 
-  it('falls back to sentiment.js\'s crowd read when the raw derivatives are not passed', () => {
-    const rows = signalChecklist(COILING, screened(), {
-      crowd: { state: 'hot', score: 70, crowding: { fundingAnnualPct: 42, oiChange24hPct: 8 } },
+  it('refuses a stale open-interest series exactly when the crowd read refuses it', () => {
+    const stale = derivs({
+      openInterest: [
+        { t: NOW_SEC - 11 * DAY, oi: 100, oiValueUsd: 120 },
+        { t: NOW_SEC - 10 * DAY, oi: 112, oiValueUsd: 134 },
+      ],
     })
-    expect(byId(rows, 'funding_flip').value).toBe(42)
-    expect(byId(rows, 'oi_expansion').value).toBe(8)
+    const { crowd, rows } = bothReads(stale)
+    // The crowd read computed the change and then declined to score it — and it
+    // still CARRIES the number on `crowding`. That is the trap: reading the
+    // value alone gets you a stale 12% with no hint that it was refused, which
+    // is what this row used to print. The verdict lives on the part, so the gate
+    // is the part.
+    expect(crowd.crowding.oiChange24hPct).toBeCloseTo(12, 6)
+    expect(partOf(crowd, 'oi').points).toBeNull()
+    expect(partOf(crowd, 'oi').label).toMatch(/stale/)
+
+    const oi = byId(rows, 'oi_expansion')
+    expect(oi.pass).toBeNull()
+    expect(oi.value).toBeNull()
+    expect(oi.level).toBe('unknown')
+    // Same refusal, same words, so the two rows cannot be read as disagreeing.
+    expect(oi.note).toContain(partOf(crowd, 'oi').label)
+    expect(oi.note).toMatch(/not counted as neutral/)
   })
 
-  it('survives junk in the derivatives payload', () => {
-    for (const bad of ['nope', 42, [], { funding: null }, { funding: { lastFundingRate: 'abc' } }, { oi: [{}, {}] }]) {
-      expect(() => signalChecklist(COILING, screened(), { derivs: bad })).not.toThrow()
-      expect(byId(signalChecklist(COILING, screened(), { derivs: bad }), 'funding_flip').pass).toBeNull()
+  it('refuses a stale funding snapshot on the same terms', () => {
+    // The same gate on the other input: a snapshot whose next payment is already
+    // more than an interval in the past is a cached read of a halted pair.
+    const halted = derivs({ nextFundingTime: NOW_MS - 24 * 3_600_000 })
+    const { crowd, rows } = bothReads(halted)
+    expect(partOf(crowd, 'funding').points).toBeNull()
+    expect(partOf(crowd, 'funding').label).toMatch(/stale/)
+
+    const f = byId(rows, 'funding_flip')
+    expect(f.pass).toBeNull()
+    expect(f.value).toBeNull()
+    expect(f.note).toContain(partOf(crowd, 'funding').label)
+  })
+
+  it('refuses a single open-interest sample rather than calling it a 24h change', () => {
+    const one = derivs({ openInterest: [{ t: NOW_SEC, oi: 112, oiValueUsd: 134 }] })
+    const { crowd, rows } = bothReads(one)
+    expect(partOf(crowd, 'oi').points).toBeNull()
+    expect(byId(rows, 'oi_expansion').pass).toBeNull()
+    expect(byId(rows, 'oi_expansion').note).toContain(partOf(crowd, 'oi').label)
+  })
+
+  it('says a coin has no perp instead of scoring it neutral', () => {
+    const { crowd, rows } = bothReads(null)
+    expect(crowd.crowding).toBeNull()
+    for (const [row, key] of [['funding_flip', 'funding'], ['oi_expansion', 'oi']]) {
+      expect(byId(rows, row).pass).toBeNull()
+      expect(byId(rows, row).note).toContain('no listed perp')
+      expect(byId(rows, row).note).toContain(partOf(crowd, key).label)
+      expect(byId(rows, row).note).toMatch(/not counted as neutral/)
+    }
+  })
+
+  it('does not reach around the crowd read to the raw feed', () => {
+    // The old code searched the derivatives payload BY SHAPE for anything
+    // carrying a lastFundingRate, so it could resolve envelopes sentiment.js
+    // cannot read — and that independence is precisely what let the two rows
+    // disagree. An envelope the data layer does not emit is now a refusal on
+    // BOTH reads together, which is the honest answer: if crowdRead cannot see
+    // the funding rate, this card has not measured one.
+    const wrongEnvelope = { premiumIndex: { lastFundingRate: -0.0002 }, oiHist: [{ t: NOW_SEC, oi: 200 }, { t: NOW_SEC, oi: 180 }] }
+    const { crowd, rows } = bothReads(wrongEnvelope)
+    expect(crowd.crowding).toBeNull()
+    expect(byId(rows, 'funding_flip').value).toBeNull()
+    expect(byId(rows, 'oi_expansion').value).toBeNull()
+
+    // And with a perfectly good payload but no crowd read at all, the row says
+    // the arithmetic's owner did not run — it does not derive a second version.
+    const orphan = signalChecklist(COILING, screened(), { derivs: derivs(), now: NOW_MS })
+    expect(byId(orphan, 'funding_flip').pass).toBeNull()
+    expect(byId(orphan, 'funding_flip').note).toMatch(/no crowd read on this pass/)
+    expect(byId(orphan, 'oi_expansion').pass).toBeNull()
+  })
+
+  it('survives junk where a crowd read should be', () => {
+    for (const bad of ['nope', 42, [], {}, { parts: 'no' }, { parts: [{ key: 'oi' }] }, { parts: [{ key: 'funding', points: 3 }], crowding: {} }]) {
+      expect(() => signalChecklist(COILING, screened(), { crowd: bad, now: NOW_MS })).not.toThrow()
+      const rows = signalChecklist(COILING, screened(), { crowd: bad, now: NOW_MS })
+      expect(byId(rows, 'funding_flip').pass).toBeNull()
+      expect(byId(rows, 'oi_expansion').pass).toBeNull()
+      expect(byId(rows, 'funding_flip').note.length).toBeGreaterThan(20)
     }
   })
 })

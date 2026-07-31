@@ -10,10 +10,12 @@
 //    misses, which is why every failure path below still writes what it can.
 //
 // 2. It screens the watchlist and alerts on STATE TRANSITIONS only — a band
-//    change or a newly actionable directive — deduped for 6 hours. A sentinel
-//    that re-sends the same "still igniting" every 2 hours gets muted inside a
-//    day, and a muted sentinel is worse than none: it is a sentinel you believe
-//    you have.
+//    change, a trigger firing, an invalidation breaking, or the directive
+//    reaching one of the two verdicts this pass can reach — deduped for 6 hours.
+//    A sentinel that re-sends the same "still igniting" every 2 hours gets muted
+//    inside a day, and a muted sentinel is worse than none: it is a sentinel you
+//    believe you have. See transitionOf() for why each of those is an EDGE and
+//    ACTIONABLE for why that list is short.
 //
 // Modelled on watch-snapshot.mjs, including the rule that matters most here:
 // it must NEVER throw. A scheduled function that 500s writes no dominance row,
@@ -31,10 +33,41 @@ const ALERT_KEY = 'alt_alert_state'
 const DEDUPE_MS = 6 * 3600 * 1000
 const MAX_ALERT_LINES = 12
 
-// The directive actions worth a phone buzz. A drop from ARM back to WATCH is
-// real information, but it is not an action — and a phone that buzzes for
-// "nothing to do any more" gets silenced, which takes the ENTER with it.
-const ACTIONABLE = new Set(['ENTER', 'ARM', 'EXIT', 'TRIM', 'AVOID'])
+// The directive actions worth a phone buzz, AND THE ONLY ONES THIS PASS CAN
+// PRODUCE. Those used to be two different lists, which is the trap altrisk.js's
+// header names out loud: a value the contract lists but the code can never
+// produce is a bug waiting for a reader.
+//
+// safeDirective() below calls altDirective with no sizing plan, no position, no
+// precedent and no candles — deliberately, see scanWatchlist — and directive.js's
+// ladder gates ENTER/STARTER/ARM/ADD on a computed size and EXIT/TRIM on a held
+// position. So six of the ten rungs are unreachable from here by construction,
+// and listing four of them made this set read as a working alert on states that
+// had never fired once. An exhaustive sweep over every band × score × flag ×
+// level × season combination of this exact call shape produces NO_DATA, AVOID,
+// WATCH and STALK and nothing else; the sweep is pinned in directive.js's test
+// so this set cannot quietly go stale again.
+//
+// GIVING THE PASS WHAT THE OTHER SIX NEED WAS THE ALTERNATIVE, AND IT DOES NOT
+// WORK: EXIT and TRIM need a held alt position, and this system has no alt
+// position book at all; ENTER needs precedent.ok, which needs 250+ daily candles
+// PER COIN — 60 upstream calls inside a 30-second scheduled budget, which is not
+// a sentinel, it is an outage; ARM and STARTER need a sizing plan, whose stop on
+// a coin with no candles is a flat percentage this digest would then quote as
+// "the plan", against this file's rule that it never quotes a level it did not
+// compute.
+//
+// So the set is honest about the two verdicts this pass can reach, and the alert
+// that actually matters — something is popping off while you are away — is
+// carried by the LEVEL transitions below instead, which the 7-day sparkline this
+// pass already holds is enough to measure.
+//
+//   AVOID — a coin you starred became one you should not buy: untradeable
+//           liquidity, or a parabolic chase. A verdict change, not a nudge.
+//   STALK — the earliest opportunity rung reachable here: a base forming under a
+//           watchlist row. It fires on a score crossing inside an unchanged
+//           band, so it is not just a restatement of the band change.
+export const ACTIONABLE = new Set(['AVOID', 'STALK'])
 
 export default async (req) => {
   try {
@@ -111,7 +144,10 @@ async function recordDominance(s, global, now) {
  * without precedent, crowd or per-coin candles. Fetching candles for 60 coins
  * is 60 upstream calls inside a 30-second budget, which is not a sentinel, it
  * is an outage. So the alert says what changed and tells you to open the tab —
- * it never quotes an entry price it did not compute.
+ * it never quotes a number it did not compute. The trigger and invalidation it
+ * DOES quote are directive.js's sparkline fallback levels, computed from the
+ * 7-day series already on the row, and every line that prints one says which
+ * basis it came from.
  */
 async function scanWatchlist(s, global, domRows, now) {
   const empty = (reason) => ({ summary: { watched: 0, transitions: 0, delivered: false, reason }, transitions: [] })
@@ -149,23 +185,29 @@ async function scanWatchlist(s, global, domRows, now) {
       if (!row) { skipped++; if (prevState[entry.id]) nextState[entry.id] = prevState[entry.id]; continue }
 
       const directive = safeDirective(row, season, now)
-      const band = row.band ?? 'unknown'
-      const action = directive?.action ?? 'unknown'
       const prev = prevState[entry.id]
-      const bandChanged = !!prev && prev.band !== band
-      const becameActionable = ACTIONABLE.has(action) && (!prev || prev.action !== action)
-      // A first sighting is not a transition. Starring a coin that is already
-      // running would otherwise fire an alert about a move that happened before
-      // you were watching.
-      const fired = !!prev && (bandChanged || becameActionable)
+      // The state this pass measured. The two level flags come straight off
+      // directive.js's own `levels` rather than being recompared here, so a
+      // "trigger fired" on the lock screen and the card the user then opens can
+      // never disagree about whether it did.
+      const curr = {
+        band: row.band ?? 'unknown',
+        action: directive?.action ?? 'unknown',
+        triggerAbove: threeState(directive?.levels?.triggerLive),
+        invalidated: threeState(directive?.levels?.invalidated),
+      }
+      const { fired, why } = transitionOf(prev, curr)
 
-      const key = `${entry.id}:${band}:${action}`
+      // The whole measured state, so a second distinct change inside the 6-hour
+      // window is still a new alert. Keying on band+action alone meant a trigger
+      // firing an hour after a band change was silently swallowed.
+      const key = `${entry.id}:${curr.band}:${curr.action}:${curr.triggerAbove}:${curr.invalidated}`
       const suppressed = fired && prev?.lastAlertKey === key && now - (prev?.lastAlertAt ?? 0) < DEDUPE_MS
-      const base = { band, action, at: now, lastAlertKey: prev?.lastAlertKey ?? null, lastAlertAt: prev?.lastAlertAt ?? null }
+      const base = { ...curr, at: now, lastAlertKey: prev?.lastAlertKey ?? null, lastAlertAt: prev?.lastAlertAt ?? null }
 
       if (fired && !suppressed) {
-        const line = alertLine(entry, row, prev, band, action, directive)
-        transitions.push({ id: entry.id, symbol: row.symbol, from: prev?.band ?? null, to: band, action })
+        const line = alertLine(entry, row, why, curr, directive)
+        transitions.push({ id: entry.id, symbol: row.symbol, from: prev?.band ?? null, to: curr.band, action: curr.action, why })
         // Held back rather than written now: the state is only advanced if the
         // message actually goes out (see below), or a Telegram outage would eat
         // the transition permanently — the next pass would see no change.
@@ -210,9 +252,48 @@ async function scanWatchlist(s, global, domRows, now) {
   }
 }
 
+/**
+ * THE FOUR TRANSITIONS, and the rule that they are EDGES.
+ *
+ * The contract names three — band change, trigger fired, invalidation hit — and
+ * the fourth is the directive reaching one of the two verdicts this pass can
+ * reach (see ACTIONABLE). Pure, and exported, so it can be pinned in a test
+ * without a Blobs round-trip.
+ *
+ * `null` on either level flag means NOT MEASURED: no sparkline on the row, so
+ * there is no 7-day high or low to be above or below. An edge is only ever
+ * false → true, never null → true, because null → true is the day the data
+ * arrived and not the day price moved — and an alert that fires on the arrival
+ * of its own input is the fastest way to get a sentinel muted. Rows stored by an
+ * earlier deploy carry no level flags at all and read as `null` here, so the
+ * first pass after this ships records them and the second is the first that can
+ * fire on them.
+ */
+export function transitionOf(prev, curr) {
+  // A first sighting is not a transition. Starring a coin that is already
+  // running would otherwise fire an alert about a move that happened before you
+  // were watching.
+  if (!prev) return { fired: false, why: [] }
+  const why = []
+  if (prev.band !== curr.band) why.push(`${prev.band} → ${curr.band}`)
+  if (prev.triggerAbove === false && curr.triggerAbove === true) why.push('trigger fired')
+  if (prev.invalidated === false && curr.invalidated === true) why.push('invalidation hit')
+  if (ACTIONABLE.has(curr.action) && prev.action !== curr.action) why.push(`now ${curr.action}`)
+  return { fired: why.length > 0, why }
+}
+
+/** true / false / null, never undefined — an absent flag is an unmeasured one,
+ *  and it has to survive a JSON round-trip through Blobs as such. */
+function threeState(v) {
+  return v === true ? true : v === false ? false : null
+}
+
 /** The directive is another agent's pure module; a throw in it must not cost us
- *  the dominance row that already landed, so the band alert degrades alone. */
-function safeDirective(row, season, now) {
+ *  the dominance row that already landed, so the band alert degrades alone.
+ *  Exported so the reachable-action sweep in directive.js's test drives the
+ *  EXACT call shape this pass uses, rather than a reconstruction of it that can
+ *  drift away from the ACTIONABLE set it is there to justify. */
+export function safeDirective(row, season, now) {
   try {
     return altDirective({
       screened: row,
@@ -236,17 +317,46 @@ function safeDirective(row, season, now) {
 // Plain English WITH the numbers, same as every other read in this codebase —
 // the point of the alert is that it can be acted on from the lock screen
 // without opening anything, or knowingly ignored.
-function alertLine(entry, row, prev, band, action, directive) {
+//
+// Exported for one reason: every number on this line also appears on the board
+// the line tells you to go and open, and the units have to match. They did not —
+// turnover went out as `0.12×` against the board's `12%` — so the agreement is
+// pinned by a test rather than by everyone remembering.
+export function alertLine(entry, row, why, curr, directive) {
+  // Nothing in this file is allowed to throw — a 500 here writes no dominance
+  // row, and a hole in that series is permanent. So the arguments are normalised
+  // rather than trusted, even though the only caller builds them itself.
+  const changes = Array.isArray(why) ? why.filter(Boolean) : []
+  const state = curr && typeof curr === 'object' ? curr : {}
   const bits = [
-    `${row.symbol || entry.symbol || entry.id} ${prev?.band && prev.band !== band ? `${prev.band} → ${band}` : band}`,
-    action !== 'unknown' ? action : null,
+    `${row.symbol || entry.symbol || entry.id} ${changes.length ? changes.join(', ') : state.band ?? 'unknown'}`,
+    state.action && state.action !== 'unknown' ? state.action : null,
     pct('24h', row.chg24h),
     pct('7d', row.chg7d),
-    Number.isFinite(row.turnover) ? `turnover ${row.turnover.toFixed(2)}×` : null,
+    turnover(row.turnover),
     Number.isFinite(row.score) ? `score ${Math.round(row.score)}` : null,
   ].filter(Boolean)
-  const head = `• ${bits.join(' · ')}`
-  return directive?.headline ? `${head}\n  ${directive.headline}` : head
+  const lines = [`• ${bits.join(' · ')}`]
+  // The level that moved, with the basis attached. Named because the sparkline
+  // levels are the WEAKER ones — a 6-day high, not the 20-day high the tab draws
+  // off candles — and a user comparing this line against the card deserves to
+  // know which one fired.
+  const level = changes.includes('trigger fired')
+    ? levelText('cleared', directive?.levels?.trigger, directive?.levels?.triggerBasis)
+    : changes.includes('invalidation hit')
+      ? levelText('lost', directive?.levels?.invalidation, directive?.levels?.invalidationBasis)
+      : null
+  if (level) lines.push(`  ${level}`)
+  if (directive?.headline) lines.push(`  ${directive.headline}`)
+  return lines.join('\n')
+}
+
+/** Em-dash rather than brackets: directive.js's own basis strings already carry
+ *  a parenthetical ("…(no candle history)"), and nesting them reads as noise on
+ *  a lock screen, which is the only place this string is ever seen. */
+function levelText(verb, level, basis) {
+  if (!Number.isFinite(level)) return null
+  return `${verb} ${px(level)}${basis ? ` — ${basis}` : ''}`
 }
 
 function digest(lines) {
@@ -258,7 +368,7 @@ function digest(lines) {
     ...shown,
     extra > 0 ? `…and ${extra} more` : null,
     '',
-    'Open the Alts tab before acting — this pass has no candles, no precedent and no levels.',
+    'Open the Alts tab before acting — this pass has no candles, no precedent and no sizing plan, so any level above is the 7-day sparkline\'s and not the 20-day candle level the tab draws.',
   ].filter((l) => l !== null).join('\n')
 }
 
@@ -275,6 +385,32 @@ async function readDomHistory(s) {
 
 function pct(label, v) {
   return Number.isFinite(v) ? `${label} ${v >= 0 ? '+' : ''}${v.toFixed(1)}%` : null
+}
+
+/**
+ * TURNOVER IS A PERCENT OF MARKET CAP, EVERYWHERE.
+ *
+ * `row.turnover` is the raw FRACTION vol24h ÷ mcap. Every surface that shows it
+ * shows it as a percent — screen.js's own label and fact say "12.0% of cap",
+ * AltBoard renders "12%" — and this line used to print `turnover 0.12×`, the
+ * same field in a second unit with a multiplier suffix that made a heavy day
+ * look like a light one. One field, one unit: the number in a Telegram alert has
+ * to be the number on the board it tells you to go and open.
+ */
+function turnover(t) {
+  return Number.isFinite(t) ? `turnover ${(t * 100).toFixed(1)}% of cap` : null
+}
+
+/** Sub-dollar alt prices need significant digits, not two decimals — most of
+ *  this watchlist trades below a cent and "$0.00" is not a level. Same rule as
+ *  directive.js's px(), because these two strings are read side by side. */
+function px(x) {
+  if (!Number.isFinite(x)) return '—'
+  const a = Math.abs(x)
+  if (a >= 1000) return `$${Math.round(x).toLocaleString('en-US')}`
+  if (a >= 1) return `$${(Math.round(x * 100) / 100).toFixed(2)}`
+  if (a === 0) return '$0'
+  return `$${x.toPrecision(4).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '')}`
 }
 
 function round(v, dp) {

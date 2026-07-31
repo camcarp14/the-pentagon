@@ -10,11 +10,23 @@
 //      worst case rides along with every median.
 //   4. AVOID speaks to a flat book. Telling someone not to buy a coin they
 //      already hold is not advice, it is noise on the day they need an exit.
+//   5. The scheduled sentinel's alert set is a subset of what its call shape can
+//      actually produce. It once listed four rungs that call shape can never
+//      reach, so four fifths of the "actionable" alerts had never fired and the
+//      one that matters most had no rung at all.
 import { describe, it, expect } from 'vitest'
 import { altDirective } from '../directive.js'
 // Imported only to pin the level definition against the shared one. directive.js
 // itself imports nothing, on purpose — see the note at the top of that file.
 import { highestHigh } from '../../ta.js'
+// The sentinel's OWN call into this module, plus the set it alerts on. Imported
+// rather than reconstructed so the sweep below cannot go stale against the pass
+// it is there to justify.
+import { ACTIONABLE, alertLine, safeDirective, transitionOf } from '../../../../../../netlify/functions/alt-watch.mjs'
+// The board's own turnover formatter, so "same field, same units" is asserted
+// against the surface the alert tells the reader to go and open, not against a
+// literal that both could be wrong about together.
+import { turnText } from '../../../components/alts/AltBoard.jsx'
 
 /* ── fixtures ─────────────────────────────────────────────────────────────── */
 
@@ -473,6 +485,133 @@ describe('levels', () => {
     expect(d.levels.invalidationBasis).toBe('20-day base low')
   })
 
+  it('publishes the level TESTS beside the levels, three-state', () => {
+    // Both are consumed elsewhere (alt-watch.mjs alerts on their edges), so they
+    // are part of the contract of this call and not an implementation detail.
+    // null is not false: it means the level or the price was never measured.
+    const live = altDirective(ready())                                  // price 11, trigger 10.1
+    expect(live.levels.triggerLive).toBe(true)
+    expect(live.levels.invalidated).toBe(false)
+
+    const under = altDirective(ready({ screened: screened({ price: 9.5 }) }))
+    expect(under.levels.triggerLive).toBe(false)
+    expect(under.levels.invalidated).toBe(true)
+
+    const blind = altDirective(ready({
+      candles: null,
+      screened: screened({ range7d: { low: null, high: null, last: null, pos: null, freshBreak: false, priorHigh: null, points: 0 } }),
+    }))
+    expect(blind.levels.triggerLive).toBeNull()
+    expect(blind.levels.invalidated).toBeNull()
+  })
+})
+
+/* ══ 6b — ONE WINDOW FOR BOTH LEVELS ═══════════════════════════════════════
+ *
+ * These two drifted apart once: the trigger excluded the current bar and the
+ * invalidation included it. Today's low is by construction ≤ every price that
+ * has traded today, so `price <= invalidation` was a self-referential test — the
+ * EXIT-on-invalidation rung, a SAFETY rung, could only fire when the candle feed
+ * was a day stale, and the "abandon it" price on the card walked down with price
+ * every day, so the level a user wrote down could never be broken.
+ *
+ * Every test below pins BOTH ends of the window together. Pinning one of them is
+ * how they came apart in the first place.
+ */
+
+describe('the level window is the same window for the trigger and the invalidation', () => {
+  const DAY_T = (i) => T0 + i * DAY
+  /** A series whose closed bars have a known high and low, so the window's two
+   *  ends are checkable by hand as well as by slice. */
+  const ramp = (n) => Array.from({ length: n }, (_, i) => ({
+    t: DAY_T(i), o: 100, h: 100 + (i % 7), l: 100 - (i % 5), c: 100, v: 1e6,
+  }))
+  const closedWindow = (cs) => cs.slice(-21, -1)
+  const levelsOf = (cs, price = 100) =>
+    altDirective(ready({ candles: cs, screened: screened({ price }) })).levels
+
+  it('draws both levels from exactly the last 20 CLOSED bars', () => {
+    for (const n of [21, 22, 40, 200]) {
+      const cs = ramp(n)
+      const w = closedWindow(cs)
+      const lv = levelsOf(cs)
+      expect(w).toHaveLength(20)
+      expect(lv.trigger).toBe(Math.max(...w.map((b) => b.h)))
+      expect(lv.invalidation).toBe(Math.min(...w.map((b) => b.l)))
+    }
+  })
+
+  it('lets neither level see today\'s bar, however extreme it is', () => {
+    // The drift-proof assertion: today's bar is replaced with the widest bar in
+    // the file and NOTHING moves. If either index ever creeps back onto
+    // bars[len-1], exactly one of these four expectations goes red.
+    const settled = ramp(60)
+    const base = levelsOf(settled)
+    for (const today of [
+      { t: DAY_T(60), o: 100, h: 1e6, l: 1e-6, c: 100, v: 1e6 },   // both ends extreme
+      { t: DAY_T(60), o: 100, h: 1e6, l: 100, c: 100, v: 1e6 },    // new high only
+      { t: DAY_T(60), o: 100, h: 100, l: 1e-6, c: 100, v: 1e6 },   // new low only
+    ]) {
+      const lv = levelsOf([...settled.slice(0, -1), today])
+      expect(lv.trigger).toBe(base.trigger)
+      expect(lv.invalidation).toBe(base.invalidation)
+    }
+  })
+
+  it('needs the same 21 bars for both, and falls back for both together', () => {
+    // 20 bars cannot yield 20 CLOSED bars. Before the fix the invalidation took
+    // that deal and the trigger did not, so one level came off candles and the
+    // other off the sparkline with nothing on screen saying so.
+    const short = levelsOf(ramp(20))
+    expect(short.triggerBasis).toMatch(/sparkline/)
+    expect(short.invalidationBasis).toMatch(/sparkline/)
+    expect(short.trigger).toBe(10.4)          // range7d.priorHigh
+    expect(short.invalidation).toBe(9.5)      // range7d.low
+
+    const enough = levelsOf(ramp(21))
+    expect(enough.triggerBasis).toBe('prior 20-day high')
+    expect(enough.invalidationBasis).toBe('20-day base low')
+  })
+
+  it('makes the EXIT-on-invalidation rung reachable on a live tape', () => {
+    // The reviewer's reproduction: a held position, down 70%, that has broken
+    // every low in the file. With today's bar inside the window the invalidation
+    // WAS today's own low (50), price 60 sat above it, and the directive said
+    // "Hold your 10 FOO — nothing has changed."
+    const falling = [
+      ...Array.from({ length: 40 }, (_, i) => ({ t: DAY_T(i), o: 130, h: 140, l: 125.44 + (39 - i) * 2, c: 130, v: 1e6 })),
+      { t: DAY_T(40), o: 70, h: 70, l: 50, c: 60, v: 1e6 },
+    ]
+    const d = altDirective(ready({
+      candles: falling,
+      screened: screened({ price: 60, band: 'dead', score: 20, flags: { ...screened().flags, freshBreak: false } }),
+      position: { units: 10, avgEntry: 200 },
+      plan: plan({ stop: { stop: 10, basis: 'pct', detail: '', warning: null, floored: false } }),
+    }))
+    expect(d.levels.invalidation).toBe(125.44)
+    expect(d.levels.invalidation).toBeGreaterThan(60)     // a level ABOVE the live price is now possible
+    expect(d.action).toBe('EXIT')
+    expect(d.severity).toBe('urgent')
+    expect(d.reasons.join(' ')).toMatch(/lost the base low \$125\.44 \(20-day base low\)/)
+  })
+
+  it('does not walk the invalidation down with price day after day', () => {
+    // The other half of the same bug: the number a user writes down has to stay
+    // put while price falls, or it is not a level. Three successive down days
+    // against an unchanged base leave the level untouched.
+    const base = Array.from({ length: 40 }, (_, i) => ({ t: DAY_T(i), o: 100, h: 101, l: 99, c: 100, v: 1e6 }))
+    const seen = []
+    for (const [i, low] of [[40, 90], [41, 80], [42, 70]]) {
+      base.push({ t: DAY_T(i), o: low + 5, h: low + 5, l: low, c: low + 1, v: 1e6 })
+      seen.push(levelsOf(base, low + 1).invalidation)
+    }
+    expect(seen[0]).toBe(99)                 // the settled base low, not today's 90
+    // Once a broken low has itself CLOSED it legitimately enters the window —
+    // the level moves because the base moved, not because price ticked.
+    expect(seen[1]).toBe(90)
+    expect(seen[2]).toBe(80)
+  })
+
   it('prices targets off measured forward returns, with the worst case in the basis', () => {
     const d = altDirective(ready())
     expect(d.levels.targets).toHaveLength(2)
@@ -489,6 +628,162 @@ describe('levels', () => {
     }
     expect(altDirective(ready({ precedent: null })).guardrails.join(' ')).toMatch(/no precedent read was run/)
     expect(altDirective(ready({ precedent: NO_PRECEDENT })).guardrails.join(' ')).toMatch(/no usable precedent: only 2 comparable episodes/)
+  })
+})
+
+/* ══ 6c — WHAT THE SCHEDULED SENTINEL CAN ACTUALLY EMIT ════════════════════
+ *
+ * netlify/functions/alt-watch.mjs alerts on a set of directive actions, and that
+ * set once listed four rungs this call shape can never reach: it calls
+ * altDirective with no sizing plan and no position, and the ladder gates
+ * ENTER/STARTER/ARM/ADD on a computed size and EXIT/TRIM on a held position. An
+ * alert set naming states that have never fired once is the trap altrisk.js's
+ * header calls out — "a value the contract lists but the code can never produce
+ * is a bug waiting for a reader" — and it hid the fact that the alert that
+ * matters most, a break going live while you are away, had no rung of its own.
+ *
+ * The sweep below is driven through the sentinel's OWN safeDirective, not a
+ * reconstruction of it, so the two cannot drift: change what that pass passes in
+ * and this test tells you what the alert set is now allowed to contain.
+ */
+
+describe('the sentinel\'s call shape', () => {
+  const BANDS = ['dead', 'basing', 'waking', 'igniting', 'running', 'extended']
+  const SEASONS = ['risk_off', 'btc_only', 'btc_leads', 'majors_rotating', 'alt_season', 'euphoric', 'unknown']
+  const SPARK = { low: 9, high: 11, last: 10, pos: 0.5, freshBreak: true, priorHigh: 11, points: 168 }
+  const NO_SPARK = { low: null, high: null, last: null, pos: null, freshBreak: false, priorHigh: null, points: 0 }
+
+  /** Every action the sentinel can produce, over every combination of the inputs
+   *  a screened watchlist row can carry. */
+  const sweep = () => {
+    const seen = new Set()
+    let n = 0
+    for (const band of BANDS) {
+      for (let score = 0; score <= 100; score += 5) {
+        for (const parabolic of [false, true]) {
+          for (const thinLiquidity of [false, true]) {
+            for (const freshBreak of [false, true]) {
+              for (const newListing of [false, true]) {
+                for (const price of [null, 8, 10, 12]) {
+                  for (const range7d of [SPARK, NO_SPARK]) {
+                    for (const phase of SEASONS) {
+                      n++
+                      const row = screened({
+                        price, score, band, range7d,
+                        vol24h: thinLiquidity ? 1e5 : 2e7,
+                        chg24h: parabolic ? 47 : 3, chg7d: parabolic ? 130 : 6,
+                        flags: { stablecoin: false, wrapper: false, parabolic, thinLiquidity, freshBreak, newListing },
+                      })
+                      seen.add(safeDirective(row, season({ phase, label: phase }), NOW)?.action)
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    return { seen, n }
+  }
+
+  it('can only ever produce four of the ten actions, and the alert set is a subset of those', () => {
+    const { seen, n } = sweep()
+    expect(n).toBeGreaterThan(100_000)
+    expect([...seen].sort()).toEqual(['AVOID', 'NO_DATA', 'STALK', 'WATCH'])
+    // Six rungs are unreachable BY CONSTRUCTION from this call shape. Named one
+    // by one so that making any of them reachable — by giving the pass a sizing
+    // plan or a position book — fails here and forces the alert set to be
+    // reconsidered rather than silently left behind.
+    for (const unreachable of ['ENTER', 'STARTER', 'ARM', 'ADD', 'EXIT', 'TRIM']) {
+      expect([...seen]).not.toContain(unreachable)
+    }
+    for (const a of ACTIONABLE) expect([...seen]).toContain(a)
+  })
+
+  it('does not buzz for the two states that are not verdicts', () => {
+    // WATCH is "nothing to do" and NO_DATA is a condition of our feed, not of
+    // the market. A phone that buzzes for either gets silenced, which takes the
+    // alerts that matter with it.
+    expect(ACTIONABLE.has('WATCH')).toBe(false)
+    expect(ACTIONABLE.has('NO_DATA')).toBe(false)
+    expect(ACTIONABLE.size).toBeGreaterThan(0)
+  })
+
+  it('reaches AVOID and STALK on inputs a real watchlist row can carry', () => {
+    const thin = screened({ vol24h: 1.4e5, flags: { ...screened().flags, thinLiquidity: true } })
+    expect(safeDirective(thin, season(), NOW).action).toBe('AVOID')
+
+    const basing = screened({ price: 10, band: 'basing', score: 52, range7d: SPARK, flags: { ...screened().flags, freshBreak: false } })
+    expect(safeDirective(basing, season(), NOW).action).toBe('STALK')
+  })
+
+  // The alert that matters most. The sentinel has no candles, so the levels come
+  // off the 7-day sparkline — but they ARE levels, they are computed, and their
+  // edges are what "something is popping off while I am away" is made of.
+  it('publishes a level test the sentinel can watch the edge of, with no candles at all', () => {
+    const below = safeDirective(screened({ price: 10, range7d: SPARK }), season(), NOW)
+    const above = safeDirective(screened({ price: 12, range7d: SPARK }), season(), NOW)
+    expect(below.levels.trigger).toBe(11)
+    expect(below.levels.triggerBasis).toMatch(/7-day sparkline/)
+    expect(below.levels.triggerLive).toBe(false)
+    expect(above.levels.triggerLive).toBe(true)
+    expect(transitionOf(
+      { band: 'basing', action: 'WATCH', triggerAbove: below.levels.triggerLive, invalidated: below.levels.invalidated },
+      { band: 'basing', action: 'WATCH', triggerAbove: above.levels.triggerLive, invalidated: above.levels.invalidated },
+    )).toEqual({ fired: true, why: ['trigger fired'] })
+  })
+
+  it('sends turnover to the phone in the units the board renders it in', () => {
+    // `row.turnover` is the raw fraction vol24h ÷ mcap. screen.js labels it
+    // "12.0% of cap", AltBoard renders "12%", and this line used to print
+    // `turnover 0.12×` — the same field, a second unit, and a multiplier suffix
+    // that makes a heavy day look like a light one. The alert has to carry the
+    // number the board it points at is showing.
+    const row = screened({ turnover: 0.12, chg24h: 12.3, chg7d: 40, score: 88, symbol: 'PEPE' })
+    const curr = { band: 'igniting', action: 'STALK', triggerAbove: true, invalidated: false }
+    const line = alertLine({ id: 'pepe', symbol: 'PEPE' }, row, ['basing → igniting'], curr, safeDirective(row, season(), NOW))
+    expect(line).toContain('turnover 12.0% of cap')
+    expect(line).not.toMatch(/turnover [\d.]+×/)
+    expect(line).toContain('24h +12.3%')
+    // What AltBoard puts on the same row. The assertion is on the UNIT and the
+    // magnitude, not on the board's rounding — the two surfaces are allowed to
+    // choose different decimals, they are not allowed to choose different units.
+    expect(turnText(row.turnover)).toMatch(/^12(\.0)?%$/)
+    // …and a row with no turnover prints nothing rather than a zero.
+    expect(alertLine({ id: 'x' }, screened({ turnover: null }), [], curr, null)).not.toContain('turnover')
+  })
+
+  it('builds a line out of anything, because this file may never throw', () => {
+    // A scheduled function that 500s writes no dominance row, and a hole in that
+    // series can never be backfilled. So the formatter normalises rather than
+    // trusting, even though its only caller builds its arguments itself.
+    for (const junk of [undefined, null, 0, '', NaN, {}, [], 'x', true]) {
+      expect(() => alertLine({ id: 'x' }, screened(), junk, junk, junk)).not.toThrow()
+      expect(typeof alertLine({ id: 'x' }, screened(), junk, junk, junk)).toBe('string')
+    }
+  })
+
+  it('names the level that fired, and which basis it came off', () => {
+    // The sentinel has no candles, so this is the WEAKER sparkline level. A user
+    // holding the alert next to the tab has to be able to tell which one moved.
+    const row = screened({ price: 12, range7d: { low: 9, high: 12, last: 12, pos: 1, freshBreak: true, priorHigh: 11, points: 168 } })
+    const curr = { band: 'igniting', action: 'WATCH', triggerAbove: true, invalidated: false }
+    const line = alertLine({ id: 'x' }, row, ['trigger fired'], curr, safeDirective(row, season(), NOW))
+    expect(line).toContain('trigger fired')
+    expect(line).toContain('cleared $11.00 — prior 6-day high from the 7-day sparkline (no candle history)')
+  })
+
+  it('treats an unmeasured level as unmeasured, not as an un-fired one', () => {
+    // A row with no sparkline has no trigger. Alerting on null → true would fire
+    // on the day the data arrived rather than on the day price broke, which is
+    // how a sentinel earns a mute.
+    const blind = safeDirective(screened({ price: 12, range7d: NO_SPARK }), season(), NOW)
+    expect(blind.levels.triggerLive).toBeNull()
+    expect(transitionOf(
+      { band: 'basing', action: 'WATCH', triggerAbove: null, invalidated: null },
+      { band: 'basing', action: 'WATCH', triggerAbove: true, invalidated: false },
+    ).fired).toBe(false)
   })
 })
 

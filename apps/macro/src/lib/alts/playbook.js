@@ -180,7 +180,7 @@ export const EARLY_SIGNALS = [
     stage: 'late',
     label: 'Perpetual funding turns positive',
     why: 'CONFIRMATION, NOT AN ENTRY. Positive funding means longs are paying shorts to keep the position — leverage has arrived. That confirms a real move is underway, and past a certain level it becomes the thing that ends it, because a crowded long book eventually unwinds into itself. There is no reading of this that is an early signal.',
-    howMeasured: 'lastFundingRate from Binance premiumIndex, annualised as rate × 3 settlements a day × 365. Positive is the flip; beyond roughly +30% annualised is crowded. That +30% is a rule of thumb, not a measured threshold.',
+    howMeasured: 'lastFundingRate from Binance premiumIndex, annualised as rate × 3 settlements a day × 365. That annualisation lives in exactly one place — sentiment.js — and this row reads the number it produced rather than recomputing it, so the crowd card and this row can never print two different funding rates for one coin. Positive is the flip; beyond roughly +30% annualised is crowded. That +30% is a rule of thumb, not a measured threshold.',
     leadTime: 'Late by definition — funding cannot turn positive before there is a move to be long of.',
   },
   {
@@ -188,7 +188,7 @@ export const EARLY_SIGNALS = [
     stage: 'late',
     label: 'Open interest expanding with price',
     why: 'CONFIRMATION, NOT AN ENTRY. New open interest alongside a rising price is new money rather than short covering, which is the healthier of the two ways a move can look — but it still describes something that has already happened. The same reading with price stalling is the warning version: positions building into a market that has stopped paying them.',
-    howMeasured: 'The last two daily samples of sumOpenInterest from Binance openInterestHist, reported as a 24-hour percent change. Above +5% in a day counts as expansion here — a rule of thumb, not a measured threshold.',
+    howMeasured: 'The last two daily samples of sumOpenInterest from Binance openInterestHist, reported as a 24-hour percent change — measured by sentiment.js, including its staleness gate: a series whose newest sample is more than three days old is not a 24-hour change and is reported as unmeasured rather than relabelled. This row reads that verdict, so it cannot call a number measurable that the crowd card on the same page refused. Above +5% in a day counts as expansion here — a rule of thumb, not a measured threshold.',
     leadTime: 'Late. Coincident with the markup at the very earliest.',
   },
 ]
@@ -214,10 +214,14 @@ const TRENDING_LOUD_RANK = 5
  *
  * @param candles  daily OHLCV, oldest→newest (may be null)
  * @param screened one screen.js row for this coin (may be null)
- * @param ctx      { quality, trendingRank, crowd, derivs, now }
+ * @param ctx      { quality, trendingRank, crowd, now }
  *                 `quality` is 'ohlcv' | 'close-only' from the data layer;
- *                 `crowd` is a sentiment.js crowdRead(); `derivs` is whatever
- *                 altDerivs() returned for the coin.
+ *                 `crowd` is a sentiment.js crowdRead(). Callers may still pass
+ *                 an `altDerivs()` payload as `derivs` — CoinDetail does — and
+ *                 it is deliberately NOT read here: the funding and open-
+ *                 interest rows take crowdRead's verdict on the same payload
+ *                 instead. See fromCrowdRead() at the bottom of this file for
+ *                 the failure that rule prevents.
  * @returns [{ id, label, pass, value, level, note, stage }]
  *
  * Rows always come back in full, in order, one per signal. A row whose input is
@@ -227,7 +231,7 @@ const TRENDING_LOUD_RANK = 5
  */
 export function signalChecklist(candles, screened, ctx = {}) {
   const c = ctx && typeof ctx === 'object' && !Array.isArray(ctx) ? ctx : {}
-  const { quality = null, crowd = null, derivs = null } = c
+  const { quality = null, crowd = null } = c
 
   // ABSENT ≠ NULL for the trending rank — the same distinction sentiment.js's
   // crowdRead makes, for the same reason, and it has to be made here too or the
@@ -418,9 +422,10 @@ export function signalChecklist(candles, screened, ctx = {}) {
   }
 
   /* 8 — funding (LATE) */
-  const funding = locateFunding(derivs) ?? num(crowd?.crowding?.fundingAnnualPct)
+  const fundingRead = fromCrowdRead(crowd, 'funding', crowd?.crowding?.fundingAnnualPct, 'the annualised funding rate')
+  const funding = fundingRead.value
   if (funding == null) {
-    add('funding_flip', { note: 'no funding rate for this coin — it has no listed perpetual, or the derivatives feed did not answer. Not measured, and not counted as neutral.' })
+    add('funding_flip', { note: fundingRead.why })
   } else {
     add('funding_flip', {
       pass: funding > 0,
@@ -434,9 +439,10 @@ export function signalChecklist(candles, screened, ctx = {}) {
   }
 
   /* 9 — open interest (LATE) */
-  const oi = locateOiChange(derivs) ?? num(crowd?.crowding?.oiChange24hPct)
+  const oiRead = fromCrowdRead(crowd, 'oi', crowd?.crowding?.oiChange24hPct, 'the 24h open-interest change')
+  const oi = oiRead.value
   if (oi == null) {
-    add('oi_expansion', { note: 'no open-interest history for this coin — no listed perpetual, or the feed did not answer. Not measured.' })
+    add('oi_expansion', { note: oiRead.why })
   } else {
     add('oi_expansion', {
       pass: oi >= OI_EXPANSION_PCT,
@@ -599,42 +605,55 @@ export function phaseOf({ screened = null, precedent = null, crowd = null, candl
 /* ══ locals ════════════════════════════════════════════════════════════════ */
 
 /**
- * altDerivs()'s envelope keys belong to the data layer and are not pinned by the
- * contract — the PARSER OUTPUT SHAPES are. So the payloads are found by shape
- * rather than by a key name this file would be guessing at, and when neither
- * shape turns up the row reports "not measured" instead of a zero. Guessing a
- * key name and getting `undefined` would silently mark every coin as "funding
- * has not flipped", which is the same string a real reading produces.
+ * THE TWO DERIVATIVE ROWS READ WHAT sentiment.js MEASURED. THEY DO NOT RE-READ
+ * THE FEED, AND THAT IS THE WHOLE POINT.
+ *
+ * Both numbers used to be recomputed here off the raw altDerivs() payload, and
+ * both recomputations were subtly different from crowdRead's:
+ *
+ *   - the 3×365 funding annualisation existed TWICE, here and in sentiment.js,
+ *     while netlify/shared/alts.mjs's parser comment promised the opposite —
+ *     "annualised once, in sentiment.js, so there is exactly one place where the
+ *     3×365 lives". Two copies of a constant that agree today are a number that
+ *     disagrees on the day one of them is corrected.
+ *   - the open-interest change skipped the staleness gate crowdRead applies
+ *     (OI_MAX_AGE_SEC — a daily series more than three days old is no longer a
+ *     24-hour change). So this checklist printed a measured "+12% in 24h" from
+ *     two samples the crowd card, two rows further down the SAME card, had
+ *     explicitly refused to score. A page that says a number is measurable and
+ *     unmeasurable at the same time is worse than either answer alone: nothing
+ *     on it tells the reader which half to believe.
+ *
+ * The gate is shared by being applied ONCE. crowdRead emits a part per
+ * derivative input, with `points: null` and a label naming the refusal — no
+ * listed perp, a single sample, a stale series — and this reads that verdict
+ * instead of second-guessing it, so the refusal here quotes the same words the
+ * crowd card shows. When crowdRead did not run at all the row says so and stops;
+ * it does not reach around it to the raw feed, because reaching around it is
+ * exactly how the two got out of step.
+ *
+ * @returns { value, why } — `why` is null when there is a value, and otherwise
+ *          is the finished note for a `pass: null` / `level: 'unknown'` row.
  */
-function locateFunding(derivs) {
-  const isFunding = (v) => v && typeof v === 'object' && !Array.isArray(v) && Number.isFinite(Number(v.lastFundingRate))
-  const hit = walk(derivs, isFunding)
-  if (!hit) return null
-  const rate = Number(hit.lastFundingRate)
-  if (!Number.isFinite(rate)) return null
-  // Binance perps settle funding every 8 hours: 3 settlements a day, 365 days.
-  return rate * 3 * 365 * 100
-}
-
-function locateOiChange(derivs) {
-  const isOi = (v) => Array.isArray(v) && v.length >= 2 &&
-    v.every((x) => x && (Number.isFinite(x.oi) || Number.isFinite(x.oiValueUsd)))
-  const series = walk(derivs, isOi)
-  if (!series) return null
-  const pick = (x) => (Number.isFinite(x.oi) ? x.oi : x.oiValueUsd)
-  const a = pick(series[series.length - 2])
-  const b = pick(series[series.length - 1])
-  if (!Number.isFinite(a) || !Number.isFinite(b) || !(a > 0)) return null
-  return (b / a - 1) * 100
-}
-
-function walk(obj, test) {
-  if (!obj || typeof obj !== 'object') return null
-  if (test(obj)) return obj
-  for (const v of Object.values(obj)) {
-    if (test(v)) return v
+function fromCrowdRead(crowd, key, value, what) {
+  const parts = Array.isArray(crowd?.parts) ? crowd.parts : null
+  if (!parts) {
+    return { value: null, why: `no crowd read on this pass, and sentiment.js is the single place ${what} is measured — so this row reports nothing rather than deriving a second version of it here. Not measured, and not counted as neutral.` }
   }
-  return null
+  const part = parts.find((p) => p && p.key === key)
+  if (!part) {
+    return { value: null, why: `the crowd read returned no ${what} at all on this pass — not measured.` }
+  }
+  if (part.points == null) {
+    // The crowd read's own words, so the two rows cannot describe the same
+    // refusal differently: "no listed perp", "only one open-interest sample",
+    // "open-interest series is stale", "funding snapshot is stale".
+    return { value: null, why: `${part.label} — the same gate the crowd read applies, applied here, so the two rows on this card cannot disagree about whether ${what} is measurable. Not measured, and not counted as neutral.` }
+  }
+  if (!Number.isFinite(value)) {
+    return { value: null, why: `the crowd read scored ${what} but carried no number back with it — not measured.` }
+  }
+  return { value, why: null }
 }
 
 /** Bars with a finite close, high and low. Kept local rather than imported from
