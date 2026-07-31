@@ -48,13 +48,16 @@ export function FreshnessChip({ state }) {
     }
   })();
   return (
+    // .t-cap is the kit's small-print size (11.5px). The chip was hand-set at
+    // 10px — under the 10.5px floor, on the one element that appears on every
+    // panel in the tab, which made it the most-repeated violation here.
     <span
-      className={state.alarm ? "biz-pulse" : undefined}
+      className={state.alarm ? "t-cap biz-pulse" : "t-cap"}
       style={{
         display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0,
         padding: "3px 8px", borderRadius: 999, whiteSpace: "nowrap",
         background: tone.bg, border: `1px solid ${tone.line}`, color: tone.fg,
-        fontSize: 10, fontWeight: 700, fontFamily: "var(--font-mono)",
+        fontWeight: 700, fontFamily: "var(--font-mono)",
         fontVariantNumeric: "tabular-nums",
       }}
     >
@@ -65,31 +68,36 @@ export function FreshnessChip({ state }) {
 }
 
 // ─── buttons ─────────────────────────────────────────────────────────────────
+// The kit's .btn carries the geometry these were hand-rolling: .md is 44px tall
+// (the one-thumb target this tab is designed around) and .sm is 34px — exactly
+// the two heights that were written inline — with no border, which is what the
+// language wants on a filled control.
+//
+// Four of the five tones map onto a kit class. `good` does not: the kit's tones
+// are accent-derived (.primary/.tinted/.plain) plus .danger, and green here is a
+// semantic verdict colour, not the tool's accent. It keeps its own fill on top
+// of .btn's geometry rather than borrowing .primary and saying "accent" when it
+// means "safe".
+const KIT_TONE = {
+  ghost: "quiet",
+  accent: "tinted",
+  danger: "danger",
+  good: "",
+  solid: "primary",
+};
+
 export function Btn({ tone = "ghost", size = "md", disabled, busy, children, style, ...rest }) {
-  const tones = {
-    ghost: { bg: "transparent", fg: "var(--muted)", line: "var(--border)" },
-    accent: { bg: "var(--accent-soft)", fg: "var(--accent-hi)", line: "var(--accent-line)" },
-    danger: { bg: "rgba(248,113,113,0.14)", fg: "#FFB4B4", line: "rgba(248,113,113,0.45)" },
-    good: { bg: "rgba(62,207,142,0.13)", fg: "#7FE7B6", line: "rgba(62,207,142,0.40)" },
-    solid: { bg: "var(--accent-grad)", fg: "var(--accent-ink)", line: "transparent" },
-  };
-  const t = tones[tone] || tones.ghost;
+  const kit = KIT_TONE[tone] ?? KIT_TONE.ghost;
   const off = disabled || busy;
   return (
     <button
       type="button"
       disabled={off}
-      className="biz-press"
+      className={["btn", size === "sm" ? "sm" : "md", kit, "biz-press"].filter(Boolean).join(" ")}
       style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7,
-        // 44px is the minimum thumb target, and this is a one-thumb tab.
-        minHeight: size === "sm" ? 34 : 44,
-        padding: size === "sm" ? "0 11px" : "0 16px",
-        borderRadius: 10, cursor: off ? "not-allowed" : "pointer",
-        background: t.bg, border: `1px solid ${t.line}`, color: t.fg,
-        fontFamily: "var(--font-display)", fontSize: size === "sm" ? 11.5 : 13, fontWeight: 700,
-        letterSpacing: "0.02em", opacity: off ? 0.55 : 1,
-        transition: "transform var(--dur-1) var(--ease-out), background var(--dur-2) var(--ease-out), opacity var(--dur-2) var(--ease-out)",
+        ...(tone === "good"
+          ? { background: "color-mix(in srgb, var(--good) 13%, transparent)", color: "var(--good)" }
+          : null),
         ...style,
       }}
       {...rest}
@@ -100,17 +108,33 @@ export function Btn({ tone = "ghost", size = "md", disabled, busy, children, sty
   );
 }
 
+/**
+ * The busy indicator inside <Btn busy>.
+ *
+ * It was referenced and never defined — a free variable that threw
+ * "Spinner is not defined" the first time anything set `busy`, which is the
+ * HALT button mid-halt, Save in the goal editor, Sign out, and every
+ * approve/veto. `vite build` was green on it; nothing rendered it until a tap.
+ * It is the kit's .spinner now, which is the drawn arc this was always meant
+ * to be. See the render test, which renders <Btn busy> on purpose.
+ */
+function Spinner() {
+  return <span className="spinner" aria-hidden="true" style={{ width: 14, height: 14, borderWidth: 2 }} />;
+}
+
 
 // ─── badges ──────────────────────────────────────────────────────────────────
 export function Badge({ tone = "empty", children, title, mono = true }) {
   const t = TONE[tone] || TONE.empty;
   return (
-    <span title={title} style={{
+    // .t-label IS this badge: 12px, 600, tracked, uppercase. It was hand-rolled
+    // at 9.5px — under the floor — doing the identical job, and uppercase is
+    // only allowed on .t-label anyway.
+    <span title={title} className="t-label" style={{
       display: "inline-flex", alignItems: "center", gap: 4,
-      padding: "2px 7px", borderRadius: 6, whiteSpace: "nowrap",
+      padding: "3px 7px", borderRadius: 6, whiteSpace: "nowrap",
       background: t.bg === "transparent" ? "color-mix(in srgb, var(--ink) 6%, transparent)" : t.bg,
       border: `1px solid ${t.line}`, color: t.fg,
-      fontSize: 9.5, fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase",
       fontFamily: mono ? "var(--font-mono)" : "var(--font-display)",
     }}>{children}</span>
   );
@@ -151,8 +175,8 @@ export function AlarmBlock({ tone = "error", headline, detail, action }) {
         </svg>
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: t.fg, fontFamily: "var(--font-display)", marginBottom: detail ? 4 : 0 }}>{headline}</div>
-        {detail && <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.55 }}>{detail}</div>}
+        <div className="t-call" style={{ fontWeight: 800, color: t.fg, marginBottom: detail ? 4 : 0 }}>{headline}</div>
+        {detail && <div className="t-cap" style={{ color: "var(--muted)", lineHeight: 1.55 }}>{detail}</div>}
         {action && <div style={{ marginTop: 10 }}>{action}</div>}
       </div>
     </div>
@@ -167,10 +191,10 @@ export function EmptyBlock({ headline, detail, alarm }) {
       padding: "22px 16px", borderRadius: 12, textAlign: "center",
       border: `1px dashed ${t.line}`, background: "transparent",
     }}>
-      <div style={{ fontSize: 12.5, fontWeight: 700, color: alarm ? t.fg : "var(--muted)", fontFamily: "var(--font-display)", marginBottom: 5 }}>
+      <div className="t-foot" style={{ fontWeight: 700, color: alarm ? t.fg : "var(--muted)", marginBottom: 5 }}>
         {headline}
       </div>
-      {detail && <div style={{ fontSize: 11, color: "var(--faint)", lineHeight: 1.55, maxWidth: 320, margin: "0 auto" }}>{detail}</div>}
+      {detail && <div className="t-cap" style={{ color: "var(--faint)", lineHeight: 1.55, maxWidth: 320, margin: "0 auto" }}>{detail}</div>}
     </div>
   );
 }
@@ -238,7 +262,7 @@ export function Panel({
             />
             {state.rowCount > 0 && (
               <>
-                <div style={{ fontSize: 10.5, color: "var(--bad)", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", fontFamily: "var(--font-mono)" }}>
+                <div className="t-label" style={{ color: "var(--bad)", fontWeight: 700, fontFamily: "var(--font-mono)" }}>
                   ↓ from the last good read, not from now
                 </div>
                 <div style={{ opacity: 0.5, filter: "saturate(0.4)" }}>{children}</div>
@@ -268,13 +292,15 @@ export function Panel({
   return (
     <section
       id={id}
+      // The kit's card — one material, no outline. This had a 1px border AND a
+      // shadow, which the language forbids on the same element; separating by
+      // tone and shadow is what .card already does. The alarm rail survives as
+      // an inset shadow stacked on the card's own, so nothing regains a border.
+      className="card"
       style={{
-        background: "var(--surface)",
-        borderRadius: 16,
-        border: `1px solid ${state.alarm ? tone.line : "var(--border)"}`,
         // The alarm reaches the panel's own edge, so a scroll past a collapsed
         // panel still registers that something is wrong.
-        boxShadow: state.alarm ? `inset 3px 0 0 ${tone.fg}` : "var(--shadow-card)",
+        boxShadow: state.alarm ? `inset 3px 0 0 ${tone.fg}, var(--shadow-card)` : undefined,
         overflow: "hidden",
       }}
     >
@@ -294,9 +320,10 @@ export function Panel({
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </span>
         )}
-        <h2 style={{
-          margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase",
-          fontFamily: "var(--font-display)", color: "var(--ink)", flex: 1, minWidth: 0,
+        {/* .t-label — 12px, tracked, uppercase, which is what this was doing by
+            hand at the same size. Uppercase is only allowed on .t-label. */}
+        <h2 className="t-label" style={{
+          margin: 0, fontWeight: 800, color: "var(--ink)", flex: 1, minWidth: 0,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}>{title}</h2>
         {right}
@@ -304,7 +331,7 @@ export function Panel({
       </header>
 
       {summary && !isOpen && (
-        <div style={{ padding: "0 14px 13px", fontSize: 11.5, color: "var(--muted)" }}>{summary}</div>
+        <div className="t-cap" style={{ padding: "0 14px 13px", color: "var(--muted)" }}>{summary}</div>
       )}
 
       {isOpen && <div style={{ padding: "0 14px 14px" }}>{body}</div>}
@@ -315,14 +342,17 @@ export function Panel({
 /** A labelled figure. Tabular by default so updating numbers don't jiggle. */
 export function Stat({ label, value, sub, tone, align = "left" }) {
   return (
+    // The kit's stat-tile grammar (.t-label + .stattile-value) without the tile
+    // itself — these sit inside a Panel, which is already a card, and nesting a
+    // second surface inside it would be a well inside a well. The label was
+    // 9.5px, under the floor, hand-doing what .t-label does at 12.
     <div style={{ minWidth: 0, textAlign: align }}>
-      <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--faint)", fontFamily: "var(--font-mono)", marginBottom: 3 }}>{label}</div>
-      <div style={{
-        fontSize: 19, fontWeight: 800, lineHeight: 1.1, fontFamily: "var(--font-display)",
+      <div className="t-label" style={{ color: "var(--faint)", fontFamily: "var(--font-mono)", marginBottom: 4 }}>{label}</div>
+      <div className="stattile-value" style={{
+        fontWeight: 800, lineHeight: 1.1,
         color: tone ? (TONE[tone] || TONE.accent).fg : "var(--ink)",
-        fontVariantNumeric: "tabular-nums", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
       }}>{value}</div>
-      {sub && <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{sub}</div>}
+      {sub && <div className="t-cap" style={{ color: "var(--muted)", marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{sub}</div>}
     </div>
   );
 }

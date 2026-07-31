@@ -161,10 +161,10 @@ export default function ActionLedger({ now }) {
             borderRadius: 10, padding: "9px 11px",
             background: TONE.stale.bg, border: `1px solid ${TONE.stale.line}`, borderLeft: `3px solid ${TONE.stale.fg}`,
           }}>
-            <div style={{ fontSize: 11.5, fontWeight: 800, color: TONE.stale.fg, fontFamily: "var(--font-display)", fontVariantNumeric: "tabular-nums" }}>
+            <div className="t-cap" style={{ fontWeight: 800, color: TONE.stale.fg, fontVariantNumeric: "tabular-nums" }}>
               Nothing matching this filter for {matchAgeMs === null ? "an unknown stretch" : shortAge(matchAgeMs)}
             </div>
-            <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.55, marginTop: 3 }}>
+            <div className="t-cap" style={{ color: "var(--muted)", lineHeight: 1.55, marginTop: 3 }}>
               Longer than the {src.state.maxAgeMin}-minute window. The ledger itself is live — the chip above measures every row, not these.
             </div>
           </div>
@@ -244,8 +244,10 @@ function ActionRow({ row }) {
       }}>{row?.action || "—"}</div>
 
       {(Number.isFinite(cost) && cost > 0) || d ? (
+        // 11.5px, not 10: Row takes no className, so the kit's .t-cap size is
+        // written out rather than borrowed. 10 was under the floor.
         <Row gap={6} wrap style={{
-          marginTop: 5, fontSize: 10, color: "var(--faint)",
+          marginTop: 5, fontSize: 11.5, color: "var(--faint)",
           fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
         }}>
           {Number.isFinite(cost) && cost > 0 && (
@@ -266,6 +268,11 @@ function ActionRow({ row }) {
           background: "color-mix(in srgb, var(--bg) 45%, transparent)",
           border: `1px solid ${failed ? TONE.error.line : "var(--border)"}`,
           fontSize: 11, lineHeight: 1.5, overflowWrap: "anywhere",
+          // #FFB4B4 stays literal. It is a lightened red chosen to stay legible
+          // as MONOSPACE ERROR TEXT sitting on top of the red-tinted well below
+          // — var(--bad) is the alarm colour for chrome and drops too close to
+          // its own wash here. Every other hex in this tab is now a token; this
+          // one is a contrast decision, not a palette choice.
           color: why ? (failed ? "#FFB4B4" : "var(--muted)") : TONE.error.fg,
           fontStyle: why ? "normal" : "italic",
           fontFamily: why ? "var(--font-mono)" : "var(--font-display)",
@@ -281,10 +288,7 @@ function ActionRow({ row }) {
 function FilterRow({ caption, values, counts, total, active, onPick, toneFor }) {
   return (
     <div>
-      <div style={{
-        fontSize: 9.5, fontWeight: 800, letterSpacing: "0.09em", textTransform: "uppercase",
-        color: "var(--faint)", fontFamily: "var(--font-mono)", marginBottom: 6,
-      }}>{caption}</div>
+      <div className="t-label" style={{ color: "var(--faint)", fontFamily: "var(--font-mono)", marginBottom: 6 }}>{caption}</div>
       <Row gap={6} wrap>
         <Chip label="all" count={total} active={active === ALL} tone="accent" onClick={() => onPick(ALL)} />
         {values.map((v) => (
@@ -326,12 +330,11 @@ function Chip({ label: text, count, active, tone, onClick }) {
 // ─── day grouping ────────────────────────────────────────────────────────────
 function DayHeading({ ms, now, count }) {
   return (
-    <div style={{
+    <div className="t-label" style={{
       // Sticky inside the scroller: 420px of feed can hold two days, and the
       // day a row belongs to is not recoverable from a clock time alone.
       position: "sticky", top: 0, zIndex: 1,
       background: "var(--surface)", padding: "5px 0 4px", marginTop: 2,
-      fontSize: 9.5, fontWeight: 800, letterSpacing: "0.09em", textTransform: "uppercase",
       color: "var(--faint)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
       borderBottom: "1px solid var(--border)",
     }}>

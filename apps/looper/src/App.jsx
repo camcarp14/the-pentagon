@@ -346,7 +346,11 @@ export default function LooperApp() {
   const unread = L.chat.filter((m) => m.role === "looper").length && L.run.awaiting ? 1 : 0;
 
   return (
-    <div className="lp-root">
+    // data-kit: Looper opts into the shared kit, on its OWN root. It renders
+    // inside the shell's tool slot, so this reaches Looper and nothing else —
+    // the same rule the shell follows by keeping data-kit off the wrapper that
+    // holds every tool.
+    <div className="lp-root" data-kit>
       <div className="lp-navbar">
         <nav className="lp-nav" aria-label="Looper">
           {TABS.map((t) => (
@@ -382,11 +386,11 @@ function RunView({ L, onSetup, onChat }) {
 
   if (!mission) {
     return (
-      <div className="lp-empty">
-        <div className="g"><Ico d={ICONS.mission} /></div>
-        <div style={{ fontWeight: 700, color: "var(--lp-ink)", marginBottom: 6 }}>Nothing set up yet</div>
-        Give Looper a goal and a direction, then set how long and how hard it should run.
-        <div style={{ marginTop: 16 }}><button type="button" className="lp-btn primary" onClick={onSetup}>Set up a mission</button></div>
+      <div className="empty">
+        <div className="empty-icon lp-eico"><Ico d={ICONS.mission} /></div>
+        <div className="empty-title">Nothing set up yet</div>
+        <p className="empty-sub">Give Looper a goal and a direction, then set how long and how hard it should run.</p>
+        <button type="button" className="btn md primary" style={{ marginTop: 8 }} onClick={onSetup}>Set up a mission</button>
       </div>
     );
   }
@@ -398,19 +402,24 @@ function RunView({ L, onSetup, onChat }) {
   return (
     <div className="lp-grid two">
       <div style={{ display: "grid", gap: 12 }}>
-        <section className="lp-card lp-status">
-          <div className="lp-ttl">
+        <section className="card pad-md lp-status">
+          <div className="t-label lp-ttl">
             Now
             <span className="sp" />
-            <span className={`lp-state ${run.status}`}><span className="dot" />{run.status === "running" ? "running" : run.status === "paused" ? "paused" : run.status === "done" ? (STOP_LABEL[run.stopReason] || "done") : "idle"}</span>
+            {/* The kit's pill and status dot. The word carries the state; the
+                colour and the pulse only agree with it. */}
+            <span className={`pill lp-state ${run.status}`}>
+              <span className={`dotstatus${run.status === "running" ? " pulse" : ""}`} />
+              {run.status === "running" ? "running" : run.status === "paused" ? "paused" : run.status === "done" ? (STOP_LABEL[run.stopReason] || "done") : "idle"}
+            </span>
           </div>
 
-          <p className="lp-focus">{run.status === "idle" ? "Not started" : last ? last.focus : "Starting the first iteration…"}</p>
-          {last?.did && <p className="lp-goalline">{last.did}</p>}
+          <p className="t-head lp-focus">{run.status === "idle" ? "Not started" : last ? last.focus : "Starting the first iteration…"}</p>
+          {last?.did && <p className="t-foot lp-goalline">{last.did}</p>}
 
           {run.awaiting && (
             <div className="lp-note warn" role="status">
-              {run.awaiting} <button type="button" className="lp-btn ghost sm" style={{ minHeight: 28, padding: "2px 8px" }} onClick={onChat}>Answer →</button>
+              {run.awaiting} <button type="button" className="btn sm plain" onClick={onChat}>Answer →</button>
             </div>
           )}
 
@@ -419,36 +428,36 @@ function RunView({ L, onSetup, onChat }) {
               "Draft 20 ZTS s…" is the one thing on this screen that must never
               be cut, since the whole panel exists to prove it is still on it. */}
           <dl className="lp-aim">
-            <dt>Goal</dt><dd>{mission.goal}</dd>
-            <dt>Next</dt><dd>{last?.next || "—"}</dd>
+            <dt className="t-label">Goal</dt><dd>{mission.goal}</dd>
+            <dt className="t-label">Next</dt><dd>{last?.next || "—"}</dd>
           </dl>
 
           <div className="lp-strip two">
-            <div className="c"><div className="k">Iteration</div><div className="v mono">{run.iterations}</div></div>
-            <div className="c"><div className="k">Time left</div><div className="v mono">{run.status === "running" ? clock(remaining) : "—"}</div></div>
+            <div className="stattile"><div className="stattile-label">Iteration</div><div className="stattile-value">{run.iterations}</div></div>
+            <div className="stattile"><div className="stattile-label">Time left</div><div className="stattile-value">{run.status === "running" ? clock(remaining) : "—"}</div></div>
           </div>
 
           <div className="lp-bar" role="img" aria-label={`self-reported progress ${pct}%`}><div style={{ width: `${pct}%` }} /></div>
           <div className="lp-meta">
-            <span className="lp-tiny">{pct}% — its own estimate</span>
-            <span className="lp-tiny lp-num">{money(run.spendUsd)} / {money(run.capUsd)}</span>
+            <span className="t-cap">{pct}% — its own estimate</span>
+            <span className="t-cap t-num">{money(run.spendUsd)} / {money(run.capUsd)}</span>
           </div>
 
           {last?.alignment && (
-            <p className="lp-goalline"><strong>Still aligned:</strong> {last.alignment}</p>
+            <p className="t-foot lp-goalline"><strong>Still aligned:</strong> {last.alignment}</p>
           )}
 
           <div className="lp-actions" style={{ marginTop: 14 }}>
-            {run.status === "running" && <button type="button" className="lp-btn" onClick={L.pause}>Pause</button>}
+            {run.status === "running" && <button type="button" className="btn md quiet" onClick={L.pause}>Pause</button>}
             {(run.status === "paused" || run.status === "done") && (
               // A budget stop is the one resume that costs more than it looks
               // like, so the button says the number instead of hiding it.
-              <button type="button" className="lp-btn primary" onClick={() => L.resume(onBudget ? run.capUsd : 0)}>
+              <button type="button" className="btn md primary" onClick={() => L.resume(onBudget ? run.capUsd : 0)}>
                 {onBudget ? `Add ${money(run.capUsd)} & resume` : run.status === "done" ? "Run again" : "Resume"}
               </button>
             )}
-            {run.status === "idle" && <button type="button" className="lp-btn primary" onClick={() => L.start()}>Start</button>}
-            <button type="button" className="lp-btn ghost" onClick={onSetup}>Settings</button>
+            {run.status === "idle" && <button type="button" className="btn md primary" onClick={() => L.start()}>Start</button>}
+            <button type="button" className="btn md plain" onClick={onSetup}>Settings</button>
           </div>
 
           <div className="lp-note">
@@ -458,27 +467,27 @@ function RunView({ L, onSetup, onChat }) {
       </div>
 
       <div style={{ display: "grid", gap: 12 }}>
-        <section className="lp-card">
+        <section className="card pad-md">
           {/* Both tags in one group: as siblings of the auto-margin spacer the
               first was pinned to the right edge and the second wrapped alone
               onto its own line. */}
-          <div className="lp-ttl">
+          <div className="t-label lp-ttl">
             Direction<span className="sp" />
             <span className="lp-tags">
-              <span className="lp-tag">{DIFF(run.difficulty).label}</span>
-              <span className="lp-tag" title="When Looper is allowed to stop and wait for you">{INT(run.interrupt).pill}</span>
+              <span className="pill">{DIFF(run.difficulty).label}</span>
+              <span className="pill" title="When Looper is allowed to stop and wait for you">{INT(run.interrupt).pill}</span>
             </span>
           </div>
-          <p className="lp-sub" style={{ margin: 0 }}>{mission.direction || <span className="lp-tiny">No direction set — it will use its own judgement.</span>}</p>
-          {mission.constraints && <p className="lp-tiny" style={{ marginTop: 9 }}><strong style={{ color: "var(--lp-ink-2)" }}>Constraints:</strong> {mission.constraints}</p>}
+          <p className="t-foot" style={{ margin: 0 }}>{mission.direction || <span className="t-cap">No direction set — it will use its own judgement.</span>}</p>
+          {mission.constraints && <p className="t-cap" style={{ marginTop: 9 }}><strong style={{ color: "var(--ink)" }}>Constraints:</strong> {mission.constraints}</p>}
         </section>
-        <section className="lp-card">
-          <div className="lp-ttl">Last few iterations</div>
-          {journal.length === 0 ? <p className="lp-tiny" style={{ margin: 0 }}>Nothing yet.</p> : (
+        <section className="card pad-md">
+          <div className="t-label lp-ttl">Last few iterations</div>
+          {journal.length === 0 ? <p className="t-cap" style={{ margin: 0 }}>Nothing yet — the first one lands about a minute after you start the run.</p> : (
             <ul className="lp-journal">
               {journal.slice(0, 4).map((e) => (
                 <li key={e.id}>
-                  <div className="lp-jhead">
+                  <div className="cell lp-jhead">
                     <span className="lp-jiter">#{e.iter}</span>
                     <span className={`lp-jfocus ${e.ok ? "" : "lp-jerr"}`}>{e.focus}</span>
                     <span className="lp-jtime">{hhmm(e.ts)}</span>
@@ -527,74 +536,74 @@ function MissionView({ L, onStarted }) {
 
   return (
     <div className="lp-grid two">
-      <section className="lp-card">
-        <div className="lp-ttl">The mission</div>
+      <section className="card pad-md">
+        <div className="t-label lp-ttl">The mission</div>
 
         <div className="lp-field">
-          <label className="lp-label">What is it working on</label>
-          <div className="lp-seg c3" style={{ marginBottom: target === "other" ? 8 : 0 }}>
+          <label className="t-label lp-label">What is it working on</label>
+          <div className="seg lp-seg c3" style={{ marginBottom: target === "other" ? 8 : 0 }}>
             {TARGETS.slice(0, 3).map((t) => (
-              <button type="button" key={t.id} className={target === t.id ? "on" : ""} onClick={() => setTarget(t.id)}><span className="k">{t.label}</span></button>
+              <button type="button" key={t.id} className={`seg-opt lp-opt${target === t.id ? " active" : ""}`} aria-pressed={target === t.id} onClick={() => setTarget(t.id)}><span className="k">{t.label}</span></button>
             ))}
           </div>
-          <div className="lp-seg c2" style={{ marginTop: 4 }}>
+          <div className="seg lp-seg c2" style={{ marginTop: 4 }}>
             {TARGETS.slice(3).map((t) => (
-              <button type="button" key={t.id} className={target === t.id ? "on" : ""} onClick={() => setTarget(t.id)}><span className="k">{t.label}</span></button>
+              <button type="button" key={t.id} className={`seg-opt lp-opt${target === t.id ? " active" : ""}`} aria-pressed={target === t.id} onClick={() => setTarget(t.id)}><span className="k">{t.label}</span></button>
             ))}
           </div>
           {target === "other" && (
-            <input className="lp-input" style={{ marginTop: 8 }} placeholder="e.g. a book outline, a move plan, a course…" value={targetNote} onChange={(e) => setTargetNote(e.target.value)} />
+            <input className="field lp-input" style={{ marginTop: 8 }} placeholder="e.g. a book outline, a move plan, a course…" value={targetNote} onChange={(e) => setTargetNote(e.target.value)} />
           )}
         </div>
 
         <div className="lp-field">
-          <label className="lp-label" htmlFor="lp-goal">Goal — the one thing to achieve</label>
-          <textarea id="lp-goal" className="lp-area" placeholder="Draft 20 ZTS short scripts that each open with a self-custody failure story." value={goal} onChange={(e) => setGoal(e.target.value)} />
+          <label className="t-label lp-label" htmlFor="lp-goal">Goal — the one thing to achieve</label>
+          <textarea id="lp-goal" className="field lp-area" placeholder="Draft 20 ZTS short scripts that each open with a self-custody failure story." value={goal} onChange={(e) => setGoal(e.target.value)} />
         </div>
 
         <div className="lp-field">
-          <label className="lp-label" htmlFor="lp-dir">Direction — how to approach it</label>
-          <textarea id="lp-dir" className="lp-area" placeholder="Punchy, conviction-driven, no fear-mongering. One script per iteration, newest first." value={direction} onChange={(e) => setDirection(e.target.value)} />
+          <label className="t-label lp-label" htmlFor="lp-dir">Direction — how to approach it</label>
+          <textarea id="lp-dir" className="field lp-area" placeholder="Punchy, conviction-driven, no fear-mongering. One script per iteration, newest first." value={direction} onChange={(e) => setDirection(e.target.value)} />
         </div>
 
         <div className="lp-field">
-          <label className="lp-label" htmlFor="lp-con">Constraints — what not to do</label>
-          <input id="lp-con" className="lp-input" placeholder="No price predictions. Never claim ZTS prevents all loss." value={constraints} onChange={(e) => setConstraints(e.target.value)} />
+          <label className="t-label lp-label" htmlFor="lp-con">Constraints — what not to do</label>
+          <input id="lp-con" className="field lp-input" placeholder="No price predictions. Never claim ZTS prevents all loss." value={constraints} onChange={(e) => setConstraints(e.target.value)} />
         </div>
       </section>
 
       <div style={{ display: "grid", gap: 12 }}>
-        <section className="lp-card">
-          <div className="lp-ttl">Difficulty</div>
-          <div className="lp-seg c4">
+        <section className="card pad-md">
+          <div className="t-label lp-ttl">Difficulty</div>
+          <div className="seg lp-seg c4">
             {Object.entries(DIFFICULTY).map(([id, d]) => (
-              <button type="button" key={id} className={difficulty === id ? "on" : ""} onClick={() => setDifficulty(id)}>
+              <button type="button" key={id} className={`seg-opt lp-opt${difficulty === id ? " active" : ""}`} aria-pressed={difficulty === id} onClick={() => setDifficulty(id)}>
                 <span className="k">{d.label}</span><span className="d">{d.note}</span>
               </button>
             ))}
           </div>
-          <p className="lp-tiny" style={{ marginTop: 9 }}>
+          <p className="t-cap" style={{ marginTop: 9 }}>
             One iteration every {cfg.cadence}s, up to {cfg.maxTokens.toLocaleString("en-US")} tokens. About {estIters} iterations in {durationMin} minutes.
           </p>
         </section>
 
-        <section className="lp-card">
-          <div className="lp-ttl">How long</div>
-          <div className="lp-seg c3">
+        <section className="card pad-md">
+          <div className="t-label lp-ttl">How long</div>
+          <div className="seg lp-seg c3">
             {DURATIONS.map((d) => (
-              <button type="button" key={d} className={durationMin === d ? "on" : ""} onClick={() => setDurationMin(d)}>
+              <button type="button" key={d} className={`seg-opt lp-opt${durationMin === d ? " active" : ""}`} aria-pressed={durationMin === d} onClick={() => setDurationMin(d)}>
                 <span className="k">{d < 60 ? `${d}m` : `${d / 60}h`}</span>
               </button>
             ))}
           </div>
           <div style={{ marginTop: 12 }}>
-            <label className="lp-label" htmlFor="lp-cap">Hard spend cap (estimate)</label>
-            <div className="lp-seg c4">
+            <label className="t-label lp-label" htmlFor="lp-cap">Hard spend cap (estimate)</label>
+            <div className="seg lp-seg c4">
               {[0.25, 1, 3, 10].map((v) => (
-                <button type="button" key={v} className={Number(capUsd) === v ? "on" : ""} onClick={() => setCapUsd(v)}><span className="k">${v}</span></button>
+                <button type="button" key={v} className={`seg-opt lp-opt${Number(capUsd) === v ? " active" : ""}`} aria-pressed={Number(capUsd) === v} onClick={() => setCapUsd(v)}><span className="k">${v}</span></button>
               ))}
             </div>
-            <p className="lp-tiny" style={{ marginTop: 8 }}>It stops itself at the cap, whichever comes first. The cap counts the whole run, not each start, and token prices are estimates — treat it as a guardrail rather than a bill.</p>
+            <p className="t-cap" style={{ marginTop: 8 }}>It stops itself at the cap, whichever comes first. The cap counts the whole run, not each start, and token prices are estimates — treat it as a guardrail rather than a bill.</p>
             {/* Without this the trap is silent: pick a cap under what the run has
                 already spent, hit Start, and it stops on the first tick. */}
             {run.spendUsd >= (Number(capUsd) || 0) && run.spendUsd > 0 && (
@@ -603,33 +612,41 @@ function MissionView({ L, onStarted }) {
           </div>
         </section>
 
-        <section className="lp-card">
-          <div className="lp-ttl">Interrupting you</div>
-          <div className="lp-seg c2">
+        <section className="card pad-md">
+          <div className="t-label lp-ttl">Interrupting you</div>
+          <div className="seg lp-seg c2">
             {Object.entries(INTERRUPT).map(([id, o]) => (
-              <button type="button" key={id} className={interrupt === id ? "on" : ""} onClick={() => setInterrupt(id)}>
+              <button type="button" key={id} className={`seg-opt lp-opt${interrupt === id ? " active" : ""}`} aria-pressed={interrupt === id} onClick={() => setInterrupt(id)}>
                 <span className="k">{o.label}</span><span className="d">{o.note}</span>
               </button>
             ))}
           </div>
-          <button type="button" className="lp-btn ghost sm" style={{ marginTop: 10 }} onClick={() => askNotify(!notify_)} aria-pressed={notify_}>
-            {notify_ ? "✓ " : ""}Browser notification when it pauses
-          </button>
+          {/* The kit's switch, in place of a text button that said its state with
+              a leading "✓". The knob moves, so the state is not the tint alone. */}
+          <div className="lp-toggle">
+            <span className="t-call">Browser notification when it pauses</span>
+            <button
+              type="button" className={`switch${notify_ ? " on" : ""}`} onClick={() => askNotify(!notify_)}
+              aria-pressed={notify_} aria-label="Browser notification when it pauses"
+            >
+              <span className="switch-knob" />
+            </button>
+          </div>
         </section>
 
         <div className="lp-actions">
           {/* Not "Restart": start() keeps the journal, iteration count and spend
               and only reopens the clock, so calling it a restart would promise a
               clean slate the button does not give. Clear run history does that. */}
-          <button type="button" className="lp-btn primary wide" disabled={!canStart} onClick={() => commit(true)}>
+          <button type="button" className="btn md primary full" disabled={!canStart} onClick={() => commit(true)}>
             {run.status === "running" ? "Apply & reset the clock" : "Start the run"}
           </button>
-          <button type="button" className="lp-btn wide" onClick={() => commit(false)}>Save without starting</button>
+          <button type="button" className="btn md quiet full" onClick={() => commit(false)}>Save without starting</button>
           {(L.journal.length > 0 || run.iterations > 0) && (
-            <button type="button" className="lp-btn danger wide" onClick={() => { if (confirm("Clear the mission's journal, chat and spend? The goal and settings stay.")) L.reset(); }}>Clear run history</button>
+            <button type="button" className="btn md danger full" onClick={() => { if (confirm("Clear the mission's journal, chat and spend? The goal and settings stay.")) L.reset(); }}>Clear run history</button>
           )}
         </div>
-        {!canStart && <p className="lp-tiny">A goal is required — it is the only thing every iteration is measured against.</p>}
+        {!canStart && <p className="t-cap">A goal is required — it is the only thing every iteration is measured against.</p>}
       </div>
     </div>
   );
@@ -646,23 +663,23 @@ function ChatView({ L }) {
   const send = () => { if (!text.trim()) return; L.say(text); setText(""); };
 
   return (
-    <section className="lp-card">
-      <div className="lp-ttl">
+    <section className="card pad-md">
+      <div className="t-label lp-ttl">
         Chat
         <span className="sp" />
-        <span className="lp-tag">{L.run.status === "running" ? "read next iteration" : L.run.status === "paused" ? "a reply resumes it" : "queued"}</span>
+        <span className="pill">{L.run.status === "running" ? "read next iteration" : L.run.status === "paused" ? "a reply resumes it" : "queued"}</span>
       </div>
 
       {L.chat.length === 0 ? (
-        <div className="lp-empty">
-          <div className="g"><Ico d={ICONS.chat} /></div>
-          Anything you send is handed to the next iteration as an instruction, and outranks its current plan.
+        <div className="empty">
+          <div className="empty-icon lp-eico"><Ico d={ICONS.chat} /></div>
+          <p className="empty-sub">Anything you send is handed to the next iteration as an instruction, and outranks its current plan.</p>
         </div>
       ) : (
         <div className="lp-chat" ref={box}>
           {L.chat.map((m) => (
             <div key={m.id} className={`lp-msg ${m.role === "user" ? "me" : "it"} ${m.role === "user" && !m.delivered ? "queued" : ""}`}>
-              <div className="who">{m.role === "user" ? (m.delivered ? "You" : "You · queued") : `Looper · #${m.iter ?? "—"}`}</div>
+              <div className="t-cap who">{m.role === "user" ? (m.delivered ? "You" : "You · queued") : `Looper · #${m.iter ?? "—"}`}</div>
               {m.text}
             </div>
           ))}
@@ -673,13 +690,13 @@ function ChatView({ L }) {
           the 16px iOS-safe font clipped a wrapped placeholder mid-word. */}
       <div className="lp-composer">
         <textarea
-          className="lp-area" rows={2} value={text} placeholder="Reply, redirect, or add a constraint…"
+          className="field lp-area" rows={2} value={text} placeholder="Reply, redirect, or add a constraint…"
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); } }}
         />
-        <button type="button" className="lp-btn primary" onClick={send} disabled={!text.trim()}>Send</button>
+        <button type="button" className="btn md primary" onClick={send} disabled={!text.trim()}>Send</button>
       </div>
-      <p className="lp-tiny" style={{ marginTop: 7 }}>⌘/Ctrl + Enter sends. It reads your notes at the start of its next iteration.</p>
+      <p className="t-cap" style={{ marginTop: 7 }}>⌘/Ctrl + Enter sends. It reads your notes at the start of its next iteration.</p>
     </section>
   );
 }
@@ -688,44 +705,50 @@ function ChatView({ L }) {
 function LogView({ L }) {
   const [open, setOpen] = useState(null);
   if (L.journal.length === 0) {
-    return <div className="lp-empty"><div className="g"><Ico d={ICONS.log} /></div>No iterations yet.</div>;
+    return (
+      <div className="empty">
+        <div className="empty-icon lp-eico"><Ico d={ICONS.log} /></div>
+        <div className="empty-title">No iterations yet</div>
+        <p className="empty-sub">Start the run on the Run tab — every iteration lands here with what it did and the work it produced.</p>
+      </div>
+    );
   }
   const spend = L.journal.reduce((n, e) => n + (e.costUsd || 0), 0);
   const tokens = L.journal.reduce((n, e) => n + (e.tokens || 0), 0);
   return (
     <div style={{ display: "grid", gap: 12 }}>
-      <section className="lp-card">
-        <div className="lp-ttl">Run totals</div>
+      <section className="card pad-md">
+        <div className="t-label lp-ttl">Run totals</div>
         <div className="lp-strip">
-          <div className="c"><div className="k">Iterations</div><div className="v mono">{L.run.iterations}</div></div>
-          <div className="c"><div className="k">Tokens</div><div className="v mono">{tokens.toLocaleString("en-US")}</div></div>
-          <div className="c"><div className="k">Spend</div><div className="v mono">{money(spend)}</div></div>
-          <div className="c"><div className="k">Failed</div><div className="v mono">{L.journal.filter((e) => !e.ok).length}</div></div>
+          <div className="stattile"><div className="stattile-label">Iterations</div><div className="stattile-value">{L.run.iterations}</div></div>
+          <div className="stattile"><div className="stattile-label">Tokens</div><div className="stattile-value">{tokens.toLocaleString("en-US")}</div></div>
+          <div className="stattile"><div className="stattile-label">Spend</div><div className="stattile-value">{money(spend)}</div></div>
+          <div className="stattile"><div className="stattile-label">Failed</div><div className="stattile-value">{L.journal.filter((e) => !e.ok).length}</div></div>
         </div>
       </section>
-      <section className="lp-card">
-        <div className="lp-ttl">Journal — newest first</div>
+      <section className="card pad-md">
+        <div className="t-label lp-ttl">Journal — newest first</div>
         <ul className="lp-journal">
           {L.journal.map((e) => (
             <li key={e.id}>
               {/* A chevron, because nothing else said these rows open. Rotating
                   it is the only cue that the work product is one tap away. */}
-              <button type="button" className="lp-jhead lp-jbtn" onClick={() => setOpen(open === e.id ? null : e.id)} aria-expanded={open === e.id}>
+              <button type="button" className="cell tappable lp-jhead" onClick={() => setOpen(open === e.id ? null : e.id)} aria-expanded={open === e.id}>
                 <span className="lp-jiter">#{e.iter}</span>
                 <span className={`lp-jfocus ${e.ok ? "" : "lp-jerr"}`}>{e.focus}</span>
                 <span className="lp-jtime">{hhmm(e.ts)}</span>
-                <svg className={`lp-jchev ${open === e.id ? "open" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+                <svg className={`cell-chevron lp-jchev ${open === e.id ? "open" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
               </button>
               {open === e.id && (
-                <>
+                <div className="lp-jbody">
                   {e.did && <div className="lp-jdid">{e.did}</div>}
-                  {e.alignment && <div className="lp-jdid"><strong style={{ color: "var(--lp-ink-2)" }}>Aligned:</strong> {e.alignment}</div>}
+                  {e.alignment && <div className="lp-jdid"><strong style={{ color: "var(--ink)" }}>Aligned:</strong> {e.alignment}</div>}
                   {e.output && <div className="lp-jout">{e.output}</div>}
                   <div className="lp-meta">
-                    <span className="lp-tiny lp-num">{e.tokens.toLocaleString("en-US")} tok</span>
-                    <span className="lp-tiny lp-num">{money(e.costUsd || 0)}</span>
+                    <span className="t-cap t-num">{e.tokens.toLocaleString("en-US")} tok</span>
+                    <span className="t-cap t-num">{money(e.costUsd || 0)}</span>
                   </div>
-                </>
+                </div>
               )}
             </li>
           ))}

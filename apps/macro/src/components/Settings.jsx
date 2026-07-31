@@ -12,13 +12,13 @@ export default function Settings({ settingsSrc, positionSrc, derived }) {
       {settingsSrc.error && (
         <div className="error-row span2" role="alert">
           <span>Settings unavailable: {settingsSrc.error} — the risk engine is flying without your parameters.</span>
-          <button className="btn sm" onClick={settingsSrc.reload}>Retry</button>
+          <button className="btn quiet sm" onClick={settingsSrc.reload}>Retry</button>
         </div>
       )}
       {positionSrc.error && (
         <div className="error-row span2" role="alert">
           <span>Position unavailable: {positionSrc.error}</span>
-          <button className="btn sm" onClick={positionSrc.reload}>Retry</button>
+          <button className="btn quiet sm" onClick={positionSrc.reload}>Retry</button>
         </div>
       )}
       <RiskForm settingsSrc={settingsSrc} />
@@ -68,20 +68,20 @@ function RiskForm({ settingsSrc }) {
   }
 
   return (
-    <section className="card span2">
-      <div className="ttl">Risk engine</div>
+    <section className="card pad-md span2">
+      <div className="ttl t-label">Risk engine</div>
       <form onSubmit={submit} data-testid="risk-form">
         <div className="formrow">
-          <div className="field"><label htmlFor="rf-eq">Account equity ($)</label><input id="rf-eq" type="number" min="1" step="1" value={f.equity} onChange={set('equity')} required /></div>
-          <div className="field"><label htmlFor="rf-risk">Risk per trade (%)</label>
-            <input id="rf-risk" type="number" min="0.05" max="5" step="0.05" value={f.riskPct} onChange={set('riskPct')} required />
+          <div className="fld"><label htmlFor="rf-eq">Account equity ($)</label><input className="field" id="rf-eq" type="number" min="1" step="1" value={f.equity} onChange={set('equity')} required /></div>
+          <div className="fld"><label htmlFor="rf-risk">Risk per trade (%)</label>
+            <input className="field" id="rf-risk" type="number" min="0.05" max="5" step="0.05" value={f.riskPct} onChange={set('riskPct')} required />
             <span className="hint">a stop hit loses exactly this much — capped at 5%</span>
           </div>
         </div>
         <div className="formrow">
-          <div className="field"><label htmlFor="rf-max">Max position (% of equity)</label><input id="rf-max" type="number" min="1" max="100" step="1" value={f.maxPositionPct} onChange={set('maxPositionPct')} required /></div>
-          <div className="field"><label htmlFor="rf-mode">Default stop mode</label>
-            <select id="rf-mode" value={f.stopMode} onChange={set('stopMode')}>
+          <div className="fld"><label htmlFor="rf-max">Max position (% of equity)</label><input className="field" id="rf-max" type="number" min="1" max="100" step="1" value={f.maxPositionPct} onChange={set('maxPositionPct')} required /></div>
+          <div className="fld"><label htmlFor="rf-mode">Default stop mode</label>
+            <select className="field" id="rf-mode" value={f.stopMode} onChange={set('stopMode')}>
               <option value="atr">ATR multiple (volatility-aware)</option>
               <option value="structure">Below swing low</option>
               <option value="percent">Fixed percent</option>
@@ -89,27 +89,27 @@ function RiskForm({ settingsSrc }) {
           </div>
         </div>
         <div className="formrow">
-          <div className="field"><label htmlFor="rf-atrm">ATR multiple</label><input id="rf-atrm" type="number" min="0.5" max="10" step="0.1" value={f.atrMult} onChange={set('atrMult')} /></div>
-          <div className="field"><label htmlFor="rf-pct">Fixed stop (%)</label><input id="rf-pct" type="number" min="1" max="50" step="0.5" value={f.stopPct} onChange={set('stopPct')} /></div>
+          <div className="fld"><label htmlFor="rf-atrm">ATR multiple</label><input className="field" id="rf-atrm" type="number" min="0.5" max="10" step="0.1" value={f.atrMult} onChange={set('atrMult')} /></div>
+          <div className="fld"><label htmlFor="rf-pct">Fixed stop (%)</label><input className="field" id="rf-pct" type="number" min="1" max="50" step="0.5" value={f.stopPct} onChange={set('stopPct')} /></div>
         </div>
         <div className="formrow">
-          <div className="field"><label htmlFor="rf-chp">Chandelier period</label><input id="rf-chp" type="number" min="5" max="100" step="1" value={f.chandelierPeriod} onChange={set('chandelierPeriod')} /></div>
-          <div className="field"><label htmlFor="rf-chm">Chandelier multiple</label>
-            <input id="rf-chm" type="number" min="0.5" max="10" step="0.1" value={f.chandelierMult} onChange={set('chandelierMult')} />
+          <div className="fld"><label htmlFor="rf-chp">Chandelier period</label><input className="field" id="rf-chp" type="number" min="5" max="100" step="1" value={f.chandelierPeriod} onChange={set('chandelierPeriod')} /></div>
+          <div className="fld"><label htmlFor="rf-chm">Chandelier multiple</label>
+            <input className="field" id="rf-chm" type="number" min="0.5" max="10" step="0.1" value={f.chandelierMult} onChange={set('chandelierMult')} />
             <span className="hint">trail = highest high since entry − mult × ATR; it only rises</span>
           </div>
         </div>
         <div className="formrow">
-          <div className="field"><label htmlFor="rf-be">Breakeven at (R)</label>
-            <input id="rf-be" type="number" min="0.25" max="5" step="0.25" value={f.beAtR} onChange={set('beAtR')} />
+          <div className="fld"><label htmlFor="rf-be">Breakeven at (R)</label>
+            <input className="field" id="rf-be" type="number" min="0.25" max="5" step="0.25" value={f.beAtR} onChange={set('beAtR')} />
             <span className="hint">once price pays you this many R, the stop jumps to entry</span>
           </div>
-          <div className="field"><label htmlFor="rf-add">Add-risk fraction</label>
-            <input id="rf-add" type="number" min="0.1" max="1" step="0.05" value={f.addRiskFraction} onChange={set('addRiskFraction')} />
+          <div className="fld"><label htmlFor="rf-add">Add-risk fraction</label>
+            <input className="field" id="rf-add" type="number" min="0.1" max="1" step="0.05" value={f.addRiskFraction} onChange={set('addRiskFraction')} />
             <span className="hint">pyramid ADDs risk this fraction of a full unit (0.5 = half risk)</span>
           </div>
         </div>
-        <button className="btn primary" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save risk settings'}</button>
+        <button className="btn primary md" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save risk settings'}</button>
       </form>
     </section>
   )
@@ -136,23 +136,23 @@ function BalanceSheetForm({ settingsSrc }) {
   }
 
   return (
-    <section className="card span2">
-      <div className="ttl">MSTR balance sheet (feeds mNAV)
+    <section className="card pad-md span2">
+      <div className="ttl t-label">MSTR balance sheet (feeds mNAV)
         <span className="spacer" />
         {seeded
           ? <span className="chip stale"><span className="dot" />seeded — verify vs 8-K</span>
           : <span className="chip live"><span className="dot" />user-verified {s?.btcHoldingsAsOf}</span>}
       </div>
-      <p className="sub" style={{ marginBottom: 12 }}>
+      <p className="sub t-foot" style={{ marginBottom: 12 }}>
         mNAV and implied-BTC-price are only as honest as these two numbers. Strategy discloses
         holdings in 8-K filings (sec.gov, ticker MSTR) and on strategy.com — update after every purchase announcement.
       </p>
       <form onSubmit={submit} data-testid="balance-form">
         <div className="formrow">
-          <div className="field"><label htmlFor="bs-btc">BTC held</label><input id="bs-btc" type="number" min="1" step="1" value={f.btcHoldings} onChange={set('btcHoldings')} required /></div>
-          <div className="field"><label htmlFor="bs-sh">Shares outstanding (A+B)</label><input id="bs-sh" type="number" min="1000000" step="1000" value={f.sharesOutstanding} onChange={set('sharesOutstanding')} required /></div>
+          <div className="fld"><label htmlFor="bs-btc">BTC held</label><input className="field" id="bs-btc" type="number" min="1" step="1" value={f.btcHoldings} onChange={set('btcHoldings')} required /></div>
+          <div className="fld"><label htmlFor="bs-sh">Shares outstanding (A+B)</label><input className="field" id="bs-sh" type="number" min="1000000" step="1000" value={f.sharesOutstanding} onChange={set('sharesOutstanding')} required /></div>
         </div>
-        <button className="btn primary" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save as verified'}</button>
+        <button className="btn primary md" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save as verified'}</button>
       </form>
     </section>
   )
@@ -201,37 +201,37 @@ function PositionForm({ positionSrc, derived }) {
   }
 
   return (
-    <section className="card span2">
-      <div className="ttl">Open position {p ? '' : '(none tracked)'}</div>
-      <p className="sub" style={{ marginBottom: 12 }}>
+    <section className="card pad-md span2">
+      <div className="ttl t-label">Open position {p ? '' : '(none tracked)'}</div>
+      <p className="sub t-foot" style={{ marginBottom: 12 }}>
         Mirror your broker fill here. The cockpit computes the trail, breakeven lock, and live R from it.
         {derived?.stopPlan?.stop != null && !p && ` Suggested initial stop right now: ${fmtPx(derived.stopPlan.stop)} (${derived.stopPlan.detail}).`}
       </p>
       <form onSubmit={submit} data-testid="position-form">
         <div className="formrow">
-          <div className="field"><label htmlFor="pf-sh">Shares</label><input id="pf-sh" type="number" min="1" step="1" value={f.shares} onChange={set('shares')} required /></div>
-          <div className="field"><label htmlFor="pf-en">Avg entry ($)</label><input id="pf-en" type="number" min="0.01" step="0.01" value={f.avgEntry} onChange={set('avgEntry')} required /></div>
+          <div className="fld"><label htmlFor="pf-sh">Shares</label><input className="field" id="pf-sh" type="number" min="1" step="1" value={f.shares} onChange={set('shares')} required /></div>
+          <div className="fld"><label htmlFor="pf-en">Avg entry ($)</label><input className="field" id="pf-en" type="number" min="0.01" step="0.01" value={f.avgEntry} onChange={set('avgEntry')} required /></div>
         </div>
         <div className="formrow">
-          <div className="field"><label htmlFor="pf-ed">Entry date</label><input id="pf-ed" type="date" value={f.entryDate} onChange={set('entryDate')} required /></div>
-          <div className="field"><label htmlFor="pf-st">Initial stop ($)</label>
-            <input id="pf-st" type="number" min="0.01" step="0.01" value={f.initialStop} onChange={set('initialStop')} required />
+          <div className="fld"><label htmlFor="pf-ed">Entry date</label><input className="field" id="pf-ed" type="date" value={f.entryDate} onChange={set('entryDate')} required /></div>
+          <div className="fld"><label htmlFor="pf-st">Initial stop ($)</label>
+            <input className="field" id="pf-st" type="number" min="0.01" step="0.01" value={f.initialStop} onChange={set('initialStop')} required />
             <span className="hint">must be below entry — this defines 1R forever</span>
           </div>
         </div>
         <div className="formrow">
-          <div className="field"><label htmlFor="pf-ov">Manual stop override (optional)</label>
-            <input id="pf-ov" type="number" min="0.01" step="0.01" value={f.stopOverride ?? ''} onChange={set('stopOverride')} placeholder="leave empty to trust the trail" />
+          <div className="fld"><label htmlFor="pf-ov">Manual stop override (optional)</label>
+            <input className="field" id="pf-ov" type="number" min="0.01" step="0.01" value={f.stopOverride ?? ''} onChange={set('stopOverride')} placeholder="leave empty to trust the trail" />
             <span className="hint">
               only ever raises the stop, never lowers it
               {Number.isFinite(p?.stopHighWater) && ` · ratchet high-water: ${fmtPx(p.stopHighWater)} (a new entry date starts a fresh trade and resets it)`}
             </span>
           </div>
-          <div className="field"><label htmlFor="pf-no">Note</label><input id="pf-no" type="text" maxLength="500" value={f.note} onChange={set('note')} /></div>
+          <div className="fld"><label htmlFor="pf-no">Note</label><input className="field" id="pf-no" type="text" maxLength="500" value={f.note} onChange={set('note')} /></div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button className="btn primary" type="submit" disabled={saving}>{saving ? 'Saving…' : p ? 'Update position' : 'Track position'}</button>
-          {p && <button className="btn danger" type="button" disabled={saving} onClick={close}>Clear position</button>}
+          <button className="btn primary md" type="submit" disabled={saving}>{saving ? 'Saving…' : p ? 'Update position' : 'Track position'}</button>
+          {p && <button className="btn danger md" type="button" disabled={saving} onClick={close}>Clear position</button>}
         </div>
       </form>
     </section>
@@ -249,13 +249,13 @@ function SourceHealth() {
     }
   }
   return (
-    <section className="card span2">
-      <div className="ttl">Data sources
+    <section className="card pad-md span2">
+      <div className="ttl t-label">Data sources
         <span className="spacer" />
-        <button className="btn sm" onClick={run} disabled={state.loading}>{state.loading ? 'Pinging…' : 'Ping all sources'}</button>
+        <button className="btn quiet sm" onClick={run} disabled={state.loading}>{state.loading ? 'Pinging…' : 'Ping all sources'}</button>
       </div>
-      {state.error && <div className="error-row"><span>{state.error}</span><button className="btn sm" onClick={run}>Retry</button></div>}
-      {!state.data && !state.error && <p className="sub">MSTR: Yahoo (delayed ~15 min) → Stooq EOD fallback. BTC: Binance → Coinbase → CoinGecko. Run a ping to see live upstream health from the server's vantage point.</p>}
+      {state.error && <div className="error-row"><span>{state.error}</span><button className="btn quiet sm" onClick={run}>Retry</button></div>}
+      {!state.data && !state.error && <p className="sub t-foot">MSTR: Yahoo (delayed ~15 min) → Stooq EOD fallback. BTC: Binance → Coinbase → CoinGecko. Run a ping to see live upstream health from the server's vantage point.</p>}
       {state.data && (
         <>
           <div className="tbl-wrap">
@@ -279,7 +279,7 @@ function SourceHealth() {
           </div>
           {Object.keys(state.data.sourceStatus || {}).length > 0 && (
             <>
-              <div className="ttl" style={{ marginTop: 16 }}>Last real fetch per endpoint (server-side)</div>
+              <div className="ttl t-label" style={{ marginTop: 16 }}>Last real fetch per endpoint (server-side)</div>
               <div className="tbl-wrap">
                 <table>
                   <thead><tr><th>Endpoint</th><th>Last result</th><th>Detail / last error</th></tr></thead>
@@ -290,7 +290,7 @@ function SourceHealth() {
                         <td>{sst.ok
                           ? <span className="chip live"><span className="dot" />ok · {sst.latencyMs}ms</span>
                           : <span className="chip dead"><span className="dot" />failed</span>}</td>
-                        <td className="tiny" style={{ whiteSpace: 'normal', maxWidth: 340 }}>
+                        <td className="tiny t-cap" style={{ whiteSpace: 'normal', maxWidth: 340 }}>
                           {sst.ok ? (sst.detail || '—') : (sst.lastError || '—')}
                         </td>
                       </tr>
@@ -298,7 +298,7 @@ function SourceHealth() {
                   </tbody>
                 </table>
               </div>
-              <p className="tiny" style={{ marginTop: 6 }}>
+              <p className="tiny t-cap" style={{ marginTop: 6 }}>
                 Pings test reachability with a minimal request; this table shows what the REAL
                 data fetches last returned — when they disagree, the difference is the diagnosis.
               </p>

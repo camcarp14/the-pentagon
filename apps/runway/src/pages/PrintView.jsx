@@ -76,17 +76,17 @@ export default function PrintView() {
         <button className="btn primary sm" onClick={() => window.print()}>Print / Save as PDF</button>
       </div>
 
-      <div className="sheet">
+      <div className="paper">
         {(contact?.name || contactLine) && (
-          <header className="sheet-head">
-            {contact?.name && <div className="sheet-name">{contact.name}</div>}
-            {contactLine && <div className="sheet-contact">{contactLine}</div>}
+          <header className="paper-head">
+            {contact?.name && <div className="paper-name">{contact.name}</div>}
+            {contactLine && <div className="paper-contact">{contactLine}</div>}
           </header>
         )}
         {kind === 'cover_letter' && (
-          <div className="sheet-date">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+          <div className="paper-date">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
         )}
-        <div className="sheet-body">
+        <div className="paper-body">
           <Markdown text={draft.content} />
         </div>
       </div>

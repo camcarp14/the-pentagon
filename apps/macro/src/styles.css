@@ -4,7 +4,42 @@
      categorical  MSTR #3B72E8 · BTC #D97706   (ΔE deutan 30.2)
      polarity     up  #0FA3A3 · down #D93A5F   (ΔE deutan 10.0)
    Status colors always ship with an icon/label, never color alone.
-   ============================================================ */
+   ============================================================
+
+   ON THE SHARED KIT (@cc/ui/components.css)
+   -----------------------------------------
+   App.jsx puts `data-kit` on Macro's own root, so every rule in the kit —
+   all of which are scoped to [data-kit] — now reaches this app. That means
+   `[data-kit] .card` (0,2,0) OUT-SPECIFIES this sheet's `.card` (0,1,0) on
+   every declaration they share, regardless of which stylesheet loads last.
+   Each collision was diffed before anything was renamed:
+
+     .card    kit wins bg/border/radius/shadow; this sheet keeps padding only.
+              (It used to set a border AND a shadow — the kit's borderless card
+              is what removes that.)
+     .btn     kit wins border/radius/font-family and the .primary/.danger/.sm
+              variants. .ghost has no kit equivalent and stays local.
+     .seg     kit's is display:flex with .seg-opt children; the old `.seg button`
+              markup moved to .seg-opt/.active to match.
+     .field   ⚠ THE ONE THAT WOULD HAVE BROKEN. This app's .field was a
+              <label>+<input> WRAPPER (flex column); the kit's .field IS the
+              input (a filled 44px box). Mapping one onto the other would have
+              wrapped every form row in a grey well. The wrapper is `.fld` now
+              and the kit's .field went onto the controls themselves, where it
+              means the same thing.
+     .empty   kit centres it in a flex column and owns the padding; the glyph
+              and the copy classes below are additive.
+     .sk .sk-line .sk-big .toast .toasts .expand .pagefade .stagger
+              same names, same meanings, kit values win. The rules kept below
+              are the fallback for `npm --workspace @app/macro run dev`, which
+              boots this sheet alone with no kit stylesheet in the page.
+     .stat    NO kit collision, but it was hand-rolling .stattile (and doing it
+              with a 10.5px UPPERCASE label). The tiles are the kit's now; what
+              is left here is the tone ladder the kit has no opinion about.
+
+   Domain colour stays literal: --mstr/--btc are the two series' fixed
+   identities and --up/--down are candle polarity. They are data, not theme,
+   and they do not resolve through the kit. */
 
 :root {
   /* surfaces — the shared Pentagon "midnight" canvas */
@@ -111,13 +146,18 @@ a { color: var(--accent); text-decoration: none; }
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
   display: flex; justify-content: space-around;
   background: rgba(11, 15, 26, 0.92); backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%);
-  border-top: 1px solid var(--border); box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.4);
+  /* Shadow removed: this bar already separates with a hairline, and the design
+     language forbids a border and a shadow on the same element. */
+  border-top: 1px solid var(--border);
   padding: 4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)));
 }
+/* 10.5px, sentence case — was 9px UPPERCASE, which was both under the hard
+   10.5px floor and a second uppercase micro-type style competing with .t-label.
+   This is the kit's own .dock-label size for the same job. */
 .nav button {
   flex: 1; min-height: 46px; padding: 8px 2px 7px;
   background: none; border: none; border-radius: var(--r-sm);
-  color: var(--ink-3); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--ink-3); font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em;
   display: flex; flex-direction: column; align-items: center; gap: 3px;
   transition: color var(--dur-1) ease, transform var(--dur-1) var(--ease-out);
 }
@@ -141,8 +181,9 @@ a { color: var(--accent); text-decoration: none; }
     height: 52px; display: flex; align-items: center; padding: 0 24px;
     background: rgba(11, 15, 26, 0.78);
     backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.055);
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 4px 16px rgba(0, 0, 0, 0.35);
+    /* Shadow removed: this bar already separates with a hairline, and the design
+     language forbids a border and a shadow on the same element. */
+  border-bottom: 1px solid rgba(255,255,255,0.055);
   }
   .nav {
     position: static; margin: 0; justify-content: flex-start;
@@ -150,18 +191,25 @@ a { color: var(--accent); text-decoration: none; }
     background: rgba(255, 255, 255, 0.045); border: 1px solid rgba(255, 255, 255, 0.055);
     border-radius: 10px; box-shadow: none; border-top: 1px solid rgba(255, 255, 255, 0.055);
   }
-  /* Syne, not the inherited Inter — the single most visible mismatch with the
-     other three tools' pills. Label-only on desktop like every other tool. */
+  /* Label-only on desktop like every other tool. The face is the inherited body
+     stack now, NOT Syne: the language allows no decorative display font (the
+     shell's own chrome test asserts the string "Syne" never appears in its
+     source), and the shell bar these pills sit under already dropped it. Size,
+     weight, tracking and colour are unchanged, so the pills still line up with
+     the bar above them. */
   .nav button {
     flex: none; flex-direction: row; gap: 0; padding: 5px 14px; min-height: 32px;
     border: none; border-radius: 7px; color: #525E74;
-    font-family: 'Syne', system-ui, sans-serif; font-size: 11.5px; font-weight: 700;
+    font-family: inherit; font-size: 11.5px; font-weight: 700;
     letter-spacing: 0.05em; text-transform: none;
     transition: color var(--dur-2) cubic-bezier(0.4, 0, 0.2, 1);
   }
   .nav button svg { display: none; }
   .nav button.on { background: var(--card-2); color: #F7F9FC; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
-  .nav button:active { transform: none; }
+  /* the [data-kit] twin exists because the kit presses EVERY button
+     (`[data-kit] button:active`) and out-specifies the bare selector; on
+     desktop these are pills in a bar and the pill is not supposed to shrink */
+  .nav button:active, [data-kit] .nav button:active { transform: none; }
 }
 
 /* ---------------- cards & grid ---------------- */
@@ -175,13 +223,27 @@ a { color: var(--accent); text-decoration: none; }
 .grid > .span2 { grid-column: 1 / -1; }
 @media (min-width: 640px) { .grid > .span2 { grid-column: span 2; } }
 
+/* The kit owns background / border / radius / shadow here — `[data-kit] .card`
+   out-specifies this rule on all four. What is left is the padding (call sites
+   pass `card pad-md`, which is the same 16px, and the kit only paints padding
+   through those classes) and the transition. The border is gone from the
+   fallback too: it used to sit on the same element as --shadow-1, which the
+   language forbids, and the kit's card is deliberately borderless. */
 .card {
-  background: var(--card); border: 1px solid var(--border); border-radius: var(--r-lg);
+  background: var(--card); border: none; border-radius: var(--r-lg);
   padding: 16px; box-shadow: var(--shadow-1);
-  transition: border-color var(--dur-2) ease, transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
+  transition: transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
 }
-.card .ttl { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-3); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; row-gap: 6px; }
-.card .ttl .spacer { margin-left: auto; }
+/* Card titles carry `.t-label` from the kit's type scale, which is the ONE
+   place uppercase is allowed. Type therefore lives there, not here — and the
+   selector is deliberately one class deep so the kit's (0,2,0) wins the tie. */
+.ttl {
+  margin-bottom: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; row-gap: 6px;
+  /* mirrors .t-label exactly, and loses to it on specificity — it is only here
+     so the standalone dev entry (styles.css with no kit sheet) still reads */
+  font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3);
+}
+.ttl .spacer { margin-left: auto; }
 .big { font-size: 26px; font-weight: 800; letter-spacing: -0.4px; }
 .sub { color: var(--ink-2); font-size: 12.5px; }
 .tiny { color: var(--ink-3); font-size: 11.5px; }
@@ -209,36 +271,51 @@ a { color: var(--accent); text-decoration: none; }
 .badge-regime.downtrend { color: var(--down); background: rgba(217, 58, 95, 0.12); }
 .badge-regime.chop, .badge-regime.insufficient_data { color: var(--ink-2); background: rgba(255, 255, 255, 0.06); }
 
-/* ---------------- buttons ---------------- */
+/* ---------------- buttons ----------------
+   `.btn` and its `.primary` / `.danger` / `.sm` modifiers are the kit's; the
+   kit wins border, radius, font-family and the two variant fills. Everything
+   below is the standalone fallback plus `.ghost`, which the kit has no
+   equivalent for — `.quiet` is a filled neutral and `.plain` is accent-tinted,
+   and these disclosure toggles must be neither (amber is reserved for things
+   that change a decision). The old `border: 1px solid` on the base is gone, so
+   nothing here pairs a border with a shadow. */
 .btn {
-  border: 1px solid var(--border-strong); background: var(--card-2); color: var(--ink);
+  border: none; background: var(--card-2); color: var(--ink);
   border-radius: 10px; padding: 9px 16px; font-weight: 600; font-size: 13.5px;
   min-height: 40px;
-  transition: transform var(--dur-1) var(--ease-out), background var(--dur-1) ease, box-shadow var(--dur-2) var(--ease-out), border-color var(--dur-1) ease, opacity var(--dur-1) ease;
+  transition: transform var(--dur-1) var(--ease-out), background var(--dur-1) ease, box-shadow var(--dur-2) var(--ease-out), opacity var(--dur-1) ease;
 }
-.btn:hover:not(:disabled) { border-color: rgba(255, 255, 255, 0.28); }
 .btn:active:not(:disabled) { transform: scale(0.97); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); }
 .btn.primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(255, 178, 36, 0.35); }
-.btn.danger { background: none; border-color: rgba(225, 29, 72, 0.5); color: var(--crit); }
-.btn.ghost { background: none; border-color: transparent; color: var(--ink-2); }
+.btn.danger { background: rgba(225, 29, 72, 0.12); color: var(--crit); }
+.btn.ghost { background: none; color: var(--ink-2); }
 .btn.sm { padding: 5px 11px; min-height: 32px; font-size: 12.5px; border-radius: 8px; }
 
-/* segmented control */
-.seg { display: inline-flex; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 2px; }
-.seg button {
+/* segmented control — the kit's .seg / .seg-opt / .active.
+   Two local additions, both load-bearing:
+   1. the kit paints selection by sliding a .seg-thumb ELEMENT behind the active
+      option; this app's Seg renders no thumb, so without a fill here selection
+      would be colour-and-weight only, and colour is never the only signal.
+   2. `.seg` fallback geometry for the standalone dev entry. */
+.seg { display: inline-flex; background: var(--bg-elev); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg-opt {
   border: none; background: none; color: var(--ink-3); font-size: 12.5px; font-weight: 600;
   padding: 6px 12px; border-radius: 8px; min-height: 32px;
   transition: transform var(--dur-1) var(--ease-out), background var(--dur-1) ease, color var(--dur-1) ease;
 }
-.seg button.on { background: var(--card-2); color: var(--ink); box-shadow: var(--shadow-1); }
-.seg button:active { transform: scale(0.96); }
+.seg-opt.active, [data-kit] .seg-opt.active { background: var(--card-2); color: var(--ink); box-shadow: var(--shadow-1); }
 
-/* ---------------- forms ---------------- */
-.field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
-.field label { font-size: 12px; font-weight: 600; color: var(--ink-2); }
-.field .hint { font-size: 11px; color: var(--ink-3); }
+/* ---------------- forms ----------------
+   `.fld`, NOT `.field`. This is the <label> + control + hint WRAPPER; the kit's
+   `.field` is the control itself, so the two names mean opposite things and
+   leaving this one as `.field` would have dropped a filled 44px well around
+   every form row. The controls carry `.field` now, which is where the kit's
+   definition is true. */
+.fld { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.fld label { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.fld .hint { font-size: 11px; color: var(--ink-3); }
 input[type='number'], input[type='text'], input[type='date'], input[type='password'], select, textarea {
   background: var(--bg-elev); border: 1px solid var(--border-strong); color: var(--ink);
   border-radius: 10px; padding: 9px 12px; min-height: 40px; width: 100%;
@@ -251,15 +328,37 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 /* ---------------- tables ---------------- */
 .tbl-wrap { overflow-x: auto; max-width: calc(100% + 32px); margin: 0 -16px; padding: 0 16px; }
 table { border-collapse: collapse; width: 100%; font-size: 13px; }
-th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ink-3); font-weight: 700; padding: 7px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+/* Sentence case at the label size: these were 10.5px UPPERCASE tracked 0.8px,
+   which is .t-label hand-rolled a size and a half too small. Uppercase belongs
+   to .t-label alone, and a <th> cannot wear it without a class on all 17 of
+   them, so the column heads read as heads by weight and colour instead. */
+th { text-align: left; font-size: 12px; letter-spacing: 0.02em; color: var(--ink-3); font-weight: 600; padding: 7px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 td { padding: 8px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); white-space: nowrap; }
 tr:last-child td { border-bottom: none; }
 
-/* ---------------- stat rows ---------------- */
+/* ---------------- stat rows ----------------
+   The tiles are the kit's `.stattile` / `.stattile-label` / `.stattile-value`.
+   There was no class-name collision here — `.stat` was simply a hand-rolled
+   stattile, down to a 10.5px UPPERCASE label doing by hand what .t-label does
+   properly at 12px. `.stats` stays: it is the GRID the tiles sit in, and the
+   kit has no opinion about that. `.tile-sub` is the third line the kit's tile
+   has no slot for. */
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; }
-.stat .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ink-3); font-weight: 700; }
-.stat .v { font-size: 17px; font-weight: 700; margin-top: 2px; }
-.stat .d { font-size: 11px; color: var(--ink-3); }
+.tile-sub { font-size: 11px; color: var(--ink-3); }
+/* standalone fallback only — every one of these loses to [data-kit] .stattile* */
+.stattile { display: flex; flex-direction: column; gap: 3px; border-radius: var(--r-md); padding: 12px 9px 10px; min-width: 0; }
+.stattile-label { font-size: 10.5px; color: var(--ink-3); font-weight: 500; }
+.stattile-value { font-family: var(--mono); font-size: 17px; font-weight: 500; letter-spacing: -0.2px; }
+/* The kit inks .stattile-label / .t-label / .t-foot / .t-cap with var(--sub),
+   which the shell does not stamp — it falls through to Graphite's WARM grey and
+   reads yellowish against this cockpit's navy. The scale (size, weight,
+   tracking, leading) is the kit's; the ink stays on this tool's cool ladder.
+   Every selector here is (0,3,0) so it wins outright rather than on file order. */
+[data-kit] .stattile > .stattile-label { color: var(--ink-3); }
+[data-kit] .ttl.t-label, [data-kit] .tc-k.t-label,
+[data-kit] .ticket .k.t-label, [data-kit] .rd-shape-k.t-label { color: var(--ink-3); }
+[data-kit] .sub.t-foot { color: var(--ink-2); }
+[data-kit] .tiny.t-cap { color: var(--ink-3); }
 
 /* meter (distance-to-stop etc.) */
 .meter { height: 6px; border-radius: 99px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
@@ -290,7 +389,21 @@ tr:last-child td { border-bottom: none; }
 /* ---------------- toasts ---------------- */
 .toasts { position: fixed; bottom: calc(var(--nav-h) + 14px + var(--safe-bottom, 0px)); left: 50%; transform: translateX(-50%); z-index: 90; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; padding: 0 14px; width: 100%; max-width: 480px; }
 @media (min-width: 768px) { .toasts { bottom: 18px; } }
-.toast { pointer-events: auto; background: var(--card-2); border: 1px solid var(--border-strong); color: var(--ink); border-radius: 12px; padding: 11px 16px; font-size: 14px; box-shadow: var(--shadow-2); animation: toastin var(--dur-3) var(--ease-spring) both; display: flex; gap: 10px; align-items: center; }
+/* ⚠ THE SAFE-AREA WORKAROUND, RESTATED SO THE KIT CANNOT WIN IT.
+   `[data-kit] .toasts` pins itself to `calc(84px + env(safe-area-inset-bottom))`
+   and out-specifies the rule above. env() raw is exactly what the shell's iOS
+   letterbox guard exists to override: an icon installed while the app shipped
+   "black-translucent" gets a window with a dead ~59pt bottom strip, and there
+   the reported inset must NOT be padded for or the bar floats off the screen
+   edge. The shell measures which window it is in and publishes the usable value
+   as --safe-bottom; these two rules keep Macro's toasts reading it. They are
+   (0,3,0) — .macro-root is the element that carries data-kit — so they win
+   outright rather than on stylesheet order. Do not "simplify" them away. */
+[data-kit].macro-root .toasts { bottom: calc(var(--nav-h) + 14px + var(--safe-bottom, 0px)); }
+@media (min-width: 768px) { [data-kit].macro-root .toasts { bottom: 18px; } }
+/* border: none matches what the kit does to this element anyway, and keeps the
+   fallback off the border-plus-shadow pairing */
+.toast { pointer-events: auto; background: var(--card-2); border: none; color: var(--ink); border-radius: 12px; padding: 11px 16px; font-size: 14px; box-shadow: var(--shadow-2); animation: toastin var(--dur-3) var(--ease-spring) both; display: flex; gap: 10px; align-items: center; }
 .toast.out { animation: toastout var(--dur-2) var(--ease-out) both; }
 .toast .tdot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex: none; }
 .toast.err .tdot { background: var(--crit); }
@@ -299,7 +412,9 @@ tr:last-child td { border-bottom: none; }
 
 /* ---------------- command palette ---------------- */
 .cmdk-wrap { position: fixed; inset: 0; z-index: 95; background: rgba(0, 0, 0, 0.62); backdrop-filter: blur(4px); display: grid; place-items: start center; padding: 12vh 16px 16px; animation: fadein var(--dur-2) ease both; }
-.cmdk { width: 100%; max-width: 560px; background: var(--bg-elev); border: 1px solid var(--border-strong); border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow-2); animation: rise var(--dur-2) var(--ease-spring) both; }
+/* no border: it sat on the same element as --shadow-2, and a floating panel
+   separates by elevation, not by outline */
+.cmdk { width: 100%; max-width: 560px; background: var(--bg-elev); border: none; border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow-2); animation: rise var(--dur-2) var(--ease-spring) both; }
 .cmdk input { border: none; background: transparent; padding: 16px 18px; font-size: 16px; width: 100%; color: inherit; border-bottom: 1px solid var(--border); border-radius: 0; min-height: 0; }
 .cmdk input:focus { outline: none; box-shadow: none; border-color: var(--border); }
 .cmdk .list { max-height: 320px; overflow-y: auto; padding: 6px; }
@@ -334,23 +449,34 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .ladder li { margin: 5px 0; color: var(--ink-2); font-size: 13px; }
 .ladder li strong { color: var(--ink); }
 
-/* empty & error states — always guide, never dead-end */
+/* empty & error states — always guide, never dead-end.
+   `.empty` is the kit's (flex column, centred, its own padding); `.glyph` is
+   this app's icon slot and `.empty-title` / `.empty-sub` are the kit's copy
+   classes, restated here only for the standalone entry. Every empty state in
+   this app now names the next action, and every error row carries a retry. */
 .empty { text-align: center; padding: 28px 16px; color: var(--ink-2); }
 .empty .glyph { font-size: 26px; margin-bottom: 6px; }
+.empty-title { font-size: 15px; font-weight: 600; color: var(--ink); }
+.empty-sub { font-size: 12.5px; line-height: 1.55; color: var(--ink-2); max-width: 300px; }
 .error-row { display: flex; align-items: center; gap: 10px; justify-content: space-between; background: rgba(225, 29, 72, 0.07); border: 1px solid rgba(225, 29, 72, 0.25); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
 
 /* mobile ergonomics — EVERY tap target ≥ 44px, including .sm variants
    (.btn.sm outspecifies .btn, so it needs its own rule here) */
 @media (max-width: 767.98px) {
   .btn, .btn.sm { min-height: 44px; }
-  .seg button { min-height: 44px; }
+  .seg button, .seg .seg-opt, [data-kit] .seg .seg-opt { min-height: 44px; }
   input, select, textarea { font-size: 16px; } /* iOS zooms focused inputs under 16px */
+  /* The same workaround, restated at a weight that beats `[data-kit] .field`
+     (font-size: 15px). Without this twin the kit would win on specificity and
+     every focused input on iOS would zoom the page — the exact bug the line
+     above exists to prevent. */
+  [data-kit] input.field, [data-kit] select.field, [data-kit] textarea.field { font-size: 16px; }
 }
 
 /* the mandate: everything above is optional to the user's nervous system */
 @media (prefers-reduced-motion: reduce) {
   .pagefade, .stagger > *, .toast, .cmdk, .cmdk-wrap { animation: none !important; }
-  .expand, .btn, .card, .nav button, .seg button, .meter > div { transition: none !important; }
+  .expand, .btn, .card, .nav button, .seg button, .seg-opt, .meter > div { transition: none !important; }
   .sk::after { animation: none; }
 }
 
@@ -379,9 +505,23 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
    Deliberately NOT a real <table>: at 390px a four-column trading table either
    scrolls sideways or shrinks the numbers below legibility. One field per row with
    its reason underneath fits the phone and reads identically on a desktop. */
-.tcard { border-width: 1px; border-left-width: 5px; border-left-color: var(--ink-3); }
-.tcard.act { border-left-color: var(--accent); }
-.tcard.urgent { border-left-color: var(--crit); }
+/* The severity stripe. It WAS `border-left-width: 5px` on a card that also
+   carried a shadow — border-and-shadow on one element, which the language
+   forbids — and the kit's borderless card would have erased it outright:
+   `[data-kit] .card { border: none }` sets border-STYLE to none, so a rule that
+   only names a width and a colour paints nothing. It is an inset shadow layer
+   now: same 5px bar, same three meanings, no border anywhere. The stripe is
+   never the only signal — the card's first row states the action in words.
+   --shadow-card is what the shell stamps; --shadow-1 is the standalone value.
+   The `[data-kit] .card.X` twins are (0,3,0) so they beat `[data-kit] .card`'s
+   own box-shadow outright, rather than winning a same-weight tie on file
+   order — which is how a stripe silently disappears six months from now. */
+.tcard,
+[data-kit] .card.tcard { box-shadow: var(--shadow-card, var(--shadow-1)), inset 5px 0 0 var(--ink-3); }
+.tcard.act,
+[data-kit] .card.tcard.act { box-shadow: var(--shadow-card, var(--shadow-1)), inset 5px 0 0 var(--accent); }
+.tcard.urgent,
+[data-kit] .card.tcard.urgent { box-shadow: var(--shadow-card, var(--shadow-1)), inset 5px 0 0 var(--crit); }
 
 .tc-head { display: flex; align-items: center; gap: 14px; }
 .tc-score { display: flex; align-items: baseline; gap: 3px; flex: none; }
@@ -407,7 +547,10 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
    as a term and its definition instead of two unrelated strings. */
 .tc-rows { margin: 14px 0 0; display: grid; gap: 1px; background: var(--border); border-radius: var(--r-md); overflow: hidden; }
 .tc-row { background: var(--card-2); display: grid; grid-template-columns: 92px 1fr; gap: 10px; padding: 10px 12px; align-items: baseline; }
-.tc-k { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ink-3); }
+/* was 10px UPPERCASE tracked 0.8px — under the 10.5px floor, and a second
+   uppercase micro-style. It wears .t-label now (12px, 0.05em), which still
+   sets "Long/short" at ~78px inside the 92px key column. */
+.tc-k { color: var(--ink-3); }
 .tc-v { margin: 0; min-width: 0; }
 .tc-val { display: block; font-size: 15.5px; font-weight: 700; line-height: 1.25; color: var(--ink); overflow-wrap: break-word; }
 .tc-note { display: block; font-size: 11.5px; color: var(--ink-3); line-height: 1.45; margin-top: 2px; text-wrap: pretty; }
@@ -440,7 +583,8 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
   margin-top: 14px; background: var(--border); border-radius: var(--r-md); overflow: hidden;
 }
 .ticket .tk { background: var(--card-2); padding: 10px 12px; min-width: 0; }
-.ticket .k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ink-3); font-weight: 700; }
+/* .t-label in the markup — this was 10px uppercase, under the floor */
+.ticket .k { color: var(--ink-3); }
 .ticket .v { font-family: var(--mono); font-size: 19px; font-weight: 500; margin-top: 3px; letter-spacing: -0.2px; white-space: nowrap; }
 .ticket .v .u { font-size: 11px; color: var(--ink-3); margin-left: 3px; font-weight: 600; }
 
@@ -466,17 +610,24 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
    3+1 and left a ragged orphan on its own row. */
 .stats-2up { grid-template-columns: repeat(2, 1fr); }
 @media (min-width: 640px) { .stats-2up { grid-template-columns: repeat(4, 1fr); } }
-.stat .v { font-family: var(--mono); font-weight: 500; letter-spacing: -0.2px; }
-.stat .v.pos { color: var(--up); } .stat .v.neg { color: var(--down); }
-.stat .est {
+/* The tone ladder on the kit's tile value. [data-kit] on the left so these beat
+   `[data-kit] .stattile-value`'s own colour and mono family; the unprefixed
+   twins keep the standalone entry honest. --up / --down / --serious are domain
+   colours (candle polarity and the leverage grade), not theme, so they stay
+   literal here rather than resolving to the kit's --green/--red. */
+.stattile-value.pos, [data-kit] .stattile-value.pos { color: var(--up); }
+.stattile-value.neg, [data-kit] .stattile-value.neg { color: var(--down); }
+.est {
   display: inline-block; margin-left: 5px; padding: 0 4px; border-radius: 4px;
   background: rgba(212, 147, 11, 0.16); color: var(--warn);
-  font-size: 8.5px; font-weight: 800; letter-spacing: 0.4px; vertical-align: 1px;
+  /* was 8.5px — two points under the hard floor, on the one badge that warns
+     you the mNAV underneath it rests on estimates */
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.2px; vertical-align: 1px;
 }
-.stat .v.grade-efficient { color: var(--good); text-transform: capitalize; font-family: var(--font); }
-.stat .v.grade-unknown { color: var(--ink-3); text-transform: capitalize; font-family: var(--font); }
-.stat .v.grade-fair { color: var(--ink-2); text-transform: capitalize; font-family: var(--font); }
-.stat .v.grade-rich { color: var(--serious); text-transform: capitalize; font-family: var(--font); }
+.stattile-value.grade-efficient, [data-kit] .stattile-value.grade-efficient { color: var(--good); text-transform: capitalize; font-family: var(--font); }
+.stattile-value.grade-unknown, [data-kit] .stattile-value.grade-unknown { color: var(--ink-3); text-transform: capitalize; font-family: var(--font); }
+.stattile-value.grade-fair, [data-kit] .stattile-value.grade-fair { color: var(--ink-2); text-transform: capitalize; font-family: var(--font); }
+.stattile-value.grade-rich, [data-kit] .stattile-value.grade-rich { color: var(--serious); text-transform: capitalize; font-family: var(--font); }
 
 /* ---- position ---- */
 .pos-id { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--ink-2); letter-spacing: 0; text-transform: none; }
@@ -491,23 +642,25 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .factlist li { margin: 3px 0; }
 .torque-note { margin: 10px 0 0; }
 .planner-note { margin-top: 10px; }
-.card .ttl-btn {
+/* No type here: these buttons carry `.ttl t-label`, and `.card .ttl-btn` (0,2,0)
+   would have TIED with `[data-kit] .t-label` and won on source order, which is
+   exactly the silent kind of collision this migration is meant to remove. */
+.ttl-btn {
   width: 100%; background: none; border: none; padding: 0 0 10px; margin: 0;
-  text-align: left; font: inherit; font-size: 11px; font-weight: 700;
-  letter-spacing: 1px; text-transform: uppercase; color: var(--ink-3);
-  display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer;
+  text-align: left; display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer;
 }
 /* Closed, the 10px gap under the title has nothing to separate it from, so a
    collapsed card carried a strip of dead space. Now that four of these stack
    under the answer card, that strip was the difference between a tidy list and
    four half-empty boxes. */
-.card .ttl-btn[aria-expanded="false"] { padding-bottom: 0; }
+.ttl-btn[aria-expanded="false"] { padding-bottom: 0; }
 /* And the card's own 16px of vertical padding around a single 44px row made each
    closed disclosure 76px tall — four of them was 300px of scroll to say four
    short things. The button keeps its own 44px, so the touch target is unchanged;
    :has() is a progressive enhancement here, and without it the spacing simply
    stays as it was. */
-.card:has(> .ttl-btn[aria-expanded="false"]) { padding-top: 9px; padding-bottom: 9px; }
+.card:has(> .ttl-btn[aria-expanded="false"]),
+[data-kit] .card:has(> .ttl-btn[aria-expanded="false"]) { padding-top: 9px; padding-bottom: 9px; }
 .dr-state { margin-left: auto; font-size: 11px; color: var(--ink-3); font-weight: 500; text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dr-chev { flex: none; color: var(--ink-3); transition: transform var(--dur-2) var(--ease-out); }
 .dr-chev.open { transform: rotate(180deg); }
@@ -515,11 +668,11 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 /* ---- touch ergonomics ---- */
 @media (max-width: 767.98px) {
   .btn.sm { min-height: 44px; padding: 8px 14px; }
-  .seg button { min-height: 44px; }
+  .seg button, .seg .seg-opt, [data-kit] .seg .seg-opt { min-height: 44px; }
   /* The stop-mode picker spans the card so all three modes are equally
      reachable instead of clustering at the left edge. */
   .seg-wide { display: flex; width: 100%; }
-  .seg-wide button { flex: 1; }
+  .seg-wide button, .seg-wide .seg-opt { flex: 1; }
   .ticket .v { font-size: 18px; }
 }
 
@@ -562,7 +715,9 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 
 /* shape gates: binary, so they are tags rather than rows */
 .rd-shape { margin-bottom: 13px; }
-.rd-shape-k { display: block; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--ink-3); font-weight: 700; margin-bottom: 6px; }
+/* .t-label in the markup — this was 9.5px uppercase, the smallest type in the
+   app and a full point under the floor */
+.rd-shape-k { display: block; color: var(--ink-3); margin-bottom: 6px; }
 .rd-tags { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .rd-tag {
   display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 0;

@@ -29,7 +29,7 @@ function Rail() {
   const queued = (discoveries || []).length;
   return (
     <nav className="rail">
-      <div className="brand"><span className="dot" />RUNWAY</div>
+      <div className="brand"><span className="dot" /><span className="t-head">Runway</span></div>
       <div className="navgroup">
         <NavLink to="/" end className={cls}><TabIco name="board" /><span className="tab-label">Board</span></NavLink>
         <NavLink to="/capture" className={cls}>
@@ -52,7 +52,7 @@ function BootScreen() {
   return (
     <div className="shell">
       <div className="rail">
-        <div className="brand"><span className="dot" />RUNWAY</div>
+        <div className="brand"><span className="dot" /><span className="t-head">Runway</span></div>
         <SkLine w="w80" /><SkLine w="w60" /><SkLine w="w80" /><SkLine w="w60" />
       </div>
       <main className="main"><SkBoard /></main>

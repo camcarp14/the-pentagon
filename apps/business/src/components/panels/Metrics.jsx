@@ -143,7 +143,7 @@ export default function Metrics({ now }) {
               >{x.label}</Btn>
             ))}
           </Row>
-          <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 7, lineHeight: 1.5 }}>{s.note}</div>
+          <div className="stattile-label" style={{ color: "var(--faint)", marginTop: 7, lineHeight: 1.5, whiteSpace: "normal" }}>{s.note}</div>
         </div>
 
         {/* ─── where it stands, and how far it has come ──────────────────── */}
@@ -195,8 +195,10 @@ export default function Metrics({ now }) {
         ) : (
           <div>
             <Spark geo={geo} gid={gid} />
+            {/* 11.5px, not 10: Row takes no className, so the kit's .t-cap
+                size is written out. 10 was under the floor. */}
             <Row gap={8} wrap style={{
-              marginTop: 8, fontSize: 10, color: "var(--faint)",
+              marginTop: 8, fontSize: 11.5, color: "var(--faint)",
               fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
             }}>
               <span>low {s.fmt(geo.lo)}</span>
@@ -257,8 +259,8 @@ export default function Metrics({ now }) {
               onClick={() => setRangeKey(r.key)}
             >{r.label}</Btn>
           ))}
-          <span style={{
-            marginLeft: "auto", alignSelf: "center", fontSize: 10, color: "var(--faint)",
+          <span className="t-cap" style={{
+            marginLeft: "auto", alignSelf: "center", color: "var(--faint)",
             fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
           }}>
             {read.length} of {inRange.length} plotted
@@ -266,9 +268,9 @@ export default function Metrics({ now }) {
         </Row>
 
         {/* ─── the age, in the body, beside the thing being believed ─────── */}
-        <div style={{
+        <div className="t-cap" style={{
           borderTop: "1px solid var(--border)", paddingTop: 9,
-          fontSize: 10.5, lineHeight: 1.55, fontVariantNumeric: "tabular-nums",
+          lineHeight: 1.55, fontVariantNumeric: "tabular-nums",
           color: overdue ? TONE.stale.fg : "var(--muted)",
           fontWeight: overdue ? 700 : 400,
         }}>
@@ -379,16 +381,16 @@ function NoTrend({ headline, detail }) {
       padding: "13px 13px", borderRadius: 12,
       border: `1px solid ${TONE.stale.line}`, borderLeft: `3px solid ${TONE.stale.fg}`, background: TONE.stale.bg,
     }}>
-      <div style={{ fontSize: 12.5, fontWeight: 800, color: TONE.stale.fg, fontFamily: "var(--font-display)" }}>{headline}</div>
-      <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.55, marginTop: 4 }}>{detail}</div>
+      <div className="t-foot" style={{ fontWeight: 800, color: TONE.stale.fg }}>{headline}</div>
+      <div className="t-cap" style={{ color: "var(--muted)", lineHeight: 1.55, marginTop: 4 }}>{detail}</div>
     </div>
   );
 }
 
 function Caveat({ tone, children }) {
   return (
-    <div style={{
-      fontSize: 10.5, lineHeight: 1.5,
+    <div className="t-cap" style={{
+      lineHeight: 1.5,
       color: tone ? (TONE[tone] || TONE.empty).fg : "var(--muted)",
       fontVariantNumeric: "tabular-nums",
     }}>{children}</div>

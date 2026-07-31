@@ -383,7 +383,23 @@
   [data-kit] *, [data-kit] *::before, [data-kit] *::after { animation-duration: 0.01ms !important; animation-delay: 0s !important; transition-duration: 0.01ms !important; }
   [data-kit] .pagefade, [data-kit] .pageslide-l, [data-kit] .pageslide-r, [data-kit] .stagger > *, [data-kit] .toast, [data-kit] .sheet { animation: none !important; }
   [data-kit] .expand, [data-kit] .seg-thumb, [data-kit] .switch-knob { transition: none; }
-  [data-kit] .sk::after { animation: none; }}
+  [data-kit] .sk::after { animation: none; }
+  /* PRESS. The block above kills durations, which does nothing to a transform
+     applied by :active — that is a state, not an animation. So every button in
+     every app that opts in still scaled on press for someone who had asked for
+     no motion. An app CANNOT fix this for itself: the kit's
+     `[data-kit] button:active` is specificity (0,3,1) and an app's own
+     `.x:active` guard is (0,3,0), and a media query adds nothing — one app had
+     already shipped a `[data-kit] .nav button:active` twin to work around
+     exactly this. Fixed here so no app has to. */
+  [data-kit] button:active:not(:disabled),
+  [data-kit] .card.pressable:active,
+  [data-kit] .pressable:active,
+  [data-kit] .stattile.tappable:active { transform: none !important; }
+  /* SPIN. `animation-duration: 0.01ms` on an infinite spinner does not stop it,
+     it runs it at 100,000 revolutions a second — a per-frame jitter, which is
+     worse than the motion it replaced. Stop the iteration, not the clock. */
+  [data-kit] .spinner { animation-iteration-count: 1 !important; animation-name: none !important; }}
 /* The shell's tool row scrolls on a phone. A visible scrollbar inside a 51px
    bar is chrome about chrome; the row's overflow is signalled by the fact that
    a segment is cut off at the edge, which is the honest affordance. */

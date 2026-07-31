@@ -8,6 +8,11 @@ import { replayRules } from '../lib/replay.js'
 import { Seg, FreshChip } from './primitives.jsx'
 import { fmtPx, round2 } from '../lib/format.js'
 
+// Literal hexes on purpose, and they stay literal through the kit migration:
+// these are DOMAIN colours, not theme. up/down are candle polarity, mstr is the
+// MSTR series' fixed identity, crit/warn mark the stop lines. They were checked
+// with the dataviz six-checks validator (see the header of styles.css) and they
+// are drawn onto a lightweight-charts canvas, which cannot read a CSS variable.
 const C = {
   up: '#0FA3A3', down: '#D93A5F', mstr: '#3B72E8', ink3: '#6B7487',
   grid: 'rgba(255,255,255,0.05)', crit: '#E11D48', warn: '#D4930B',
@@ -28,15 +33,19 @@ export default function ChartPanel({ derived, settings, position }) {
 
   return (
     <div className="grid">
-      <section className="card span2">
-        <div className="ttl">
+      <section className="card pad-md span2">
+        <div className="ttl t-label">
           {view === 'btc' ? 'BTC · daily' : 'MSTR · daily'}
           <span className="spacer" />
           <FreshChip fresh={derived.freshCandles} />
           <Seg value={view} onChange={setView} options={[{ value: 'mstr', label: 'MSTR' }, { value: 'btc', label: 'BTC' }]} />
         </div>
         {candles.length === 0 ? (
-          <div className="empty"><div className="glyph">▦</div>No candle history from any source. Check Settings → Data sources.</div>
+          <div className="empty">
+            <div className="glyph" aria-hidden>▦</div>
+            <div className="empty-title">No candle history from any source</div>
+            <div className="empty-sub">Open Settings → Data sources and run a ping to see which upstream is refusing.</div>
+          </div>
         ) : (
           <Chart
             candles={candles}
@@ -47,19 +56,22 @@ export default function ChartPanel({ derived, settings, position }) {
         )}
         {view === 'mstr' && (
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
-            <button className={`btn sm${showReplay ? ' primary' : ''}`} onClick={() => setShowReplay((s) => !s)} data-testid="replay-toggle">
+            <button className={`btn sm ${showReplay ? 'primary' : 'quiet'}`} onClick={() => setShowReplay((s) => !s)} data-testid="replay-toggle">
               {showReplay ? 'Replay ON' : 'Run rule replay'}
             </button>
-            <span className="tiny">replays the ATR-stop variant of the entry/trail rules over this history — fills at next open, 0.1% fees, no lookahead</span>
+            <span className="tiny t-cap">replays the ATR-stop variant of the entry/trail rules over this history — fills at next open, 0.1% fees, no lookahead</span>
           </div>
         )}
       </section>
 
       {replay && (
-        <section className="card span2 pagefade" data-testid="replay-summary">
-          <div className="ttl">Rule replay — {replay.summary.trades} trades over {Math.round(derived.mstrCandles.length / 21)} months</div>
+        <section className="card pad-md span2 pagefade" data-testid="replay-summary">
+          <div className="ttl t-label">Rule replay — {replay.summary.trades} trades over {Math.round(derived.mstrCandles.length / 21)} months</div>
           {replay.summary.trades === 0 ? (
-            <div className="empty">The ruleset never triggered on this tape. That is an answer, not an error.</div>
+            <div className="empty">
+              <div className="empty-title">The ruleset never triggered on this tape</div>
+              <div className="empty-sub">That is an answer, not an error. Widen the history or switch the stop mode in Settings to audit a different variant.</div>
+            </div>
           ) : (
             <>
               <div className="stats">
@@ -70,9 +82,9 @@ export default function ChartPanel({ derived, settings, position }) {
                 <Stat k="Avg hold" v={replay.summary.avgBars == null ? '—' : `${Math.round(replay.summary.avgBars)} bars`} />
               </div>
               {replay.warnings.length > 0 && (
-                <p className="tiny" style={{ marginTop: 8 }}>{replay.warnings.join(' · ')}</p>
+                <p className="tiny t-cap" style={{ marginTop: 8 }}>{replay.warnings.join(' · ')}</p>
               )}
-              <p className="tiny" style={{ marginTop: 6 }}>
+              <p className="tiny t-cap" style={{ marginTop: 6 }}>
                 A rule audit on one tape — not a promise. Slippage beyond the fee model, halts, and gaps are real life.
               </p>
             </>
@@ -85,7 +97,7 @@ export default function ChartPanel({ derived, settings, position }) {
 
 function Stat({ k, v, d, sign }) {
   const cls = sign == null ? '' : sign >= 0 ? 'pos' : 'neg'
-  return <div className="stat"><div className="k">{k}</div><div className={`v num ${cls}`}>{v}</div>{d && <div className="d">{d}</div>}</div>
+  return <div className="stattile"><div className="stattile-label">{k}</div><div className={`stattile-value num ${cls}`}>{v}</div>{d && <div className="tile-sub">{d}</div>}</div>
 }
 function fmtR(x) { return x == null ? '—' : `${x >= 0 ? '+' : ''}${round2(x)}R` }
 

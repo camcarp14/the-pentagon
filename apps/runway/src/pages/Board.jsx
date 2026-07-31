@@ -21,7 +21,7 @@ function Agenda() {
 
   if (!rows.length) return null;
   return (
-    <div className="card section">
+    <div className="card pad-md section">
       <h2>Today — {rows.length} follow-up{rows.length === 1 ? '' : 's'} due</h2>
       <ul className="timeline agenda">
         {rows.map((f) => (
@@ -90,7 +90,7 @@ function MobileStages({ byStage, staleIds, nextDueByJob, daysIn }) {
       <div className="stagebar" role="group" aria-label="Pipeline stage">
         {STAGES.map((s) => (
           <button key={s.id} aria-pressed={s.id === stage}
-            className={`stagepill${s.id === stage ? ' on' : ''}`} onClick={() => setStage(s.id)}>
+            className={`pill${s.id === stage ? ' active' : ''}`} onClick={() => setStage(s.id)}>
             {s.label}
             {byStage[s.id].length > 0 && <span className="cnt">{byStage[s.id].length}</span>}
           </button>
@@ -188,7 +188,7 @@ export default function Board() {
   return (
     <>
       <div className="page-head">
-        <h1>Board</h1>
+        <h1 className="t-title2">Board</h1>
         <div style={{ display: 'flex', gap: 10 }}>
           {/* the liveness sweep is a utility, not a headline action — on
               mobile it lives at the foot of the pipeline instead */}
@@ -202,11 +202,14 @@ export default function Board() {
         </div>
       </div>
 
+      {/* the kit's stat tiles, `on-canvas` so each one is its own card. The
+          label used to be a Syne uppercase 11px (9.5px on a phone) — a
+          decorative face hand-rolling what .stattile-label does at the floor. */}
       <div className="grid metrics section stagger">
-        <div className="card metric"><div className="lab"><span className="lab-full">Active</span><span className="lab-short">Active</span></div><div className="big"><Num v={metrics.active} /></div><div className="note">everything not closed</div></div>
-        <div className="card metric"><div className="lab"><span className="lab-full">Applied this week</span><span className="lab-short">This wk</span></div><div className="big"><Num v={metrics.appliedThisWeek} /></div><div className="note">last 7 days</div></div>
-        <div className="card metric"><div className="lab"><span className="lab-full">Response rate</span><span className="lab-short">Response</span></div><div className="big">{metrics.responseRate == null ? '—' : <><Num v={metrics.responseRate} />%</>}</div><div className="note">applications that got a screen</div></div>
-        <div className="card metric"><div className="lab"><span className="lab-full">Needs follow-up</span><span className="lab-short">Follow-up</span></div><div className="big"><Num v={metrics.staleJobs.length} /></div><div className="note">quiet &gt; {metrics.windowDays} business days</div></div>
+        <div className="stattile on-canvas metric"><div className="stattile-label"><span className="lab-full">Active</span><span className="lab-short">Active</span></div><div className="stattile-value"><Num v={metrics.active} /></div><div className="t-cap note">everything not closed</div></div>
+        <div className="stattile on-canvas metric"><div className="stattile-label"><span className="lab-full">Applied this week</span><span className="lab-short">This wk</span></div><div className="stattile-value"><Num v={metrics.appliedThisWeek} /></div><div className="t-cap note">last 7 days</div></div>
+        <div className="stattile on-canvas metric"><div className="stattile-label"><span className="lab-full">Response rate</span><span className="lab-short">Response</span></div><div className="stattile-value">{metrics.responseRate == null ? '—' : <><Num v={metrics.responseRate} />%</>}</div><div className="t-cap note">applications that got a screen</div></div>
+        <div className="stattile on-canvas metric"><div className="stattile-label"><span className="lab-full">Needs follow-up</span><span className="lab-short">Follow-up</span></div><div className="stattile-value"><Num v={metrics.staleJobs.length} /></div><div className="t-cap note">quiet &gt; {metrics.windowDays} business days</div></div>
       </div>
 
       <Agenda />
@@ -247,7 +250,7 @@ export default function Board() {
               onDragLeave={() => setOverCol((c) => (c === s.id ? null : c))}
               onDrop={() => onDrop(s.id)}
             >
-              <div className="kcol-head"><span>{s.label}</span><span className="cnt">{byStage[s.id].length}</span></div>
+              <div className="kcol-head"><span className="t-label">{s.label}</span><span className="cnt">{byStage[s.id].length}</span></div>
               {byStage[s.id].map((j) => (
                 <KCard
                   key={j.id}

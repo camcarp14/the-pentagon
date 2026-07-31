@@ -232,10 +232,10 @@ export default function Learnings({ now }) {
             disappear from the archive between polls while still selected. */}
         {visible.length === 0 && items.length > 0 && (
           <div style={{ borderRadius: 11, border: "1px solid var(--border)", background: "var(--subtle)", padding: "12px 12px" }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ink)", fontFamily: "var(--font-display)" }}>
+            <div className="t-foot" style={{ fontWeight: 700, color: "var(--ink)" }}>
               Nothing tagged “{tag}”
             </div>
-            <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.55, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>
+            <div className="t-cap" style={{ color: "var(--muted)", lineHeight: 1.55, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>
               The archive holds {items.length} learning{items.length === 1 ? "" : "s"} — none carrying this tag. The filter is
               empty, not the source; the database answered {src.state.fetchAgeMs === null ? "this session" : `${shortAge(src.state.fetchAgeMs)} ago`}.
             </div>
@@ -352,14 +352,16 @@ function LearningRow({ it, now, open, onToggle }) {
       {expandable && open && (
         <div style={{ marginTop: 9, paddingTop: 9, borderTop: "1px solid var(--border)" }}>
           <SectionLabel>{detail ? "The working" : "Provenance"}</SectionLabel>
-          <div style={{
-            fontSize: 11.5, lineHeight: 1.6, marginTop: 4, overflowWrap: "anywhere",
+          <div className="t-cap" style={{
+            lineHeight: 1.6, marginTop: 4, overflowWrap: "anywhere",
             color: detail ? "var(--muted)" : TONE.stale.fg,
           }}>
             {detail || "No working recorded — this belief is stated without the reasoning behind it, so nothing here can be checked against anything."}
           </div>
 
-          <Row gap={7} wrap style={{ marginTop: 8, fontSize: 10, color: "var(--faint)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+          {/* 11.5px, not 10: Row takes no className, so the kit's .t-cap size
+              is written out. 10 was under the floor. */}
+          <Row gap={7} wrap style={{ marginTop: 8, fontSize: 11.5, color: "var(--faint)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
             {/* The relative age above answers "is this recent"; the date answers
                 "which week was this", and past a few days those stop being the
                 same question. */}
@@ -412,19 +414,22 @@ function ConfidenceScale({ value, tone }) {
 // ─── bits ────────────────────────────────────────────────────────────────────
 function TagChip({ label, title }) {
   return (
-    <span title={title} style={{
+    // .stattile-label is the kit's 10.5px micro-label; the chip was 9.5px.
+    <span title={title} className="stattile-label" style={{
       display: "inline-flex", alignItems: "center", padding: "2px 6px", borderRadius: 6,
       background: "color-mix(in srgb, var(--ink) 6%, transparent)", border: "1px solid var(--border)",
-      color: "var(--muted)", fontFamily: "var(--font-mono)", fontSize: 9.5, fontWeight: 700,
-      maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      color: "var(--muted)", fontFamily: "var(--font-mono)", fontWeight: 700,
+      maxWidth: 140,
     }}>{label}</span>
   );
 }
 
 function SectionLabel({ children, tone }) {
   return (
-    <div style={{
-      fontSize: 9.5, fontWeight: 800, letterSpacing: "0.09em", textTransform: "uppercase",
+    // .t-label IS this label — 12px, 600, tracked, uppercase. It was hand-set
+    // at 9.5px, under the 10.5px floor, and uppercase is only allowed on
+    // .t-label anyway.
+    <div className="t-label" style={{
       color: tone ? (TONE[tone] || TONE.empty).fg : "var(--faint)", fontFamily: "var(--font-mono)",
     }}>{children}</div>
   );

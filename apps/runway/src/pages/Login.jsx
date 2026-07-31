@@ -43,16 +43,16 @@ export default function Login() {
 
   return (
     <div className="login-wrap">
-      <form className="login card pagefade" onSubmit={submit}>
-        <div className="brand" style={{ padding: '0 0 10px' }}><span className="dot" />RUNWAY</div>
+      <form className="login card pad-lg pagefade" onSubmit={submit}>
+        <div className="brand" style={{ padding: '0 0 10px' }}><span className="dot" /><span className="t-head">Runway</span></div>
         <p className="sub" style={{ marginTop: 0 }}>Private job-search command board. One seat, allowlisted email only.</p>
-        <div className="field">
+        <div className="fld">
           <label className="f" htmlFor="login-email">Email</label>
-          <input id="login-email" type="email" required autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input className="field" id="login-email" type="email" required autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
-        <div className="field">
+        <div className="fld">
           <label className="f" htmlFor="login-pw">Password</label>
-          <input id="login-pw" type="password" required minLength={8} autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} value={pw} onChange={(e) => setPw(e.target.value)} />
+          <input className="field" id="login-pw" type="password" required minLength={8} autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} value={pw} onChange={(e) => setPw(e.target.value)} />
         </div>
         {err && <p className="err-text" role="alert">{err}</p>}
         {notice && <p className="sub" role="status">{notice}</p>}

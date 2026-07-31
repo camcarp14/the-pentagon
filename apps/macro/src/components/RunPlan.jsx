@@ -24,8 +24,8 @@ export default function RunPlan({ derived, settings, position }) {
 
   return (
     <>
-      <section className="card span2" data-testid="run-radar">
-        <div className="ttl">Run radar — what arms the buy
+      <section className="card pad-md span2" data-testid="run-radar">
+        <div className="ttl t-label">Run radar — what arms the buy
           <span className="spacer" />
           {radar.armed
             ? <span className="chip live"><span className="dot" />ARMED</span>
@@ -35,7 +35,7 @@ export default function RunPlan({ derived, settings, position }) {
         </div>
         <div className="radar-cols">
           <div>
-            <div className="tiny" style={{ marginBottom: 6, fontWeight: 700 }}>MSTR REGIME ({radar.regime.score}/100 — needs ≥ 70)</div>
+            <div className="tiny t-cap" style={{ marginBottom: 6, fontWeight: 700 }}>MSTR REGIME ({radar.regime.score}/100 — needs ≥ 70)</div>
             <ul className="radar-list">
               {radar.mstr.map((c) => (
                 <li key={c.id} className={c.pass ? 'pass' : 'fail'}>
@@ -43,25 +43,25 @@ export default function RunPlan({ derived, settings, position }) {
                   <span>
                     {c.label}
                     {!c.pass && c.distancePct != null && <span className="dist num"> +{c.distancePct}% away</span>}
-                    {!c.pass && c.note && <span className="tiny note"> — {c.note}</span>}
+                    {!c.pass && c.note && <span className="tiny t-cap note"> — {c.note}</span>}
                   </span>
                 </li>
               ))}
             </ul>
           </div>
           <div>
-            <div className="tiny" style={{ marginBottom: 6, fontWeight: 700 }}>BTC CONFIRMATION</div>
+            <div className="tiny t-cap" style={{ marginBottom: 6, fontWeight: 700 }}>BTC CONFIRMATION</div>
             <ul className="radar-list">
               <li className={radar.btc.pass ? 'pass' : 'fail'}>
                 <span className="mark" aria-hidden>{radar.btc.pass ? '✓' : '○'}</span>
                 <span>
                   BTC regime uptrend (now {radar.btc.state} {radar.btc.score ?? '—'})
                   {!radar.btc.pass && radar.btc.distancePct != null && <span className="dist num"> 50-day ≈ {fmtPx(radar.btc.level)} · +{radar.btc.distancePct}% away</span>}
-                  {!radar.btc.pass && radar.btc.note && <span className="tiny note"> — {radar.btc.note}</span>}
+                  {!radar.btc.pass && radar.btc.note && <span className="tiny t-cap note"> — {radar.btc.note}</span>}
                 </span>
               </li>
             </ul>
-            <div className="tiny" style={{ margin: '10px 0 6px', fontWeight: 700 }}>TRIGGER PATHS</div>
+            <div className="tiny t-cap" style={{ margin: '10px 0 6px', fontWeight: 700 }}>TRIGGER PATHS</div>
             <ul className="radar-list">
               <li className={radar.paths.breakout.active ? 'pass' : 'fail'}>
                 <span className="mark" aria-hidden>{radar.paths.breakout.active ? '✓' : '○'}</span>
@@ -82,16 +82,16 @@ export default function RunPlan({ derived, settings, position }) {
             </ul>
           </div>
         </div>
-        <p className="tiny" style={{ marginTop: 12 }}>
+        <p className="tiny t-cap" style={{ marginTop: 12 }}>
           The bias lives here — one ticker, long only. What fires is mechanical: these same checks gate every
           entry the directive will ever issue. Belief sets the watchlist; evidence sets the entry.
         </p>
       </section>
 
-      <section className="card span2" data-testid="battle-plan">
-        <div className="ttl">Battle plan — tickets ready before the day comes</div>
+      <section className="card pad-md span2" data-testid="battle-plan">
+        <div className="ttl t-label">Battle plan — tickets ready before the day comes</div>
         {tickets.length === 0 ? (
-          <p className="sub">Tickets appear when there's a computable trigger level (needs price history).</p>
+          <p className="sub t-foot">Tickets appear when there's a computable trigger level (needs price history).</p>
         ) : (
           <div className="tbl-wrap">
             <table>
@@ -102,7 +102,7 @@ export default function RunPlan({ derived, settings, position }) {
                     <td>
                       <strong>{t.name}</strong>
                       {t.live && <span className="chip live" style={{ marginLeft: 6 }}><span className="dot" />LIVE</span>}
-                      <div className="tiny">{t.trigger}</div>
+                      <div className="tiny t-cap">{t.trigger}</div>
                     </td>
                     <td className="num">{t.shares > 0 ? `${t.shares} sh @ ~${fmtPx(t.entry)}` : '—'}</td>
                     <td className="num">{t.stop == null ? '—' : fmtPx(t.stop)}</td>
@@ -116,7 +116,7 @@ export default function RunPlan({ derived, settings, position }) {
         )}
         {settings && (
           <>
-            <div className="tiny" style={{ margin: '14px 0 6px', fontWeight: 700 }}>THE CAMPAIGN LADDER (how a multi-month run gets ridden)</div>
+            <div className="tiny t-cap" style={{ margin: '14px 0 6px', fontWeight: 700 }}>THE CAMPAIGN LADDER (how a multi-month run gets ridden)</div>
             <ol className="ladder">
               <li><strong>Entry</strong> — first trigger with both regimes green: 1 unit ({settings.riskPct}% risk, {stopModeLabel(settings)}).</li>
               <li><strong>Breakeven lock</strong> — at +{settings.beAtR}R the stop jumps to entry. The trade can no longer lose.</li>
@@ -127,7 +127,7 @@ export default function RunPlan({ derived, settings, position }) {
         )}
         {breaks.length > 0 && (
           <>
-            <div className="tiny" style={{ margin: '14px 0 6px', fontWeight: 700, color: 'var(--down)' }}>WHAT RETIRES THE PLAN (pre-committed)</div>
+            <div className="tiny t-cap" style={{ margin: '14px 0 6px', fontWeight: 700, color: 'var(--down)' }}>WHAT RETIRES THE PLAN (pre-committed)</div>
             <ul className="radar-list">
               {breaks.map((b) => (
                 <li key={b.id} className="fail"><span className="mark" aria-hidden>✕</span><span>{b.label}</span></li>
@@ -135,7 +135,7 @@ export default function RunPlan({ derived, settings, position }) {
             </ul>
           </>
         )}
-        <p className="tiny" style={{ marginTop: 10 }}>
+        <p className="tiny t-cap" style={{ marginTop: 10 }}>
           Tickets are preparation, not permission — the directive gates every entry.
           {position && ` Position open: tickets are sized as ADDs (${settings?.addRiskFraction ?? 0.5}× risk unit).`}
         </p>

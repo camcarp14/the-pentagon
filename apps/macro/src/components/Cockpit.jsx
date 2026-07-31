@@ -134,7 +134,7 @@ function HealthStrip({ derived, settings, failing, sessionExpired, onReload }) {
           </span>
         )}
       </div>
-      <button className="btn sm hstrip-btn" onClick={onReload}>Refresh</button>
+      <button className="btn quiet sm hstrip-btn" onClick={onReload}>Refresh</button>
     </section>
   )
 }
@@ -186,10 +186,10 @@ function EntryReadiness({ derived }) {
   const shapeGates = gates.filter((g) => g.level == null)
 
   return (
-    <section className="card span2 readiness" data-testid="entry-readiness">
+    <section className="card pad-md span2 readiness" data-testid="entry-readiness">
       {/* The whole title row is the control — a 12.5px "expand" word was a ~70px
           invisible target on a phone. */}
-      <button className="ttl ttl-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+      <button className="ttl ttl-btn t-label" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         What has to change
         <span className="dr-state">
           {radar.armed ? 'armed' : radar.ready ? 'waiting on a trigger' : `${passed} of ${gates.length} gates`}
@@ -235,7 +235,7 @@ function EntryReadiness({ derived }) {
 
       {shapeGates.length > 0 && (
         <div className="rd-shape">
-          <span className="rd-shape-k">Trend shape</span>
+          <span className="rd-shape-k t-label">Trend shape</span>
           {/* Own row, equal columns: inline with the label these three wrapped
               2-then-1 and read ragged. */}
           <div className="rd-tags">
@@ -252,19 +252,19 @@ function EntryReadiness({ derived }) {
           numeric strips on this page read as one instrument family. */}
       <div className="ticket rd-ticket">
         <div className="tk">
-          <div className="k">Breakout</div>
+          <div className="k t-label">Breakout</div>
           <div className={`v num ${bo?.active ? 'good' : ''}`}>
             {bo?.active ? 'live' : bo?.level != null ? fmtPx(bo.level) : '—'}
           </div>
           {!bo?.active && bo?.distancePct != null && <div className="tk-sub num">{bo.distancePct > 0 ? '+' : ''}{bo.distancePct}%</div>}
         </div>
         <div className="tk">
-          <div className="k">Pullback</div>
+          <div className="k t-label">Pullback</div>
           <div className={`v cap ${pb?.stage === 'trigger' ? 'good' : ''}`}>{!pb?.stage || pb.stage === 'none' ? 'none' : pb.stage}</div>
           <div className="tk-sub">{pb?.stage === 'setup' ? 'arming' : pb?.stage === 'trigger' ? 'fires now' : 'no dip yet'}</div>
         </div>
         <div className="tk">
-          <div className="k">Leverage</div>
+          <div className="k t-label">Leverage</div>
           <div className={`v cap grade-${derived.torqueRead.grade}`}>{derived.torqueRead.grade}</div>
           <div className="tk-sub num">{derived.beta == null ? '—' : `${round2(derived.beta)}× beta`}</div>
         </div>
@@ -277,9 +277,9 @@ function EntryReadiness({ derived }) {
       </button>
       <Expand open={blocks}>
         <ul className="factlist">
-          {blocking.length === 0 && <li className="sub">Nothing — every gate is met.</li>}
+          {blocking.length === 0 && <li className="sub t-foot">Nothing — every gate is met.</li>}
           {blocking.map((g) => (
-            <li key={g.id} className="sub">
+            <li key={g.id} className="sub t-foot">
               <strong>{g.label}</strong>
               {g.level != null && <> · level {fmtPx(g.level)}</>}
               {g.distancePct != null && <> · {g.distancePct > 0 ? '+' : ''}{g.distancePct}% away</>}
@@ -306,8 +306,8 @@ function MarketReads({ derived, settings }) {
   const seeded = settings?.btcHoldingsSeeded || settings?.sharesSeeded
 
   return (
-    <section className="card span2" data-testid="market-reads">
-      <button className="ttl ttl-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+    <section className="card pad-md span2" data-testid="market-reads">
+      <button className="ttl ttl-btn t-label" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         Market reads
         <span className="dr-state num">MSTR {regime.score ?? '—'} · BTC {btcAlign.score ?? '—'}</span>
         <span className={`dr-chev ${open ? 'open' : ''}`} aria-hidden>▾</span>
@@ -330,15 +330,18 @@ function MarketReads({ derived, settings }) {
           390px, so a four-tile row always left a ragged orphan on its own line.
           "Implied BTC" is gone: it is mNAV x BTC price, so it spent a quarter of
           the row restating two tiles that are already here. */}
+      {/* The kit's stat tiles. This was a hand-rolled .stat whose label was
+          10.5px UPPERCASE tracked 0.8px — .t-label done by hand, a size and a
+          half too small, on the only screen where a misread costs money. */}
       <div className="stats stats-2up">
-        <div className="stat"><div className="k">Beta vs BTC</div><div className="v num">{beta == null ? '—' : `${round2(beta)}×`}</div><div className="d">30-day daily</div></div>
-        <div className="stat">
-          <div className="k">mNAV{seeded && <span className="est" title="rests on seeded holdings — see Settings">est</span>}</div>
-          <div className="v num">{nav?.mNav == null ? '—' : `${nav.mNav}×`}</div>
-          <div className="d">{nav?.premiumPct == null ? 'premium' : `${nav.premiumPct >= 0 ? '+' : ''}${round2(nav.premiumPct)}% prem`}</div>
+        <div className="stattile"><div className="stattile-label">Beta vs BTC</div><div className="stattile-value num">{beta == null ? '—' : `${round2(beta)}×`}</div><div className="tile-sub">30-day daily</div></div>
+        <div className="stattile">
+          <div className="stattile-label">mNAV{seeded && <span className="est" title="rests on seeded holdings — see Settings">est</span>}</div>
+          <div className="stattile-value num">{nav?.mNav == null ? '—' : `${nav.mNav}×`}</div>
+          <div className="tile-sub">{nav?.premiumPct == null ? 'premium' : `${nav.premiumPct >= 0 ? '+' : ''}${round2(nav.premiumPct)}% prem`}</div>
         </div>
-        <div className="stat"><div className="k">20d RS</div><div className={`v num ${rs?.spreadPct == null ? '' : rs.spreadPct >= 0 ? 'pos' : 'neg'}`}>{rs?.spreadPct == null ? '—' : `${rs.spreadPct >= 0 ? '+' : ''}${round2(rs.spreadPct)}pp`}</div><div className="d">MSTR − BTC</div></div>
-        <div className="stat"><div className="k">Leverage</div><div className={`v grade-${torqueRead.grade}`}>{torqueRead.grade}</div><div className="d">vs BTC torque</div></div>
+        <div className="stattile"><div className="stattile-label">20d RS</div><div className={`stattile-value num ${rs?.spreadPct == null ? '' : rs.spreadPct >= 0 ? 'pos' : 'neg'}`}>{rs?.spreadPct == null ? '—' : `${rs.spreadPct >= 0 ? '+' : ''}${round2(rs.spreadPct)}pp`}</div><div className="tile-sub">MSTR − BTC</div></div>
+        <div className="stattile"><div className="stattile-label">Leverage</div><div className={`stattile-value grade-${torqueRead.grade}`}>{torqueRead.grade}</div><div className="tile-sub">vs BTC torque</div></div>
       </div>
 
       {facts.length > 0 && (
@@ -348,9 +351,9 @@ function MarketReads({ derived, settings }) {
           </button>
           <Expand open={work}>
             <ul className="factlist">
-              {facts.map((f, i) => <li key={i} className="sub">{f}</li>)}
+              {facts.map((f, i) => <li key={i} className="sub t-foot">{f}</li>)}
             </ul>
-            <p className="sub torque-note">{torqueRead.text}</p>
+            <p className="sub t-foot torque-note">{torqueRead.text}</p>
           </Expand>
         </>
       )}
@@ -390,8 +393,8 @@ function RunPlanDisclosure({ derived, settings, position }) {
   // `.disclose-row` it was the one odd control in a stack of four and read like
   // it belonged to a different screen.
   return (
-    <section className="card span2" data-testid="run-plan-disclosure">
-      <button className="ttl ttl-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+    <section className="card pad-md span2" data-testid="run-plan-disclosure">
+      <button className="ttl ttl-btn t-label" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         Run plan &amp; tickets
         <span className="dr-state">{armed.length > 0 ? armed.join(' · ') : 'nothing armed'}</span>
         <span className={`dr-chev ${open ? 'open' : ''}`} aria-hidden>▾</span>
@@ -418,19 +421,19 @@ function PositionCard({ derived, position }) {
   const DOMAIN = 10
 
   return (
-    <section className="card span2" data-testid="position-card">
-      <div className="ttl">Open position<span className="spacer" /><span className="pos-id num">{position.shares} @ {fmtPx(position.avgEntry)}</span></div>
+    <section className="card pad-md span2" data-testid="position-card">
+      <div className="ttl t-label">Open position<span className="spacer" /><span className="pos-id num">{position.shares} @ {fmtPx(position.avgEntry)}</span></div>
       <div className="stats stats-2up">
-        <div className="stat"><div className="k">Open R</div><div className={`v num ${r == null ? '' : r >= 0 ? 'pos' : 'neg'}`} data-testid="open-r">{r == null ? '—' : `${r >= 0 ? '+' : ''}${round2(r)}R`}</div></div>
-        <div className="stat"><div className="k">Unrealized</div><div className={`v num ${unrealized == null ? '' : unrealized >= 0 ? 'pos' : 'neg'}`}>{unrealized == null ? '—' : `${unrealized < 0 ? '-' : ''}$${Math.abs(Math.round(unrealized)).toLocaleString('en-US')}`}</div></div>
-        <div className="stat"><div className="k">Stop now</div><div className="v num">{eff == null ? '—' : fmtPx(eff)}</div><div className="d">{trailNote(position, posDerived)}</div></div>
-        <div className="stat"><div className="k">To stop</div><div className={`v num ${meterCls === 'danger' ? 'neg' : ''}`}>{distPct == null ? '—' : `${round2(distPct)}%`}</div><div className="d">initial risk {initialRiskPct == null ? '—' : `${round2(initialRiskPct)}%`}</div></div>
+        <div className="stattile"><div className="stattile-label">Open R</div><div className={`stattile-value num ${r == null ? '' : r >= 0 ? 'pos' : 'neg'}`} data-testid="open-r">{r == null ? '—' : `${r >= 0 ? '+' : ''}${round2(r)}R`}</div></div>
+        <div className="stattile"><div className="stattile-label">Unrealized</div><div className={`stattile-value num ${unrealized == null ? '' : unrealized >= 0 ? 'pos' : 'neg'}`}>{unrealized == null ? '—' : `${unrealized < 0 ? '-' : ''}$${Math.abs(Math.round(unrealized)).toLocaleString('en-US')}`}</div></div>
+        <div className="stattile"><div className="stattile-label">Stop now</div><div className="stattile-value num">{eff == null ? '—' : fmtPx(eff)}</div><div className="tile-sub">{trailNote(position, posDerived)}</div></div>
+        <div className="stattile"><div className="stattile-label">To stop</div><div className={`stattile-value num ${meterCls === 'danger' ? 'neg' : ''}`}>{distPct == null ? '—' : `${round2(distPct)}%`}</div><div className="tile-sub">initial risk {initialRiskPct == null ? '—' : `${round2(initialRiskPct)}%`}</div></div>
       </div>
       <div className="stopbar">
         <div className={`meter ${meterCls}`} role="img" aria-label={distPct == null ? 'stop distance unknown' : `price is ${round2(distPct)} percent above the stop, on a 0 to ${DOMAIN} percent scale`}>
           <div style={{ width: `${distPct == null ? 0 : Math.max(3, Math.min(100, (distPct / DOMAIN) * 100))}%` }} />
         </div>
-        <div className="tiny stopbar-scale"><span>0%</span><span>distance to stop</span><span>{DOMAIN}%+</span></div>
+        <div className="tiny t-cap stopbar-scale"><span>0%</span><span>distance to stop</span><span>{DOMAIN}%+</span></div>
       </div>
     </section>
   )
@@ -465,14 +468,14 @@ function EntryPlanner({ derived, settings, hasPosition }) {
   const liveEntry = derived.directive?.action === 'ENTER' || derived.directive?.action === 'ADD'
 
   return (
-    <section className="card span2" data-testid="entry-planner">
+    <section className="card pad-md span2" data-testid="entry-planner">
       {/* No .spacer here: .dr-state already carries margin-left:auto, and two
           auto margins split the free space instead of pushing to the edge. */}
       {/* "hypothetical:" when the answer card says to stay flat. Without it the
           collapsed row printed a share count directly under a card whose "How
           much" row read "nothing" — two numbers that look like a contradiction,
           on the screen where a misread costs money. */}
-      <button className="ttl ttl-btn" onClick={() => { userToggled.current = true; setOpen((o) => !o) }} aria-expanded={open}>
+      <button className="ttl ttl-btn t-label" onClick={() => { userToggled.current = true; setOpen((o) => !o) }} aria-expanded={open}>
         If you enter now
         <span className="dr-state">
           {sz?.ok ? `${liveEntry ? '' : 'hypothetical: '}${sz.shares} sh · ${fmtPx(plan.stop)}` : 'no plan'}
@@ -480,25 +483,33 @@ function EntryPlanner({ derived, settings, hasPosition }) {
         <span className={`dr-chev ${open ? 'open' : ''}`} aria-hidden>▾</span>
       </button>
       <Expand open={open}>
-        <div className="seg seg-wide">
+        <div className="seg seg-wide" role="tablist">
           {['atr', 'structure', 'percent'].map((m) => (
-            <button key={m} className={effMode === m ? 'on' : ''} onClick={() => setMode(m)}>{m === 'atr' ? `ATR ×${settings.atrMult}` : m === 'structure' ? 'Swing low' : `${settings.stopPct}%`}</button>
+            <button key={m} type="button" role="tab" aria-selected={effMode === m} className={effMode === m ? 'seg-opt active' : 'seg-opt'} onClick={() => setMode(m)}>{m === 'atr' ? `ATR ×${settings.atrMult}` : m === 'structure' ? 'Swing low' : `${settings.stopPct}%`}</button>
           ))}
         </div>
         {price == null ? (
-          <div className="empty"><div className="glyph">—</div>No live price to plan against.</div>
+          <div className="empty">
+            <div className="glyph" aria-hidden>—</div>
+            <div className="empty-title">No live price to plan against</div>
+            {/* an empty state that only says what is missing is a dead end */}
+            <div className="empty-sub">Tap Refresh at the top of the tab, or check Settings → Data sources to see which feed is down.</div>
+          </div>
         ) : plan?.stop == null ? (
-          <div className="empty">Stop can't be computed: {plan?.detail ?? 'no data'} <span className="tiny">({plan?.warning})</span></div>
+          <div className="empty">
+            <div className="empty-title">Stop can’t be computed</div>
+            <div className="empty-sub">{plan?.detail ?? 'no data'} ({plan?.warning}). Pick another stop mode above, or add price history by refreshing.</div>
+          </div>
         ) : (
           <>
             <div className="stats stats-2up">
-              <div className="stat"><div className="k">Buy</div><div className="v num" data-testid="plan-shares">{sz?.ok ? `${sz.shares} sh` : '—'}</div><div className="d">≈ ${sz?.ok ? Math.round(sz.positionUsd).toLocaleString('en-US') : '—'}</div></div>
-              <div className="stat"><div className="k">Stop</div><div className="v num">{fmtPx(plan.stop)}</div><div className="d">{plan.detail}</div></div>
-              <div className="stat"><div className="k">Risk</div><div className="v num">{sz?.ok ? `$${Math.round(sz.riskUsd).toLocaleString('en-US')}` : '—'}</div><div className="d">{settings.riskPct}% of equity{sz?.capped ? ' · CAPPED' : ''}</div></div>
-              <div className="stat"><div className="k">Position</div><div className="v num">{sz?.ok ? `${sz.positionPct}%` : '—'}</div><div className="d">max {settings.maxPositionPct}%</div></div>
+              <div className="stattile"><div className="stattile-label">Buy</div><div className="stattile-value num" data-testid="plan-shares">{sz?.ok ? `${sz.shares} sh` : '—'}</div><div className="tile-sub">≈ ${sz?.ok ? Math.round(sz.positionUsd).toLocaleString('en-US') : '—'}</div></div>
+              <div className="stattile"><div className="stattile-label">Stop</div><div className="stattile-value num">{fmtPx(plan.stop)}</div><div className="tile-sub">{plan.detail}</div></div>
+              <div className="stattile"><div className="stattile-label">Risk</div><div className="stattile-value num">{sz?.ok ? `$${Math.round(sz.riskUsd).toLocaleString('en-US')}` : '—'}</div><div className="tile-sub">{settings.riskPct}% of equity{sz?.capped ? ' · CAPPED' : ''}</div></div>
+              <div className="stattile"><div className="stattile-label">Position</div><div className="stattile-value num">{sz?.ok ? `${sz.positionPct}%` : '—'}</div><div className="tile-sub">max {settings.maxPositionPct}%</div></div>
             </div>
             {!sz?.ok && sz?.error && <div className="guardrail"><span>⚠︎</span><span>{sizingErrorCopy(sz.error)}</span></div>}
-            <p className="tiny planner-note">
+            <p className="tiny t-cap planner-note">
               Advisory only — place orders at your broker. A stop is a decision made now, not in the moment.
             </p>
           </>

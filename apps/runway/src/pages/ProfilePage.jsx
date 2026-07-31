@@ -110,10 +110,10 @@ function ResumeCard() {
   };
 
   if (state === 'error') return <div className="section"><ErrorState msg={`Couldn't load your resume: ${loadErr}`} onRetry={load} /></div>;
-  if (state === 'loading') return <div className="card section"><SkLine w="w40" /><SkLine w="w80" /><SkLine w="w60" /></div>;
+  if (state === 'loading') return <div className="card pad-md section"><SkLine w="w40" /><SkLine w="w80" /><SkLine w="w60" /></div>;
 
   return (
-    <form className="card section" onSubmit={save}>
+    <form className="card pad-md section" onSubmit={save}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
         <h2>Master resume</h2>
         <button type="button" className="btn ghost sm" onClick={() => setImportOpen((o) => !o)}>
@@ -125,9 +125,9 @@ function ResumeCard() {
       </p>
       <Expand open={importOpen}>
         <div style={{ paddingBottom: 14 }}>
-          <div className="field">
+          <div className="fld">
             <label className="f" htmlFor="rm-import">Paste your whole resume</label>
-            <textarea id="rm-import" rows={8} placeholder="Paste the full text of your resume — AI structures it into the editor below (nothing saves until you hit Save resume)."
+            <textarea className="field" id="rm-import" rows={8} placeholder="Paste the full text of your resume — AI structures it into the editor below (nothing saves until you hit Save resume)."
               value={importText} onChange={(e) => setImportText(e.target.value)} />
           </div>
           {importErr && (
@@ -144,32 +144,32 @@ function ResumeCard() {
       <div className="frow c2">
         <div>
           <label className="f" htmlFor="rm-name">Name</label>
-          <input id="rm-name" placeholder="as it should appear on the resume" value={contact.name} onChange={(e) => setContact({ ...contact, name: e.target.value })} />
+          <input className="field" id="rm-name" placeholder="as it should appear on the resume" value={contact.name} onChange={(e) => setContact({ ...contact, name: e.target.value })} />
         </div>
         <div>
           <label className="f" htmlFor="rm-email">Email</label>
-          <input id="rm-email" type="email" value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} />
+          <input className="field" id="rm-email" type="email" value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} />
         </div>
       </div>
       <div className="frow c3">
         <div>
           <label className="f" htmlFor="rm-phone">Phone</label>
-          <input id="rm-phone" value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} />
+          <input className="field" id="rm-phone" value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} />
         </div>
         <div>
           <label className="f" htmlFor="rm-loc">Location</label>
-          <input id="rm-loc" placeholder="Chicago, IL" value={contact.location} onChange={(e) => setContact({ ...contact, location: e.target.value })} />
+          <input className="field" id="rm-loc" placeholder="Chicago, IL" value={contact.location} onChange={(e) => setContact({ ...contact, location: e.target.value })} />
         </div>
         <div>
           <label className="f" htmlFor="rm-links">Links (comma-separated)</label>
-          <input id="rm-links" placeholder="linkedin.com/in/…" value={contact.links} onChange={(e) => setContact({ ...contact, links: e.target.value })} />
+          <input className="field" id="rm-links" placeholder="linkedin.com/in/…" value={contact.links} onChange={(e) => setContact({ ...contact, links: e.target.value })} />
         </div>
       </div>
-      <div className="field">
+      <div className="fld">
         <label className="f" htmlFor="rm-summary">Professional summary</label>
-        <textarea id="rm-summary" rows={3} placeholder="Two or three sentences on who you are professionally…" value={summary} onChange={(e) => setSummary(e.target.value)} />
+        <textarea className="field" id="rm-summary" rows={3} placeholder="Two or three sentences on who you are professionally…" value={summary} onChange={(e) => setSummary(e.target.value)} />
       </div>
-      <div className="field">
+      <div className="fld">
         <label className="f" htmlFor="rm-skills">Skills</label>
         <TagInput id="rm-skills" value={skills} placeholder="e.g. google ads, sa360, sql — press Enter to add"
           onAdd={(t) => setSkills((p) => (p.includes(t) ? p : [...p, t]))}
@@ -177,15 +177,15 @@ function ResumeCard() {
       </div>
       <label className="f">Experience</label>
       {roles.map((r, i) => (
-        <div key={i} className="card" style={{ marginBottom: 10, background: 'rgba(255,255,255,0.02)' }}>
+        <div key={i} className="card pad-md" style={{ marginBottom: 10, background: 'rgba(255,255,255,0.02)' }}>
           <div className="frow c3">
-            <div><label className="f" htmlFor={`rm-co-${i}`}>Company</label><input id={`rm-co-${i}`} value={r.company} onChange={(e) => setRole(i, { company: e.target.value })} /></div>
-            <div><label className="f" htmlFor={`rm-ti-${i}`}>Title</label><input id={`rm-ti-${i}`} value={r.title} onChange={(e) => setRole(i, { title: e.target.value })} /></div>
-            <div><label className="f" htmlFor={`rm-da-${i}`}>Dates</label><input id={`rm-da-${i}`} placeholder="2022 – present" value={r.dates} onChange={(e) => setRole(i, { dates: e.target.value })} /></div>
+            <div><label className="f" htmlFor={`rm-co-${i}`}>Company</label><input className="field" id={`rm-co-${i}`} value={r.company} onChange={(e) => setRole(i, { company: e.target.value })} /></div>
+            <div><label className="f" htmlFor={`rm-ti-${i}`}>Title</label><input className="field" id={`rm-ti-${i}`} value={r.title} onChange={(e) => setRole(i, { title: e.target.value })} /></div>
+            <div><label className="f" htmlFor={`rm-da-${i}`}>Dates</label><input className="field" id={`rm-da-${i}`} placeholder="2022 – present" value={r.dates} onChange={(e) => setRole(i, { dates: e.target.value })} /></div>
           </div>
-          <div className="field" style={{ marginBottom: 6 }}>
+          <div className="fld" style={{ marginBottom: 6 }}>
             <label className="f" htmlFor={`rm-bu-${i}`}>Bullets — one per line</label>
-            <textarea id={`rm-bu-${i}`} rows={4} placeholder={'Managed $2.4M annual paid search budget across 12 healthcare clients\nCut CPA 31% by restructuring…'} value={r.bullets} onChange={(e) => setRole(i, { bullets: e.target.value })} />
+            <textarea className="field" id={`rm-bu-${i}`} rows={4} placeholder={'Managed $2.4M annual paid search budget across 12 healthcare clients\nCut CPA 31% by restructuring…'} value={r.bullets} onChange={(e) => setRole(i, { bullets: e.target.value })} />
           </div>
           {roles.length > 1 && (
             <button type="button" className="btn ghost sm" onClick={() => setRoles((rs) => rs.filter((_, idx) => idx !== i))}>Remove role</button>
@@ -218,13 +218,13 @@ function AccountCard() {
     } catch (ex) { setErr(ex.message); } finally { setBusy(false); }
   };
   return (
-    <form className="card section" onSubmit={change}>
+    <form className="card pad-md section" onSubmit={change}>
       <h2>Account</h2>
       <p className="sub" style={{ marginTop: 0 }}>Signed in as {session?.user?.email}</p>
       <div className="frow c2">
         <div>
           <label className="f" htmlFor="ac-pw">New password</label>
-          <input id="ac-pw" type="password" minLength={8} required autoComplete="new-password"
+          <input className="field" id="ac-pw" type="password" minLength={8} required autoComplete="new-password"
             value={pw} onChange={(e) => setPw(e.target.value)} />
         </div>
       </div>
@@ -253,7 +253,7 @@ function TagInput({ id, value, onAdd, onRemove, placeholder }) {
           </span>
         ))}
       </div>
-      <input id={id} value={txt} placeholder={placeholder} onChange={(e) => setTxt(e.target.value)}
+      <input className="field" id={id} value={txt} placeholder={placeholder} onChange={(e) => setTxt(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(); } }}
         onBlur={add} />
     </div>
@@ -312,7 +312,7 @@ export default function ProfilePage() {
   return (
     <>
       <div className="page-head">
-        <h1>Profile & targets</h1>
+        <h1 className="t-title2">Profile & targets</h1>
         <span className="sub">Every captured role is scored against these criteria.</span>
       </div>
 
@@ -325,9 +325,9 @@ export default function ProfilePage() {
         </div>
       )}
 
-      <form className="card section" onSubmit={save}>
+      <form className="card pad-md section" onSubmit={save}>
         <h2>What you're aiming at</h2>
-        <div className="field">
+        <div className="fld">
           <label className="f" htmlFor="tp-kw">Title keywords <span style={{ fontWeight: 400 }}>(any match counts — press Enter to add)</span></label>
           <TagInput id="tp-kw" value={f.title_keywords} placeholder="e.g. paid search, sem, performance marketing"
             onAdd={(t) => setF((p) => ({ ...p, title_keywords: p.title_keywords.includes(t) ? p.title_keywords : [...p.title_keywords, t] }))}
@@ -336,22 +336,22 @@ export default function ProfilePage() {
         <div className="frow c2">
           <div>
             <label className="f" htmlFor="tp-floor">Comp floor ($/yr)</label>
-            <input id="tp-floor" type="number" min="0" step="5000" placeholder="120000" value={f.comp_floor} onChange={(e) => setF({ ...f, comp_floor: e.target.value })} />
+            <input className="field" id="tp-floor" type="number" min="0" step="5000" placeholder="120000" value={f.comp_floor} onChange={(e) => setF({ ...f, comp_floor: e.target.value })} />
           </div>
           <div>
             <label className="f" htmlFor="tp-loc">Location preference (note)</label>
-            <input id="tp-loc" placeholder="e.g. Chicago or remote" value={f.location_pref} onChange={(e) => setF({ ...f, location_pref: e.target.value })} />
+            <input className="field" id="tp-loc" placeholder="e.g. Chicago or remote" value={f.location_pref} onChange={(e) => setF({ ...f, location_pref: e.target.value })} />
           </div>
         </div>
-        <div className="field">
+        <div className="fld">
           <label className="f">Remote preference</label>
           <div className="seg" role="radiogroup" aria-label="Remote preference">
             {['remote', 'hybrid', 'onsite', 'any'].map((r) => (
-              <button key={r} type="button" className={f.remote_pref === r ? 'on' : ''} onClick={() => setF((p) => ({ ...p, remote_pref: r }))}>{r}</button>
+              <button key={r} type="button" className={f.remote_pref === r ? 'seg-opt active' : 'seg-opt'} onClick={() => setF((p) => ({ ...p, remote_pref: r }))}>{r}</button>
             ))}
           </div>
         </div>
-        <div className="field">
+        <div className="fld">
           <label className="f">Seniority band</label>
           <div className="chips">
             {SENIORITY_LADDER.map((s) => (
@@ -381,7 +381,7 @@ export default function ProfilePage() {
         <div className="frow c2">
           <div>
             <label className="f" htmlFor="tp-fud">Follow-up window (business days)</label>
-            <input id="tp-fud" type="number" min="1" max="60" value={f.followup_days} onChange={(e) => setF({ ...f, followup_days: e.target.value })} />
+            <input className="field" id="tp-fud" type="number" min="1" max="60" value={f.followup_days} onChange={(e) => setF({ ...f, followup_days: e.target.value })} />
             <p className="sub" style={{ marginBottom: 0 }}>Anything sitting in Applied longer than this with no touch gets flagged on the board.</p>
           </div>
         </div>

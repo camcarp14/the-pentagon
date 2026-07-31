@@ -64,10 +64,10 @@ function CoveragePanel({ job }) {
 
   const reqs = Array.isArray(job.requirements) ? job.requirements.filter((r) => typeof r === 'string' && r.trim()) : [];
   if (!reqs.length) return null;
-  if (resume === undefined) return <div className="card section"><SkLine w="w40" /><SkLine w="w80" /></div>;
+  if (resume === undefined) return <div className="card pad-md section"><SkLine w="w40" /><SkLine w="w80" /></div>;
   if (!resume || !Object.keys(resume).length) {
     return (
-      <div className="card section">
+      <div className="card pad-md section">
         <h2>Requirements coverage</h2>
         <EmptyState title="Add your master resume to see coverage" hint="Once it's stored, every posting requirement gets a deterministic hit/miss against your actual experience." cta="Open profile" ctaTo="/profile" />
       </div>
@@ -76,7 +76,7 @@ function CoveragePanel({ job }) {
 
   const cov = computeCoverage(reqs, resume);
   return (
-    <div className="card section">
+    <div className="card pad-md section">
       <h2>Requirements coverage — {cov.hits}/{cov.total} evidenced by your resume</h2>
       <ul className="timeline">
         {cov.rows.map((r, i) => (
@@ -163,7 +163,7 @@ function Overview({ job }) {
 
   return (
     <>
-      <div className="card section">
+      <div className="card pad-md section">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
           <h2>Fit against your targets</h2>
           <div style={{ display: 'flex', gap: 6 }}>
@@ -191,17 +191,17 @@ function Overview({ job }) {
 
       <CoveragePanel job={job} />
 
-      <div className="card section">
+      <div className="card pad-md section">
         <h2>Details</h2>
         <div className="dl">
-          <div><div className="lab">Comp</div><div className="val">{fmtComp(job.comp_min, job.comp_max) || '—'}</div></div>
-          <div><div className="lab">Location</div><div className="val">{job.location || '—'}</div></div>
-          <div><div className="lab">Remote</div><div className="val">{job.remote_type}</div></div>
-          <div><div className="lab">Seniority</div><div className="val">{job.seniority}</div></div>
-          <div><div className="lab">Industry</div><div className="val">{job.industry || '—'}</div></div>
-          <div><div className="lab">Source</div><div className="val">{job.source}</div></div>
-          <div><div className="lab">Captured</div><div className="val">{fmtDate(job.created_at)}</div></div>
-          <div><div className="lab">Applied</div><div className="val">{fmtDate(job.applied_at)}</div></div>
+          <div><div className="t-label">Comp</div><div className="val">{fmtComp(job.comp_min, job.comp_max) || '—'}</div></div>
+          <div><div className="t-label">Location</div><div className="val">{job.location || '—'}</div></div>
+          <div><div className="t-label">Remote</div><div className="val">{job.remote_type}</div></div>
+          <div><div className="t-label">Seniority</div><div className="val">{job.seniority}</div></div>
+          <div><div className="t-label">Industry</div><div className="val">{job.industry || '—'}</div></div>
+          <div><div className="t-label">Source</div><div className="val">{job.source}</div></div>
+          <div><div className="t-label">Captured</div><div className="val">{fmtDate(job.created_at)}</div></div>
+          <div><div className="t-label">Applied</div><div className="val">{fmtDate(job.applied_at)}</div></div>
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
           <button className="btn sm" onClick={() => setEditOpen((o) => !o)}>{editOpen ? 'Close editor' : 'Edit details'}</button>
@@ -220,7 +220,7 @@ function Overview({ job }) {
       </div>
 
       {job.raw_description && (
-        <div className="card section">
+        <div className="card pad-md section">
           <h2>Posting</h2>
           <pre className="desc">{job.raw_description}</pre>
         </div>
@@ -244,16 +244,16 @@ function Notes({ job }) {
   };
 
   return (
-    <div className="card">
-      <div className="field">
+    <div className="card pad-md">
+      <div className="fld">
         <label className="f" htmlFor="jd-notes">Notes</label>
-        <textarea id="jd-notes" rows={6} placeholder="Research, comp intel, referral angles…"
+        <textarea className="field" id="jd-notes" rows={6} placeholder="Research, comp intel, referral angles…"
           value={notes} onChange={(e) => setNotes(e.target.value)}
           onBlur={() => saveIfChanged('notes', notes, job.notes || '')} />
       </div>
-      <div className="field">
+      <div className="fld">
         <label className="f" htmlFor="jd-prep">Interview prep</label>
-        <textarea id="jd-prep" rows={6} placeholder="Stories to tell, questions to ask, who you're meeting…"
+        <textarea className="field" id="jd-prep" rows={6} placeholder="Stories to tell, questions to ask, who you're meeting…"
           value={prep} onChange={(e) => setPrep(e.target.value)}
           onBlur={() => saveIfChanged('prep_notes', prep, job.prep_notes || '')} />
       </div>
@@ -297,10 +297,10 @@ function Contacts({ jobId }) {
   };
 
   if (err) return <ErrorState msg={`Couldn't load contacts: ${err}`} onRetry={load} />;
-  if (rows === null) return <div className="card"><SkLine w="w60" /><SkLine w="w80" /><SkLine w="w40" /></div>;
+  if (rows === null) return <div className="card pad-md"><SkLine w="w60" /><SkLine w="w80" /><SkLine w="w40" /></div>;
 
   return (
-    <div className="card">
+    <div className="card pad-md">
       {rows.length === 0 ? (
         <p className="sub" style={{ marginTop: 0 }}>No contacts yet — add the recruiter or hiring manager below so follow-ups have a name.</p>
       ) : (
@@ -322,11 +322,11 @@ function Contacts({ jobId }) {
       )}
       <form onSubmit={add}>
         <div className="frow c3">
-          <div><label className="f" htmlFor="ct-name">Name *</label><input id="ct-name" required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
-          <div><label className="f" htmlFor="ct-role">Role</label><input id="ct-role" placeholder="recruiter / HM" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })} /></div>
-          <div><label className="f" htmlFor="ct-email">Email</label><input id="ct-email" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
+          <div><label className="f" htmlFor="ct-name">Name *</label><input className="field" id="ct-name" required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
+          <div><label className="f" htmlFor="ct-role">Role</label><input className="field" id="ct-role" placeholder="recruiter / HM" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })} /></div>
+          <div><label className="f" htmlFor="ct-email">Email</label><input className="field" id="ct-email" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
         </div>
-        <div className="field"><label className="f" htmlFor="ct-notes">Notes</label><input id="ct-notes" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
+        <div className="fld"><label className="f" htmlFor="ct-notes">Notes</label><input className="field" id="ct-notes" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
         <button className="btn sm" disabled={busy || !f.name.trim()}>{busy ? 'Adding…' : 'Add contact'}</button>
       </form>
     </div>
@@ -361,7 +361,7 @@ function FollowUps({ job }) {
   };
 
   return (
-    <div className="card">
+    <div className="card pad-md">
       {rows.length === 0 ? (
         <p className="sub" style={{ marginTop: 0 }}>Nothing scheduled — a follow-up on the books is what keeps this role off the “gone quiet” list.</p>
       ) : (
@@ -397,8 +397,8 @@ function FollowUps({ job }) {
       )}
       <form onSubmit={add}>
         <div className="frow c2">
-          <div><label className="f" htmlFor="fu-due">Due</label><input id="fu-due" type="date" required value={due} onChange={(e) => setDue(e.target.value)} /></div>
-          <div><label className="f" htmlFor="fu-note">Note</label><input id="fu-note" placeholder="e.g. nudge the recruiter" value={note} onChange={(e) => setNote(e.target.value)} /></div>
+          <div><label className="f" htmlFor="fu-due">Due</label><input className="field" id="fu-due" type="date" required value={due} onChange={(e) => setDue(e.target.value)} /></div>
+          <div><label className="f" htmlFor="fu-note">Note</label><input className="field" id="fu-note" placeholder="e.g. nudge the recruiter" value={note} onChange={(e) => setNote(e.target.value)} /></div>
         </div>
         <button className="btn sm" disabled={busy}>{busy ? 'Scheduling…' : 'Schedule follow-up'}</button>
       </form>
@@ -409,9 +409,9 @@ function FollowUps({ job }) {
 function History({ jobId }) {
   const { events } = useApp();
   const rows = [...(events || []).filter((e) => e.job_id === jobId)].reverse();
-  if (rows.length === 0) return <div className="card"><p className="sub" style={{ margin: 0 }}>No history yet.</p></div>;
+  if (rows.length === 0) return <div className="card pad-md"><p className="sub" style={{ margin: 0 }}>No history yet.</p></div>;
   return (
-    <div className="card">
+    <div className="card pad-md">
       <ul className="timeline">
         {rows.map((e) => (
           <li key={e.id}>
@@ -453,7 +453,7 @@ export default function JobDetail() {
       <div className="page-head">
         <div style={{ minWidth: 0 }}>
           <Link to="/" className="sub">← Board</Link>
-          <h1 style={{ marginTop: 4 }}>{job.company || 'Unknown'} — {job.title || 'Untitled role'}</h1>
+          <h1 className="t-title2" style={{ marginTop: 4 }}>{job.company || 'Unknown'} — {job.title || 'Untitled role'}</h1>
           <div className="sub" style={{ marginTop: 4 }}>
             {[fmtComp(job.comp_min, job.comp_max), job.location, job.remote_type !== 'unknown' ? job.remote_type : null].filter(Boolean).join(' · ') || 'No details yet'}
             {job.url && <> · <a href={job.url} target="_blank" rel="noreferrer">View posting ↗</a></>}

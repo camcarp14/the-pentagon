@@ -71,11 +71,11 @@ export default function Approvals({ now, lastVisitAt }) {
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 4 }}>
               <span className="biz-pulse" style={{ width: 7, height: 7, borderRadius: "50%", background: TONE.error.fg, flexShrink: 0 }} />
-              <span style={{ fontSize: 12.5, fontWeight: 800, color: TONE.error.fg, fontFamily: "var(--font-display)", letterSpacing: "0.03em" }}>
+              <span className="t-label" style={{ color: TONE.error.fg, fontWeight: 800 }}>
                 AUTO-PROCEEDED WITHOUT YOU · {p.sinceLastVisit.length}
               </span>
             </div>
-            <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.55, marginBottom: 10 }}>
+            <div className="t-cap" style={{ color: "var(--muted)", lineHeight: 1.55, marginBottom: 10 }}>
               {p.sinceLastVisit.length === 1 ? "This decision's" : "These decisions'"} veto window closed while you were away.
               The agent went ahead. You cannot undo {p.sinceLastVisit.length === 1 ? "it" : "them"} here — this is a record, not a queue.
             </div>
@@ -132,8 +132,8 @@ export default function Approvals({ now, lastVisitAt }) {
           <div style={{
             padding: "16px 14px", borderRadius: 12, border: "1px dashed var(--border)", textAlign: "center",
           }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--muted)", fontFamily: "var(--font-display)" }}>Nothing waiting on you</div>
-            <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 4 }}>
+            <div className="t-foot" style={{ fontWeight: 700, color: "var(--muted)" }}>Nothing waiting on you</div>
+            <div className="t-cap" style={{ color: "var(--faint)", marginTop: 4 }}>
               {p.decided.length} decided · database reachable, checked {shortAge(src.state.fetchAgeMs)} ago
             </div>
           </div>
@@ -151,8 +151,8 @@ export default function Approvals({ now, lastVisitAt }) {
                   {p.decided.map((row) => (
                     <div key={row.id} style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", borderRadius: 9, background: "var(--subtle)", border: "1px solid var(--border)" }}>
                       <Badge tone={row.decision === "approved" ? "fresh" : "empty"}>{row.decision}</Badge>
-                      <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.title}</span>
-                      <span style={{ fontSize: 10, color: "var(--faint)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>
+                      <span className="t-cap" style={{ flex: 1, minWidth: 0, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.title}</span>
+                      <span className="t-cap" style={{ color: "var(--faint)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>
                         {dayLabel(row.decided_at || row.created_at)}
                       </span>
                     </div>
@@ -169,8 +169,10 @@ export default function Approvals({ now, lastVisitAt }) {
 
 function SectionLabel({ children, tone }) {
   return (
-    <div style={{
-      fontSize: 9.5, fontWeight: 800, letterSpacing: "0.09em", textTransform: "uppercase",
+    // .t-label IS this label — 12px, 600, tracked, uppercase. It was hand-set
+    // at 9.5px, under the 10.5px floor, and uppercase is only allowed on
+    // .t-label anyway.
+    <div className="t-label" style={{
       color: tone ? (TONE[tone] || TONE.empty).fg : "var(--faint)", fontFamily: "var(--font-mono)",
     }}>{children}</div>
   );
@@ -190,9 +192,9 @@ function PendingRow({ row, now, urgent, busy, error, onDecide }) {
     }}>
       <Row gap={9} align="flex-start">
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)", lineHeight: 1.4, marginBottom: 3 }}>{row.title}</div>
+          <div className="t-call" style={{ fontWeight: 700, lineHeight: 1.4, marginBottom: 3 }}>{row.title}</div>
           {row.summary && (
-            <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.5, marginBottom: 6 }}>{row.summary}</div>
+            <div className="t-cap" style={{ color: "var(--muted)", lineHeight: 1.5, marginBottom: 6 }}>{row.summary}</div>
           )}
           <Row gap={6} wrap>
             {row.kind && <Badge>{row.kind}</Badge>}
@@ -212,7 +214,7 @@ function PendingRow({ row, now, urgent, busy, error, onDecide }) {
               color: c.expired ? TONE.error.fg : urgent ? tone.fg : "var(--muted)",
             }}
           >{c.text}</div>
-          <div style={{ fontSize: 9.5, color: "var(--faint)", marginTop: 2, fontFamily: "var(--font-mono)" }}>
+          <div className="stattile-label" style={{ color: "var(--faint)", marginTop: 2, fontFamily: "var(--font-mono)" }}>
             {row.deadlineUnknown ? "no deadline set" : c.expired ? "went ahead" : `until ${clockTime(row.veto_until)}`}
           </div>
         </div>
@@ -230,7 +232,7 @@ function PendingRow({ row, now, urgent, busy, error, onDecide }) {
           refuse. The row is still pinned to the top either way, because a
           deadline we cannot read is one we cannot prove is safe. */}
       {!decidable && !error && (
-        <div style={{ fontSize: 10.5, color: TONE.error.fg, marginTop: 7, fontWeight: 600, lineHeight: 1.5 }}>
+        <div className="t-cap" style={{ color: TONE.error.fg, marginTop: 7, fontWeight: 600, lineHeight: 1.5 }}>
           {row.deadlineUnknown
             ? "This approval has no readable veto_until, so there is no way to tell whether the agent has acted on it. It cannot be decided from here."
             : "The window has closed — the agent has already proceeded."}
@@ -254,8 +256,8 @@ function ExpiredRow({ row, now, muted }) {
       border: "1px solid var(--border)",
     }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.title}</div>
-        <div style={{ fontSize: 10, color: "var(--faint)", marginTop: 2, fontFamily: "var(--font-mono)" }}>
+        <div className="t-foot" style={{ fontWeight: 700, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.title}</div>
+        <div className="stattile-label" style={{ color: "var(--faint)", marginTop: 2, fontFamily: "var(--font-mono)", whiteSpace: "normal" }}>
           proceeded {ageMs === null ? "at an unknown time" : `${shortAge(ageMs)} ago`}
           {Number.isFinite(Number(row.cost_usd)) && Number(row.cost_usd) > 0 ? ` · ${usd(Number(row.cost_usd))}` : ""}
         </div>

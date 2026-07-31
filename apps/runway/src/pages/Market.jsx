@@ -26,7 +26,7 @@ function CalibrationCard() {
   const bandLabel = { 'below-range': 'below typical', 'within-range': 'within typical', 'above-range': 'above typical' };
   const bandColor = { 'below-range': 'var(--bad)', 'within-range': 'var(--dim)', 'above-range': 'var(--good)' };
   return (
-    <div className="card section">
+    <div className="card pad-md section">
       <h2>Your funnel vs the market</h2>
       {cal.rows.map((r) => (
         <div className="bar-row cal-row" key={r.key}>
@@ -55,7 +55,7 @@ function WaitingCard() {
   const w = useMemo(() => computeWaiting(jobs), [jobs]);
   if (!w.inFlight) return null;
   return (
-    <div className="card section">
+    <div className="card pad-md section">
       <h2>Waiting on a response — {w.inFlight}</h2>
       <p className="sub" style={{ marginTop: 2 }}>
         Typical first-response window: {w.window[0]}–{w.window[1]} days ({w.year}, directional). Many applications never get a response — silence is common, not a verdict.
@@ -86,7 +86,7 @@ function FunnelCard() {
   const max = Math.max(1, ...f.reached);
   if (!f.reached[0]) return null;
   return (
-    <div className="card section">
+    <div className="card pad-md section">
       <h2>Pipeline funnel</h2>
       {f.stages.map((s, i) => (
         <div className="bar-row funnel-row" key={s}>
@@ -140,7 +140,7 @@ function CompChart({ priced, floor }) {
   for (const g of groups) {
     const med = median(g.jobs.map(mid));
     rows.push(
-      <text key={`h-${g.s}`} x="0" y={y + 12} fill="var(--dim)" fontSize="12" fontWeight="700" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <text key={`h-${g.s}`} x="0" y={y + 12} fill="var(--dim)" fontSize="12" fontWeight="700">
         {g.s} · {g.jobs.length} · median {fmtK(med)}
       </text>,
     );
@@ -204,7 +204,7 @@ export default function Market() {
   if (priced.length < 3) {
     return (
       <>
-        <div className="page-head"><h1>Insights</h1></div>
+        <div className="page-head"><h1 className="t-title2">Insights</h1></div>
         <FunnelCard />
         <CalibrationCard />
         <WaitingCard />
@@ -221,20 +221,20 @@ export default function Market() {
   return (
     <>
       <div className="page-head">
-        <h1>Insights</h1>
+        <h1 className="t-title2">Insights</h1>
         <span className="sub">{priced.length} postings with stated comp</span>
       </div>
       <FunnelCard />
       <CalibrationCard />
       <WaitingCard />
-      <div className="card section">
+      <div className="card pad-md section">
         <h2>Comp distribution by level</h2>
         {/* fixed-min chart scrolls sideways on phones instead of shrinking to unreadable */}
         <div className="chartwrap">
           <CompChart priced={priced} floor={profile?.comp_floor ?? null} />
         </div>
       </div>
-      <div className="card">
+      <div className="card pad-md">
         <h2>All captured comp</h2>
         <div className="tablewrap">
           <table>

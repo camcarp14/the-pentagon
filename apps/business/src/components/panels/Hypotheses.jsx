@@ -170,7 +170,7 @@ export default function Hypotheses({ now }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div>
               <SectionLabel tone="error">Blocked · {blocked.length}</SectionLabel>
-              <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.5, marginTop: 3 }}>
+              <div className="t-cap" style={{ color: "var(--muted)", lineHeight: 1.5, marginTop: 3 }}>
                 {blocked.length === 1 ? "This one is not" : "These are not"} waiting {blocked.length === 1 ? "its" : "their"} turn
                 — {blocked.length === 1 ? "it" : "they"} cannot proceed until something changes.
               </div>
@@ -215,10 +215,10 @@ export default function Hypotheses({ now }) {
             borderRadius: 11, border: "1px solid var(--border)",
             background: "var(--subtle)", padding: "12px 12px",
           }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ink)", fontFamily: "var(--font-display)" }}>
+            <div className="t-foot" style={{ fontWeight: 700, color: "var(--ink)" }}>
               No {filter} hypotheses
             </div>
-            <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.55, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>
+            <div className="t-cap" style={{ color: "var(--muted)", lineHeight: 1.55, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>
               The queue holds {counts.all} row{counts.all === 1 ? "" : "s"} — none of them with this status. The filter is
               empty, not the source; the database answered {src.state.fetchAgeMs === null ? "this session" : `${shortAge(src.state.fetchAgeMs)} ago`}.
             </div>
@@ -285,8 +285,9 @@ function HypothesisRow({ rank, row, now, open, onToggle }) {
 
         <span
           title={row?.title || undefined}
+          className="t-foot"
           style={{
-            flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, lineHeight: 1.4,
+            flex: 1, minWidth: 0, fontWeight: 700, lineHeight: 1.4,
             color: "var(--ink)", overflow: "hidden",
             // Two lines collapsed, all of it once open — a title truncated
             // forever is a hypothesis you can't identify.
@@ -301,9 +302,11 @@ function HypothesisRow({ rank, row, now, open, onToggle }) {
             fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
             color: isBlocked ? TONE.error.fg : "var(--ink)",
           }}>{Number.isFinite(score) ? score.toFixed(2) : "—"}</span>
-          <span style={{
-            display: "block", fontSize: 8.5, fontWeight: 800, letterSpacing: "0.09em",
-            textTransform: "uppercase", color: "var(--faint)", fontFamily: "var(--font-mono)", marginTop: 2,
+          {/* .stattile-label is the kit's 10.5px caption-under-a-number. This
+              was 8.5px — the smallest text in the tab — and the uppercase went
+              with it, since uppercase belongs only to .t-label. */}
+          <span className="stattile-label" style={{
+            display: "block", color: "var(--faint)", fontFamily: "var(--font-mono)", marginTop: 2,
           }}>score</span>
         </span>
       </Row>
@@ -361,11 +364,8 @@ function HypothesisRow({ rank, row, now, open, onToggle }) {
           background: "color-mix(in srgb, var(--bg) 45%, transparent)",
           border: `1px solid ${TONE.error.line}`,
         }}>
-          <div style={{
-            fontSize: 9, fontWeight: 800, letterSpacing: "0.09em", textTransform: "uppercase",
-            color: TONE.error.fg, fontFamily: "var(--font-mono)",
-          }}>Why it is stuck</div>
-          <div style={{ fontSize: 11, color: reason ? "var(--muted)" : TONE.error.fg, lineHeight: 1.55, marginTop: 3 }}>
+          <div className="t-label" style={{ color: TONE.error.fg, fontFamily: "var(--font-mono)" }}>Why it is stuck</div>
+          <div className="t-cap" style={{ color: reason ? "var(--muted)" : TONE.error.fg, lineHeight: 1.55, marginTop: 3 }}>
             {reason || "No reason recorded — the row is blocked and does not say why, which is the least actionable state it can be in."}
           </div>
         </div>
@@ -377,14 +377,16 @@ function HypothesisRow({ rank, row, now, open, onToggle }) {
       {expandable && open && (
         <div style={{ marginTop: 9, paddingTop: 9, borderTop: `1px solid ${isBlocked ? TONE.error.line : "var(--border)"}` }}>
           <SectionLabel>Why it ranks here</SectionLabel>
-          <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.6, marginTop: 4 }}>{rationale}</div>
+          <div className="t-cap" style={{ color: "var(--muted)", lineHeight: 1.6, marginTop: 4 }}>{rationale}</div>
           {lift && (
-            <div style={{ fontSize: 11, color: "var(--ink)", lineHeight: 1.55, marginTop: 7 }}>
+            <div className="t-cap" style={{ color: "var(--ink)", lineHeight: 1.55, marginTop: 7 }}>
               <span style={{ color: "var(--faint)" }}>Expected lift · </span>{lift}
             </div>
           )}
+          {/* 11.5px, not 10: Row takes no className, so the kit's .t-cap size
+              is written out. 10 was under the floor. */}
           <Row gap={7} wrap style={{
-            marginTop: 8, fontSize: 10, color: "var(--faint)",
+            marginTop: 8, fontSize: 11.5, color: "var(--faint)",
             fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
           }}>
             <span>filed {createdAge === null ? "at an unknown time" : `${shortAge(createdAge)} ago`}</span>
@@ -407,8 +409,10 @@ function Group({ cap, maxHeight, children }) {
 
 function SectionLabel({ children, tone }) {
   return (
-    <div style={{
-      fontSize: 9.5, fontWeight: 800, letterSpacing: "0.09em", textTransform: "uppercase",
+    // .t-label IS this label — 12px, 600, tracked, uppercase. It was hand-set
+    // at 9.5px, under the 10.5px floor, and uppercase is only allowed on
+    // .t-label anyway.
+    <div className="t-label" style={{
       color: tone ? (TONE[tone] || TONE.empty).fg : "var(--faint)", fontFamily: "var(--font-mono)",
     }}>{children}</div>
   );

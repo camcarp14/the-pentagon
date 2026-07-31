@@ -36,22 +36,21 @@ export default function GoalEditor({ cfg }) {
 
   if (!editing) {
     return (
+      // The kit's pressable card: one material, no outline, and the press
+      // physics come with it instead of being written out here.
       <button
         type="button"
-        className="biz-press"
+        className="card pad-sm pressable biz-press"
         onClick={() => setEditing(true)}
         style={{
           display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left",
-          background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
           padding: "11px 13px", minHeight: 44, cursor: "pointer", color: "var(--ink)",
         }}
       >
-        <span style={{
-          fontSize: 9.5, fontWeight: 800, letterSpacing: "0.09em", textTransform: "uppercase",
-          color: "var(--faint)", fontFamily: "var(--font-mono)", flexShrink: 0,
-        }}>Goal</span>
-        <span style={{
-          flex: 1, minWidth: 0, fontSize: 12, lineHeight: 1.45,
+        {/* .t-label — 12px, tracked, uppercase. This was 9.5px, under the floor. */}
+        <span className="t-label" style={{ color: "var(--faint)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>Goal</span>
+        <span className="t-cap" style={{
+          flex: 1, minWidth: 0, lineHeight: 1.45,
           color: saved ? "var(--ink)" : "var(--warn)",
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}>
@@ -59,7 +58,7 @@ export default function GoalEditor({ cfg }) {
               rendering as a tidy blank. */}
           {saved || "No goal set — the agent is running without a stated objective."}
         </span>
-        <span style={{ fontSize: 10, color: justSaved ? "var(--good)" : "var(--faint)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>
+        <span className="t-cap" style={{ color: justSaved ? "var(--good)" : "var(--faint)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>
           {justSaved ? "saved" : "edit"}
         </span>
       </button>
@@ -67,11 +66,11 @@ export default function GoalEditor({ cfg }) {
   }
 
   return (
-    <div style={{ background: "var(--surface)", border: "1px solid var(--accent-line)", borderRadius: 12, padding: 13 }}>
-      <div style={{
-        fontSize: 9.5, fontWeight: 800, letterSpacing: "0.09em", textTransform: "uppercase",
-        color: "var(--faint)", fontFamily: "var(--font-mono)", marginBottom: 8,
-      }}>Goal</div>
+    // The kit's card again. The "you are editing this" outline was a border next
+    // to a card shadow; it is now the kit's own selection treatment — an inset
+    // ring stacked on the card shadow, the same shape .stattile.selected uses.
+    <div className="card" style={{ boxShadow: "inset 0 0 0 1.5px var(--accent-line), var(--shadow-card)", padding: 13 }}>
+      <div className="t-label" style={{ color: "var(--faint)", fontFamily: "var(--font-mono)", marginBottom: 8 }}>Goal</div>
       <textarea
         value={draft}
         onChange={(e) => setDraft(e.target.value)}

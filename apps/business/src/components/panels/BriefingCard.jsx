@@ -148,7 +148,9 @@ export default function BriefingCard({ now }) {
                 </div>
               </ScrollList>
               {b.byOutcome.failure > b.failedActions.length && (
-                <div style={{ fontSize: 10.5, color: "var(--faint)", fontVariantNumeric: "tabular-nums" }}>
+                // whiteSpace normal: .stattile-label ellipsises by default,
+                // which is right under a number and wrong under a sentence.
+                <div className="stattile-label" style={{ color: "var(--faint)", fontVariantNumeric: "tabular-nums", whiteSpace: "normal" }}>
                   Showing {b.failedActions.length} of {b.byOutcome.failure} — the rest are in the action ledger.
                 </div>
               )}
@@ -182,7 +184,7 @@ export default function BriefingCard({ now }) {
                 {b.deltas.map((d) => <DeltaRow key={d.key} d={d} lead={d.key === "objective"} />)}
               </div>
 
-              <div style={{ fontSize: 10, color: "var(--faint)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", lineHeight: 1.5 }}>
+              <div className="t-cap" style={{ color: "var(--faint)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", lineHeight: 1.5 }}>
                 latest snapshot {b.latestSnapshotAtMs === null ? "unknown" : `${shortAge(now - b.latestSnapshotAtMs)} ago`}
                 {b.baselineAtMs !== null && ` · baseline ${shortAge(now - b.baselineAtMs)} ago`}
               </div>
@@ -231,7 +233,7 @@ export default function BriefingCard({ now }) {
             // unqualified "all clear" is the calm zero in a friendlier font.
             <Row gap={9} align="flex-start" style={{ padding: "11px 12px", borderRadius: 11, background: TONE.fresh.bg, border: `1px solid ${TONE.fresh.line}` }}>
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: TONE.fresh.fg, flexShrink: 0, marginTop: 5 }} />
-              <span style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.55 }}>
+              <span className="t-cap" style={{ color: "var(--muted)", lineHeight: 1.55 }}>
                 <b style={{ color: TONE.fresh.fg, fontWeight: 800 }}>Nothing blocking.</b>{" "}
                 Not halted, no approval waiting on you, no hypothesis stuck, no failing invariant check.
               </span>
@@ -289,10 +291,11 @@ function Headline({ b }) {
     : "var(--ink)";
   return (
     <div>
-      <div style={{ fontSize: 17, lineHeight: 1.3, fontWeight: 800, letterSpacing: "-0.01em", fontFamily: "var(--font-display)", color, overflowWrap: "anywhere" }}>
+      {/* .t-head is the kit's 17px section title — the size this already was. */}
+      <div className="t-head" style={{ fontWeight: 800, color, overflowWrap: "anywhere" }}>
         {b.headline}
       </div>
-      <div style={{ marginTop: 5, fontSize: 10, color: "var(--faint)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+      <div className="t-cap" style={{ marginTop: 5, color: "var(--faint)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
         since {clockTime(b.windowStartMs)} · {b.windowHours}h window
       </div>
     </div>
@@ -304,7 +307,7 @@ function Section({ index, label, children }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <Row gap={8}>
-        <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--faint)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>
+        <span className="t-label" style={{ color: "var(--faint)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>
           {index} · {label}
         </span>
         <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
@@ -316,8 +319,7 @@ function Section({ index, label, children }) {
 
 function Label({ children, tone, style }) {
   return (
-    <div style={{
-      fontSize: 9.5, fontWeight: 800, letterSpacing: "0.09em", textTransform: "uppercase",
+    <div className="t-label" style={{
       color: tone ? (TONE[tone] || TONE.empty).fg : "var(--faint)", fontFamily: "var(--font-mono)",
       ...style,
     }}>{children}</div>
@@ -328,7 +330,7 @@ function Label({ children, tone, style }) {
 function Note({ tone = "stale", lead, children }) {
   const t = TONE[tone] || TONE.stale;
   return (
-    <div style={{ padding: "9px 11px", borderRadius: 10, background: t.bg, border: `1px solid ${t.line}`, fontSize: 11, lineHeight: 1.55, color: "var(--muted)" }}>
+    <div className="t-cap" style={{ padding: "9px 11px", borderRadius: 10, background: t.bg, border: `1px solid ${t.line}`, lineHeight: 1.55, color: "var(--muted)" }}>
       {lead && <b style={{ color: t.fg, fontWeight: 800 }}>{lead} </b>}
       {children}
     </div>
@@ -343,16 +345,16 @@ function FailedRow({ a }) {
       border: `1px solid ${TONE.error.line}`, borderLeft: `3px solid ${TONE.error.fg}`,
     }}>
       <Row gap={8} align="flex-start">
-        <div style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 700, color: "var(--ink)", lineHeight: 1.45, overflowWrap: "anywhere" }}>
+        <div className="t-foot" style={{ flex: 1, minWidth: 0, fontWeight: 700, color: "var(--ink)", lineHeight: 1.45, overflowWrap: "anywhere" }}>
           {a.action}
         </div>
-        <span style={{ fontSize: 10, color: "var(--faint)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
+        <span className="t-cap" style={{ color: "var(--faint)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
           {clockTime(a.occurred_at)}
         </span>
       </Row>
       {/* Wrapped, not truncated. Stack traces and vendor errors are ugly and
           they are also the only part of this row you can act on. */}
-      <div style={{ marginTop: 5, fontSize: 11, lineHeight: 1.5, color: TONE.error.fg, fontFamily: "var(--font-mono)", overflowWrap: "anywhere" }}>
+      <div className="t-cap" style={{ marginTop: 5, lineHeight: 1.5, color: TONE.error.fg, fontFamily: "var(--font-mono)", overflowWrap: "anywhere" }}>
         {a.error || "No error text was recorded — the ledger says it failed and nothing more."}
       </div>
       <Row gap={6} wrap style={{ marginTop: 7 }}>
@@ -368,7 +370,7 @@ function DeltaRow({ d, lead }) {
   const color = dir > 0 ? TONE.fresh.fg : dir < 0 ? TONE.error.fg : "var(--muted)";
   return (
     <Row gap={10} style={{ padding: "9px 0", borderTop: "1px solid var(--border)" }}>
-      <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <span className="t-cap" style={{ flex: 1, minWidth: 0, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {METRIC_LABELS[d.key] || d.key}
       </span>
       <span style={{
@@ -378,11 +380,14 @@ function DeltaRow({ d, lead }) {
         {fmtMetric(d.key, d.to)}
       </span>
       <div style={{ width: 80, textAlign: "right", flexShrink: 0 }}>
-        <div style={{ fontSize: d.delta === null ? 10 : 11.5, fontWeight: 700, color: d.delta === null ? "var(--faint)" : color, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+        {/* The size was a ternary that resolved to 10 whenever there was no
+            baseline — a floor violation only reachable on the emptier of the two
+            states. One size now, from the scale. */}
+        <div className="t-cap" style={{ fontWeight: 700, color: d.delta === null ? "var(--faint)" : color, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
           {d.delta === null ? "no baseline" : signed(d.delta, (x) => fmtMetric(d.key, x))}
         </div>
         {d.pct !== null && (
-          <div style={{ fontSize: 10, color: "var(--faint)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", marginTop: 2 }}>
+          <div className="stattile-label" style={{ color: "var(--faint)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", marginTop: 2 }}>
             {signed(d.pct, (x) => pct(x, 1))}
           </div>
         )}
@@ -396,15 +401,15 @@ function LearningRow({ l }) {
   const known = Number.isFinite(c);
   return (
     <div style={{ padding: "10px 11px", borderRadius: 11, background: "var(--subtle)", border: "1px solid var(--border)" }}>
-      <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ink)", lineHeight: 1.45, overflowWrap: "anywhere" }}>
+      <div className="t-foot" style={{ fontWeight: 700, color: "var(--ink)", lineHeight: 1.45, overflowWrap: "anywhere" }}>
         {l.statement}
       </div>
       {l.detail && (
         // Clamped: this is the card, not the archive. The statement is the
         // belief; the detail is the working, and three lines of working is as
         // much as a two-minute read can spend on one row.
-        <div style={{
-          marginTop: 4, fontSize: 11, color: "var(--muted)", lineHeight: 1.5, overflowWrap: "anywhere",
+        <div className="t-cap" style={{
+          marginTop: 4, color: "var(--muted)", lineHeight: 1.5, overflowWrap: "anywhere",
           display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden",
         }}>{l.detail}</div>
       )}
@@ -413,7 +418,7 @@ function LearningRow({ l }) {
           {known ? `${pct(c, 0)} confident` : "confidence unrecorded"}
         </Badge>
         {l.source && <Badge>{l.source}</Badge>}
-        <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--faint)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+        <span className="t-cap" style={{ marginLeft: "auto", color: "var(--faint)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
           {clockTime(l.learned_at)}
         </span>
       </Row>
@@ -428,14 +433,15 @@ function NextRow({ h, rank }) {
   return (
     <Row gap={9} align="flex-start" style={{ padding: "10px 11px", borderRadius: 11, background: "var(--subtle)", border: "1px solid var(--border)" }}>
       <span style={{
-        width: 18, height: 18, borderRadius: 6, flexShrink: 0, marginTop: 1,
+        width: 20, height: 20, borderRadius: 6, flexShrink: 0, marginTop: 1,
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         background: "var(--accent-soft)", border: "1px solid var(--accent-line)", color: "var(--accent)",
-        fontSize: 10, fontWeight: 800, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
+        // 10.5 is the floor; the box grew 2px so the rank still centres in it.
+        fontSize: 10.5, fontWeight: 800, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
       }}>{rank}</span>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ink)", lineHeight: 1.45, overflowWrap: "anywhere" }}>{h.title}</div>
+        <div className="t-foot" style={{ fontWeight: 700, color: "var(--ink)", lineHeight: 1.45, overflowWrap: "anywhere" }}>{h.title}</div>
         <Row gap={6} wrap style={{ marginTop: 6 }}>
           <Badge tone={running ? "accent" : "empty"}>{running ? "running" : "queued"}</Badge>
           {h.tier >= 2 && <Badge tone={h.tier >= 3 ? "error" : "stale"}>tier {h.tier}</Badge>}
@@ -448,7 +454,9 @@ function NextRow({ h, rank }) {
         <div style={{ fontSize: 13, fontWeight: 800, color: "var(--ink)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>
           {Number.isFinite(score) ? score.toFixed(2) : "—"}
         </div>
-        <div style={{ fontSize: 9, color: "var(--faint)", fontFamily: "var(--font-mono)", marginTop: 2 }}>score</div>
+        {/* .stattile-label is the kit's 10.5px caption-under-a-number — this
+            was 9px, and lower-case, so it never needed the uppercase either. */}
+        <div className="stattile-label" style={{ color: "var(--faint)", fontFamily: "var(--font-mono)", marginTop: 2 }}>score</div>
       </div>
     </Row>
   );
@@ -464,8 +472,8 @@ function BlockedRow({ item }) {
     }}>
       <Row gap={8} align="flex-start">
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ink)", lineHeight: 1.45, overflowWrap: "anywhere" }}>{item.label}</div>
-          <div style={{ marginTop: 3, fontSize: 11, color: "var(--muted)", lineHeight: 1.5, overflowWrap: "anywhere" }}>{item.detail}</div>
+          <div className="t-foot" style={{ fontWeight: 700, color: "var(--ink)", lineHeight: 1.45, overflowWrap: "anywhere" }}>{item.label}</div>
+          <div className="t-cap" style={{ marginTop: 3, color: "var(--muted)", lineHeight: 1.5, overflowWrap: "anywhere" }}>{item.detail}</div>
         </div>
         {/* The type is the pointer: it says which surface below this card can
             actually clear the block. */}

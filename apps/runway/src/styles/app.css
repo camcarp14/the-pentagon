@@ -1,8 +1,36 @@
-/* ============ RUNWAY design system ============ */
+/* ============ RUNWAY — on the Pentagon's shared design kit ============ */
 /* Runway rides the shared "midnight" canvas (same base as ZTS & Clarify) with a
    VIOLET accent to differentiate it. These values mirror @cc/design's
    cssVars("runway"); the shell also stamps them on Runway's mount wrapper, so
-   embedded and standalone render identically. */
+   embedded and standalone render identically.
+
+   WHAT CHANGED WHEN THIS MOVED ONTO THE KIT
+   Runway's root now carries `data-kit` (see Root.jsx), and EVERY rule in
+   packages/ui/components.css is scoped to `[data-kit]` — so the kit reaches
+   this app now, at specificity (0,2,0), which beats a bare `.card` or `.btn`
+   here. That made three names dangerous and one name fatal:
+
+     .sheet  — WAS the printed résumé (a 816px letter-paper document).
+               The kit's .sheet is `position: fixed` bottom-anchored modal
+               chrome. Keeping the name would have turned a printable document
+               into a dialog. Renamed to .paper / .paper-* throughout.
+     .field  — WAS a form-ROW wrapper (`margin-bottom: 14px`) around a label
+               and a control. The kit's .field IS the control: a filled 44px
+               well. Every wrapper is `.fld` now and the kit's `.field` sits on
+               the input/select/textarea, which is what it was written for.
+     .seg    — the kit owns the segmented control; the options are `.seg-opt`
+               (+ `.active`) instead of a bare `.seg button`.
+     .empty  — the kit owns the empty state; `.t`/`.h` are `.empty-title` /
+               `.empty-sub`.
+     .card / .btn / .toast / .sk / .expand / .pagefade / .stagger / kbd — same
+               meaning in both places, so the kit simply takes them over. What
+               stays below is only what the kit has no opinion about (sizes,
+               the secondary fill, Runway's own `.ghost`).
+
+   Colours the kit reads that are NOT declared here (--ink, --sub, --line,
+   --r-card, --shadow-card, --seg-bg, --on-accent, --ink-a*, --accent-a*) come
+   from @cc/design's tokens + themes, which the shell loads once and selects
+   with data-palette="runway" data-theme="dark" on the mount wrapper. */
 :root {
   --bg: #0B0F1A;
   --surface: #141B2C;
@@ -27,8 +55,9 @@
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 14.5px/1.55 Inter, "Segoe UI", -apple-system, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
-.mono { font-family: ui-monospace, Consolas, monospace; }
+/* the shared body face, not a private font list — @cc/design owns the stack */
+body { margin: 0; background: var(--bg); color: var(--text); font: 14.5px/1.55 var(--font-body, system-ui, sans-serif); -webkit-font-smoothing: antialiased; }
+.mono { font-family: var(--font-mono, ui-monospace, monospace); }
 a { color: var(--info); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
@@ -37,7 +66,7 @@ a:hover { text-decoration: underline; }
 /* ---------- shell ---------- */
 .shell { display: grid; grid-template-columns: 218px 1fr; min-height: 100vh; }
 .rail { border-right: 1px solid var(--border); padding: 18px 12px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh; background: rgba(255,255,255,0.012); }
-.brand { display: flex; align-items: center; gap: 9px; padding: 4px 10px 16px; font-weight: 700; letter-spacing: 0.14em; font-size: 13px; }
+.brand { display: flex; align-items: center; gap: 9px; padding: 4px 10px 16px; }
 .brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
 /* The tab group. Base (fallback) is the old vertical rail; the desktop
    embed overrides (Root.jsx) turn it into a Clarify/ZTS-style pill group, and
@@ -61,47 +90,69 @@ a:hover { text-decoration: underline; }
 .main > .pagefade:has(.kanban) { max-width: 1580px; }
 
 .page-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; margin: 0 0 18px; flex-wrap: wrap; }
+/* Page titles carry the kit's .t-title2; this element rule is what the printed
+   résumé's own <h1>/<h2> fall back to, and nothing else. */
 h1 { font-size: 21px; margin: 0; letter-spacing: -0.01em; }
-h2 { margin: 0 0 10px; color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 12px; }
+/* Card section headings. Were 12px uppercase tracked 0.06em — hand-rolling
+   .t-label at a size the kit reserves for ONE class. Sentence case now, sized
+   off the kit's .t-head, with hierarchy coming from size and weight. */
+h2 { margin: 0 0 10px; color: var(--ink, var(--text)); font-weight: 600; font-size: 16px; letter-spacing: -0.01em; }
 .sub { color: var(--dim); font-size: 13px; }
 
 /* ---------- cards, grids ---------- */
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+/* The kit's .card owns background, radius and the soft shadow, with NO outline
+   (this rule used to add `border: 1px solid var(--border)` on top of it, which
+   is the border-and-shadow pairing the language forbids). Call sites carry
+   `card pad-md`, so padding comes from the kit too. */
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
-/* Dashboard metric widgets, styled to match ZTS's Stat cards: a roomier 16px
-   card, a Syne uppercase label, and a DM-Mono number at weight 500. */
+/* Dashboard metric widgets are the kit's .stattile now (`stattile on-canvas
+   metric`): a hero number in tabular mono over a small label. The label was a
+   Syne uppercase 11px — a decorative face doing .t-label's job by hand. */
 .grid.metrics { gap: 14px; }
-.card.metric { border-radius: 16px; padding: 18px 20px; }
-.metric .lab { font-family: var(--font-display, 'Syne', system-ui); font-size: 11px; color: var(--dim); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; }
-.metric .big { font-family: var(--font-mono, 'DM Mono', ui-monospace, monospace); font-size: 26px; font-weight: 500; margin-top: 12px; line-height: 1; }
-.metric .note { font-size: 10px; color: var(--faint); margin-top: 7px; }
+[data-kit] .grid.metrics .stattile { padding: 18px 20px; gap: 0; }
+[data-kit] .grid.metrics .stattile-label { white-space: normal; }
+/* the number stays the size it has always been on this dashboard */
+[data-kit] .grid.metrics .stattile-value { font-size: 26px; line-height: 1; margin-top: 12px; }
+[data-kit] .grid.metrics .note { margin-top: 7px; }
 .lab-short { display: none; } /* compact metric labels, mobile-only */
 
+/* the discovery inbox reads as "there is something waiting" — an accent ring,
+   drawn as an inset shadow because the kit's card has no border to colour */
+[data-kit] .card.inbox { box-shadow: inset 0 0 0 1px var(--accent-line), var(--shadow-card); }
+
 /* ---------- buttons ---------- */
-.btn { border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); border-radius: 9px; padding: 8px 14px; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
-.btn:hover:not(:disabled) { border-color: rgba(255,255,255,0.28); }
-.btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.btn.danger { background: var(--bad-soft); border-color: rgba(255,111,111,0.4); color: var(--bad); }
-.btn.ghost { background: transparent; border-color: transparent; color: var(--dim); }
-.btn.ghost:hover:not(:disabled) { color: var(--text); background: rgba(255,255,255,0.06); }
-.btn.sm { padding: 5px 10px; font-size: 12.5px; border-radius: 7px; }
+/* .btn is the kit's: it owns shape, press physics, and .primary/.danger/.sm.
+   What is left here is the ONE default size Runway's markup assumes when it
+   writes a bare `.btn` (the kit only sizes .sm/.md/.lg), the secondary fill,
+   and `.ghost` — a transparent neutral the kit has no variant for (.plain is
+   accent-coloured, which would paint half this app violet). */
+[data-kit] .btn { background: var(--ink-a06); color: var(--ink); height: 38px; padding: 0 16px; font-size: 13.5px; }
+[data-kit] .btn:hover:not(:disabled) { background: var(--ink-a10); }
+[data-kit] .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+[data-kit] .btn.ghost { background: transparent; color: var(--sub); }
+[data-kit] .btn.ghost:hover:not(:disabled) { background: var(--ink-a06); color: var(--ink); }
 
 /* ---------- forms ---------- */
 label.f { display: block; font-size: 12.5px; color: var(--dim); margin-bottom: 5px; font-weight: 600; }
+/* Controls that did NOT adopt the kit's .field (checkboxes, date pickers in
+   older rows) still need a sane base. .field call sites override all of this. */
 input, select, textarea { width: 100%; background: var(--subtle); border: 1px solid var(--border); color: var(--text); border-radius: 9px; padding: 9px 11px; font: inherit; transition: border-color var(--dur-1) var(--ease-out); }
 input:hover, select:hover, textarea:hover { border-color: var(--border-strong); }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
 textarea { resize: vertical; min-height: 90px; }
-.field { margin-bottom: 14px; }
+[data-kit] textarea.field { min-height: 90px; resize: vertical; }
+/* the form ROW. It was `.field`, which is the kit's name for the control
+   itself — see the header note. */
+.fld { margin-bottom: 14px; }
 .frow { display: grid; gap: 12px; margin-bottom: 14px; }
 .frow.c2 { grid-template-columns: 1fr 1fr; } .frow.c3 { grid-template-columns: 1fr 1fr 1fr; }
 .err-text { color: var(--bad); font-size: 13px; }
 
-/* segmented */
-.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; background: var(--subtle); }
-.seg button { border: none; background: transparent; color: var(--dim); padding: 7px 13px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
-.seg button.on { background: var(--accent-soft); color: var(--accent); }
+/* segmented — the kit's .seg / .seg-opt. The kit animates a .seg-thumb behind
+   the active option; Runway has no measuring code for one, so the active
+   option carries the thumb's own fill directly. Selection is therefore fill +
+   weight + colour, never colour alone. */
+[data-kit] .seg .seg-opt.active { background: var(--seg-thumb); box-shadow: 0 1px 4px rgba(0,0,0,0.22), 0 3px 8px rgba(0,0,0,0.12); }
 
 /* chips */
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -112,6 +163,8 @@ textarea { resize: vertical; min-height: 90px; }
 .chip.pick.on { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
 
 /* ---------- badges ---------- */
+/* the fit band. The number is inside the badge, so the colour is a second
+   reading of a value that is already legible in text. */
 .badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 7px; padding: 2px 8px; font-size: 12px; font-weight: 700; }
 .badge.good { background: var(--good-soft); color: var(--good); }
 .badge.mid { background: var(--accent-soft); color: var(--accent); }
@@ -122,10 +175,11 @@ textarea { resize: vertical; min-height: 90px; }
 .kanban { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(206px, 1fr); gap: 10px; overflow-x: auto; padding-bottom: 14px; align-items: start; }
 .kcol { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; min-height: 220px; display: flex; flex-direction: column; gap: 8px; transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out); }
 .kcol.over { border-color: var(--accent); background: var(--accent-soft); }
-.kcol-head { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--dim); padding: 2px 4px 6px; }
+.kcol-head { display: flex; justify-content: space-between; align-items: center; color: var(--dim); padding: 2px 4px 6px; }
 .kcol-head .cnt { color: var(--faint); }
-.kcard { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; cursor: grab; display: block; color: inherit; }
-.kcard:hover { text-decoration: none; border-color: var(--border-strong); transform: translateY(-1px); }
+/* a job card is a card: one material, separated by tone and shadow, no outline */
+.kcard { background: var(--surface); border: none; box-shadow: var(--shadow-card); border-radius: 10px; padding: 10px 12px; cursor: grab; display: block; color: inherit; }
+.kcard:hover { text-decoration: none; transform: translateY(-1px); box-shadow: var(--shadow-float, 0 12px 40px rgba(0,0,0,0.5)); }
 .kcard:active { cursor: grabbing; }
 .kcard.dragging { opacity: 0.4; }
 .kcard .co { font-size: 12px; color: var(--dim); }
@@ -135,16 +189,19 @@ textarea { resize: vertical; min-height: 90px; }
 .kempty { border: 1px dashed var(--border); border-radius: 10px; padding: 14px 10px; text-align: center; color: var(--faint); font-size: 12px; }
 
 /* ---------- mobile pipeline: stage pills + single-column list ---------- */
+/* the stage strip is the kit's .pill row: monochrome, because accent is for
+   the primary action and live state, not for filters */
 .stagebar { display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 2px 2px 10px; margin: 0 -2px 4px; scrollbar-width: none; }
 .stagebar::-webkit-scrollbar { display: none; }
-.stagepill { flex: none; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--dim); border-radius: 99px; padding: 8px 14px; min-height: 40px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-.stagepill.on { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
-.stagepill .cnt { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px; background: rgba(255,255,255,0.09); font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.stagepill.on .cnt { background: var(--accent); color: var(--accent-ink); }
+[data-kit] .stagebar .pill { height: 40px; padding: 0 14px; font-weight: 600; }
+[data-kit] .stagebar .pill .cnt { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px; background: var(--ink-a10); font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; }
+[data-kit] .stagebar .pill.active .cnt { background: var(--bg); color: var(--ink); }
 .stagelist { display: flex; flex-direction: column; gap: 8px; }
 .stagelist .kcard { cursor: pointer; }
 
 /* ---------- stage stepper ---------- */
+/* current stage is a filled pill, past stages are outlined, future stages are
+   plain — shape as well as colour, so the position is readable without hue */
 .stepper { display: flex; gap: 6px; flex-wrap: wrap; }
 .step { border: 1px solid var(--border); background: var(--surface-2); color: var(--dim); border-radius: 99px; padding: 5px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
 .step:hover { border-color: var(--border-strong); color: var(--text); }
@@ -171,20 +228,21 @@ textarea { resize: vertical; min-height: 90px; }
 
 /* ---------- timeline ---------- */
 .timeline { list-style: none; margin: 0; padding: 0; }
-.timeline li { display: flex; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.timeline li { display: flex; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line, var(--border)); font-size: 13px; }
 .timeline li:last-child { border-bottom: none; }
 .timeline .when { color: var(--faint); white-space: nowrap; font-size: 12px; min-width: 108px; font-variant-numeric: tabular-nums; }
 
 /* ---------- table ---------- */
 .tablewrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th { text-align: left; color: var(--dim); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+/* column heads were 11.5px uppercase tracked — .t-label's job, and .t-label is
+   the only class in this language allowed to shout */
+th { text-align: left; color: var(--dim); font-size: 12px; font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--border); }
 td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
 
 /* ---------- states ---------- */
-.empty { border: 1px dashed var(--border-strong); border-radius: var(--radius); padding: 34px 20px; text-align: center; }
-.empty .t { font-weight: 700; margin-bottom: 4px; }
-.empty .h { color: var(--dim); font-size: 13px; margin-bottom: 14px; }
+/* .empty is the kit's; .empty-title / .empty-sub replaced .t / .h. Every empty
+   state in this app says what to do next and ships the control that does it. */
 .errbox { background: var(--bad-soft); border: 1px solid rgba(255,111,111,0.35); border-radius: var(--radius); padding: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .errbox .m { color: var(--bad); font-size: 13.5px; }
 
@@ -198,10 +256,11 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
 .section { margin-bottom: 22px; }
 
 /* ---------- discovery inbox ---------- */
-.inbox { border-color: var(--accent-line); }
 .countpill { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 8px; border-radius: 99px; background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 800; vertical-align: middle; font-variant-numeric: tabular-nums; }
-.scanning-dot { margin-left: 12px; font-size: 12px; font-weight: 600; color: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
-@keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+.scanning-dot { margin-left: 12px; font-size: 12px; font-weight: 600; color: var(--accent); animation: rw-pulse 1.4s ease-in-out infinite; }
+/* rw- prefixed: Runway injects this sheet into the shared document, and a bare
+   @keyframes pulse would shadow the kit's for every other tool on screen. */
+@keyframes rw-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
 .kbdhint { color: var(--faint); font-size: 12px; }
 .kbdhint kbd { margin: 0 1px; }
 .inbox-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; max-height: 560px; overflow-y: auto; border-radius: 10px; }
@@ -229,24 +288,34 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
 .fitnum { font-size: 40px; font-weight: 800; line-height: 1; margin: 4px 0 10px; font-variant-numeric: tabular-nums; }
 .desc { white-space: pre-wrap; font-size: 13px; color: var(--dim); max-height: 320px; overflow-y: auto; margin: 0; font-family: inherit; }
 .dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
-.dl .lab { font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+/* the keys are .t-label in the markup — the one class allowed to be uppercase */
 .dl .val { font-size: 13.5px; margin-top: 2px; font-variant-numeric: tabular-nums; }
 
 /* ---------- resume studio (print view) ---------- */
+/* THE PAPER. This is a letter-width printed document, not app chrome: a white
+   816px sheet in a serif face that a browser prints to PDF and a human uploads
+   to an application. It was called `.sheet`, which is the kit's name for a
+   position:fixed bottom sheet — under [data-kit] that rename was the difference
+   between a résumé and a modal. Nothing in this block is themed, on purpose:
+   paper is paper in every palette. */
 .studio-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
-.sheet { background: #ffffff; color: #111418; max-width: 816px; margin: 0 auto 14px; padding: 56px 64px; border-radius: 4px; box-shadow: 0 18px 60px rgba(0,0,0,0.5); font: 13.5px/1.5 Georgia, 'Times New Roman', serif; }
-.sheet ::selection { background: rgba(0,0,0,0.12); }
-.sheet-head { border-bottom: 1.5px solid #111418; padding-bottom: 10px; margin-bottom: 16px; }
-.sheet-name { font-size: 24px; font-weight: 700; letter-spacing: 0.01em; }
-.sheet-contact { font-size: 12px; color: #3c4148; margin-top: 4px; }
-.sheet-date { font-size: 12.5px; color: #3c4148; margin-bottom: 14px; }
-.sheet-body h1 { font-size: 17px; margin: 16px 0 6px; }
-.sheet-body h2 { font-size: 14px; margin: 16px 0 6px; color: #111418; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid #d5d8dc; padding-bottom: 3px; }
-.sheet-body h3 { font-size: 13.5px; margin: 12px 0 4px; }
-.sheet-body p { margin: 7px 0; }
-.sheet-body ul { margin: 6px 0 10px; padding-left: 20px; }
-.sheet-body li { margin: 4px 0; }
-.sheet-body hr { border: none; border-top: 1px solid #d5d8dc; margin: 14px 0; }
+.paper { background: #ffffff; color: #111418; max-width: 816px; margin: 0 auto 14px; padding: 56px 64px; border-radius: 4px; box-shadow: 0 18px 60px rgba(0,0,0,0.5); font: 13.5px/1.5 Georgia, 'Times New Roman', serif; }
+.paper ::selection { background: rgba(0,0,0,0.12); }
+.paper-head { border-bottom: 1.5px solid #111418; padding-bottom: 10px; margin-bottom: 16px; }
+.paper-name { font-size: 24px; font-weight: 700; letter-spacing: 0.01em; }
+.paper-contact { font-size: 12px; color: #3c4148; margin-top: 4px; }
+.paper-date { font-size: 12.5px; color: #3c4148; margin-bottom: 14px; }
+.paper-body h1 { font-size: 17px; margin: 16px 0 6px; }
+/* Uppercase survives here and nowhere else in Runway. A résumé section rule
+   ("EXPERIENCE", "EDUCATION") is a typographic convention of the printed
+   document a recruiter receives — it is not this app's interface language, and
+   .t-label (12px, --sub, on a dark canvas) would be wrong on white paper. */
+.paper-body h2 { font-size: 14px; margin: 16px 0 6px; color: #111418; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid #d5d8dc; padding-bottom: 3px; }
+.paper-body h3 { font-size: 13.5px; margin: 12px 0 4px; }
+.paper-body p { margin: 7px 0; }
+.paper-body ul { margin: 6px 0 10px; padding-left: 20px; }
+.paper-body li { margin: 4px 0; }
+.paper-body hr { border: none; border-top: 1px solid #d5d8dc; margin: 14px 0; }
 
 @media print {
   .rail, .toasts, .no-print, .cmdk-wrap { display: none !important; }
@@ -254,48 +323,57 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
   .main { padding: 0; }
   .main > .pagefade { max-width: none; animation: none; }
   body { background: #ffffff; }
-  .sheet { box-shadow: none; border-radius: 0; max-width: none; margin: 0; padding: 0; }
+  .paper { box-shadow: none; border-radius: 0; max-width: none; margin: 0; padding: 0; }
 }
 
 /* ============ mobile: streamlined, one-hand, glanceable ============ */
 @media (max-width: 767.98px) {
   input, select, textarea { font-size: 16px; } /* iOS zooms focused inputs under 16px */
+  /* …and the same, at a weight that beats `[data-kit] .field` (15px). Without
+     this twin, every control that adopted the kit's field would zoom the page
+     on focus — the exact bug the line above exists to prevent. */
+  [data-kit] input.field, [data-kit] select.field, [data-kit] textarea.field { font-size: 16px; }
   .shell { grid-template-columns: 1fr; }
   /* bottom nav: a real app bar — comfortable clearance above the home
      indicator (max() guarantees breathing room even where env() is 0) */
-  .rail { position: fixed; bottom: 0; top: auto; height: auto; width: 100%; flex-direction: row; align-items: center; border-top: 1px solid var(--border); border-right: none; background: rgba(11,15,26,0.92); backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%); box-shadow: 0 -2px 16px rgba(0,0,0,0.4); z-index: 50; padding: 4px max(6px, env(safe-area-inset-right)) max(10px, calc(6px + var(--safe-bottom, 0px))) max(6px, env(safe-area-inset-left)); }
+  .rail { position: fixed; bottom: 0; top: auto; height: auto; width: 100%; flex-direction: row; align-items: center; border-top: 1px solid var(--border); border-right: none; background: rgba(11,15,26,0.92); backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%); z-index: 50; padding: 4px max(6px, env(safe-area-inset-right)) max(10px, calc(6px + var(--safe-bottom, 0px))) max(6px, env(safe-area-inset-left)); }
   .rail-foot { display: none; } .brand { display: none; }
   /* the pill group opens up to fill the bar so its tabs spread edge-to-edge */
   .navgroup { flex-direction: row; flex: 1; gap: 0; padding: 0; background: none; border: none; }
-  /* icon-over-label bottom-bar cells, matching ZTS/Clarify/Macro exactly */
-  .nav-item { flex: 1; flex-direction: column; justify-content: center; gap: 3px; min-height: 46px; padding: 8px 2px 7px; color: var(--faint); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+  /* icon-over-label bottom-bar cells, matching ZTS/Clarify/Macro exactly.
+     10.5px sentence case, which is what the kit's own .dock-label is — the
+     9px uppercase this used to be sat under the type floor. */
+  .nav-item { flex: 1; flex-direction: column; justify-content: center; gap: 3px; min-height: 46px; padding: 8px 2px 7px; color: var(--faint); font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em; }
   .nav-item .tab-ico { display: block; }
   .nav-item:hover { background: none; color: var(--faint); }
   .nav-item.active { background: none; color: var(--accent); }
   .main { padding: max(14px, env(safe-area-inset-top)) 12px 140px; }
 
   /* tighter rhythm: a phone screen is ~5x smaller — spacing must be too */
-  h1 { font-size: 19px; }
+  [data-kit] .page-head .t-title2 { font-size: 19px; }
   .page-head { margin-bottom: 12px; gap: 10px; }
-  .card { padding: 12px 13px; }
+  [data-kit] .card.pad-md { padding: 12px 13px; }
   .section { margin-bottom: 12px; }
 
   /* metrics: ONE fused stat strip — four numbers in a glance row, ~70px
      total, instead of four floating boxes that ate a third of the screen */
   .grid.metrics { grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-  .grid.metrics .metric { border: none; border-radius: 0; padding: 10px 4px 12px; text-align: center; background: var(--surface); }
-  .metric .lab { font-size: 9.5px; letter-spacing: 0.03em; }
-  .metric .big { font-size: 20px; margin-top: 3px; }
-  .metric .note { display: none; } /* the label carries it; captions are the space-eaters */
+  [data-kit] .grid.metrics .stattile { border-radius: 0; box-shadow: none; padding: 10px 4px 12px; text-align: center; background: var(--surface); }
+  [data-kit] .grid.metrics .stattile-label { font-size: 10.5px; letter-spacing: 0; }
+  [data-kit] .grid.metrics .stattile-value { font-size: 20px; margin-top: 3px; }
+  [data-kit] .grid.metrics .note { display: none; } /* the label carries it; captions are the space-eaters */
   .lab-full { display: none; } .lab-short { display: inline; }
   /* the strip is one visual unit — its cells must not stagger separately */
-  .grid.metrics.stagger > * { animation-delay: 0ms; }
+  [data-kit] .grid.metrics.stagger > * { animation-delay: 0ms; }
   /* other .grid uses (skeletons) just go single-column */
   .grid:not(.metrics) { grid-template-columns: 1fr; gap: 8px; }
 
-  /* touch targets: polish.css bumps .btn/.tabs to 42px; cover the rest of
-     the tappable set (the stepper is THE move control on mobile) */
-  .step, .chip.pick, .seg button { min-height: 44px; }
+  /* touch targets: polish.css bumps .btn/.tabs to 44px; cover the rest of
+     the tappable set (the stepper is THE move control on mobile). .seg-opt,
+     not `.seg button` — the kit's options are a class now, and the kit sizes
+     them at 32px, which is under the target. */
+  .step, .chip.pick { min-height: 44px; }
+  [data-kit] .seg .seg-opt { min-height: 44px; }
 
   /* forms & fit bars */
   .frow.c2, .frow.c3 { grid-template-columns: 1fr; }
@@ -322,7 +400,7 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
   .disc.on { border-color: var(--border); background: var(--surface); }
   .disc-ti { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.35; }
   .disc-actions { grid-column: 1 / -1; padding-top: 4px; }
-  .disc-actions .btn { min-height: 40px; flex: 1; justify-content: center; }
+  [data-kit] .disc-actions .btn { min-height: 40px; flex: 1; justify-content: center; }
   .inbox-list { max-height: 60vh; }
 
   /* timelines & agenda: reclaim the date column */
@@ -342,7 +420,7 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
   .stagebar { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 26px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 26px), transparent); padding-right: 30px; scroll-padding-right: 30px; }
 
   /* liveness sweep: quiet full-width utility at the foot of the pipeline */
-  .checkrow { width: 100%; justify-content: center; margin-top: 12px; min-height: 44px; color: var(--dim); font-weight: 500; }
+  [data-kit] .btn.checkrow { width: 100%; justify-content: center; margin-top: 12px; min-height: 44px; color: var(--sub); font-weight: 500; }
 
   /* job detail */
   .fitnum { font-size: 32px; }

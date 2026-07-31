@@ -69,7 +69,7 @@ function DiscoveryInbox() {
   const watchedCount = (boards || []).length;
 
   return (
-    <div className="card section inbox">
+    <div className="card pad-md section inbox">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
         <h2 style={{ margin: 0 }}>
           Discovery inbox{items.length > 0 && <span className="countpill">{items.length}</span>}
@@ -160,7 +160,7 @@ function StarterPacks() {
   };
 
   return (
-    <div className="card section">
+    <div className="card pad-md section">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
         <h2 style={{ margin: 0 }}>Starter packs</h2>
         <button type="button" className="btn ghost sm" onClick={() => setOpen((o) => !o)}>{open ? 'Hide' : 'Browse packs'}</button>
@@ -200,7 +200,7 @@ function BookmarkletCard() {
   const code = `javascript:void(window.open('${window.location.origin}/capture?url='+encodeURIComponent(location.href)))`;
   useEffect(() => { anchorRef.current?.setAttribute('href', code); }, [code]);
   return (
-    <div className="card section bookmarklet">
+    <div className="card pad-md section bookmarklet">
       <h2>Capture from anywhere</h2>
       <p className="sub" style={{ marginTop: 0 }}>
         Drag this to your bookmarks bar. On any job posting, click it — Runway opens with the URL ready to parse.
@@ -262,7 +262,7 @@ function WatchlistCard() {
   };
 
   return (
-    <div className="card section">
+    <div className="card pad-md section">
       <h2>Watched boards {(boards || []).length > 0 && <span className="countpill">{boards.length}</span>}</h2>
       <p className="sub" style={{ marginTop: 0 }}>
         Type a company name (Runway probes 13 board providers for it) or paste a board URL — Greenhouse, Lever, Ashby, SmartRecruiters, Workable, Recruitee, Breezy, Rippling, BambooHR, Jobvite, Pinpoint, Teamtailor, Personio, and Workday all publish public feeds. Scanned on open and every weekday morning once scheduled scans are on.
@@ -299,7 +299,7 @@ function WatchlistCard() {
       )}
       <form onSubmit={add}>
         <div className="frow" style={{ gridTemplateColumns: '1fr auto', marginBottom: 0 }}>
-          <input aria-label="Company name or board URL to watch" placeholder="Company name, or a board URL"
+          <input className="field" aria-label="Company name or board URL to watch" placeholder="Company name, or a board URL"
             value={input} onChange={(e) => { setInput(e.target.value); setFindHits(null); }} />
           <button className="btn sm" disabled={adding || finding || !input.trim()}>
             {finding ? 'Finding…' : adding ? 'Adding…' : looksLikeName ? 'Find board' : '+ Watch'}
@@ -401,7 +401,7 @@ export default function Capture() {
   return (
     <>
       <div className="page-head">
-        <h1>Capture</h1>
+        <h1 className="t-title2">Capture</h1>
         <span className="sub">Runway finds and scores roles for you — nothing is ever submitted on your behalf.</span>
       </div>
 
@@ -412,11 +412,11 @@ export default function Capture() {
         <div>
           <WatchlistCard />
 
-          <div className="card section">
+          <div className="card pad-md section">
             <h2>Paste a posting</h2>
-            <div className="field">
+            <div className="fld">
               <label className="f" htmlFor="cap-paste">Job URL or full description text</label>
-              <textarea id="cap-paste" rows={3}
+              <textarea className="field" id="cap-paste" rows={3}
                 placeholder="https://boards.greenhouse.io/… or paste the whole posting text"
                 value={paste} onChange={(e) => setPaste(e.target.value)} />
             </div>
@@ -434,12 +434,12 @@ export default function Capture() {
             </div>
           </div>
 
-          <form className="card section" onSubmit={submit}>
+          <form className="card pad-md section" onSubmit={submit}>
             <h2>Details</h2>
             <JobForm value={f} onChange={setF} flags={flags} onFlags={setFlags} idPrefix="cap" />
-            <div className="field">
+            <div className="fld">
               <label className="f" htmlFor="cap-notes">Notes</label>
-              <textarea id="cap-notes" rows={3} placeholder="Anything worth remembering about this one…" value={notes} onChange={(e) => setNotes(e.target.value)} />
+              <textarea className="field" id="cap-notes" rows={3} placeholder="Anything worth remembering about this one…" value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
             {err && <p className="err-text" role="alert">Couldn’t save: {err} — fix and try again.</p>}
             <button className="btn primary" disabled={busy || !f.company.trim() || !f.title.trim()}>
@@ -450,7 +450,7 @@ export default function Capture() {
           <BookmarkletCard />
         </div>
 
-        <aside className="card">
+        <aside className="card pad-md">
           <h2>Fit preview</h2>
           {preview.score == null ? (
             <>

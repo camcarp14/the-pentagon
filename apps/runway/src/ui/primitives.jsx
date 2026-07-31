@@ -54,12 +54,12 @@ export function useIsMobile(query = '(max-width: 767.98px)') {
 
 // ---- skeletons: replace EVERY page-level spinner ----
 export const SkLine = ({ w }) => <div className={`sk sk-line${w ? ` ${w}` : ''}`} />;
-export const SkCard = () => (<div className="card"><SkLine w="w40" /><div className="sk sk-big" /><SkLine w="w80" /></div>);
+export const SkCard = () => (<div className="card pad-md"><SkLine w="w40" /><div className="sk sk-big" /><SkLine w="w80" /></div>);
 export function SkPage({ cards = 4 }) {
   return (
     <div className="pagefade">
       <div className="grid section">{Array.from({ length: cards }).map((_, i) => <SkCard key={i} />)}</div>
-      <div className="card section"><SkLine w="w40" /><SkLine /><SkLine w="w80" /><SkLine w="w60" /></div>
+      <div className="card pad-md section"><SkLine w="w40" /><SkLine /><SkLine w="w80" /><SkLine w="w60" /></div>
     </div>
   );
 }
@@ -89,13 +89,17 @@ export function ErrorState({ msg, onRetry, retryLabel = 'Retry' }) {
     </div>
   );
 }
+// The kit's empty state. `.t` / `.h` are `.empty-title` / `.empty-sub` now, and
+// the dashed outline is gone — an empty state is an absence, not an object with
+// a border. Every one of them still says what to do next and ships the control
+// that does it.
 export function EmptyState({ title, hint, cta, onCta, ctaTo }) {
   const nav = useNavigate();
   return (
     <div className="empty">
-      <div className="t">{title}</div>
-      {hint && <div className="h">{hint}</div>}
-      {cta && <button className="btn primary" onClick={onCta || (() => ctaTo && nav(ctaTo))}>{cta}</button>}
+      <div className="empty-title">{title}</div>
+      {hint && <div className="empty-sub">{hint}</div>}
+      {cta && <button className="btn primary md" onClick={onCta || (() => ctaTo && nav(ctaTo))}>{cta}</button>}
     </div>
   );
 }
@@ -126,7 +130,9 @@ export function ToastProvider({ children }) {
       <div className="toasts" aria-live="polite">
         {items.map((t) => (
           <div key={t.id} className={`toast${t.err ? ' err' : ''}${t.out ? ' out' : ''}`}>
-            <span className="tdot" />
+            {/* the marker is a dot for a success and a diamond for an error
+                (polish.css rotates it) — the state does not live in colour alone */}
+            <span className="tdot" aria-hidden="true" />
             {t.msg}
             {t.action && (
               <button type="button" className="tbtn" onClick={() => { dismiss(t.id); t.action.fn(); }}>

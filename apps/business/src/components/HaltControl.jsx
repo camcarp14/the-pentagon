@@ -130,9 +130,12 @@ export function StatusAndHalt({ cfg, now }) {
   const tier = AUTONOMY_TIERS[cfg.row?.autonomy_tier] || null;
 
   return (
-    <div style={{
-      background: "var(--surface)", borderRadius: 16,
-      border: `1px solid ${tone.line}`, boxShadow: `inset 3px 0 0 ${tone.fg}`,
+    // The kit's card. This carried a border AND an inset rail — the pairing the
+    // language forbids — so the outline is gone and the rail is stacked on the
+    // card's own shadow. The rail itself stays: it is the only status signal
+    // that survives being scrolled halfway off screen.
+    <div className="card" style={{
+      boxShadow: `inset 3px 0 0 ${tone.fg}, var(--shadow-card)`,
       padding: 14, display: "flex", flexDirection: "column", gap: 12,
     }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
@@ -142,18 +145,18 @@ export function StatusAndHalt({ cfg, now }) {
               className={status.key === "running" ? undefined : "biz-pulse"}
               style={{ width: 9, height: 9, borderRadius: "50%", background: tone.fg, flexShrink: 0, boxShadow: `0 0 10px ${tone.fg}` }}
             />
-            <span style={{
-              fontSize: 15, fontWeight: 800, fontFamily: "var(--font-display)", color: tone.fg,
+            <span className="t-body" style={{
+              fontWeight: 800, color: tone.fg,
               letterSpacing: "0.04em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>{status.label}</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             {tier && <Badge tone={cfg.row?.autonomy_tier >= 3 ? "stale" : "empty"} title={tier.detail}>T{cfg.row.autonomy_tier}</Badge>}
-            <span style={{ fontSize: 10.5, color: status.key === "silent" ? tone.fg : "var(--muted)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontWeight: status.key === "silent" ? 700 : 400 }}>
+            <span className="t-cap" style={{ color: status.key === "silent" ? tone.fg : "var(--muted)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontWeight: status.key === "silent" ? 700 : 400 }}>
               {status.beatAge === null ? "no heartbeat ever" : `heartbeat ${shortAge(status.beatAge)} ago`}
             </span>
             {cfg.status === "error" && (
-              <span style={{ fontSize: 10.5, color: "var(--bad)", fontWeight: 700, fontFamily: "var(--font-mono)" }}>
+              <span className="t-cap" style={{ color: "var(--bad)", fontWeight: 700, fontFamily: "var(--font-mono)" }}>
                 · offline{cfg.atMs ? ` · last confirmed ${shortAge(now - cfg.atMs)} ago` : ""}
               </span>
             )}
@@ -180,8 +183,8 @@ export function StatusAndHalt({ cfg, now }) {
       </div>
 
       {status.detail && (
-        <div style={{
-          fontSize: 11.5, lineHeight: 1.55, color: status.tone === "error" ? "var(--ink)" : "var(--muted)",
+        <div className="t-cap" style={{
+          lineHeight: 1.55, color: status.tone === "error" ? "var(--ink)" : "var(--muted)",
           background: tone.bg, border: `1px solid ${tone.line}`, borderRadius: 10, padding: "9px 11px",
         }}>
           {halted ? <><strong style={{ color: tone.fg }}>Reason:</strong> {status.detail}</> : status.detail}

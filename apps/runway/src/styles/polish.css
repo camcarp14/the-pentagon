@@ -1,83 +1,73 @@
-/* ============ THE POLISH SYSTEM — motion tokens + system classes ============
-   One physics for every state change. Everything gated by prefers-reduced-motion. */
-:root {
-  --dur-1: 140ms; --dur-2: 240ms; --dur-3: 420ms;
-  --dur-shimmer: 1400ms; --stagger-step: 45ms;
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-spring: cubic-bezier(0.34, 1.4, 0.44, 1);
-}
+/* ============ RUNWAY POLISH — what the shared kit does not already do ========
+   The motion system, the skeletons, the page/stagger entrances, the expand, the
+   toast pill and the type press physics ALL live in packages/ui/components.css
+   now, scoped to [data-kit], which Runway's root opts into. Everything that was
+   a second, near-identical copy of them has been deleted from this file —
+   including the private @keyframes (pagein, rise, shimmer, fadein, toastin,
+   toastout, pulse). That matters beyond duplication: Runway injects this sheet
+   into the SHARED document, and a bare `@keyframes rise` here silently
+   redefined the kit's `rise` for every other tool on screen.
+
+   What is left is Runway's own: the command palette, the toast's position
+   (which carries an iOS workaround the kit's default would defeat), and the
+   phone ergonomics. */
 
 /* numbers behave like instruments; headings balance; details read as designed */
-.big, .mono, .val, table td, .badge, .metric { font-variant-numeric: tabular-nums; }
+.big, .mono, .val, table td, .badge, .stattile-value { font-variant-numeric: tabular-nums; }
 h1, h2, h3 { text-wrap: balance; }
-::selection { background: rgba(139,124,255,0.32); }
+::selection { background: var(--accent-a32, rgba(139,124,255,0.32)); }
 * { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.18) transparent; }
 *::-webkit-scrollbar { width: 9px; height: 9px; }
 *::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 99px; }
 
-/* press physics — every interactive element acknowledges touch <100ms */
-.btn, .tabs button, .seg button, .step, .chip.pick { transition: transform var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out); }
-.btn:active:not(:disabled), .tabs button:active, .seg button:active, .step:active, .chip.pick:active { transform: scale(0.97); }
-.btn.primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(139,124,255,0.28); }
-.card, .kcard { transition: border-color var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out); }
+/* press physics — the kit already scales every <button> on :active; these are
+   the transitions that make the state changes read as motion rather than cuts */
+.btn, .tabs button, .seg-opt, .step, .chip.pick, .pill { transition: transform var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out); }
+[data-kit] .btn.primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 22px var(--accent-a25, rgba(139,124,255,0.28)); }
+[data-kit] a.btn:hover { text-decoration: none; }
+.card, .kcard { transition: transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out); }
 
-/* page + tab transitions: nothing hard-cuts. Wrap routed content in a keyed div. */
-.pagefade { animation: pagein var(--dur-3) var(--ease-out) both; }
-@keyframes pagein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+/* ---- toasts ----
+   The pill itself is the kit's (.toasts / .toast / .tdot, glass, spring in).
+   Only the POSITION is Runway's, and it has to be: Runway carries its own fixed
+   bottom nav on a phone, and `--safe-bottom` is the shell's CORRECTED inset —
+   it is deliberately 0px in the letterboxed iOS standalone window, where the
+   reported env(safe-area-inset-bottom) is dead space. The kit's default bottom
+   (84px + env()) would float the toast off the real screen edge there. Written
+   at [data-kit] weight so it beats the kit's own rule whatever the sheet order. */
+[data-kit] .toasts { bottom: 18px; z-index: 90; max-width: 480px; }
+[data-kit] .toast .tbtn { background: none; border: none; color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; padding: 2px 4px; margin-left: 4px; }
+/* An error toast is not "the same toast in red": the marker turns from a dot
+   into a diamond, so the state survives a colourblind reader and a greyscale
+   screenshot. */
+[data-kit] .toast.err .tdot { border-radius: 2px; transform: rotate(45deg); }
 
-/* entrance choreography: sections develop top-to-bottom */
-.stagger > * { animation: rise var(--dur-3) var(--ease-out) both; animation-delay: calc(var(--i, 0) * var(--stagger-step)); }
-@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-.stagger > *:nth-child(1){--i:0}.stagger > *:nth-child(2){--i:1}.stagger > *:nth-child(3){--i:2}.stagger > *:nth-child(4){--i:3}
-.stagger > *:nth-child(5){--i:4}.stagger > *:nth-child(6){--i:5}.stagger > *:nth-child(7){--i:6}.stagger > *:nth-child(8){--i:7}
-
-/* skeletons: pages develop instead of arriving */
-.sk { position: relative; overflow: hidden; background: rgba(255,255,255,0.055); border-radius: 8px; }
-.sk::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent); animation: shimmer var(--dur-shimmer) infinite; }
-@keyframes shimmer { 100% { transform: translateX(100%); } }
-.sk-line { height: 13px; margin: 8px 0; } .sk-line.w40 { width: 40%; } .sk-line.w60 { width: 60%; } .sk-line.w80 { width: 80%; }
-.sk-big { height: 30px; width: 55%; margin: 10px 0 6px; }
-.sk-ring { border-radius: 50%; }
-
-/* smooth height-auto expand with ZERO measuring: grid-rows 0fr -> 1fr */
-.expand { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--dur-3) var(--ease-out); }
-.expand.open { grid-template-rows: 1fr; }
-.expand > div { overflow: hidden; min-height: 0; }
-
-/* toasts: spring in, fade out, never shift layout */
-.toasts { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 90; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; padding: 0 14px; width: 100%; max-width: 480px; }
-.toast { pointer-events: auto; background: var(--surface); border: 1px solid rgba(255,255,255,0.09); color: var(--text); border-radius: 12px; padding: 11px 16px; font-size: 14px; box-shadow: 0 10px 34px rgba(0,0,0,0.45); animation: toastin var(--dur-3) var(--ease-spring) both; display: flex; gap: 10px; align-items: center; }
-.toast.out { animation: toastout var(--dur-2) var(--ease-out) both; }
-.toast .tdot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex: none; }
-.toast .tbtn { background: none; border: none; color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; padding: 2px 4px; margin-left: 4px; }
-.toast.err .tdot { background: var(--bad); }
-@keyframes toastin { from { opacity: 0; transform: translateY(14px) scale(0.97); } to { opacity: 1; transform: none; } }
-@keyframes toastout { to { opacity: 0; transform: translateY(8px) scale(0.98); } }
-
-/* command palette (⌘K) */
-.cmdk-wrap { position: fixed; inset: 0; z-index: 95; background: rgba(0,0,0,0.62); backdrop-filter: blur(4px); display: grid; place-items: start center; padding: 12vh 16px 16px; animation: fadein var(--dur-2) var(--ease-out) both; }
-.cmdk { width: 100%; max-width: 560px; background: var(--surface); border: 1px solid rgba(255,255,255,0.14); border-radius: 16px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,0.55); animation: rise var(--dur-2) var(--ease-spring) both; }
-.cmdk input { border: none; background: transparent; padding: 16px 18px; font-size: 16px; width: 100%; color: inherit; border-bottom: 1px solid rgba(255,255,255,0.09); border-radius: 0; }
-.cmdk input:focus { outline: none; border-color: rgba(255,255,255,0.09); }
+/* command palette (⌘K) — no border AND shadow on the same element; the depth
+   is the shadow's job and the outline was doing it twice */
+.cmdk-wrap { position: fixed; inset: 0; z-index: 95; background: var(--scrim, rgba(0,0,0,0.62)); backdrop-filter: blur(4px); display: grid; place-items: start center; padding: 12vh 16px 16px; animation: rw-fadein var(--dur-2) var(--ease-out) both; }
+.cmdk { width: 100%; max-width: 560px; background: var(--surface); border: none; border-radius: 16px; overflow: hidden; box-shadow: var(--shadow-deep, 0 30px 80px rgba(0,0,0,0.55)); animation: rw-rise var(--dur-2) var(--ease-spring) both; }
+.cmdk input { border: none; background: transparent; padding: 16px 18px; font-size: 16px; width: 100%; color: inherit; border-bottom: 1px solid var(--line, rgba(255,255,255,0.09)); border-radius: 0; }
+.cmdk input:focus { outline: none; border-color: var(--line, rgba(255,255,255,0.09)); }
 .cmdk .list { max-height: 320px; overflow-y: auto; padding: 6px; }
 .cmdk .item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 10px; cursor: pointer; font-size: 14.5px; opacity: 0.75; }
-.cmdk .item.on { background: rgba(255,255,255,0.07); opacity: 1; }
-.cmdk .item .hint { color: rgba(255,255,255,0.4); font-size: 12px; white-space: nowrap; }
-kbd { font-family: ui-monospace, monospace; font-size: 10.5px; border: 1px solid rgba(255,255,255,0.12); border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px; opacity: 0.8; }
-@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+.cmdk .item.on { background: var(--ink-a06, rgba(255,255,255,0.07)); opacity: 1; }
+.cmdk .item .hint { color: var(--faint); font-size: 12px; white-space: nowrap; }
+/* rw- prefixed for the same reason the others were deleted: this sheet lands in
+   the shared document head. */
+@keyframes rw-fadein { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rw-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 /* mobile ergonomics */
 @media (max-width: 767.98px) {
-  .btn, .tabs button { min-height: 44px; }
+  [data-kit] .btn, .tabs button { min-height: 44px; }
   input, select, textarea { font-size: 16px; } /* iOS zooms focused inputs under 16px */
   /* toasts rise above the fixed bottom nav (~76px + safe area tall) */
-  .toasts { bottom: calc(88px + max(22px, var(--safe-bottom))); }
+  [data-kit] .toasts { bottom: calc(88px + max(22px, var(--safe-bottom))); }
 }
 
 /* the mandate: everything above is optional to the user's nervous system */
 @media (prefers-reduced-motion: reduce) {
-  .pagefade, .stagger > *, .toast, .cmdk, .cmdk-wrap { animation: none !important; }
-  .expand, .btn, .card, .kcard, .tabs button, .seg button, .step, .chip.pick { transition: none; }
-  .sk::after { animation: none; }
+  .cmdk, .cmdk-wrap { animation: none !important; }
+  .btn, .card, .kcard, .tabs button, .seg-opt, .step, .chip.pick, .pill { transition: none; }
   .bar i { transition: none; }
 }

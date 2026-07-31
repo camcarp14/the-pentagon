@@ -32,10 +32,13 @@ export function Num({ v, f = (x) => Math.round(x).toLocaleString('en-US'), dur }
   return shown == null ? <>—</> : <>{f(shown)}</>
 }
 
-/* ---- skeletons: pages develop instead of arriving ---- */
+/* ---- skeletons: pages develop instead of arriving ----
+   .sk / .sk-line / .sk-big are the kit's, same names and same meanings; the
+   copies left in styles.css are the standalone-dev fallback. Same story for
+   .toast / .toasts / .expand / .pagefade below. */
 export const SkLine = ({ w }) => <div className={`sk sk-line${w ? ` ${w}` : ''}`} />
 export const SkCard = () => (
-  <div className="card"><SkLine w="w40" /><div className="sk sk-big" /><SkLine w="w80" /></div>
+  <div className="card pad-md"><SkLine w="w40" /><div className="sk sk-big" /><SkLine w="w80" /></div>
 )
 export function SkPage({ cards = 4 }) {
   return (
@@ -75,13 +78,18 @@ export function ToastProvider({ children }) {
 }
 export const useToast = () => useContext(ToastCtx) || (() => {})
 
-/* ---- segmented control ---- */
+/* ---- segmented control ----
+   The kit's .seg / .seg-opt / .active. The old markup styled `.seg button` and
+   marked selection with `.on` — the same control under a second set of names,
+   and the kit's `[data-kit] .seg` (display:flex, its own padding and fill) would
+   have won the container half of it regardless, leaving a hybrid. aria-selected
+   still carries the state for anyone who is not reading the fill. */
 export function Seg({ value, onChange, options }) {
   return (
     <div className="seg" role="tablist">
       {options.map((o) => (
-        <button key={o.value} role="tab" aria-selected={value === o.value}
-          className={value === o.value ? 'on' : ''} onClick={() => onChange(o.value)}>
+        <button key={o.value} type="button" role="tab" aria-selected={value === o.value}
+          className={value === o.value ? 'seg-opt active' : 'seg-opt'} onClick={() => onChange(o.value)}>
           {o.label}
         </button>
       ))}

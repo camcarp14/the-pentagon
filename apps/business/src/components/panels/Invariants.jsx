@@ -144,7 +144,7 @@ export default function Invariants({ now }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <SectionLabel>Passing · {passing.length}</SectionLabel>
             {problems.length === 0 && (
-              <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.55 }}>
+              <div className="t-cap" style={{ color: "var(--muted)", lineHeight: 1.55 }}>
                 Every check on record reported inside the last {windowMin} minutes, and every one of them passed. That is a
                 statement about {passing.length} named check{passing.length === 1 ? "" : "s"} — not about anything that has
                 never written a row here.
@@ -186,7 +186,7 @@ function WatchdogBlock({ watchdog, now, windowMs, windowMin, loaded }) {
       <SectionLabel tone={silent ? "stale" : failed ? "error" : undefined}>Last watchdog run</SectionLabel>
 
       {watchdog === null ? (
-        <div style={{ fontSize: 11.5, color: TONE.stale.fg, lineHeight: 1.55, marginTop: 5, fontWeight: 600 }}>
+        <div className="t-cap" style={{ color: TONE.stale.fg, lineHeight: 1.55, marginTop: 5, fontWeight: 600 }}>
           Not one of the {loaded} loaded result{loaded === 1 ? "" : "s"} has kind “watchdog”. Nothing on record is checking
           the checks, so every state below is self-reported by the things being watched.
         </div>
@@ -202,12 +202,12 @@ function WatchdogBlock({ watchdog, now, windowMs, windowMin, loaded }) {
               }}
             >{shortAge(ageMs)}</span>
             <div style={{ flex: 1, minWidth: 0, paddingTop: 3 }}>
-              <div style={{
-                fontSize: 11.5, fontWeight: 700, color: "var(--ink)",
+              <div className="t-cap" style={{
+                fontWeight: 700, color: "var(--ink)",
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}>{watchdog.row?.name || "(unnamed watchdog)"}</div>
-              <div style={{
-                fontSize: 10, color: "var(--faint)", marginTop: 2,
+              <div className="stattile-label" style={{
+                color: "var(--faint)", marginTop: 2,
                 fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
               }}>{dayLabel(watchdog.row?.checked_at)} · {clockTime(watchdog.row?.checked_at)}</div>
             </div>
@@ -217,14 +217,14 @@ function WatchdogBlock({ watchdog, now, windowMs, windowMin, loaded }) {
           {/* The age is the headline, so it gets a sentence rather than a
               colour alone — "2h" is only alarming if you already know the
               window it blew through. */}
-          <div style={{ fontSize: 11, color: silent ? TONE.stale.fg : "var(--muted)", lineHeight: 1.55, marginTop: 8 }}>
+          <div className="t-cap" style={{ color: silent ? TONE.stale.fg : "var(--muted)", lineHeight: 1.55, marginTop: 8 }}>
             {silent
               ? `Longer than the ${windowMin}-minute window. The watchdog itself has stopped reporting, which makes the checks below unverified rather than clean.`
               : `Inside the ${windowMin}-minute window — something is still running the checks.`}
           </div>
 
           {failed && watchdog.row?.detail && (
-            <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.55, marginTop: 6 }}>{watchdog.row.detail}</div>
+            <div className="t-cap" style={{ color: "var(--muted)", lineHeight: 1.55, marginTop: 6 }}>{watchdog.row.detail}</div>
           )}
         </>
       )}
@@ -253,8 +253,9 @@ function CheckRow({ line }) {
 
         <span
           title={line.name}
+          className="t-foot"
           style={{
-            flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, lineHeight: 1.4,
+            flex: 1, minWidth: 0, fontWeight: 700, lineHeight: 1.4,
             color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}
         >{line.name}</span>
@@ -269,9 +270,11 @@ function CheckRow({ line }) {
             fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
             color: line.status === "silent" ? TONE.stale.fg : "var(--muted)",
           }}>{line.ageMs === null ? "—" : shortAge(line.ageMs)}</span>
-          <span style={{
-            display: "block", fontSize: 8.5, fontWeight: 800, letterSpacing: "0.08em",
-            textTransform: "uppercase", color: "var(--faint)", fontFamily: "var(--font-mono)", marginTop: 2,
+          {/* .stattile-label — the kit's 10.5px caption under a number. This
+              was 8.5px, and the uppercase went with it: uppercase belongs only
+              to .t-label, and the words are already lower case in source. */}
+          <span className="stattile-label" style={{
+            display: "block", color: "var(--faint)", fontFamily: "var(--font-mono)", marginTop: 2,
           }}>{line.ageMs === null ? "undated" : "ago"}</span>
         </span>
       </Row>
@@ -299,8 +302,8 @@ function CheckRow({ line }) {
           </Badge>
         )}
 
-        <span style={{
-          marginLeft: "auto", fontSize: 10, color: "var(--faint)",
+        <span className="t-cap" style={{
+          marginLeft: "auto", color: "var(--faint)",
           fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", flexShrink: 0,
         }}>{line.runs} run{line.runs === 1 ? "" : "s"}</span>
       </Row>
@@ -314,13 +317,10 @@ function CheckRow({ line }) {
           background: "color-mix(in srgb, var(--bg) 45%, transparent)",
           border: `1px solid ${t.line}`,
         }}>
-          <div style={{
-            fontSize: 9, fontWeight: 800, letterSpacing: "0.09em", textTransform: "uppercase",
-            color: t.fg, fontFamily: "var(--font-mono)",
-          }}>
+          <div className="t-label" style={{ color: t.fg, fontFamily: "var(--font-mono)" }}>
             {line.status === "failing" ? "What it reported" : "Last thing it said, before it went quiet"}
           </div>
-          <div style={{ fontSize: 11, color: row.detail ? "var(--muted)" : t.fg, lineHeight: 1.55, marginTop: 3 }}>
+          <div className="t-cap" style={{ color: row.detail ? "var(--muted)" : t.fg, lineHeight: 1.55, marginTop: 3 }}>
             {row.detail || (line.status === "failing"
               ? "No detail recorded — the check says it failed and does not say what it saw, which is the least actionable form a failure can take."
               : `Its last result was “${row.passed === false ? "failed" : "passed"}”, and that is the only thing on record. It has not run since.`)}
@@ -344,13 +344,13 @@ function FailureHistory({ failures, now, loaded }) {
         // its sample size instead, because "no failures" over the last hundred
         // results is a narrower claim than "no failures", and the narrow one is
         // the true one.
-        <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.55 }}>
+        <div className="t-cap" style={{ color: "var(--muted)", lineHeight: 1.55 }}>
           None of the {loaded} most recent result{loaded === 1 ? "" : "s"} failed. Older failures may exist beyond that
           window — this is the loaded history, not the whole log.
         </div>
       ) : (
         <>
-          <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.55 }}>
+          <div className="t-cap" style={{ color: "var(--muted)", lineHeight: 1.55 }}>
             The last {failures.length} failed result{failures.length === 1 ? "" : "s"} across every check, including ones
             that pass right now. A fault that comes and goes is the one you will never be looking at when it happens.
           </div>
@@ -378,24 +378,25 @@ function FailureRow({ row, now }) {
       <Row gap={9} align="flex-start">
         <span
           title={row?.name || undefined}
+          className="t-cap"
           style={{
-            flex: 1, minWidth: 0, fontSize: 11.5, fontWeight: 700, color: "var(--ink)",
+            flex: 1, minWidth: 0, fontWeight: 700, color: "var(--ink)",
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}
         >{row?.name || "(unnamed check)"}</span>
         <span style={{ flexShrink: 0, textAlign: "right" }}>
-          <span style={{
-            display: "block", fontSize: 10.5, fontWeight: 700, color: "var(--muted)",
+          <span className="stattile-label" style={{
+            display: "block", fontWeight: 700, color: "var(--muted)",
             fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
           }}>{ageMs === null ? "undated" : `${shortAge(ageMs)} ago`}</span>
-          <span style={{
-            display: "block", fontSize: 9, color: "var(--faint)", marginTop: 1,
+          <span className="stattile-label" style={{
+            display: "block", color: "var(--faint)", marginTop: 1,
             fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
           }}>{dayLabel(row?.checked_at)} {clockTime(row?.checked_at)}</span>
         </span>
       </Row>
       {row?.detail && (
-        <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.5, marginTop: 5 }}>{row.detail}</div>
+        <div className="t-cap" style={{ color: "var(--muted)", lineHeight: 1.5, marginTop: 5 }}>{row.detail}</div>
       )}
       <Row gap={6} wrap style={{ marginTop: 6 }}>
         {row?.kind && <Badge>{row.kind}</Badge>}
@@ -417,8 +418,10 @@ function Group({ cap, maxHeight, children }) {
 
 function SectionLabel({ children, tone }) {
   return (
-    <div style={{
-      fontSize: 9.5, fontWeight: 800, letterSpacing: "0.09em", textTransform: "uppercase",
+    // .t-label IS this label — 12px, 600, tracked, uppercase. It was hand-set
+    // at 9.5px, under the 10.5px floor, and uppercase is only allowed on
+    // .t-label anyway.
+    <div className="t-label" style={{
       color: tone ? (TONE[tone] || TONE.empty).fg : "var(--faint)", fontFamily: "var(--font-mono)",
     }}>{children}</div>
   );

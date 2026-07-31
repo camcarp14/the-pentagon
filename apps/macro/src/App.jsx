@@ -197,14 +197,29 @@ export default function App({ embedded = false }) {
   // token gate; a 401 there means the shared session lapsed, which the shell
   // handles by returning to its own login.
   if (needToken && !embedded) {
-    return <TokenGate onDone={() => { setNeedToken(false); window.location.reload() }} />
+    // same opt-in as the main return below — the gate is a whole screen of this
+    // app, so it gets the kit too
+    return (
+      <div data-kit className="macro-root">
+        <TokenGate onDone={() => { setNeedToken(false); window.location.reload() }} />
+      </div>
+    )
   }
 
   const sources = { quote, btc, mstr1d, btc1d, settingsSrc, positionSrc, journalSrc }
   const reloadAll = () => { quote.reload(); btc.reload(); mstr1d.reload(); btc1d.reload(); settingsSrc.reload(); positionSrc.reload() }
 
   return (
-    <ToastProvider>
+    // data-kit: Macro opts into the shared kit HERE, on its own outermost
+    // element, and nowhere higher. Under the Pentagon this renders inside the
+    // shell's tool slot, so the attribute reaches this app and nothing else —
+    // the shell deliberately keeps data-kit off the wrapper that holds every
+    // tool, because eight apps own .card / .btn / .field and mean different
+    // things by them. It is a plain wrapper div: .navbar is `display: contents`
+    // on mobile and a sticky bar on desktop, and neither cares about one more
+    // static block ancestor.
+    <div data-kit className="macro-root">
+      <ToastProvider>
       {/* The nav sits OUTSIDE .shell so that on desktop its wrapper can be a
           full-bleed sticky bar — the same chrome ZTS and Clarify use — instead of
           a pill group parked inside the 1180px content column that scrolls away.
@@ -222,7 +237,7 @@ export default function App({ embedded = false }) {
       </div>
       <div className="shell">
         <header className="hdr">
-          {!embedded && <div className="brand"><span className="bolt">⚡</span>TORQUE <span className="tiny" style={{ fontWeight: 500 }}>MSTR cockpit</span></div>}
+          {!embedded && <div className="brand"><span className="bolt">⚡</span>TORQUE <span className="tiny t-cap" style={{ fontWeight: 500 }}>MSTR cockpit</span></div>}
           <div className="tape">
             <Ticker sym="MSTR" px={derived.price} chg={derived.price == null ? null : quote.data?.changePct}
               fresh={derived.freshQuote} kind={quote.data?.kind} delayedMin={quote.data?.delayedMin} sourceDetail={quote.data?.sourceDetail} />
@@ -244,7 +259,8 @@ export default function App({ embedded = false }) {
           { label: 'Refresh market data', k: ['reload', 'update'], run: reloadAll },
         ]} />
       </div>
-    </ToastProvider>
+      </ToastProvider>
+    </div>
   )
 }
 
@@ -257,7 +273,7 @@ function Ticker({ sym, px, chg, fresh, kind, delayedMin, sourceDetail }) {
       <span className={`chg num ${cls}`}>{chg == null ? '' : `${chg >= 0 ? '+' : ''}${round2(chg)}%`}</span>
       <FreshChip fresh={fresh} title={sourceDetail} />
       {kind === 'eod' && <span className="chip stale" title={`end-of-day close via ${sourceDetail || 'fallback'}`}><span className="dot" />EOD</span>}
-      {kind === 'delayed' && Number.isFinite(delayedMin) && <span className="tiny" title={sourceDetail}>{delayedMin}m delayed</span>}
+      {kind === 'delayed' && Number.isFinite(delayedMin) && <span className="tiny t-cap" title={sourceDetail}>{delayedMin}m delayed</span>}
     </span>
   )
 }
@@ -269,20 +285,20 @@ function TokenGate({ onDone }) {
   const [rejected] = useState(() => !!sessionStorage.getItem('torque_token'))
   return (
     <div className="gate">
-      <div className="card">
-        <div className="ttl">⚡ Torque — access token</div>
+      <div className="card pad-md">
+        <div className="ttl t-label">⚡ Torque — access token</div>
         {rejected && (
           <div className="error-row" style={{ marginBottom: 12 }} role="alert">
             <span>That token was rejected — check <code>DASHBOARD_TOKEN</code> in your Netlify environment.</span>
           </div>
         )}
-        <p className="sub">This cockpit is protected by a shared secret (the <code>DASHBOARD_TOKEN</code> you set on Netlify). Paste it once; it stays in this browser session only.</p>
+        <p className="sub t-foot">This cockpit is protected by a shared secret (the <code>DASHBOARD_TOKEN</code> you set on Netlify). Paste it once; it stays in this browser session only.</p>
         <form onSubmit={(e) => { e.preventDefault(); sessionStorage.setItem('torque_token', val.trim()); onDone() }}>
-          <div className="field">
+          <div className="fld">
             <label htmlFor="tok">Token</label>
-            <input id="tok" type="password" value={val} onChange={(e) => setVal(e.target.value)} autoFocus />
+            <input className="field" id="tok" type="password" value={val} onChange={(e) => setVal(e.target.value)} autoFocus />
           </div>
-          <button className="btn primary" type="submit" disabled={!val.trim()}>Unlock</button>
+          <button className="btn primary md" type="submit" disabled={!val.trim()}>Unlock</button>
         </form>
       </div>
     </div>

@@ -57,18 +57,18 @@ export default function Journal({ journalSrc }) {
       {journalSrc.error && (
         <div className="error-row span2" role="alert">
           <span>Journal unavailable: {journalSrc.error}</span>
-          <button className="btn sm" onClick={journalSrc.reload}>Retry</button>
+          <button className="btn quiet sm" onClick={journalSrc.reload}>Retry</button>
         </div>
       )}
 
       {stats && (
-        <section className="card span2">
-          <div className="ttl">Scoreboard — cumulative R by trade</div>
+        <section className="card pad-md span2">
+          <div className="ttl t-label">Scoreboard — cumulative R by trade</div>
           <div className="stats" style={{ marginBottom: 12 }}>
-            <div className="stat"><div className="k">Trades</div><div className="v num">{stats.n}</div></div>
-            <div className="stat"><div className="k">Win rate</div><div className="v num">{stats.winRate}%</div></div>
-            <div className="stat"><div className="k">Avg R</div><div className={`v num ${stats.avgR >= 0 ? 'pos' : 'neg'}`}>{stats.avgR >= 0 ? '+' : ''}{stats.avgR}R</div></div>
-            <div className="stat"><div className="k">Total R</div><div className={`v num ${stats.cumR >= 0 ? 'pos' : 'neg'}`} data-testid="total-r">{stats.cumR >= 0 ? '+' : ''}{stats.cumR}R</div></div>
+            <div className="stattile"><div className="stattile-label">Trades</div><div className="stattile-value num">{stats.n}</div></div>
+            <div className="stattile"><div className="stattile-label">Win rate</div><div className="stattile-value num">{stats.winRate}%</div></div>
+            <div className="stattile"><div className="stattile-label">Avg R</div><div className={`stattile-value num ${stats.avgR >= 0 ? 'pos' : 'neg'}`}>{stats.avgR >= 0 ? '+' : ''}{stats.avgR}R</div></div>
+            <div className="stattile"><div className="stattile-label">Total R</div><div className={`stattile-value num ${stats.cumR >= 0 ? 'pos' : 'neg'}`} data-testid="total-r">{stats.cumR >= 0 ? '+' : ''}{stats.cumR}R</div></div>
           </div>
           <RCurve curve={stats.curve} />
         </section>
@@ -76,12 +76,13 @@ export default function Journal({ journalSrc }) {
 
       <AddTrade onSaved={journalSrc.reload} />
 
-      <section className="card span2">
-        <div className="ttl">Closed trades</div>
+      <section className="card pad-md span2">
+        <div className="ttl t-label">Closed trades</div>
         {withR.length === 0 ? (
           <div className="empty">
-            <div className="glyph">✎</div>
-            No trades logged yet. Add your first closed trade above — the scoreboard builds itself.
+            <div className="glyph" aria-hidden>✎</div>
+            <div className="empty-title">No trades logged yet</div>
+            <div className="empty-sub">Add your first closed trade above — the scoreboard builds itself.</div>
           </div>
         ) : (
           <div className="tbl-wrap">
@@ -92,7 +93,7 @@ export default function Journal({ journalSrc }) {
               <tbody>
                 {withR.map((t) => (
                   <tr key={t.id}>
-                    <td className="tiny">{t.entryDate} → {t.exitDate}</td>
+                    <td className="tiny t-cap">{t.entryDate} → {t.exitDate}</td>
                     <td><span className="chip">{t.kind}</span></td>
                     <td className={`num ${t.r == null ? '' : t.r >= 0 ? 'pos' : 'neg'}`}>{t.r == null ? '—' : `${t.r >= 0 ? '+' : ''}${round2(t.r)}R`}</td>
                     <td className={`num ${t.pnl >= 0 ? 'pos' : 'neg'}`}>{t.pnl < 0 ? '-' : ''}${Math.abs(Math.round(t.pnl)).toLocaleString('en-US')}</td>
@@ -112,9 +113,13 @@ export default function Journal({ journalSrc }) {
   )
 }
 
-/** Single-series cumulative R sparkline. Direct end-label, no legend. */
+/** Single-series cumulative R sparkline. Direct end-label, no legend.
+ *  #0FA3A3 / #D93A5F stay literal through the kit migration: they are this
+ *  app's polarity pair (up / down), validated for deuteranopia separation, and
+ *  the curve's colour IS the sign of the number — data, not theme. The end
+ *  label prints the signed value too, so colour never carries it alone. */
 function RCurve({ curve }) {
-  if (curve.length < 2) return <p className="tiny">Curve appears after two trades.</p>
+  if (curve.length < 2) return <p className="tiny t-cap">Curve appears after two trades.</p>
   const w = 600; const h = 120; const pad = 6
   const min = Math.min(0, ...curve); const max = Math.max(0, ...curve)
   const x = (i) => pad + (i / (curve.length - 1)) * (w - pad * 2)
@@ -173,35 +178,35 @@ function AddTrade({ onSaved }) {
   }
 
   return (
-    <section className="card span2">
-      <div className="ttl">Log a closed trade</div>
+    <section className="card pad-md span2">
+      <div className="ttl t-label">Log a closed trade</div>
       <form onSubmit={submit} data-testid="add-trade-form">
         <div className="formrow">
-          <div className="field"><label htmlFor="jt-ed">Entry date</label><input id="jt-ed" type="date" value={f.entryDate} onChange={set('entryDate')} required /></div>
-          <div className="field"><label htmlFor="jt-xd">Exit date</label><input id="jt-xd" type="date" value={f.exitDate} onChange={set('exitDate')} required /></div>
+          <div className="fld"><label htmlFor="jt-ed">Entry date</label><input className="field" id="jt-ed" type="date" value={f.entryDate} onChange={set('entryDate')} required /></div>
+          <div className="fld"><label htmlFor="jt-xd">Exit date</label><input className="field" id="jt-xd" type="date" value={f.exitDate} onChange={set('exitDate')} required /></div>
         </div>
         <div className="formrow">
-          <div className="field"><label htmlFor="jt-e">Entry price</label><input id="jt-e" type="number" step="0.01" min="0.01" value={f.entry} onChange={set('entry')} required /></div>
-          <div className="field"><label htmlFor="jt-x">Exit price</label><input id="jt-x" type="number" step="0.01" min="0.01" value={f.exit} onChange={set('exit')} required /></div>
+          <div className="fld"><label htmlFor="jt-e">Entry price</label><input className="field" id="jt-e" type="number" step="0.01" min="0.01" value={f.entry} onChange={set('entry')} required /></div>
+          <div className="fld"><label htmlFor="jt-x">Exit price</label><input className="field" id="jt-x" type="number" step="0.01" min="0.01" value={f.exit} onChange={set('exit')} required /></div>
         </div>
         <div className="formrow">
-          <div className="field"><label htmlFor="jt-s">Shares</label><input id="jt-s" type="number" step="1" min="1" value={f.shares} onChange={set('shares')} required /></div>
-          <div className="field"><label htmlFor="jt-st">Initial stop</label>
-            <input id="jt-st" type="number" step="0.01" min="0.01" value={f.initialStop} onChange={set('initialStop')} required />
+          <div className="fld"><label htmlFor="jt-s">Shares</label><input className="field" id="jt-s" type="number" step="1" min="1" value={f.shares} onChange={set('shares')} required /></div>
+          <div className="fld"><label htmlFor="jt-st">Initial stop</label>
+            <input className="field" id="jt-st" type="number" step="0.01" min="0.01" value={f.initialStop} onChange={set('initialStop')} required />
             <span className="hint">{previewR != null ? `this trade will book as ${previewR >= 0 ? '+' : ''}${round2(previewR)}R` : 'R computes from entry − initial stop'}</span>
           </div>
         </div>
         <div className="formrow">
-          <div className="field"><label htmlFor="jt-k">Kind</label>
-            <select id="jt-k" value={f.kind} onChange={set('kind')}>
+          <div className="fld"><label htmlFor="jt-k">Kind</label>
+            <select className="field" id="jt-k" value={f.kind} onChange={set('kind')}>
               <option value="pullback">pullback</option>
               <option value="breakout">breakout</option>
               <option value="manual">manual</option>
             </select>
           </div>
-          <div className="field"><label htmlFor="jt-n">Note</label><input id="jt-n" type="text" maxLength="500" value={f.note} onChange={set('note')} placeholder="what did you learn" /></div>
+          <div className="fld"><label htmlFor="jt-n">Note</label><input className="field" id="jt-n" type="text" maxLength="500" value={f.note} onChange={set('note')} placeholder="what did you learn" /></div>
         </div>
-        <button className="btn primary" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Log trade'}</button>
+        <button className="btn primary md" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Log trade'}</button>
       </form>
     </section>
   )

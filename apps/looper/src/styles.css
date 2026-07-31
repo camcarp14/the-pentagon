@@ -1,89 +1,92 @@
 /* ============================================================
-   LOOPER — the autonomous-run surface. Rides the shared Pentagon
-   "midnight" canvas with a CYAN accent (the machine tool, distinct
-   from the four hand-driven ones). Values mirror @cc/design's
-   cssVars("looper"); the shell also stamps them on the mount
-   wrapper, so embedded and standalone render identically.
-   ============================================================ */
-:root {
-  --lp-bg: #0B0F1A;
-  --lp-card: #141B2C;
-  --lp-card-2: #1B2438;
-  --lp-border: rgba(255, 255, 255, 0.085);
-  --lp-line-soft: rgba(255, 255, 255, 0.055);
-  --lp-ink: #E9EDF5;
-  --lp-ink-2: #94A1B5;
-  --lp-ink-3: #66738A;
-  --lp-good: #12A594;
-  --lp-warn: #D4930B;
-  --lp-crit: #E11D48;
-  --lp-mono: 'DM Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  --lp-display: 'Syne', system-ui, sans-serif;
-  --lp-r-sm: 8px; --lp-r-md: 12px; --lp-r-lg: 16px;
-  --lp-dur: 240ms;
-  --lp-ease: cubic-bezier(0.22, 1, 0.36, 1);
-}
+   LOOPER — the autonomous-run surface, on the shared kit.
 
-.lp-root { color: var(--lp-ink); font-size: 14.5px; line-height: 1.5; }
-.lp-root *, .lp-root *::before, .lp-root *::after { box-sizing: border-box; }
-.lp-num { font-family: var(--lp-mono); font-variant-numeric: tabular-nums; }
+   App.jsx opts in with data-kit on Looper's own root, so
+   packages/ui/components.css supplies the primitives: card,
+   btn, pill, seg, field, stattile, cell, switch, empty, the
+   type scale and the press physics. What is left in this file
+   is only what the kit does not have — Looper's bottom bar and
+   two-column shell, the status panel, the aim list, the
+   journal and the chat transcript.
+
+   Colours are shared tokens now (--surface, --ink, --sub,
+   --line, --accent, --green/--amber/--red). The old --lp-*
+   ramp re-typed @cc/design's cssVars("looper") by hand, which
+   the shell already stamps on the mount wrapper — one more
+   place for the palette to drift. Nothing in Looper encodes a
+   domain meaning in a hex (no language colours, no tickers),
+   so no literal survives the move.
+
+   Rules are written [data-kit] .lp-* so they outrank the kit's
+   own class rules wherever Looper composes with one, whatever
+   order the two sheets land in the document.
+   ============================================================ */
+
+/* data-kit sits on this element, hence the compound selector. */
+[data-kit].lp-root { color: var(--ink); font-size: 14.5px; line-height: 1.5; }
+[data-kit].lp-root *, [data-kit].lp-root *::before, [data-kit].lp-root *::after { box-sizing: border-box; }
 
 /* ---------------- nav (matches the other four tools exactly) ---------------- */
 .lp-navbar { display: contents; }
-.lp-nav {
+[data-kit] .lp-nav {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
   display: flex; justify-content: space-around;
-  background: rgba(11, 15, 26, 0.92);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
   backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%);
-  border-top: 1px solid var(--lp-border); box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.4);
+  /* A glass edge, and nothing else: the bar carried a hairline AND a drop
+     shadow, which the language does not allow on one element. */
+  border-top: 0.5px solid var(--line);
   /* CANONICAL bottom-bar geometry — identical to ZTS/Clarify/Runway/Macro. */
   padding: 4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)));
 }
-.lp-nav button {
+[data-kit] .lp-nav button {
   position: relative; /* the unread badge anchors here */
   flex: 1; min-height: 46px; padding: 8px 2px 7px;
-  background: none; border: none; border-radius: var(--lp-r-sm); cursor: pointer;
-  color: var(--lp-ink-3); font-size: 9px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.04em; font-family: var(--lp-display);
+  background: none; border: none; border-radius: var(--r-ctl); cursor: pointer;
+  color: var(--faint); font: inherit; font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em;
   display: flex; flex-direction: column; align-items: center; gap: 3px;
-  transition: color var(--lp-dur) ease;
+  transition: color var(--dur-2) ease;
 }
-.lp-nav button svg { width: 21px; height: 21px; }
-.lp-nav button.on { color: var(--accent); }
+[data-kit] .lp-nav button svg { width: 21px; height: 21px; transition: transform var(--dur-1) var(--ease-out); }
+/* Tabs don't shrink under the kit's press physics — the icon nudges instead,
+   the same grammar the kit's own dock uses. */
+[data-kit] .lp-nav button:active:not(:disabled) { transform: none; }
+[data-kit] .lp-nav button:active svg { transform: scale(0.88); }
+[data-kit] .lp-nav button.on { color: var(--accent); }
 /* Unread dot, pinned to the icon's top-right on mobile. Anchored with explicit
    offsets rather than a transform off its static position: as a flow item in a
    column flex it landed under the label, which read as a stray artefact. */
-.lp-nav .lp-badge {
+[data-kit] .lp-nav .lp-badge {
   position: absolute; top: 7px; left: 50%; margin-left: 7px;
   width: 7px; height: 7px; border-radius: 99px; background: var(--accent);
 }
 
 @media (min-width: 768px) {
-  .lp-navbar {
+  [data-kit] .lp-navbar {
     position: sticky; top: calc(52px + env(safe-area-inset-top, 0px)); z-index: 50;
     height: 52px; display: flex; align-items: center; padding: 0 24px;
-    background: rgba(11, 15, 26, 0.78);
+    background: color-mix(in srgb, var(--bg) 78%, transparent);
     backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%);
-    border-bottom: 1px solid var(--lp-line-soft);
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 4px 16px rgba(0, 0, 0, 0.35);
+    border-bottom: 0.5px solid var(--line);
   }
-  .lp-nav {
-    position: static; justify-content: flex-start; display: inline-flex; gap: 2px; padding: 3px;
-    backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none;
-    background: rgba(255, 255, 255, 0.045); border: 1px solid var(--lp-line-soft);
-    border-top: 1px solid var(--lp-line-soft); border-radius: 10px;
+  /* The desktop bar is a segmented control, so it borrows the kit's segmented
+     material: the seg well, and the seg thumb under the active option. */
+  [data-kit] .lp-nav {
+    position: static; justify-content: flex-start; display: inline-flex; gap: 2px; padding: 2px;
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+    background: var(--seg-bg); border: none; border-radius: 10px;
   }
-  .lp-nav button {
+  [data-kit] .lp-nav button {
     flex: none; flex-direction: row; gap: 0; padding: 5px 14px; min-height: 32px;
-    font-size: 11.5px; letter-spacing: 0.05em; text-transform: none; color: #525E74;
+    font-size: 13px; font-weight: 500; letter-spacing: 0; color: var(--sub);
   }
-  .lp-nav button svg { display: none; }
-  .lp-nav button.on {
-    background: var(--lp-card-2); color: #F7F9FC;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  [data-kit] .lp-nav button svg { display: none; }
+  [data-kit] .lp-nav button.on {
+    background: var(--seg-thumb); color: var(--ink); font-weight: 600;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12), 0 3px 8px rgba(0, 0, 0, 0.06);
   }
   /* No icon to sit on once the bar is a row of words — ride inline after the label. */
-  .lp-nav .lp-badge { position: static; margin: 0 0 0 6px; align-self: center; }
+  [data-kit] .lp-nav .lp-badge { position: static; margin: 0 0 0 6px; align-self: center; }
 }
 
 /* ---------------- shell ---------------- */
@@ -93,150 +96,139 @@
 .lp-grid > * { min-width: 0; }
 @media (min-width: 860px) { .lp-grid.two { grid-template-columns: 1.15fr 1fr; } }
 
-.lp-card {
-  background: var(--lp-card); border: 1px solid var(--lp-border);
-  border-radius: var(--lp-r-lg); padding: 16px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
-}
-.lp-ttl {
-  font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-  color: var(--lp-ink-3); margin-bottom: 11px; display: flex; align-items: center; gap: 8px;
-  flex-wrap: wrap; row-gap: 6px; font-family: var(--lp-display);
-}
-.lp-ttl .sp { margin-left: auto; }
-.lp-sub { color: var(--lp-ink-2); font-size: 12.5px; }
-.lp-tiny { color: var(--lp-ink-3); font-size: 11.5px; }
+/* Card titles are the kit's .t-label; this is the row they sit in. */
+[data-kit] .lp-ttl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; row-gap: 6px; margin-bottom: 11px; }
+[data-kit] .lp-ttl .sp { margin-left: auto; }
+/* .t-label's uppercase INHERITS, and the chips that sit in these rows are prose
+   ("pauses when stuck", "read next iteration"), not labels. The title shouts;
+   nothing riding next to it does. */
+[data-kit] .lp-ttl .pill { text-transform: none; letter-spacing: 0; }
 
 /* ---------------- controls ---------------- */
-.lp-btn {
-  border: 1px solid rgba(255, 255, 255, 0.16); background: var(--lp-card-2); color: var(--lp-ink);
-  border-radius: 10px; padding: 9px 16px; min-height: 44px; font: inherit; font-size: 13.5px;
-  font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-  transition: transform var(--lp-dur) var(--lp-ease), border-color var(--lp-dur) ease, background var(--lp-dur) ease;
-}
-.lp-btn:active:not(:disabled) { transform: scale(0.97); }
-.lp-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.lp-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink, #04222A); font-weight: 800; }
-.lp-btn.ghost { background: none; border-color: transparent; color: var(--lp-ink-2); }
-.lp-btn.danger { background: rgba(225, 29, 72, 0.12); border-color: rgba(225, 29, 72, 0.4); color: #FF8DA6; }
-.lp-btn.sm { min-height: 36px; padding: 6px 12px; font-size: 12.5px; border-radius: 8px; }
-.lp-btn.wide { width: 100%; }
-.lp-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+[data-kit] .lp-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+[data-kit] .lp-field { margin-bottom: 13px; }
+[data-kit] .lp-label { display: block; margin-bottom: 6px; }
+/* The kit's .field carries the look; these two rules carry the one thing it
+   cannot know about. Compound selectors, so they win over [data-kit] .field
+   however the two sheets are ordered in the document. */
+[data-kit] .field.lp-input, [data-kit] .field.lp-area { font-size: 16px; } /* 16px: iOS zooms smaller inputs */
+[data-kit] .field.lp-area { resize: vertical; min-height: 84px; line-height: 1.5; }
+@media (min-width: 768px) { [data-kit] .field.lp-input, [data-kit] .field.lp-area { font-size: 14px; } }
 
-.lp-field { margin-bottom: 13px; }
-.lp-label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--lp-ink-3); margin-bottom: 6px; font-family: var(--lp-display); }
-.lp-input, .lp-area, .lp-select {
-  width: 100%; background: #0F1626; border: 1px solid var(--lp-border); color: var(--lp-ink);
-  border-radius: 10px; padding: 11px 12px; font: inherit; font-size: 16px; /* 16px: iOS zooms smaller inputs */
-  transition: border-color var(--lp-dur) ease;
+/* segmented pickers — equal cells, 44px, wrap on narrow screens.
+   The kit's .seg is a flex row of single-line options; Looper's carry a second
+   line of note text and can run to four cells, so the well becomes a grid and
+   the option stacks. Everything else (material, radius, colours) is the kit's. */
+[data-kit] .seg.lp-seg { display: grid; gap: 4px; padding: 4px; border-radius: 12px; }
+[data-kit] .seg.lp-seg.c2 { grid-template-columns: repeat(2, 1fr); }
+[data-kit] .seg.lp-seg.c3 { grid-template-columns: repeat(3, 1fr); }
+[data-kit] .seg.lp-seg.c4 { grid-template-columns: repeat(2, 1fr); }
+@media (min-width: 560px) { [data-kit] .seg.lp-seg.c4 { grid-template-columns: repeat(4, 1fr); } }
+/* font: inherit — a <button> does not inherit the page font on its own, and
+   neither .seg-opt nor .cell sets one. */
+[data-kit] .seg-opt.lp-opt { flex-direction: column; gap: 2px; min-height: 44px; padding: 6px 8px; font-family: var(--font-body); }
+[data-kit] .seg-opt.lp-opt .k { font-weight: 600; }
+/* was 10px — under the floor, and the note is the thing that explains the tier */
+[data-kit] .seg-opt.lp-opt .d { font-size: 11.5px; line-height: 1.2; color: var(--faint); }
+/* The kit moves a .seg-thumb under the active option; Looper's pickers wrap to
+   two rows, where a single sliding thumb cannot follow, so the selected cell
+   carries the thumb material itself. Weight and material, not colour alone. */
+[data-kit] .seg-opt.lp-opt.active {
+  background: var(--seg-thumb);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12), 0 3px 8px rgba(0, 0, 0, 0.06);
 }
-.lp-area { resize: vertical; min-height: 84px; line-height: 1.5; }
-.lp-input:focus, .lp-area:focus, .lp-select:focus { outline: none; border-color: var(--accent); }
-@media (min-width: 768px) { .lp-input, .lp-area, .lp-select { font-size: 14px; } }
+[data-kit] .seg-opt.lp-opt.active .d { color: var(--sub); }
 
-/* segmented pickers — equal cells, 44px, wrap on narrow screens */
-.lp-seg { display: grid; gap: 4px; background: #0F1626; border: 1px solid var(--lp-border); border-radius: 12px; padding: 4px; }
-.lp-seg.c2 { grid-template-columns: repeat(2, 1fr); }
-.lp-seg.c3 { grid-template-columns: repeat(3, 1fr); }
-.lp-seg.c4 { grid-template-columns: repeat(2, 1fr); }
-@media (min-width: 560px) { .lp-seg.c4 { grid-template-columns: repeat(4, 1fr); } }
-.lp-seg button {
-  min-height: 44px; border: none; background: none; cursor: pointer; border-radius: 9px;
-  color: var(--lp-ink-3); font: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 8px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  transition: background var(--lp-dur) ease, color var(--lp-dur) ease;
-}
-.lp-seg button .k { font-weight: 700; }
-.lp-seg button .d { font-size: 10px; color: var(--lp-ink-3); }
-.lp-seg button.on { background: var(--lp-card-2); color: var(--lp-ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); }
-.lp-seg button.on .d { color: var(--lp-ink-2); }
+/* A labelled row for the kit's switch. */
+[data-kit] .lp-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; margin-top: 6px; }
+/* The visual box stays the kit's iOS 51x31; the touch target reaches 44pt —
+   the same trick the kit plays on .icon-btn. */
+[data-kit] .lp-toggle .switch::before { content: ''; position: absolute; inset: -7px -4px; }
 
 /* ---------------- status: the "what is it doing" box ---------------- */
-.lp-status { border-left: 4px solid var(--accent); }
-.lp-state {
-  display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 99px;
-  font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
-  border: 1px solid var(--lp-border); color: var(--lp-ink-2); font-family: var(--lp-display);
-}
-.lp-state .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--lp-ink-3); }
-.lp-state.running { color: var(--accent); border-color: var(--accent-line); }
-.lp-state.running .dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: lp-pulse 1.6s ease-in-out infinite; }
-.lp-state.paused { color: var(--lp-warn); border-color: rgba(212, 147, 11, 0.4); }
-.lp-state.paused .dot { background: var(--lp-warn); }
-.lp-state.done { color: var(--lp-good); border-color: rgba(18, 165, 148, 0.4); }
-.lp-state.done .dot { background: var(--lp-good); }
-@keyframes lp-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+/* The accent rule stays, as an inset shadow rather than a border: .card already
+   carries --shadow-card, and a border plus a shadow on one element is out. */
+[data-kit] .card.lp-status { box-shadow: var(--shadow-card), inset 3px 0 0 var(--accent); }
+/* The state chip is the kit's pill with the kit's status dot inside it. The word
+   is the signal; the colour agrees with it. */
+[data-kit] .pill.lp-state { color: var(--sub); }
+[data-kit] .pill.lp-state .dotstatus { background: var(--faint); }
+[data-kit] .pill.lp-state.running { color: var(--accent); }
+[data-kit] .pill.lp-state.running .dotstatus { background: var(--accent); }
+[data-kit] .pill.lp-state.paused { color: var(--amber); }
+[data-kit] .pill.lp-state.paused .dotstatus { background: var(--amber); }
+[data-kit] .pill.lp-state.done { color: var(--green); }
+[data-kit] .pill.lp-state.done .dotstatus { background: var(--green); }
 
-.lp-focus { font-size: 17px; font-weight: 700; line-height: 1.3; margin: 2px 0 0; text-wrap: pretty; }
-.lp-goalline { font-size: 12.5px; color: var(--lp-ink-2); margin: 9px 0 0; line-height: 1.5; }
-.lp-goalline strong { color: var(--lp-ink); font-weight: 600; }
+[data-kit] .lp-focus { margin: 2px 0 0; text-wrap: pretty; }
+[data-kit] .lp-goalline { margin: 9px 0 0; }
+[data-kit] .lp-goalline strong { color: var(--ink); font-weight: 600; }
 
 /* the aim block: goal + next, as label/value ROWS so long prose wraps instead
    of ellipsising. Label column is fixed so the two values align. */
-.lp-aim { display: grid; grid-template-columns: 52px 1fr; gap: 4px 12px; margin: 13px 0 0; }
-.lp-aim dt { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: var(--lp-ink-3); padding-top: 3px; }
-.lp-aim dd { margin: 0; font-size: 13.5px; font-weight: 600; line-height: 1.45; color: var(--lp-ink); min-width: 0; overflow-wrap: break-word; }
-.lp-aim dt + dd { text-wrap: pretty; }
+[data-kit] .lp-aim { display: grid; grid-template-columns: 56px 1fr; gap: 4px 12px; margin: 13px 0 0; }
+[data-kit] .lp-aim dt { padding-top: 4px; }
+[data-kit] .lp-aim dd { margin: 0; font-size: 13.5px; font-weight: 600; line-height: 1.45; color: var(--ink); min-width: 0; overflow-wrap: break-word; }
+[data-kit] .lp-aim dt + dd { text-wrap: pretty; }
 
-/* the numeric strip: mono figures only, hairline cells like Macro's ticket */
-.lp-strip { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--lp-border); border-radius: var(--lp-r-md); overflow: hidden; margin-top: 13px; }
-@media (min-width: 560px) { .lp-strip { grid-template-columns: repeat(4, 1fr); } }
+/* the numeric strip: the kit's stat tiles. The hand-rolled cells keyed off a
+   9.5px uppercase label — under the floor, and doing by hand what
+   .stattile-label does at 10.5px without shouting. */
+[data-kit] .lp-strip { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 13px; }
+@media (min-width: 560px) { [data-kit] .lp-strip { grid-template-columns: repeat(4, 1fr); } }
 /* two cells should stay two columns, not two quarters, at every width. Higher
    specificity than the media query above, so source order does not matter. */
-.lp-strip.two { grid-template-columns: repeat(2, 1fr); }
-.lp-strip .c { background: var(--lp-card-2); padding: 10px 12px; min-width: 0; }
-.lp-strip .k { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--lp-ink-3); font-weight: 700; }
-.lp-strip .v { font-size: 14px; font-weight: 600; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lp-strip .v.mono { font-family: var(--lp-mono); font-weight: 500; }
+[data-kit] .lp-strip.two { grid-template-columns: repeat(2, 1fr); }
 
-.lp-bar { height: 6px; border-radius: 99px; background: rgba(255, 255, 255, 0.07); overflow: hidden; margin-top: 12px; }
-.lp-bar > div { height: 100%; border-radius: 99px; background: var(--accent); transition: width 420ms var(--lp-ease); }
-.lp-meta { display: flex; justify-content: space-between; gap: 10px; margin-top: 6px; }
+[data-kit] .lp-bar { height: 6px; border-radius: 99px; background: var(--ink-a08); overflow: hidden; margin-top: 12px; }
+[data-kit] .lp-bar > div { height: 100%; border-radius: 99px; background: var(--accent); transition: width var(--dur-3) var(--ease-out); }
+[data-kit] .lp-meta { display: flex; justify-content: space-between; gap: 10px; margin-top: 6px; }
 
 /* ---------------- journal ---------------- */
-.lp-journal { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; background: var(--lp-border); border-radius: var(--lp-r-md); overflow: hidden; }
-.lp-journal li { background: var(--lp-card-2); padding: 11px 12px; }
-.lp-jhead { display: flex; align-items: baseline; gap: 8px; }
-.lp-jiter { font-family: var(--lp-mono); font-size: 11px; color: var(--lp-ink-3); flex: none; }
-.lp-jfocus { font-size: 13px; font-weight: 600; min-width: 0; }
-.lp-jtime { margin-left: auto; font-size: 10.5px; color: var(--lp-ink-3); flex: none; font-family: var(--lp-mono); }
-.lp-jbtn { background: none; border: none; padding: 0; width: 100%; text-align: left; color: inherit; font: inherit; cursor: pointer; min-height: 30px; }
-.lp-jchev { width: 15px; height: 15px; flex: none; color: var(--lp-ink-3); align-self: center; transition: transform var(--lp-dur) var(--lp-ease); }
-.lp-jchev.open { transform: rotate(90deg); }
-.lp-jdid { font-size: 12.5px; color: var(--lp-ink-2); margin-top: 5px; line-height: 1.5; }
-.lp-jout { margin-top: 8px; padding: 9px 11px; background: #0F1626; border-radius: var(--lp-r-sm); border: 1px solid var(--lp-border); font-size: 12.5px; color: var(--lp-ink-2); white-space: pre-wrap; overflow-wrap: break-word; max-height: 260px; overflow-y: auto; line-height: 1.55; }
-.lp-jerr { color: #FF8DA6; }
+/* A list, so hairlines are allowed: one 1px grid gap showing the rule through. */
+[data-kit] .lp-journal { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; background: var(--line); border-radius: var(--r-well); overflow: hidden; }
+[data-kit] .lp-journal li { background: var(--surface-2); }
+/* rides the kit's .cell for its geometry and press feedback */
+[data-kit] .cell.lp-jhead { gap: 8px; font: inherit; }
+[data-kit] .lp-jiter { font-family: var(--font-mono); font-size: 11.5px; color: var(--faint); flex: none; }
+[data-kit] .lp-jfocus { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
+[data-kit] .lp-jtime { margin-left: auto; font-size: 11.5px; color: var(--faint); flex: none; font-family: var(--font-mono); }
+[data-kit] .lp-jchev { width: 15px; height: 15px; transition: transform var(--dur-2) var(--ease-out); }
+[data-kit] .lp-jchev.open { transform: rotate(90deg); }
+[data-kit] .lp-jbody { padding: 0 16px 12px; }
+[data-kit] .lp-jdid { font-size: 12.5px; color: var(--sub); margin-top: 5px; line-height: 1.5; }
+[data-kit] .lp-jout { margin-top: 8px; padding: 9px 11px; background: var(--surface); border-radius: var(--r-well); font-size: 12.5px; color: var(--sub); white-space: pre-wrap; overflow-wrap: break-word; max-height: 260px; overflow-y: auto; line-height: 1.55; }
+[data-kit] .lp-jerr { color: var(--red); }
 
 /* ---------------- chat ---------------- */
-.lp-chat { display: flex; flex-direction: column; gap: 9px; max-height: 52vh; overflow-y: auto; padding-right: 2px; }
-.lp-msg { padding: 10px 12px; border-radius: var(--lp-r-md); font-size: 13px; line-height: 1.5; max-width: 90%; overflow-wrap: break-word; }
-.lp-msg.me { align-self: flex-end; background: var(--accent-soft); border: 1px solid var(--accent-line); }
-.lp-msg.it { align-self: flex-start; background: var(--lp-card-2); border: 1px solid var(--lp-border); }
-.lp-msg .who { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--lp-ink-3); font-weight: 700; margin-bottom: 4px; }
-.lp-msg.queued { opacity: 0.62; }
-.lp-composer { display: flex; gap: 8px; margin-top: 12px; align-items: stretch; }
+[data-kit] .lp-chat { display: flex; flex-direction: column; gap: 9px; max-height: 52vh; overflow-y: auto; padding-right: 2px; }
+[data-kit] .lp-msg { padding: 10px 12px; border-radius: var(--r-well); font-size: 13.5px; line-height: 1.5; max-width: 90%; overflow-wrap: break-word; }
+[data-kit] .lp-msg.me { align-self: flex-end; background: var(--accent-a12); color: var(--ink); }
+[data-kit] .lp-msg.it { align-self: flex-start; background: var(--surface-2); }
+[data-kit] .lp-msg .who { margin-bottom: 4px; }
+/* Queued is dimmed AND says "queued" on its own label — never the tint alone. */
+[data-kit] .lp-msg.queued { opacity: 0.62; }
+[data-kit] .lp-composer { display: flex; gap: 8px; margin-top: 12px; align-items: stretch; }
 /* Two lines of the 16px iOS-safe font, so a wrapped placeholder is not clipped. */
-.lp-composer .lp-area { min-height: 62px; }
-.lp-composer .lp-btn { flex: none; align-self: stretch; }
+[data-kit] .lp-composer .lp-area { min-height: 62px; }
+/* height:auto or the kit's fixed 44px beats the stretch and the send button
+   stops matching the composer it sits in. */
+[data-kit] .lp-composer .btn { flex: none; align-self: stretch; height: auto; }
 
 /* ---------------- misc ---------------- */
-.lp-empty { text-align: center; padding: 34px 20px; border: 1px dashed var(--lp-border); border-radius: var(--lp-r-lg); color: var(--lp-ink-2); font-size: 13px; }
-.lp-empty .g { color: var(--lp-ink-3); margin-bottom: 10px; line-height: 0; }
-.lp-empty .g svg { width: 26px; height: 26px; }
+[data-kit] .lp-eico { line-height: 0; }
+[data-kit] .lp-eico svg { width: 26px; height: 26px; }
 /* Notes carry their meaning in a left rule rather than a leading glyph: the
    dingbats used before (◷, ⚠︎) fall back to tofu boxes wherever the font lacks
    them, which is most Android builds. */
-.lp-note {
+[data-kit] .lp-note {
   font-size: 11.5px; line-height: 1.5; margin-top: 12px; padding: 9px 11px;
-  border-left: 2px solid rgba(255, 255, 255, 0.14); border-radius: 0 var(--lp-r-sm) var(--lp-r-sm) 0;
-  background: rgba(255, 255, 255, 0.025); color: var(--lp-ink-3);
+  border-left: 2px solid var(--line-strong); border-radius: 0 var(--r-well) var(--r-well) 0;
+  background: var(--ink-a03); color: var(--sub);
 }
-.lp-note.warn { border-left-color: var(--lp-warn); background: rgba(212, 147, 11, 0.09); color: #F0C46A; }
-.lp-note .lp-btn { margin-left: 4px; vertical-align: -1px; }
-.lp-tags { display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
-.lp-tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 99px; font-size: 10.5px; font-weight: 700; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--lp-border); color: var(--lp-ink-3); flex: none; }
+[data-kit] .lp-note.warn { border-left-color: var(--amber); background: var(--amber-a08); color: var(--ink); }
+[data-kit] .lp-note .btn { margin-left: 4px; vertical-align: -1px; }
+[data-kit] .lp-tags { display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
 
-@media (prefers-reduced-motion: reduce) {
-  .lp-state.running .dot { animation: none; }
-  .lp-btn, .lp-bar > div, .lp-seg button { transition: none; }
-}
+/* The reduced-motion mandate is the kit's now: components.css stops every
+   animation and transition under [data-kit], which is every element here. */

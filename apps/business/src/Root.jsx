@@ -96,7 +96,13 @@ export default function BusinessRoot() {
   if (!session) return <SignIn onDone={setSession} />;
 
   return (
-    <div className="biz-root">
+    // data-kit: AI Business opts into the shared kit HERE, on the tab's own
+    // root. It renders inside the shell's tool slot, so every [data-kit] rule in
+    // packages/ui/components.css reaches this tab and nothing else — the same
+    // rule the shell follows by keeping data-kit off the wrapper that holds
+    // every tool. Note this element is behind the styled gate above, so a cold
+    // renderToStaticMarkup never reaches it; see src/__tests__/render.test.jsx.
+    <div className="biz-root" data-kit>
       {activeFault() && <FaultBanner fault={activeFault()} />}
       <App session={session} />
     </div>
@@ -109,20 +115,20 @@ function EnvProblem({ problems }) {
     <Centered>
       <div style={{ maxWidth: 460, width: "100%" }}>
         <Title>This tab is not safe to run</Title>
-        <p style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.65, margin: "0 0 16px" }}>
+        <p className="t-foot" style={{ color: "var(--muted)", lineHeight: 1.65, margin: "0 0 16px" }}>
           It refuses to connect rather than starting in a state where every query would
           appear to succeed. Fix the environment and reload.
         </p>
         <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
           {problems.map((p, i) => (
-            <li key={i} style={{
-              fontSize: 12, lineHeight: 1.6, color: "var(--ink)",
+            <li key={i} className="t-cap" style={{
+              lineHeight: 1.6, color: "var(--ink)",
               background: "rgba(248,113,113,0.12)", border: "1px solid rgba(248,113,113,0.45)",
               borderLeft: "3px solid var(--bad)", borderRadius: 10, padding: "10px 12px",
             }}>{p}</li>
           ))}
         </ul>
-        <p style={{ fontSize: 11, color: "var(--faint)", lineHeight: 1.6, marginTop: 16 }}>
+        <p className="t-cap" style={{ color: "var(--faint)", lineHeight: 1.6, marginTop: 16 }}>
           See <code style={{ fontFamily: "var(--font-mono)" }}>supabase/agent/README.md</code>, or hit{" "}
           <code style={{ fontFamily: "var(--font-mono)" }}>/.netlify/functions/env-check</code> to see what the deploy actually has.
         </p>
@@ -137,7 +143,8 @@ function EnvProblem({ problems }) {
 function Checking() {
   return (
     <Centered>
-      <div className="biz-spin" style={{ width: 26, height: 26, borderRadius: "50%", border: "2px solid var(--border)", borderTopColor: "var(--accent)" }} />
+      {/* The kit's .spinner — the same drawn arc this was hand-rolling. */}
+      <div className="spinner" style={{ width: 26, height: 26 }} />
     </Centered>
   );
 }
@@ -162,34 +169,31 @@ function SignIn({ onDone }) {
 
   return (
     <Centered>
-      <form onSubmit={submit} className="biz-root" style={{
-        width: "100%", maxWidth: 340, background: "var(--surface)",
-        border: "1px solid var(--border)", borderRadius: 18, padding: "26px 22px",
-        boxShadow: "var(--shadow-modal)",
+      {/* The kit's card. This had a border AND a modal shadow — the pairing the
+          language forbids — so the outline is gone and the elevation stays. */}
+      <form onSubmit={submit} className="biz-root card" style={{
+        width: "100%", maxWidth: 340, padding: "26px 22px",
       }}>
         <Title>AI Business</Title>
-        <p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6, margin: "0 0 18px" }}>
+        <p className="t-cap" style={{ color: "var(--muted)", lineHeight: 1.6, margin: "0 0 18px" }}>
           The agent runs in its own Supabase project, so this is a separate sign-in from the
           Pentagon's — that separation is what keeps a compromise of the agent away from
           everything else here.
         </p>
 
-        <label style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700, display: "block", marginBottom: 6 }}>Email</label>
+        <label className="t-cap" style={{ color: "var(--muted)", fontWeight: 700, display: "block", marginBottom: 6 }}>Email</label>
         <input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} style={{ marginBottom: 13 }} />
 
-        <label style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700, display: "block", marginBottom: 6 }}>Password</label>
+        <label className="t-cap" style={{ color: "var(--muted)", fontWeight: 700, display: "block", marginBottom: 6 }}>Password</label>
         <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
 
         {err && (
-          <div style={{ fontSize: 11.5, color: "var(--bad)", marginTop: 12, lineHeight: 1.5 }}>{err}</div>
+          <div className="t-cap" style={{ color: "var(--bad)", marginTop: 12, lineHeight: 1.5 }}>{err}</div>
         )}
 
-        <button type="submit" disabled={busy} className="biz-press" style={{
-          width: "100%", marginTop: 18, minHeight: 46, borderRadius: 10, border: "none",
-          cursor: busy ? "default" : "pointer", background: "var(--accent-grad)", color: "var(--accent-ink)",
-          fontWeight: 800, fontSize: 13.5, fontFamily: "var(--font-display)", letterSpacing: "0.03em",
-          opacity: busy ? 0.7 : 1,
-        }}>
+        {/* The kit's primary button, full width. .btn.md is 44px, .btn.full is
+            100% — both of which this was writing out by hand. */}
+        <button type="submit" disabled={busy} className="btn md primary full biz-press" style={{ marginTop: 18 }}>
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>
@@ -205,9 +209,9 @@ function FaultBanner({ fault }) {
     stale: "every row is being back-dated three hours on purpose",
   }[fault];
   return (
-    <div style={{
+    <div className="t-cap" style={{
       background: "rgba(255,178,36,0.16)", borderBottom: "1px solid rgba(245,184,77,0.5)",
-      padding: "9px 14px", fontSize: 11.5, color: "var(--warn)", fontWeight: 700,
+      padding: "9px 14px", color: "var(--warn)", fontWeight: 700,
       fontFamily: "var(--font-mono)", textAlign: "center", lineHeight: 1.5,
     }}>
       ⚠ FAULT INJECTION ACTIVE (?fault={fault}) — {what}. Remove the query parameter to see real state.
@@ -217,7 +221,9 @@ function FaultBanner({ fault }) {
 
 function Centered({ children }) {
   return (
-    <div className="biz-root" style={{
+    // The gate screens render OUTSIDE the mounted tab root above, so they carry
+    // their own data-kit — same scope, same rule: this app and nothing else.
+    <div className="biz-root" data-kit style={{
       minHeight: "calc(100vh - 52px)", display: "grid", placeItems: "center",
       padding: "24px 18px", background: "var(--bg)", color: "var(--ink)", fontFamily: "var(--font-body)",
     }}>
@@ -227,10 +233,7 @@ function Centered({ children }) {
 }
 
 function Title({ children }) {
-  return (
-    <h1 style={{
-      margin: "0 0 8px", fontSize: 16, fontWeight: 800, fontFamily: "var(--font-display)",
-      color: "var(--ink)", letterSpacing: "0.02em",
-    }}>{children}</h1>
-  );
+  // .t-head is the kit's 17px section title — one step off what this was doing
+  // at 16, and it comes with the scale's own tracking and colour.
+  return <h1 className="t-head" style={{ margin: "0 0 8px", fontWeight: 800 }}>{children}</h1>;
 }

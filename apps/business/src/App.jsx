@@ -243,47 +243,52 @@ function Tile({ label, tone, value, caption, broken, brokenNote, href }) {
   const t = TONE[tone] || TONE.empty;
   const inner = (
     <>
-      <div style={{
-        fontSize: 9.5, fontWeight: 800, letterSpacing: "0.09em", textTransform: "uppercase",
-        color: "var(--faint)", fontFamily: "var(--font-mono)", marginBottom: 4,
-      }}>{label}</div>
-      <div style={{
-        fontSize: 22, fontWeight: 800, lineHeight: 1.05, fontFamily: "var(--font-display)",
+      {/* .t-label is the kit's uppercase micro-label at 12px. This was 9.5px —
+          under the 10.5px floor — doing exactly the same job by hand. */}
+      <div className="t-label" style={{ color: "var(--faint)", fontFamily: "var(--font-mono)", marginBottom: 4 }}>{label}</div>
+      <div className="stattile-value" style={{
+        fontSize: 22, fontWeight: 800, lineHeight: 1.05,
         color: broken ? t.fg : tone === "empty" ? "var(--muted)" : t.fg,
-        fontVariantNumeric: "tabular-nums",
       }}>
         {/* An unknown value is a dash, never a zero. */}
         {broken ? "—" : value}
       </div>
-      <div style={{
-        fontSize: 10.5, lineHeight: 1.4, marginTop: 4,
+      <div className="t-cap" style={{
+        lineHeight: 1.4, marginTop: 4,
         color: broken ? t.fg : "var(--muted)",
         fontWeight: broken ? 700 : 400,
         overflow: "hidden",
+        whiteSpace: "normal",
       }}>
         {broken ? brokenNote : caption}
       </div>
     </>
   );
 
+  // The kit's stat tile on the page canvas. It used to be a border AND an inset
+  // rail — border-plus-shadow on one element, which the language forbids — so
+  // the outline is gone and the alarm rail is stacked onto the card's own
+  // shadow. Padding is held at the original 11/12 rather than .on-canvas's 16:
+  // B6 puts four things above the fold on a 390×664 phone, and five more pixels
+  // per tile is one of them pushed off.
   const style = {
     flex: 1, minWidth: 0, textAlign: "left", display: "block",
-    background: "var(--surface)", borderRadius: 14, padding: "11px 12px",
-    border: `1px solid ${tone === "empty" ? "var(--border)" : t.line}`,
-    ...(tone === "empty" ? null : { boxShadow: `inset 3px 0 0 ${t.fg}` }),
+    padding: "11px 12px",
+    ...(tone === "empty" ? null : { boxShadow: `inset 3px 0 0 ${t.fg}, var(--shadow-card)` }),
     textDecoration: "none", color: "inherit", minHeight: 76,
   };
+  const cls = "stattile on-canvas";
 
   return href
-    ? <a className="biz-press" href={href} style={style}>{inner}</a>
-    : <div style={style}>{inner}</div>;
+    ? <a className={`${cls} biz-press`} href={href} style={style}>{inner}</a>
+    : <div className={cls} style={style}>{inner}</div>;
 }
 
 function Footer() {
   const [busy, setBusy] = useState(false);
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, paddingTop: 6 }}>
-      <span style={{ fontSize: 10, color: "var(--faint)", lineHeight: 1.5, flex: 1, minWidth: 0 }}>
+      <span className="t-cap" style={{ color: "var(--faint)", lineHeight: 1.5, flex: 1, minWidth: 0 }}>
         Read-only except halt/resume, approve/veto, and the goal — enforced by column grants
         in the agent's database, not by this page.
       </span>

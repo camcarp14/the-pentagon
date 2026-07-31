@@ -118,14 +118,14 @@ export default function TailorTab({ job }) {
   };
 
   if (loadErr) return <ErrorState msg={`Couldn't load drafts: ${loadErr}`} onRetry={load} />;
-  if (drafts === null) return <div className="card"><SkLine w="w40" /><SkLine w="w80" /><SkLine w="w60" /></div>;
+  if (drafts === null) return <div className="card pad-md"><SkLine w="w40" /><SkLine w="w80" /><SkLine w="w60" /></div>;
 
   return (
-    <div className="card">
+    <div className="card pad-md">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
         <div className="seg" role="radiogroup" aria-label="Draft type">
           {KINDS.map(([id, label]) => (
-            <button key={id} type="button" className={kind === id ? 'on' : ''} onClick={() => setKind(id)}>{label}</button>
+            <button key={id} type="button" className={kind === id ? 'seg-opt active' : 'seg-opt'} onClick={() => setKind(id)}>{label}</button>
           ))}
         </div>
         <button className="btn primary sm" onClick={generate} disabled={generating}>
@@ -142,8 +142,8 @@ export default function TailorTab({ job }) {
 
       {!editor && list.length === 0 ? (
         <div className="empty">
-          <div className="t">No {KIND_NOUN[kind]} drafts yet</div>
-          <div className="h">
+          <div className="empty-title">No {KIND_NOUN[kind]} drafts yet</div>
+          <div className="empty-sub">
             {kind === 'prep_brief'
               ? 'Generate an interview prep brief — likely questions, STAR stories mapped from your resume, gap talking points, and questions to ask them.'
               : kind === 'outreach_note'
@@ -151,17 +151,17 @@ export default function TailorTab({ job }) {
                 : 'Generate one from your master resume — it lands here as an editable draft, never sent anywhere.'}
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button className="btn primary" onClick={generate} disabled={generating}>{generating ? 'Drafting…' : 'Generate draft'}</button>
-            <button className="btn ghost" onClick={() => { setEditor(BLANK_TEMPLATE[kind]); setDirty(true); }}>Start blank</button>
+            <button className="btn primary md" onClick={generate} disabled={generating}>{generating ? 'Drafting…' : 'Generate draft'}</button>
+            <button className="btn quiet md" onClick={() => { setEditor(BLANK_TEMPLATE[kind]); setDirty(true); }}>Start blank</button>
           </div>
         </div>
       ) : (
         <>
-          <div className="field">
+          <div className="fld">
             <label className="f" htmlFor="tailor-editor">
               {viewingVersion ? `Viewing v${viewingVersion}` : 'Unsaved working copy'}{dirty ? ' — edited' : ''}
             </label>
-            <textarea id="tailor-editor" rows={16} value={editor}
+            <textarea className="field" id="tailor-editor" rows={16} value={editor}
               onChange={(e) => { setEditor(e.target.value); setDirty(true); setViewingVersion(null); }} />
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

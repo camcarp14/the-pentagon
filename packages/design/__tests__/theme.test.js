@@ -149,4 +149,21 @@ describe("the token layer is complete", () => {
   it("gates its animation behind prefers-reduced-motion", () => {
     expect(kit + tokens).toMatch(/@media\s*\(prefers-reduced-motion/);
   });
+
+  it("reduced motion actually stops motion, not just shortens it", () => {
+    // Two holes an adversarial review found after four apps opted in:
+    //
+    // 1. The block killed DURATIONS, which does nothing to a transform applied
+    //    by :active — that is a state, not an animation. Every button in every
+    //    opted-in app still scaled on press for someone who had asked for no
+    //    motion, and no app could fix it for itself: `[data-kit] button:active`
+    //    is specificity (0,3,1) against an app's own (0,3,0) guard, and a media
+    //    query adds nothing. One app had already shipped a workaround twin.
+    // 2. `animation-duration: 0.01ms` on an INFINITE spinner does not stop it —
+    //    it runs it at ~100,000 revolutions a second, a per-frame jitter that is
+    //    worse than the motion it replaced.
+    const block = kit.slice(kit.indexOf("@media (prefers-reduced-motion"));
+    expect(block, "press transforms must be reset, not just shortened").toMatch(/button:active[^{]*\{[^}]*transform:\s*none/);
+    expect(block, "an infinite spin must stop, not speed up").toMatch(/\.spinner[^{]*\{[^}]*animation-(iteration-count|name)/);
+  });
 });

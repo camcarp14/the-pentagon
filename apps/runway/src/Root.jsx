@@ -33,13 +33,15 @@ import App from "./App.jsx";
 const EMBED_OVERRIDES = `
 @media (min-width: 768px) {
   .shell { display: flex; flex-direction: column; min-height: calc(100vh - 52px); }
+  /* one hairline OR one shadow, never both on the same element — the bar's
+     separation is the border-bottom, and the drop shadow that used to sit on
+     top of it has gone. */
   .rail {
     position: sticky; top: 52px; height: 52px; width: 100%;
     flex-direction: row; align-items: center; gap: 6px;
     border-right: none; border-bottom: 1px solid rgba(255,255,255,0.055);
     background: rgba(11,15,26,0.78);
     backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%);
-    box-shadow: 0 1px 0 rgba(255,255,255,0.03), 0 4px 16px rgba(0,0,0,0.35);
     padding: 0 24px; z-index: 50;
   }
   .rail .brand { display: none; }
@@ -48,15 +50,18 @@ const EMBED_OVERRIDES = `
      two-stop shadow + inset highlight. Runway previously used --surface (a
      DARKER fill than the container), so its active tab read recessed while the
      other tools' read raised — the main reason its menu felt like a different
-     product. Bar chrome (height/padding/background/shadow/z-index) now matches
+     product. Bar chrome (height/padding/background/z-index) now matches
      the ZTS and Clarify bars exactly too. */
   .navgroup { flex-direction: row; gap: 2px; padding: 3px; background: rgba(255,255,255,0.045); border: 1px solid rgba(255,255,255,0.055); border-radius: 10px; }
-  .rail .nav-item { flex: 0 0 auto; gap: 7px; padding: 5px 14px; min-height: 32px; border-radius: 7px; color: #525E74; font-weight: 700; font-size: 11.5px; letter-spacing: 0.05em; font-family: 'Syne', system-ui; transition: color 0.2s cubic-bezier(0.4,0,0.2,1); }
+  /* system stack, not Syne: the display face was the only decorative font left
+     in Runway, and the shell's own chrome dropped it for the same reason. */
+  .rail .nav-item { flex: 0 0 auto; gap: 7px; padding: 5px 14px; min-height: 32px; border-radius: 7px; color: #525E74; font-weight: 600; font-size: 12.5px; letter-spacing: 0; transition: color 0.2s cubic-bezier(0.4,0,0.2,1); }
   .rail .nav-item:hover { background: transparent; color: #E9EDF5; }
   .rail .nav-item.active { background: var(--surface-2, #1B2438); color: #F7F9FC; box-shadow: 0 1px 2px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06); }
-  .rail .nav-item .navcount { margin-left: 6px; min-width: auto; height: auto; padding: 1px 6px; border-radius: 999px; font-size: 9px; font-weight: 800; }
+  /* 11px, not 9px: nothing in this language is allowed under 10.5px. */
+  .rail .nav-item .navcount { margin-left: 6px; min-width: auto; height: auto; padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 800; }
   .rail-foot { margin-top: 0; margin-left: auto; flex-direction: row; align-items: center; gap: 14px; padding: 0; font-size: 12px; }
-  .rail-foot .btn { display: none; }   /* the shell owns sign-out */
+  [data-kit] .rail-foot .btn { display: none; }   /* the shell owns sign-out */
   /* Let the inner .pagefade own the width (reading pages cap at 1220, the
      kanban breaks out to 1580) instead of clamping the board to a narrow column. */
   .main { max-width: 1580px; margin: 0 auto; width: 100%; }
@@ -72,8 +77,14 @@ export default function RunwayRoot() {
     return () => el.remove();
   }, []);
   return (
-    <MemoryRouter>
-      <App />
-    </MemoryRouter>
+    // data-kit: Runway opts into the shared kit HERE, on its own outermost
+    // element, and nowhere higher. It renders inside the shell's tool slot, so
+    // this reaches this app and nothing else — the same rule the shell follows
+    // by keeping data-kit off the wrapper that holds every tool.
+    <div data-kit>
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>
+    </div>
   );
 }

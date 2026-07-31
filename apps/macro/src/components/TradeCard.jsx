@@ -64,7 +64,7 @@ export default function TradeCard({ derived, settings, position, plan }) {
   const hiddenRails = guardrails.slice(2)
 
   return (
-    <section className={`card span2 tcard ${d.severity}`} data-testid="trade-card">
+    <section className={`card pad-md span2 tcard ${d.severity}`} data-testid="trade-card">
       {/* ── the score ─────────────────────────────────────────────────────── */}
       <div className={`tc-head band-${win.band}`}>
         <div className="tc-score">
@@ -168,8 +168,8 @@ export default function TradeCard({ derived, settings, position, plan }) {
                 </div>
               </div>
             )}
-            {d.reasons?.length > 0 && <ul className="factlist">{d.reasons.map((r, i) => <li key={i} className="sub">{r}</li>)}</ul>}
-            <p className="sub tc-foot">
+            {d.reasons?.length > 0 && <ul className="factlist">{d.reasons.map((r, i) => <li key={i} className="sub t-foot">{r}</li>)}</ul>}
+            <p className="sub t-foot tc-foot">
               8 or more means the rules would take the trade. 6&ndash;7 means the trend is confirmed and only the
               trigger is missing. Below 3 there is no long edge at all. The leverage figure is MSTR&rsquo;s own beta to
               BTC &mdash; it is the instrument, not borrowed money, so &ldquo;how much&rdquo; is the only exposure dial here.
@@ -185,7 +185,7 @@ export default function TradeCard({ derived, settings, position, plan }) {
 function Row({ k, v, note, tone = 'flat' }) {
   return (
     <div className="tc-row">
-      <dt className="tc-k">{k}</dt>
+      <dt className="tc-k t-label">{k}</dt>
       <dd className="tc-v">
         <span className={`tc-val tone-${tone}`}>{v}</span>
         {note && <span className="tc-note">{note}</span>}

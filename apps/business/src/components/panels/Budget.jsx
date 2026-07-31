@@ -120,9 +120,9 @@ export default function Budget({ now }) {
           {s.categories.length > 0 ? (
             <CategoryList lines={s.categories} projectable={s.projectable} />
           ) : (
-            <div style={{
+            <div className="t-cap" style={{
               padding: "13px 12px", borderRadius: 10, border: "1px dashed var(--border)",
-              fontSize: 11, color: "var(--faint)", lineHeight: 1.55, textAlign: "center",
+              color: "var(--faint)", lineHeight: 1.55, textAlign: "center",
             }}>
               One umbrella cap, no per-category rows and no categorised spend — the total above is the only thing there is to watch.
             </div>
@@ -130,7 +130,9 @@ export default function Budget({ now }) {
 
           {/* One chip on the header can only report the worse source. With two
               feeds behind one panel, which one aged is the actionable half. */}
-          <Row gap={7} wrap style={{ fontSize: 10, color: "var(--faint)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+          {/* 11.5px, not 10: Row takes no className, so the kit's .t-cap size
+              is written out. 10 was under the floor. */}
+          <Row gap={7} wrap style={{ fontSize: 11.5, color: "var(--faint)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
             <span>caps {readAge(caps.state.fetchAgeMs)}</span>
             <span style={{ opacity: 0.45 }}>·</span>
             <span>ledger {readAge(spend.state.fetchAgeMs)}</span>
@@ -186,11 +188,11 @@ function Headline({ s, v }) {
         border: T ? `1px solid ${T.line}` : "1px dashed var(--border)",
         ...(T ? { borderLeft: `3px solid ${T.fg}` } : null),
       }}>
-        <div style={{
-          fontSize: 12.5, fontWeight: 800, fontFamily: "var(--font-display)", lineHeight: 1.35,
+        <div className="t-foot" style={{
+          fontWeight: 800, lineHeight: 1.35,
           color: T ? T.fg : "var(--muted)", fontVariantNumeric: "tabular-nums",
         }}>{v.headline}</div>
-        <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.55, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>
+        <div className="t-cap" style={{ color: "var(--muted)", lineHeight: 1.55, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>
           {v.detail}
         </div>
       </div>
@@ -302,8 +304,8 @@ function CategoryRow({ line, projectable }) {
       ...(tone ? { borderLeft: `3px solid ${tone.fg}` } : null),
     }}>
       <Row gap={8}>
-        <span style={{
-          flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: "var(--ink)",
+        <span className="t-foot" style={{
+          flex: 1, minWidth: 0, fontWeight: 700, color: "var(--ink)",
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}>{line.category}</span>
         <span style={{
@@ -323,7 +325,7 @@ function CategoryRow({ line, projectable }) {
         {line.uncapped && <Badge tone="stale">no cap</Badge>}
         {line.breached && <Badge tone="error">over cap</Badge>}
         {line.hardStop && <Badge tone="error" title="Breaching this cap halts the agent.">hard stop</Badge>}
-        <span style={{ fontSize: 10.5, color: "var(--muted)", fontVariantNumeric: "tabular-nums", lineHeight: 1.45 }}>
+        <span className="stattile-label" style={{ color: "var(--muted)", fontVariantNumeric: "tabular-nums", lineHeight: 1.45, whiteSpace: "normal" }}>
           {categoryNote(line, projectable)}
         </span>
       </Row>
