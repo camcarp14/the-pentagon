@@ -297,57 +297,10 @@ function statsFor(genome) {
   return { nodes: genome.nodes.length, edges: Array.isArray(genome.edges) ? genome.edges.length : 0, byRegion };
 }
 
-function Minds({ onOpenTool, isMobile }) {
-  const minds = ["zts", "clarify"].map((app) => ({ app, genome: readJSON(`${LS[app]}dna_genome`, null) }));
-  const any = minds.some((m) => m.genome);
-  return (
-    <div>
-      <Header title="Minds" sub="The DNA neural-graphs that compile into each tool's system prompt" />
-      {!any ? (
-        <EmptyState icon="radar" title="No minds initialized yet" sub="Open ZTS or Clarify → DNA to seed a mind; it'll appear here." />
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
-          {minds.map(({ app, genome }) => {
-            const s = statsFor(genome);
-            const maxR = s ? Math.max(1, ...Object.values(s.byRegion)) : 1;
-            return (
-              <Card key={app}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
-                    <Dot app={app} size={10} />
-                    <span style={{ fontSize: 14, fontWeight: 800, color: P.ink, fontFamily: P.display }}>{appMeta(app).brand}</span>
-                  </span>
-                  <button onClick={() => onOpenTool(app)} style={{ background: "none", border: `1px solid ${P.line}`, color: P.muted, borderRadius: 8, padding: "5px 11px", fontSize: 11, cursor: "pointer", fontFamily: P.display, fontWeight: 600 }}>Open to edit →</button>
-                </div>
-                {!s ? (
-                  <div style={{ color: P.faint, fontSize: 12.5 }}>Not initialized.</div>
-                ) : (
-                  <>
-                    <div style={{ display: "flex", gap: 20, marginBottom: 16 }}>
-                      <div><div style={{ fontSize: 22, fontWeight: 800, color: P.ink, fontFamily: P.display }}>{s.nodes}</div><div style={{ fontSize: 10.5, color: P.faint, textTransform: "uppercase", letterSpacing: "0.08em" }}>Nodes</div></div>
-                      <div><div style={{ fontSize: 22, fontWeight: 800, color: P.ink, fontFamily: P.display }}>{s.edges}</div><div style={{ fontSize: 10.5, color: P.faint, textTransform: "uppercase", letterSpacing: "0.08em" }}>Synapses</div></div>
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                      {Object.entries(REGION_LABELS).map(([r, label]) => (
-                        <div key={r} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11.5 }}>
-                          <span style={{ width: 74, color: P.muted }}>{label}</span>
-                          <div style={{ flex: 1, height: 6, borderRadius: 99, background: P.surface2, overflow: "hidden" }}>
-                            <div style={{ height: "100%", width: `${(s.byRegion[r] / maxR) * 100}%`, background: appMeta(app).accent, opacity: 0.85, borderRadius: 99 }} />
-                          </div>
-                          <span style={{ width: 20, textAlign: "right", color: P.faint, fontFamily: P.mono }}>{s.byRegion[r]}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </Card>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
+// The Minds panel used to be a read-out: node and edge counts for ZTS and
+// Clarify, a link into each tool's own DNA tab, and no SYNC at all. It is the
+// editor now — one screen for every mind, in the place a mind belongs, which is
+// settings. See Minds.jsx for why it edits three fields and no others.
 
 // ─── AGENTS ────────────────────────────────────────────────────────────────────
 // The engine controls for every tool live here now (removed from the tools'
@@ -593,7 +546,7 @@ export default function System({ onExit, onOpenTool, tabPrefs, onTabPrefs }) {
         {tab === "overview" && <Overview isMobile={isMobile} />}
         {tab === "ops" && <Ops isMobile={isMobile} />}
         {tab === "usage" && <Usage isMobile={isMobile} />}
-        {tab === "minds" && <Minds onOpenTool={onOpenTool} isMobile={isMobile} />}
+        {tab === "minds" && <Minds isMobile={isMobile} />}
         {tab === "agents" && <Agents isMobile={isMobile} />}
         {tab === "tabs" && tabPrefs && <Tabs prefs={tabPrefs} onChange={onTabPrefs} isMobile={isMobile} />}
       </div>
