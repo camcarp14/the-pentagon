@@ -737,3 +737,297 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .rd-ticket .v.grade-rich { color: var(--serious); }
 .rd-ticket .v.grade-unknown { color: var(--ink-3); }
 .tk-sub { font-size: 10.5px; color: var(--ink-3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ============================================================
+   ALTS — the alt command center.
+
+   NO @keyframes IN THIS BLOCK, and none anywhere else in this file. Keyframe
+   names are document-global and this sheet is injected into the shared head at
+   mount, so a name defined here shadows the kit's for EVERY tool on the page —
+   the bug DESIGN.md §6 documents twice. Everything below either references a
+   kit-owned name (pagein, rise, shimmer, toastin…) or animates a property with
+   a plain transition.
+
+   Composition rules this block follows:
+     • `.tc-*`, `.ticket`, `.stattile`, `.meter`, `.chip`, `.empty`, `.tbl-wrap`
+       are REUSED wherever they already say the right thing. New names exist
+       only for genuinely new furniture and are all prefixed `alt-`.
+     • Mobile first. Two breakpoints: 768px (the table shape) and 1020px (the
+       two-pane command center). Nothing between them needs a third.
+     • Horizontal scrolling happens inside `.tbl-wrap` and nowhere else.
+   ============================================================ */
+
+/* ---- the two panes ----
+   Under 1020px this is ONE column and selecting a coin swaps the board out for
+   the detail. That swap is display-only: the detail is a panel in the document
+   flow with its own back control, not a modal, so page scroll is never trapped
+   and the browser back gesture never fights a scrim. */
+.alt-panes { display: grid; gap: 12px; align-items: start; }
+.alt-pane-board { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.alt-pane-detail { display: none; min-width: 0; }
+.alt-panes.picked .alt-pane-board { display: none; }
+.alt-panes.picked .alt-pane-detail { display: block; }
+.alts .error-row { margin-bottom: 12px; }
+
+/* ---- season card ---- */
+.alt-season-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.alt-season-ttl { margin-bottom: 0; }
+.alt-season-btn { margin-left: auto; flex: none; }
+.alt-retry { margin-top: 12px; }
+
+/* The two head bands the answer card never needed: `no` is a regime with no alt
+   bid in it and `bad` is a directive that says get out. `.tc-head.band-building`
+   and friends already cover the rest. */
+.tc-head.band-no .tc-num, .tc-head.band-no .tc-label { color: var(--ink-2); }
+.tc-head.band-bad .tc-num, .tc-head.band-bad .tc-label { color: var(--crit); }
+.tc-head.band-unknown .tc-num, .tc-head.band-unknown .tc-label { color: var(--ink-3); }
+.tc-pips.band-no > span.on { background: var(--ink-3); }
+.tc-pips.band-bad > span.on { background: var(--crit); }
+
+/* Breadth carries 60 of season.js's 100 points, so it gets bars and the three
+   tilts get tiles. The caption under each bar is the DENOMINATOR: "63%" out of
+   9 rows and out of 94 rows are different claims. */
+.alt-bars { display: grid; grid-template-columns: 1fr; gap: 10px; margin: 14px 0 12px; }
+.alt-bar { background: var(--card-2); border-radius: var(--r-md); padding: 10px 12px; min-width: 0; }
+.alt-bar-top { display: flex; align-items: baseline; gap: 8px; margin-bottom: 7px; }
+.alt-bar-k { font-size: 12px; font-weight: 600; color: var(--ink); }
+.alt-bar-v { margin-left: auto; font-family: var(--mono); font-size: 14px; font-weight: 500; color: var(--ink-2); }
+.alt-bar .meter > div { background: var(--ink-2); }
+.alt-bar.hot .meter > div { background: var(--good); }
+.alt-bar.hot .alt-bar-v { color: var(--good); }
+.alt-bar.cold .meter > div { background: var(--down); }
+.alt-bar.cold .alt-bar-v { color: var(--down); }
+.alt-bar .tiny { margin-top: 5px; display: block; }
+.alt-stats { margin-top: 12px; }
+.alt-note { margin-top: 10px; line-height: 1.55; }
+.alt-lead { margin: 0 0 10px; }
+
+/* ---- board controls ---- */
+.alt-controls { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 12px; }
+.alt-fld { margin-bottom: 0; min-width: 0; }
+.alt-boardfoot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.alt-boardfoot .tiny { margin-right: auto; }
+
+/* ---- the board ----
+   ONE DOM, TWO LAYOUTS. Every cell carries a grid-area name; the phone template
+   uses six of them and the desktop template uses all eleven. The three the phone
+   leaves out MUST be display:none rather than merely unplaced — an item whose
+   named area does not exist in the active template falls back to auto-placement
+   and silently grows a third row of orphans. */
+.alt-board { display: grid; gap: 1px; background: var(--border); border-radius: var(--r-md); overflow: hidden; }
+.alt-head { display: none; }
+.alt-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px; background: var(--card-2); min-width: 0; }
+.alt-row.on { box-shadow: inset 3px 0 0 var(--accent); }
+.alt-row-main {
+  display: grid; min-width: 0; width: 100%; text-align: left;
+  background: none; border: none; border-radius: 0; padding: 9px 4px 9px 11px; min-height: 60px;
+  /* The score spans both rows in its own column, because the board IS ranked by
+     it. The band pill sits under the name where a word fits — in a 30px score
+     column it clipped to "igniti…", which is the one label that has to be read
+     whole. */
+  grid-template-columns: 34px minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "score coin price c24"
+    "score band  spark c7";
+  gap: 3px 9px; align-items: center;
+  transition: background var(--dur-1) ease;
+}
+.alt-row-main:hover { background: rgba(255, 255, 255, 0.03); }
+.alt-c { min-width: 0; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.c-rank { grid-area: rank; color: var(--ink-3); font-size: 11px; }
+.c-coin { grid-area: coin; display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.c-price { grid-area: price; text-align: right; color: var(--ink); font-weight: 600; }
+.c-24 { grid-area: c24; text-align: right; }
+.c-7 { grid-area: c7; text-align: right; }
+.c-30 { grid-area: c30; text-align: right; }
+.c-rs { grid-area: rs; text-align: right; }
+.c-turn { grid-area: turn; text-align: right; color: var(--ink-2); }
+.c-spark { grid-area: spark; overflow: visible; display: flex; align-items: center; }
+.c-score { grid-area: score; font-family: var(--mono); font-size: 17px; font-weight: 500; color: var(--ink-2); align-self: center; }
+.c-band { grid-area: band; display: flex; align-items: center; gap: 4px; }
+/* Phone: rank, the 30-day return, RS and turnover live in the detail pane, one
+   tap away. They must be display:none rather than merely left out of the
+   template — an item whose named area is absent falls back to auto-placement
+   and grows a third row of orphans. */
+.c-rank, .c-rs, .c-turn, .c-30 { display: none; }
+
+.alt-sym { font-weight: 700; font-size: 13px; color: var(--ink); flex: none; }
+.alt-name { font-size: 11.5px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The score is inked by BAND, so the ranking number and the state word can never
+   read as two different opinions. */
+.c-score.band-igniting { color: var(--good); }
+.c-score.band-running { color: var(--warn); }
+.c-score.band-extended { color: var(--serious); }
+
+/* Band pills: background only — no border, so nothing here can ever pair one
+   with a shadow. The word is always printed, so colour is never the only
+   signal. */
+.alt-band {
+  display: inline-block; padding: 2px 8px; border-radius: 99px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.01em; text-transform: capitalize;
+  background: rgba(255, 255, 255, 0.05); color: var(--ink-3); white-space: nowrap;
+}
+.alt-band.b-basing { color: var(--ink-2); }
+.alt-band.b-waking { color: var(--ink); background: rgba(255, 255, 255, 0.09); }
+.alt-band.b-igniting { color: var(--good); background: rgba(18, 165, 148, 0.14); }
+.alt-band.b-running { color: var(--warn); background: rgba(212, 147, 11, 0.14); }
+.alt-band.b-extended { color: var(--serious); background: rgba(194, 65, 12, 0.16); }
+
+/* The two flags that decide whether a row is tradeable at all, marked on the
+   board rather than waiting for the detail — they are the reason a top-of-board
+   score is not an invitation. */
+.alt-flag { font-size: 10.5px; font-weight: 700; padding: 1px 5px; border-radius: 5px; background: rgba(255, 255, 255, 0.06); color: var(--ink-3); }
+.alt-flag.warn { color: var(--warn); background: rgba(212, 147, 11, 0.14); }
+.alt-flag.bad { color: var(--crit); background: rgba(225, 29, 72, 0.13); }
+
+/* The star is a SIBLING of the row button, never a child: a button inside a
+   button is invalid, and its click would bubble into "open this coin" — you
+   would star a row and be thrown into the detail pane every time. */
+.alt-star {
+  background: none; border: none; padding: 0; min-height: 44px; min-width: 44px;
+  display: grid; place-items: center; color: var(--ink-3); font-size: 15px;
+  transition: color var(--dur-1) ease, transform var(--dur-1) var(--ease-out);
+}
+.alt-star.on { color: var(--accent); }
+.alt-star:disabled { opacity: 0.45; cursor: progress; }
+.alt-star:active:not(:disabled) { transform: scale(0.9); }
+
+/* ---- the sparkline ---- */
+.alt-spark { display: block; width: 84px; height: 20px; color: var(--ink-3); }
+.alt-spark.dir-up { color: var(--up); }
+.alt-spark.dir-down { color: var(--down); }
+.alt-spark-none { color: var(--ink-3); font-size: 12px; }
+
+/* ---- detail pane ---- */
+.alt-detail { display: block; min-width: 0; }
+/* Its own single-column grid rather than `.grid`: the detail is a narrow pane at
+   every width that matters, and `.grid > .span2 { grid-column: span 2 }` would
+   have grown a phantom second column the moment this stack went one-up. */
+.alt-detail-grid { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: start; }
+.alt-detail-grid > * { min-width: 0; }
+.alt-dhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.alt-ident { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.alt-ident-sym { font-size: 17px; font-weight: 800; letter-spacing: -0.2px; color: var(--ink); }
+.alt-ident-name { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alt-ident-spark { display: none; }
+.alt-tags { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0 2px; }
+.alt-tail { margin: 0 0 10px; font-size: 12.5px; color: var(--good); line-height: 1.45; }
+.alt-degraded .factlist li { color: var(--ink-2); }
+
+/* base rates reuse the order ticket, so three medians read as one instrument */
+.alt-rates { margin-top: 12px; }
+.alt-rates .v { font-size: 17px; }
+
+/* the matched episodes: date, run, forward return, drawdown, similarity */
+.alt-eps { display: grid; gap: 1px; background: var(--border); border-radius: var(--r-sm); overflow: hidden; margin-top: 12px; }
+.alt-ep { background: var(--card-2); display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 8px 11px; font-size: 11.5px; }
+.alt-ep-d { color: var(--ink); font-weight: 600; font-family: var(--mono); }
+.alt-ep-r { font-family: var(--mono); font-weight: 600; }
+.alt-ep-k { color: var(--ink-3); }
+.alt-ep-f { font-family: var(--mono); }
+.alt-ep-dd { font-family: var(--mono); color: var(--down); }
+.alt-ep-s { font-family: var(--mono); color: var(--ink-3); margin-left: auto; }
+
+/* the checklist: nine rows, each with its own note under it */
+.alt-sig { display: grid; gap: 1px; background: var(--border); border-radius: var(--r-md); overflow: hidden; margin-top: 12px; }
+.alt-sig-row {
+  background: var(--card-2); display: grid; align-items: baseline; gap: 3px 8px; padding: 9px 11px;
+  grid-template-columns: 16px minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "mark key   stage lvl"
+    ".    note  note  note";
+}
+.alt-sig-mark { grid-area: mark; font-size: 11.5px; font-weight: 800; color: var(--ink-3); text-align: center; }
+.alt-sig-row.pass .alt-sig-mark { color: var(--good); }
+.alt-sig-k { grid-area: key; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.alt-sig-row.pass .alt-sig-k { color: var(--ink); }
+.alt-sig-lvl { grid-area: lvl; font-size: 10.5px; font-weight: 700; color: var(--ink-3); text-transform: capitalize; white-space: nowrap; }
+.alt-sig-lvl.lvl-strong { color: var(--good); }
+.alt-sig-lvl.lvl-moderate { color: var(--warn); }
+.alt-sig-note { grid-area: note; font-size: 11.5px; color: var(--ink-3); line-height: 1.45; text-wrap: pretty; }
+/* "early" vs "late" is the whole point of the ordering — an attention spike is
+   confirmation, not an entry, and the row has to say so without a legend. */
+.alt-sig-stage { grid-area: stage; font-size: 10.5px; font-weight: 600; color: var(--ink-3); text-transform: capitalize; }
+.alt-sig-stage.stage-early { color: var(--good); }
+.alt-sig-stage.stage-late { color: var(--serious); }
+
+/* attention beside crowding — the divergence between them is the read */
+.alt-two { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 12px; }
+.alt-col { background: var(--card-2); border-radius: var(--r-md); padding: 11px 12px; min-width: 0; }
+.alt-col-k { display: block; margin-bottom: 8px; color: var(--ink-3); }
+.alt-kv { margin: 0; display: grid; gap: 5px; }
+.alt-kv-row { display: flex; align-items: baseline; gap: 10px; }
+.alt-kv-k { font-size: 11.5px; color: var(--ink-3); }
+.alt-kv-v { margin: 0; margin-left: auto; font-size: 12.5px; font-weight: 600; color: var(--ink); text-align: right; }
+.alt-col .empty { padding: 12px 0 4px; text-align: left; }
+
+/* ---- 768px: the board becomes a table ---- */
+@media (min-width: 768px) {
+  .alt-controls { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); }
+  .alt-bars { grid-template-columns: 1fr 1fr; }
+  .alt-two { grid-template-columns: 1fr 1fr; }
+  .alt-ident-spark { display: block; flex: none; }
+
+  /* The eleven-column shape. It is wider than a 620px pane on purpose — the
+     board is a dense instrument and `.tbl-wrap` is the one place in this app
+     allowed to scroll sideways. */
+  .alt-board { min-width: 700px; }
+  .alt-head, .alt-row-main {
+    grid-template-columns: 24px minmax(70px, 1.2fr) 78px 56px 56px 56px 60px 60px 68px 40px 74px;
+    grid-template-areas: "rank coin price c24 c7 c30 rs turn spark score band";
+    gap: 0 8px;
+  }
+  .alt-head {
+    display: grid; align-items: end; padding: 8px 48px 8px 11px;
+    background: var(--card); color: var(--ink-3);
+  }
+  .alt-head .alt-c { font-size: 11px; font-weight: 600; color: var(--ink-3); }
+  .alt-head .c-price, .alt-head .c-24, .alt-head .c-7, .alt-head .c-30,
+  .alt-head .c-rs, .alt-head .c-turn { text-align: right; }
+  .alt-row-main { min-height: 44px; padding: 7px 4px 7px 11px; }
+  .c-rank, .c-rs, .c-turn, .c-30 { display: block; }
+  .c-rank { text-align: right; }
+  .c-score { font-size: 14px; align-self: auto; }
+  .alt-spark { width: 66px; height: 18px; }
+  /* the header sparkline is a read, not a table cell — it keeps its own size */
+  .alt-ident-spark .alt-spark { width: 104px; height: 26px; }
+}
+
+/* ---- 1020px: the command center ----
+   Two panes, both always mounted, detail sticky. Inside the shell's 1180px
+   column, so this does not fight the container — the board simply gets the
+   larger share and scrolls its own table inside `.tbl-wrap`. */
+@media (min-width: 1020px) {
+  .alt-panes { grid-template-columns: minmax(0, 1.08fr) minmax(340px, 0.92fr); }
+  .alt-pane-detail, .alt-panes.picked .alt-pane-detail { display: block; }
+  .alt-panes.picked .alt-pane-board { display: grid; }
+  .alt-pane-detail {
+    position: sticky;
+    /* the shell bar plus Macro's own 52px sticky nav, plus a hair of breathing */
+    top: calc(var(--shell-bar, 52px) + 66px);
+    max-height: calc(100dvh - var(--shell-bar, 52px) - 92px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  /* The back control belongs to the phone: on desktop the board never left. */
+  .alt-back { display: none; }
+  /* Four stat tiles across a ~400px pane is four unreadable columns, and
+     attention-beside-crowding stops being side-by-side at that width. The
+     season card, in the wider left pane, keeps its 4-up. */
+  .alt-pane-detail .alt-stats { grid-template-columns: repeat(2, 1fr); }
+  .alt-pane-detail .alt-two { grid-template-columns: 1fr; }
+}
+
+/* ---- touch ergonomics: every target ≥ 44px ---- */
+@media (max-width: 767.98px) {
+  /* Not .alt-row-main: it is already 60px tall in its two-row shape, and naming
+     it here would have SHRUNK it to 44 on the one platform this rule exists to
+     protect. */
+  .alt-star { min-height: 44px; min-width: 44px; }
+  .alt-season-btn, .alt-boardfoot .btn { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alt-row-main, .alt-star, .alt-bar .meter > div { transition: none !important; }
+}

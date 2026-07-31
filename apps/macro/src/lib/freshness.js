@@ -6,6 +6,12 @@ export const SOURCE_MAX_AGE_SEC = {
   btc: 180,           // live crypto: 3 min
   candles_1d: 93600,  // daily candles: 26 h
   candles_30m: 1800,  // intraday: 30 min
+  // Alts. Both are measured from the payload's own `asOf` (when the UPSTREAM
+  // answered), never from meta.fetchedAt — those endpoints serve a Blobs cache
+  // with a stale fallback, so meta.fetchedAt is "when this response was built",
+  // which on a cache hit is always now.
+  alt_scan: 300,      // whole-market scan: 90s server cache, 5 min before stale
+  alt_coin: 900,      // per-coin deep read: 5 min server cache, 15 min to stale
 }
 
 /** live < maxAge · stale < 3×maxAge · dead beyond (or never fetched). */

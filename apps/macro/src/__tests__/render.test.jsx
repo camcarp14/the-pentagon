@@ -22,6 +22,11 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import App from "../App.jsx";
+import AltsPanel from "../components/alts/AltsPanel.jsx";
+import CoinDetail from "../components/alts/CoinDetail.jsx";
+import { sparkPoints, sparkDirection } from "../components/alts/sparkline.jsx";
+import { screenCoin } from "../lib/alts/screen.js";
+import { seasonRead } from "../lib/alts/season.js";
 
 const warnings = [];
 let realWarn, realErr;
@@ -70,6 +75,20 @@ describe("Macro renders on the kit", () => {
     expect(out).not.toMatch(/<div class="seg"[^>]*>\s*<button[^>]*class="on"/);
   });
 
+  it("mounts the Alts tab cold, second in the nav", () => {
+    // All five panels stay mounted in this app, so the Alts panel's body runs on
+    // every cold render whether or not the tab is selected — which is exactly
+    // the coverage this file exists for. At t=0 it is skeletons, because its
+    // scan has not landed; the tab button and the panel wrapper prove it is
+    // wired, and the fixture renders below prove the body.
+    const out = html();
+    expect(out).toContain('aria-label="Alts"');
+    expect(out).toContain('data-testid="alts-panel"');
+    // second: cockpit, then alts, then chart
+    expect(out.indexOf('aria-label="Cockpit"')).toBeLessThan(out.indexOf('aria-label="Alts"'));
+    expect(out.indexOf('aria-label="Alts"')).toBeLessThan(out.indexOf('aria-label="Chart"'));
+  });
+
   it("renders the chart panel's real content, not just its shell", () => {
     // Proof that the cold render is actually executing component bodies rather
     // than bailing out early everywhere: the Chart tab has no loading gate, so
@@ -89,6 +108,266 @@ describe("Macro renders on the kit", () => {
     html();
     const react = warnings.filter((w) => !w.startsWith("[@cc/"));
     expect(react, `React warned:\n${react.join("\n")}`).toEqual([]);
+  });
+});
+
+/* ── the Alts tab, rendered against fixtures ──────────────────────────────────
+ *
+ * The cold App render proves the panel is wired and reaches its skeleton gate.
+ * It cannot prove the board, the season card or the detail pane, because at t=0
+ * none of them have data — and those are precisely the bodies where an
+ * undefined reference ships green and blanks the tab in production. So they are
+ * rendered here against payloads shaped exactly like /api/alt-scan and
+ * /api/alt-coin, which is the only kind of fixture available: the sandbox proxy
+ * 403s every crypto host, and a test that needs the network is not a test.  */
+
+const NOW = Date.UTC(2026, 6, 31, 12, 0, 0);
+const DAY = 86_400_000;
+
+/** A rising-then-resting hourly series, 168 points, like sparkline_in_7d. */
+const spark = (base, gain) =>
+  Array.from({ length: 168 }, (_, i) => base * (1 + (gain * i) / 167 + Math.sin(i / 9) * 0.004));
+
+const row = (over = {}) => ({
+  id: "x", symbol: "X", name: "Coin X", image: null, rank: 1,
+  price: 1, mcap: 1e9, fdv: 1.2e9, vol24h: 1e8,
+  chg1h: 0.2, chg24h: 1.5, chg7d: 4, chg14d: 6, chg30d: 9, chg1y: 40,
+  ath: 3, athChangePct: -55, athDate: "2024-03-14T00:00:00.000Z", atl: 0.2, atlChangePct: 400,
+  circulating: 1e9, totalSupply: 1e9, maxSupply: null,
+  sparkline7d: spark(1, 0.04),
+  ...over,
+});
+
+const UNIVERSE = [
+  row({ id: "bitcoin", symbol: "BTC", name: "Bitcoin", rank: 1, price: 96_400, mcap: 1.9e12, vol24h: 4.2e10, chg24h: 0.8, chg7d: 2.1, chg30d: 5.4, sparkline7d: spark(96_000, 0.02) }),
+  row({ id: "ethereum", symbol: "ETH", name: "Ethereum", rank: 2, price: 3_420, mcap: 4.1e11, vol24h: 1.8e10, chg24h: 1.9, chg7d: 6.4, chg30d: 11.2, sparkline7d: spark(3_300, 0.06) }),
+  row({ id: "solana", symbol: "SOL", name: "Solana", rank: 5, price: 184.22, mcap: 8.7e10, vol24h: 5.1e9, chg24h: 6.2, chg7d: 14.8, chg30d: 22.5, sparkline7d: spark(160, 0.15) }),
+  row({ id: "pepe", symbol: "PEPE", name: "Pepe", rank: 31, price: 0.0000122, mcap: 5.1e9, vol24h: 9.4e8, chg24h: 11.4, chg7d: 26.1, chg30d: 41.9, sparkline7d: spark(0.0000098, 0.24) }),
+  row({ id: "some-micro", symbol: "MICRO", name: "Micro Thing", rank: 240, price: 0.0413, mcap: 6.2e7, vol24h: 90_000, chg24h: -2.1, chg7d: -8.4, chg30d: -19.2, sparkline7d: spark(0.05, -0.08) }),
+  // Both must be screened OUT: a stablecoin posts perfect turnover on a flat
+  // return, and a wrapper is a receipt for something already on the board.
+  row({ id: "tether", symbol: "USDT", name: "Tether", rank: 3, price: 1, mcap: 1.4e11, vol24h: 9e10, chg24h: 0.01, chg7d: 0.02, chg30d: -0.01 }),
+  row({ id: "wrapped-bitcoin", symbol: "WBTC", name: "Wrapped Bitcoin", rank: 14, price: 96_300, mcap: 1.3e10, vol24h: 3e8, chg24h: 0.8, chg7d: 2.0, chg30d: 5.3 }),
+];
+
+const SCAN_PAYLOAD = {
+  universe: UNIVERSE,
+  global: { btcDominancePct: 54.2, ethDominancePct: 11.8, totalMcapUsd: 3.4e12, totalVol24hUsd: 1.1e11, mcapChange24hPct: 1.4 },
+  fearGreed: { value: 62, label: "Greed", at: Math.round(NOW / 1000) },
+  trending: [{ id: "solana", symbol: "SOL", name: "Solana", rank: 1, mcapRank: 5 }],
+  domHistory: null,          // day one of the cron: the trend must read 'unknown'
+  degraded: ["trending: HTTP 429"],
+  sourceDetail: "coingecko + alternative.me",
+  cached: true, stale: false, cacheAgeSec: 12,
+  asOf: NOW,
+};
+
+const src = (data, over = {}) => ({
+  data, error: null, fetchedAt: NOW, loading: false, reload: () => {}, ...over,
+});
+
+const SETTINGS = { equity: 100_000, riskPct: 1, maxPositionPct: 30, stopMode: "atr", atrMult: 2.5, stopPct: 8 };
+
+const WATCHLIST = src({ watchlist: { ids: [{ id: "solana", symbol: "SOL", name: "Solana", addedAt: NOW - DAY, note: "" }], updatedAt: NOW - DAY } });
+
+const panel = (over = {}) =>
+  renderToStaticMarkup(createElement(AltsPanel, {
+    scan: src(SCAN_PAYLOAD), watchlistSrc: WATCHLIST, settings: SETTINGS, now: NOW, ...over,
+  }));
+
+/** Daily OHLCV with three deliberate ignitions, so the precedent read has a
+ *  sample to count instead of only its refusal path. */
+function candles(n = 520) {
+  const out = [];
+  let p = 10;
+  for (let i = 0; i < n; i++) {
+    const pumping = [120, 260, 400].some((s) => i >= s && i < s + 20);
+    p *= pumping ? 1.035 : 1 + Math.sin(i / 7) * 0.004 - 0.0004;
+    out.push({
+      t: Math.round((NOW - (n - 1 - i) * DAY) / 1000),
+      o: p * 0.996, h: p * 1.025, l: p * 0.975, c: p,
+      v: 1e6 * (1 + (pumping ? 4 : 0) + Math.abs(Math.sin(i / 11))),
+    });
+  }
+  return out;
+}
+
+const SOL = UNIVERSE[2];
+const COIN_PAYLOAD = {
+  id: "solana", symbol: "SOL",
+  candles: candles(), candleQuality: "ohlcv", candleSource: "binance klines",
+  binanceSymbol: "SOLUSDT", priceMultiplier: 1,
+  coin: {
+    id: "solana", symbol: "sol", name: "Solana", categories: ["Smart Contract Platform"],
+    community: { sentimentUpPct: 81, redditSubs: 220_000, redditActive48h: 640, redditPosts48h: 9, twitterFollowers: 2_600_000, telegram: null, watchlistUsers: 1_100_000 },
+  },
+  derivs: {
+    symbol: "SOLUSDT", priceMultiplier: 1, markPrice: 184.4,
+    lastFundingRate: 0.00021, nextFundingTime: NOW + 3 * 3_600_000,
+    openInterest: Array.from({ length: 30 }, (_, i) => ({ t: Math.round((NOW - (29 - i) * DAY) / 1000), oi: 1e6 * (1 + i / 60), oiValueUsd: 1.8e8 * (1 + i / 60) })),
+    globalLongShort: Array.from({ length: 30 }, (_, i) => ({ t: Math.round((NOW - (29 - i) * DAY) / 1000), ratio: 2.1, longPct: 68, shortPct: 32 })),
+    topLongShort: Array.from({ length: 30 }, (_, i) => ({ t: Math.round((NOW - (29 - i) * DAY) / 1000), ratio: 1.05, longPct: 51, shortPct: 49 })),
+    degraded: [], sourceDetail: "binance futures SOLUSDT",
+  },
+  degraded: [], sourceDetail: "binance klines + coingecko meta", asOf: NOW,
+};
+
+const detail = (over = {}) => {
+  const season = seasonRead({
+    universe: UNIVERSE, btcRow: UNIVERSE[0], ethRow: UNIVERSE[1],
+    global: SCAN_PAYLOAD.global, fearGreed: SCAN_PAYLOAD.fearGreed,
+    trending: SCAN_PAYLOAD.trending, domHistory: null, now: NOW,
+  });
+  const screened = screenCoin(SOL, { btcRow: UNIVERSE[0], ethRow: UNIVERSE[1], season, now: NOW });
+  return renderToStaticMarkup(createElement(CoinDetail, {
+    sel: { id: "solana", symbol: "SOL", name: "Solana" },
+    payload: COIN_PAYLOAD, loading: false, error: null,
+    onRetry: () => {}, onBack: () => {},
+    screened, season, settings: SETTINGS,
+    freshScan: { state: "live", ageSec: 12, label: "12s ago" },
+    freshCoin: { state: "live", ageSec: 3, label: "3s ago" },
+    fearGreed: SCAN_PAYLOAD.fearGreed, trendingRank: 1, trendingChecked: true,
+    starred: true, onToggleWatch: () => {}, saving: false,
+    ...over,
+  }));
+};
+
+describe("The Alts tab renders against a real payload shape", () => {
+  it("renders the season answer, the board and the pick-a-coin state", () => {
+    const out = panel();
+    expect(out).toContain('data-testid="season-card"');
+    expect(out).toContain('data-testid="alt-board"');
+    expect(out).toContain("Pick a coin");
+    expect(out).toContain("Solana");
+    // the watched coin's star is lit, from the watchlist source and not local state
+    expect(out).toContain('aria-label="Remove SOL from the watchlist"');
+  });
+
+  it("keeps stablecoins and wrappers off the board entirely", () => {
+    const out = panel();
+    expect(out).toContain(">SOL<");
+    expect(out, "USDT is a dollar, not a momentum row").not.toContain(">USDT<");
+    expect(out, "WBTC is a receipt for a coin already on the board").not.toContain(">WBTC<");
+  });
+
+  it("says the dominance trend is unknown rather than inventing one", () => {
+    // domHistory is null on day one of the cron, and season.js refuses to infer
+    // the trend from anything else. The card has to say so out loud.
+    expect(panel()).toContain("trend unknown");
+  });
+
+  it("shows no prices at all once the scan is dead", () => {
+    // The freshness ladder, not the error, decides. A 3× max-age-old payload is
+    // dead, and a dead scan may not render a remembered price under a red chip.
+    const out = panel({ scan: src({ ...SCAN_PAYLOAD, asOf: NOW - 4000_000 }, { fetchedAt: NOW - 4000_000 }) });
+    expect(out).toContain("No live market scan");
+    expect(out).not.toContain("$96,400");
+    expect(out).toContain(">Retry<");
+  });
+
+  it("gives a failed scan an error row with a retry, without losing the board", () => {
+    const out = panel({ scan: src(SCAN_PAYLOAD, { error: "coingecko: HTTP 429" }) });
+    expect(out).toContain("coingecko: HTTP 429");
+    expect(out).toContain("showing the last good pass");
+    expect(out).toContain('data-testid="alt-board"');
+  });
+
+  it("renders every section of the coin detail, base rates included", () => {
+    const out = detail();
+    for (const id of ["coin-directive", "coin-precedent", "coin-checklist", "coin-crowd", "coin-sizing"]) {
+      expect(out, `missing ${id}`).toContain(`data-testid="${id}"`);
+    }
+    // the precedent block is either a counted sample or an honest refusal —
+    // never a silent gap
+    expect(/Match to the archetype|No base rate for SOL/.test(out)).toBe(true);
+    // the divergence is the whole reason derivatives are in this app
+    expect(out).toContain("Divergence");
+    // a median is never shown without its worst case beside it
+    if (out.includes("Match to the archetype")) expect(out).toContain("worst ");
+  });
+
+  it("states the refusal when there is not enough history for a base rate", () => {
+    const out = detail({ payload: { ...COIN_PAYLOAD, candles: candles(60) } });
+    expect(out).toContain("No base rate for SOL");
+    expect(out).toContain('class="empty-sub"');
+  });
+
+  it("says a coin has no perp instead of scoring it neutral", () => {
+    const out = detail({ payload: { ...COIN_PAYLOAD, derivs: null } });
+    expect(out).toContain("No listed perpetual");
+  });
+
+  it("will not report a coin as unwatched when the trending feed never answered", () => {
+    // ABSENT ≠ NULL, and the two reads on this pane have to agree about it.
+    // `trendingChecked: false` is what the panel passes when /api/alt-scan came
+    // back with `trending: null` (a 429). Both crowdRead and signalChecklist are
+    // handed the key only when the list actually arrived — passing a bare null
+    // made the late-stage attention row claim "not on the trending list", which
+    // is a measurement, and the most bullish reading this row has.
+    const down = detail({ trendingChecked: false, trendingRank: null });
+    expect(down).toMatch(/did not answer/);
+    expect(down, "a failed feed must not read as a measured absence")
+      .not.toMatch(/not on the trending list/);
+
+    // ...and when the list DID arrive without this coin on it, that is a real
+    // measurement and it still reads as the good version of the row.
+    const up = detail({ trendingChecked: true, trendingRank: null });
+    expect(up).toMatch(/not on the trending list/);
+  });
+
+  it("emits no NaN and no literal 'undefined' from any alts surface", () => {
+    for (const out of [panel(), detail(), detail({ loading: true }), detail({ error: "HTTP 502" })]) {
+      expect(out).not.toMatch(/NaN/);
+      expect(out).not.toMatch(/(style|class)="[^"]*undefined/);
+      expect(out).not.toMatch(/>undefined</);
+    }
+  });
+
+  it("loads with skeletons and fails with a retry, never a spinner", () => {
+    const cold = panel({ scan: { data: null, error: null, fetchedAt: null, loading: true, reload: () => {} } });
+    expect(cold).toContain('class="sk sk-line w40"');
+    const broken = detail({ payload: null, error: "binance: HTTP 451" });
+    expect(broken).toContain("binance: HTTP 451");
+    expect(broken).toContain(">Retry<");
+  });
+
+  it("renders the alts surfaces without a React warning", () => {
+    const before = warnings.length;
+    panel(); detail(); detail({ payload: { ...COIN_PAYLOAD, derivs: null, candles: null } });
+    const react = warnings.slice(before).filter((w) => !w.startsWith("[@cc/"));
+    expect(react, `React warned:\n${react.join("\n")}`).toEqual([]);
+  });
+});
+
+describe("The sparkline survives the three inputs that used to blank it", () => {
+  it("returns null rather than a broken polyline", () => {
+    expect(sparkPoints(null)).toBeNull();
+    expect(sparkPoints([])).toBeNull();
+    expect(sparkPoints([42])).toBeNull();
+    expect(sparkPoints([1, NaN])).toBeNull();      // one finite point after filtering
+    expect(sparkDirection(null)).toBeNull();
+  });
+
+  it("draws a dead-flat series on the midline instead of dividing by zero", () => {
+    // (v - min) / (max - min) is 0/0 here. A single NaN in `points` makes an SVG
+    // polyline render NOTHING, silently — the column just goes blank on the rows
+    // whose flatness is the interesting fact about them.
+    const p = sparkPoints(new Array(24).fill(7), { width: 72, height: 20 });
+    expect(p).not.toMatch(/NaN/);
+    expect(p.split(" ")).toHaveLength(24);
+    // the midline of the drawable band: 18.5 - 0.5 × (18.5 - 1.5)
+    for (const pair of p.split(" ")) expect(pair.split(",")[1]).toBe("10");
+    expect(sparkDirection(new Array(24).fill(7))).toBe("flat");
+  });
+
+  it("downsamples long series but keeps the first and last point", () => {
+    const s = Array.from({ length: 168 }, (_, i) => i);
+    const pts = sparkPoints(s, { width: 72, height: 20 }).split(" ");
+    expect(pts.length).toBeLessThanOrEqual(48);
+    expect(pts[0].split(",")[0]).toBe("0");          // first x at the left edge
+    expect(pts[pts.length - 1].split(",")[0]).toBe("72");
+    expect(pts[pts.length - 1].split(",")[1]).toBe("1.5");  // last point is the high
+    expect(sparkDirection(s)).toBe("up");
   });
 });
 
@@ -194,10 +473,13 @@ describe("Macro obeys the language", () => {
     // The manifest above is globbed. This is the assertion that keeps it
     // honest: a new component under src/ must show up in `files`, and the
     // surfaces that exist today must all still be in it.
-    expect(files.length).toBeGreaterThanOrEqual(9);
+    expect(files.length).toBeGreaterThanOrEqual(14);
     for (const f of ["App.jsx", "Root.jsx", "main.jsx", "components/Cockpit.jsx",
       "components/TradeCard.jsx", "components/Journal.jsx", "components/Settings.jsx",
-      "components/RunPlan.jsx", "components/ChartPanel.jsx", "components/primitives.jsx"]) {
+      "components/RunPlan.jsx", "components/ChartPanel.jsx", "components/primitives.jsx",
+      "components/alts/AltsPanel.jsx", "components/alts/SeasonCard.jsx",
+      "components/alts/AltBoard.jsx", "components/alts/CoinDetail.jsx",
+      "components/alts/sparkline.jsx"]) {
       expect(files, `${f} must be scanned`).toContain(f);
     }
   });
