@@ -183,16 +183,46 @@ function AppToggle({ active, onPick, compact, apps }) {
         // many tools are visible — hide three in System and it reflows to one
         // row on its own. The bar's height is measured and published as
         // --shell-bar (see the header), so nothing downstream assumes 52px.
-        display: "grid",
-        // 70px is the widest cell that still fits FIVE columns on a 393px
-        // phone — "Business" is the long one, ~46px of label plus the dot and
-        // its gap. Five rather than four matters: at four, the default set of
-        // five tools stranded one tool alone on a second row with three empty
-        // cells beside it. At five they sit on one line and the full eight go
-        // 5 + 3.
-        gridTemplateColumns: `repeat(auto-fit, minmax(${compact ? 70 : 92}px, 1fr))`,
+        // ── AND THE TWO BRANCHES ARE NOT THE SAME LAYOUT ────────────────────
+        //
+        // They used to be: one `width: 100%` auto-fit grid for both. On a phone
+        // that is correct, because the row below the identity line is a
+        // full-width flex item and the percentage has a real width to resolve
+        // against. On a DESKTOP it collapsed the bar into a vertical stack.
+        //
+        // The parent is `flex: 0 1 auto` — shrink-to-fit, so its width comes
+        // FROM its contents. A percentage width on a child of a shrink-to-fit
+        // parent is a cycle: the child asks the parent, whose width depends on
+        // the child. CSS breaks it by having the child contribute its
+        // MIN-CONTENT, which for `repeat(auto-fit, minmax(92px, 1fr))` is one
+        // 92px column. So the grid resolved to a single column and every tool
+        // stacked. Measured in Chromium before the fix, identical at 1024,
+        // 1280, 1440 and 1920: columns 1, toolrow 100x176, bar 177px tall
+        // instead of 52 — a narrow ladder of tools overlapping the page under
+        // it, at every desktop width.
+        //
+        // Nothing caught it because the assertion was on the SOURCE TEXT: the
+        // string "auto-fit" was present, exactly as the test demanded, and the
+        // rendered result was a column. scripts/toolrow-check.mjs measures the
+        // built page instead, which is the only kind of test that can see this.
+        //
+        // Desktop is a wrapping FLEX row: no percentage, so no cycle, and each
+        // tool is as wide as its own name rather than stretched to an equal
+        // share. It still wraps rather than scrolling or truncating — measured
+        // at 768px with all eight tools, flex wraps to two lines with every
+        // label intact, where a single-row grid clipped all eight to ellipsis.
+        // A truncated tool is the same invisible tool the scroller was.
+        ...(compact
+          // 70px is the widest cell that still fits FIVE columns on a 393px
+          // phone — "Business" is the long one, ~46px of label plus the dot and
+          // its gap. Five rather than four matters: at four, the default set of
+          // five tools stranded one tool alone on a second row with three empty
+          // cells beside it. At five they sit on one line and the full eight go
+          // 5 + 3.
+          ? { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(70px, 1fr))", width: "100%" }
+          : { display: "flex", flexWrap: "wrap", width: "auto", maxWidth: "100%" }),
         gap: 2, padding: compact ? 2 : 3, borderRadius: compact ? 12 : 11,
-        width: "100%", minWidth: 0,
+        minWidth: 0,
         background: "color-mix(in srgb, var(--ink) 6%, transparent)",
         border: "1px solid rgba(255,255,255,0.055)",
       }}
@@ -210,7 +240,13 @@ function AppToggle({ active, onPick, compact, apps }) {
             style={{
               position: "relative", zIndex: 1,
               display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-              minWidth: 0, padding: "0 6px",
+              // Desktop cells size to their own label (the row is flex there),
+              // so they need real side padding — 6px was tuned for a grid cell
+              // already stretched to 92px, and on a content-sized button it
+              // reads as text jammed against the edge. `flex: 0 1 auto` lets a
+              // narrow window shrink them before the row wraps.
+              ...(compact ? { padding: "0 6px" } : { flex: "0 1 auto", padding: "0 12px" }),
+              minWidth: 0,
               minHeight: compact ? 36 : 32,
               border: "none", borderRadius: compact ? 9 : 8, cursor: "pointer",
               // The active cell is drawn, not slid. A sliding thumb has to be

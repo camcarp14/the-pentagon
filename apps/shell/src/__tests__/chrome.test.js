@@ -80,6 +80,29 @@ describe("the chrome obeys the language", () => {
     expect(toggle, "wraps rather than scrolling or dividing").toContain("auto-fit");
     // auto-fit, not a fixed column count — hiding or adding a tool must reflow.
     expect(toggle).not.toMatch(/gridTemplateColumns:\s*`?repeat\(\s*\d/);
+
+    // ── AND THE PART THIS TEST COULD NOT SEE ────────────────────────────────
+    //
+    // Everything above passed on code that shipped a vertical ladder of tools
+    // to production at every desktop width. `repeat(auto-fit, minmax(92px,
+    // 1fr))` was in the file exactly as asserted; it rendered ONE column,
+    // because the grid also carried `width: 100%` and its parent is
+    // `flex: 0 1 auto`. A percentage against a shrink-to-fit parent is a cycle,
+    // and CSS breaks it by taking the child's min-content — a single column.
+    // Measured 100x176 with the bar at 177px instead of 51, identical at 1024
+    // through 1920.
+    //
+    // A string match cannot do layout, so the real guard is
+    // scripts/toolrow-check.mjs, which measures the built page in a browser and
+    // fails 14 checks against the pre-fix source. What is left here is the one
+    // thing this file CAN state: the desktop branch must not size itself with a
+    // percentage, and must wrap rather than truncate.
+    expect(toggle, "desktop sizes to content — a percentage cycles against a shrink-to-fit parent").toContain('width: "auto"');
+    expect(toggle, "desktop wraps; it does not scroll or ellipsise").toContain("flexWrap");
+    expect(
+      [...toggle.matchAll(/width:\s*"100%"/g)].length,
+      'only the compact branch may use width: "100%" — its row IS full-width, so the percentage resolves',
+    ).toBe(1);
   });
 
   it("shows each tool's whole name, never an abbreviation or a bare dot", () => {
