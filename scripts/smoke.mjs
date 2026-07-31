@@ -25,11 +25,43 @@
 // object where PostgREST returns an array shows up as "x.slice is not a
 // function" deep in app code). Better a narrow honest stub than a broad lying one.
 //
-// Run:  npm run smoke        (builds, serves, checks every tool, tears down)
+// Run:  npm run smoke
+//
+// It serves apps/shell/dist itself if nothing is already listening on BASE, and
+// tears that server down on the way out. Build first (`npm run build`) — this
+// checks the built bundle, which is the artefact that actually ships. Point it
+// at something else with BASE=…, or narrow it with TOOL=zts.
 
-import { chromium } from "playwright";
+import { chromium } from "playwright-core";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { join, dirname } from "node:path";
 
 const BASE = process.env.BASE || "http://127.0.0.1:4178";
+
+const reachable = async () => {
+  try { await fetch(BASE, { signal: AbortSignal.timeout(1500) }); return true; } catch { return false; }
+};
+
+let server = null;
+if (!(await reachable())) {
+  const shell = join(dirname(fileURLToPath(import.meta.url)), "..", "apps", "shell");
+  const port = new URL(BASE).port || "4178";
+  // detached, and killed as a GROUP: `npx` spawns vite as a child, so killing
+  // the npx pid leaves the actual server orphaned and holding the port — which
+  // it did, and the next run then silently reused the stale build.
+  server = spawn("npx", ["vite", "preview", "--port", port, "--strictPort"], { cwd: shell, stdio: "ignore", detached: true });
+  for (let i = 0; i < 40 && !(await reachable()); i++) await new Promise((r) => setTimeout(r, 500));
+  if (!(await reachable())) {
+    console.error(`could not serve apps/shell/dist on ${BASE} — run "npm run build" first`);
+    try { process.kill(-server.pid); } catch {}
+    process.exit(1);
+  }
+}
+const done = (code) => {
+  if (server) { try { process.kill(-server.pid); } catch { try { server.kill(); } catch {} } }
+  process.exit(code);
+};
 const ONLY = process.env.TOOL ? [process.env.TOOL] : null;
 
 const TOOLS = ONLY || ["zts", "clarify", "runway", "sync", "ideas", "macro", "looper", "business", "system"];
@@ -106,6 +138,50 @@ for (const { tool, signedIn } of SURFACES) {
 
   if (webfonts.length) errs.push(`requested a webfont (DESIGN.md §3 says system stack only): ${webfonts[0]}`);
 
+  // THE VACUITY GUARD. The injected session only signs you in if the BUILD has
+  // Supabase configured; without VITE_SUPABASE_URL / _ANON_KEY the shell shows
+  // LoginScreen for every route. Every check below would then pass while testing
+  // nothing at all — nine tools "clean" because none of them rendered. Fail loud
+  // instead: a green run has to mean the tools actually mounted.
+  const onLogin = await page.$('input[type="password"]').then(Boolean).catch(() => false);
+  if (signedIn && onLogin) {
+    errs.push("still on the sign-in screen — the build has no Supabase config, so NO tool was actually loaded. Build with VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY set.");
+  }
+  if (!signedIn && !onLogin) {
+    errs.push("expected the sign-in screen with no session, got something else");
+  }
+
+  // A tool is not one screen. System's Minds tab threw "Minds is not defined"
+  // from the day it shipped, and a check that only loaded the DEFAULT tab saw a
+  // perfectly healthy Overview. So: click through every tab this surface offers
+  // and hold each one to the same standard.
+  // Click through the DOM rather than with a synthetic pointer: several of these
+  // tab strips live in horizontal scrollers, where Playwright's actionability
+  // check times out on a tab that is merely scrolled out of view. That produced
+  // failures that said nothing about whether the tab's component works, which is
+  // the only question being asked here. el.click() still fires React's onClick.
+  const tabCount = await page.$$eval('[role="tab"]', (els) => els.length).catch(() => 0);
+  for (let i = 0; i < tabCount; i++) {
+    let name = `#${i}`;
+    try {
+      name = await page.$$eval('[role="tab"]', (els, k) => els[k]?.textContent.trim() || `#${k}`, i);
+      await page.$$eval('[role="tab"]', (els, k) => els[k]?.click(), i);
+      await page.waitForTimeout(800);
+      const t = await page.evaluate(() => document.body.innerText);
+      if (/This tool hit an error/i.test(t)) {
+        const why = (t.match(/^\s*[\w$.]+ is not defined\s*$/m) || [""])[0].trim();
+        errs.push(`tab "${name}" threw: ${why || t.replace(/\s+/g, " ").slice(0, 140)}`);
+      }
+    } catch (e) {
+      // A tab that vanishes mid-walk (the strip re-rendered) is not a defect.
+      if (!/failed to find element|not attached|Cannot read/i.test(e.message)) {
+        errs.push(`tab "${name}" broke the walk: ${e.message.split("\n")[0]}`);
+      }
+    }
+  }
+  // Back to the first tab so the visible-text checks below read the default view.
+  if (tabCount) { try { await page.$$eval('[role="tab"]', (els) => els[0]?.click()); await page.waitForTimeout(500); } catch {} }
+
   const text = await page.evaluate(() => document.body.innerText).catch(() => "");
 
   // The shell catches a thrown tool and renders this instead of crashing the
@@ -133,6 +209,7 @@ await browser.close();
 
 if (failures.length) {
   console.error(`\n${failures.length} of ${SURFACES.length} surfaces failed: ${failures.map((f) => f.tool).join(", ")}`);
-  process.exit(1);
+  done(1);
 }
 console.log(`\nAll ${SURFACES.length} surfaces loaded clean.`);
+done(0);

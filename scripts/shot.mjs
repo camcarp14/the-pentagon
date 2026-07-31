@@ -1,7 +1,7 @@
 // Screenshot a surface at phone size, so a layout complaint can be checked
 // against a picture rather than against a guess.
 //   TOOL=system node scripts/shot.mjs out.png
-import { chromium } from "playwright";
+import { chromium } from "playwright-core";
 
 const BASE = process.env.BASE || "http://127.0.0.1:4178";
 const TOOL = process.env.TOOL || "system";
@@ -27,6 +27,10 @@ await page.route("**/*", (route) => {
 });
 await page.goto(`${BASE}/#/${TOOL}`, { waitUntil: "networkidle", timeout: 45000 });
 await page.waitForTimeout(2500);
+if (process.env.CLICK) {
+  await page.getByRole("tab", { name: process.env.CLICK }).click();
+  await page.waitForTimeout(1200);
+}
 await page.screenshot({ path: OUT, fullPage: false });
 console.log("wrote", OUT);
 await browser.close();

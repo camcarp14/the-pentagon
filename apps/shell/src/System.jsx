@@ -15,6 +15,13 @@ import { visibleTabs, isHidden, canHide, toggleTab, moveTab, resetTabPrefs, DEFA
 import { AnimatedNumber, EmptyState, useIsMobile } from "@cc/ui";
 import { auth, supabase } from "@cc/supabase";
 import Ops from "./Ops.jsx";
+// Minds was rendered at the bottom of this file WITHOUT being imported, so the
+// Minds tab threw "Minds is not defined" and the shell's error boundary ate the
+// whole System panel — from the day the consolidated mind screen landed. A free
+// variable is legal JavaScript, so the build was green, and no test mounted the
+// tab, so the suite was green. Third instance of this exact class (nodeR, data,
+// Minds); the browser smoke test now walks every tab for that reason.
+import Minds from "./Minds.jsx";
 
 // Which localStorage prefix each tool writes under (they run on one domain now).
 const LS = { zts: "zts_", clarify: "sm_", looper: "lp_" };
@@ -87,18 +94,25 @@ function useIdeasSpend(cutoff) {
 }
 
 // ─── shared bits ──────────────────────────────────────────────────────────────
+// 18px of padding on every card, nested two deep, was most of the dead space on
+// this screen. 14 matches the kit's --pad-card and still breathes.
 const Card = ({ children, style }) => (
-  <div style={{ background: P.surface, border: `1px solid ${P.line}`, borderRadius: 16, padding: 18, ...style }}>{children}</div>
+  <div style={{ background: P.surface, border: `1px solid ${P.line}`, borderRadius: 14, padding: 14, ...style }}>{children}</div>
 );
 const Dot = ({ app, size = 8 }) => (
   <span style={{ width: size, height: size, borderRadius: "50%", background: appMeta(app).accent, boxShadow: `0 0 8px ${appMeta(app).accent}66`, display: "inline-block", flexShrink: 0 }} />
 );
+// The kit's .stattile, not a hand-rolled card. The old version was a full Card
+// (18px padding, 26px/800 value, uppercase 0.1em-tracked label) laid out with
+// `flex: 1; min-width: 150` and flex-wrap — which on a phone fitted two per row
+// and dropped the third onto a line of its own, so "AI calls" rendered as a
+// near-empty full-width slab. That is what "the spacing is huge" was.
 const Stat = ({ label, children, sub }) => (
-  <Card style={{ flex: 1, minWidth: 150 }}>
-    <div style={{ fontSize: 10.5, fontWeight: 700, color: P.faint, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8, fontFamily: P.display }}>{label}</div>
-    <div style={{ fontSize: 26, fontWeight: 800, color: P.ink, fontFamily: P.display, lineHeight: 1 }}>{children}</div>
-    {sub && <div style={{ fontSize: 11.5, color: P.muted, marginTop: 6 }}>{sub}</div>}
-  </Card>
+  <div className="stattile on-canvas">
+    <span className="stattile-value">{children}</span>
+    <span className="stattile-label">{label}</span>
+    {sub && <span className="stattile-label" style={{ color: P.faint, whiteSpace: "normal" }}>{sub}</span>}
+  </div>
 );
 
 // ─── OVERVIEW (cross-tool digest) ────────────────────────────────────────────
@@ -128,9 +142,12 @@ function Overview({ isMobile }) {
   return (
     <div>
       <Header title="Overview" sub="Token spend and usage across every Pentagon tool, at a glance" />
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+      {/* Three equal columns, not flex-wrap: three tiles fit a 393px phone at
+          the kit's size, and an even grid never leaves one stranded on its own
+          row. */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 14 }}>
         <Stat label="Total spend"><AnimatedNumber value={totals.cost} format={fmt$} /></Stat>
-        <Stat label="Tokens" sub={`${fmtN(totals.tok)} across logged tools`}><AnimatedNumber value={totals.tok} format={fmtN} /></Stat>
+        <Stat label="Tokens"><AnimatedNumber value={totals.tok} format={fmtN} /></Stat>
         <Stat label="AI calls"><AnimatedNumber value={totals.calls} format={fmtN} /></Stat>
       </div>
       <Card>
@@ -398,8 +415,11 @@ function Agents({ isMobile }) {
 }
 
 // ─── chrome ────────────────────────────────────────────────────────────────────
+// The kit's .t-label is the ONE place uppercase survives (DESIGN.md §4.3), so
+// this keeps the caps but drops to the kit's 0.05em tracking from 0.1em, which
+// at 10.5px was wide enough to read as a separate typeface.
 const SectionLabel = ({ children }) => (
-  <div style={{ fontSize: 10.5, fontWeight: 700, color: P.faint, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12, fontFamily: P.display }}>{children}</div>
+  <div className="t-label" style={{ marginBottom: 10 }}>{children}</div>
 );
 const Header = ({ title, sub, right }) => (
   <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 18, gap: 16, flexWrap: "wrap" }}>
@@ -533,18 +553,45 @@ export default function System({ onExit, onOpenTool, tabPrefs, onTabPrefs }) {
   const isMobile = useIsMobile();
   const btn = { background: "none", border: `1px solid ${P.line}`, color: P.muted, borderRadius: 8, padding: "6px 12px", fontSize: 11.5, cursor: "pointer", fontFamily: P.display, fontWeight: 600, whiteSpace: "nowrap" };
   return (
-    <div style={{ minHeight: "calc(100vh - 52px)", background: P.bg, color: P.ink, fontFamily: "'Inter', system-ui, sans-serif" }}>
-      <div style={{ maxWidth: 1080, margin: "0 auto", padding: isMobile ? "18px 14px 80px" : "26px 24px 60px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-          <div style={{ display: "inline-flex", gap: 2, padding: 3, borderRadius: 11, background: P.surface2, border: `1px solid ${P.line}`, maxWidth: "100%", overflowX: "auto" }}>
-            {TABS.map(([k, label]) => (
-              <button key={k} onClick={() => setTab(k)} style={{ padding: isMobile ? "6px 12px" : "7px 16px", border: "none", borderRadius: 8, cursor: "pointer", background: tab === k ? P.surface : "transparent", color: tab === k ? P.ink : P.faint, fontSize: isMobile ? 11 : 12, fontWeight: 700, fontFamily: P.display, letterSpacing: "0.04em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{label}</button>
-            ))}
-          </div>
-          <div style={{ display: "inline-flex", gap: 8, marginLeft: "auto" }}>
-            <button onClick={() => auth.signOut()} style={btn}>Sign out</button>
-            <button onClick={onExit} style={btn}>{isMobile ? "← Back" : "Back to tools →"}</button>
-          </div>
+    // data-kit opts this screen into the shared component sheet — without it the
+    // .stattile/.card/.t-label classes below match nothing. Font stack comes from
+    // the token now; it used to name 'Inter', a webfont that no longer loads.
+    <div data-kit style={{ minHeight: "calc(100vh - 52px)", background: P.bg, color: P.ink, fontFamily: "var(--font-body)" }}>
+      <div style={{ maxWidth: 1080, margin: "0 auto", padding: isMobile ? "14px 12px 80px" : "22px 24px 60px" }}>
+        {/* The row used to be tabs + buttons on ONE line with flex-wrap and
+            `marginLeft: auto`, which on a phone pushed Sign out / Back onto a
+            second line, right-aligned, with a 20px gap under them — and the six
+            tabs, uppercase and 0.04em-tracked, overflowed a container that could
+            scroll but gave no hint of it, so "Tabs" was simply cut in half at
+            the screen edge. Now: tabs get their own full-width scroll-snap row
+            (the same pattern as the shell's tool row), and the two buttons sit
+            in a quiet line above them. Sentence case, per §4.3 — uppercase is
+            reserved for .t-label. */}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 10 }}>
+          <button className="btn sm quiet" onClick={() => auth.signOut()}>Sign out</button>
+          <button className="btn sm quiet" onClick={onExit}>{isMobile ? "← Back" : "Back to tools →"}</button>
+        </div>
+        <div
+          role="tablist"
+          style={{
+            display: "flex", gap: 2, padding: 3, borderRadius: 11, marginBottom: 16,
+            background: P.surface2, border: `1px solid ${P.line}`,
+            overflowX: "auto", scrollSnapType: "x proximity", scrollbarWidth: "none", WebkitOverflowScrolling: "touch",
+          }}
+        >
+          {TABS.map(([k, label]) => (
+            <button
+              key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+              style={{
+                flex: isMobile ? "none" : 1, scrollSnapAlign: isMobile ? "center" : undefined,
+                minHeight: isMobile ? 40 : 34, padding: isMobile ? "0 15px" : "0 16px",
+                border: "none", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap",
+                background: tab === k ? P.surface : "transparent",
+                color: tab === k ? P.ink : P.faint,
+                fontSize: 13, fontWeight: tab === k ? 600 : 500, fontFamily: P.display,
+              }}
+            >{label}</button>
+          ))}
         </div>
         {tab === "overview" && <Overview isMobile={isMobile} />}
         {tab === "ops" && <Ops isMobile={isMobile} />}
