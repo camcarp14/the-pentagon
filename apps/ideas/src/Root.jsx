@@ -9,9 +9,41 @@
 // tables that are already here. No second database, no sync, no API of its own.
 //
 // Three surfaces, in the order they get used:
-//   Ideas   — repos, ranked and categorised
+//   Ideas   — A REVIEW QUEUE: the ranker's top ten, and a button for ten more
 //   Saved   — the ones kept (local to this browser, like the other tools' prefs)
 //   Skills  — the SKILL.md files the pipeline wrote, and the reviewer's verdict
+//
+// ── WHY IDEAS IS A QUEUE AND NOT A FEED ────────────────────────────────────
+//
+// Ranking a firehose does not stop it being a firehose. The list was still five
+// hundred rows long with the good ones nearer the top, so the only honest thing
+// to do with it was scroll, and the operator's own read was the right one: pick
+// ten, let me review them, give me ten more when I ask. Four decisions make
+// that work rather than merely look tidy, and each of them is a place this
+// could quietly lose the operator's work:
+//
+//   1. THE BUTTON MARKS, IT DOES NOT DELETE. Pressing it stamps the ten on
+//      screen with a round number (src/lib/queue.js) and moves on. They are in
+//      Reviewed, one tap away; the whole round comes back with Undo, and any
+//      single repo comes back with the ↩ on its row — where it rejoins the pool
+//      AT ITS RANK, not at the end. The card under the button says so, because
+//      a button that might be discarding ten repos is a button you hesitate on.
+//   2. THE QUEUE IS A LIVE VIEW, NOT A FROZEN SLATE. It is recomputed from the
+//      ranked pool on every render, so a scan landing mid-round puts its new
+//      repos straight into contention. What the button marks is the ids that
+//      were ON SCREEN when it was pressed — passed to markReviewed, never
+//      recomputed there — so the ten you looked at are the ten that get stamped
+//      even if the ranker changed its mind a second earlier.
+//   3. FILTERS RE-RANK INSIDE THE QUEUE, AND THE HEADER SAYS SO. Narrowing to
+//      Agents gives you the top ten agents repos, not the subset of the top ten
+//      overall that happen to be agents — the second reading makes the filter
+//      look broken when it returns four rows. The header names every active
+//      filter, prints the size of the pool they describe, and offers to clear
+//      them. Sort is the ordering, so the header names that too.
+//   4. THE END OF THE QUEUE IS A REAL STATE. "Nothing left" says how many you
+//      got through and when the next scan is due — measured off the gaps
+//      between recorded runs (src/lib/cadence.js), never off the "four times a
+//      day" written in the comment above, which is documentation and not data.
 //
 // ── WHAT THIS PAGE USED TO BE, AND WHY IT CHANGED ──────────────────────────
 //
@@ -46,7 +78,12 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@cc/supabase";
 import { AnimatedNumber, EmptyState, ErrorState, SkeletonRows, useIsMobile } from "@cc/ui";
-import { categorize, recommend, CATEGORY_LABEL, fmtRate } from "./lib/rank.js";
+import { categorize, recommend, CATEGORY_LABEL, fmtRate, RECOMMEND_FLOOR } from "./lib/rank.js";
+import {
+  BATCH, loadQueue, saveQueue, markReviewed, undoLastRound, requeue, clearReviewed,
+  splitQueue, sortReviewed, arrivedSince, lastRoundIds, reviewedCount, roundOf,
+} from "./lib/queue.js";
+import { scanCadence } from "./lib/cadence.js";
 
 // The client's default schema is `public`, which is where the scanner writes —
 // so unlike ZTS and Runway this tool needs no schema hop.
@@ -270,7 +307,12 @@ function SubNav({ tab, onTab, savedCount, onRefresh, refreshing, isMobile }) {
               ref={(el) => { refs.current[t] = el; }}
               onClick={() => onTab(t)}
               className={tab === t ? "seg-opt active" : "seg-opt"}
-              style={{ padding: "0 12px", minHeight: 36, whiteSpace: "nowrap", flex: "1 1 auto" }}
+              // 44 on a phone, and it fits: the bar is 52 and .seg adds 2px of
+              // padding either side, so a 44px pill is a 48px control inside it.
+              // The kit's .seg-opt floor is 32 and this was overriding it to 36
+              // — a hair over the kit and a full 8px under the touch floor, on
+              // the three targets this tool is navigated by.
+              style={{ padding: "0 12px", minHeight: isMobile ? 44 : 36, whiteSpace: "nowrap", flex: "1 1 auto" }}
             >
               {tabLabel(t)}
               {/* The saved count moves ONTO the pill it describes — the stat tile
@@ -284,9 +326,12 @@ function SubNav({ tab, onTab, savedCount, onRefresh, refreshing, isMobile }) {
             </button>
           ))}
         </div>
+        {/* .btn sm is 34px, which is under the touch floor — fine for a pointer,
+            not for a thumb. The bar is 52px tall, so md (44px) fits inside it
+            with 4px to spare on the surface where the floor applies. */}
         <button
           type="button"
-          className="btn sm quiet"
+          className={isMobile ? "btn md quiet" : "btn sm quiet"}
           onClick={onRefresh}
           disabled={refreshing}
           title="Re-read the scanner's tables"
@@ -348,77 +393,194 @@ function Filters({ query, onQuery, sort, onSort, category, onCategory, range, on
   );
 }
 
-/* ── what to look at first, and why ───────────────────────────────────────────
+/* ── progress, drawn ──────────────────────────────────────────────────────────
  *
- * The whole point of the change. Every number below is computed in rank.js from
- * columns on the row, and the parts line prints the addition so a reader can
- * verify the score by eye — the same posture as Macro's screener.
+ * aria-hidden, and that is not laziness: the line directly underneath states
+ * the same two numbers exactly, so a screen reader that also announced this
+ * would hear the fraction twice. The bar is the glanceable copy of a sentence
+ * that is already there — never the only place a number appears. */
+const Meter = ({ done, total }) => (
+  <div
+    aria-hidden="true"
+    style={{ height: 4, borderRadius: 999, background: "var(--ink-a05)", overflow: "hidden", margin: "10px 0 8px" }}
+  >
+    <div style={{ width: `${total > 0 ? Math.round((done / total) * 100) : 0}%`, height: "100%", borderRadius: 999, background: "var(--accent)" }} />
+  </div>
+);
+
+/* Undo works on the ROUND, which is a fact about your history and not about the
+ * filter you happen to have on. So under a filter the button would promise "put
+ * 10 back" and visibly return one, with the other nine landing outside the
+ * filter — a number on screen that does not match what pressing it does, which
+ * is the exact shape this repo has been burned by. Both counts are printed
+ * instead, and only when they differ. */
+const UndoLabel = ({ round, count, here }) => (
+  <>
+    Undo round {round} — put {count.toLocaleString()} back
+    {here != null && here !== count && <>, {here.toLocaleString()} of them here</>}
+  </>
+);
+
+/* ── the queue's header ───────────────────────────────────────────────────────
  *
- * The empty case is a first-class state, not a hidden component: `reason` says
- * which of the two gates stopped it (nothing measurable at all, or measurable
- * and not moving enough) with the counts in it. A tool that quietly shows
- * nothing has told you nothing. */
-function Recommended({ picks, reason, noInterests, onOpenCategory }) {
+ * Everything the operator needs to trust the button, in the order they need it:
+ * how far through they are, what the ten were chosen from, what a filter is
+ * doing to that, and the two ways back.
+ *
+ * Every number is passed in already computed from fetched rows. There is no
+ * arithmetic in here that could disagree with the list underneath, and no
+ * sentence that is true only when a filter happens to be off. */
+function QueueHeader({
+  round, done, pool, onScreen, waiting, filters, sortName, arrived,
+  rankNote, noInterests, lastRound, lastRoundHere, onUndo, onClearFilters, onShowReviewed,
+}) {
+  const total = done + pool;
+  const scope = filters.length ? "that match these filters" : "in the feed";
   return (
     <Card style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
-        <span className="t-label">Worth a look</span>
-        <span className="t-cap" style={{ fontFamily: "var(--font-mono)" }}>score / 100</span>
+        <span className="t-label">Review queue</span>
+        <span className="t-cap" style={{ fontFamily: "var(--font-mono)", flex: "none" }}>
+          {round > 0 && <>round {round} · </>}score / 100
+        </span>
       </div>
-      <p className="t-cap" style={{ margin: "6px 0 0", lineHeight: 1.5 }}>{reason}</p>
+
+      <Meter done={done} total={total} />
+
+      {/* The progress claim. Denominator is whatever set the filters describe,
+          and the sentence says which — "30 of 217" over a filtered pool while
+          the words implied the whole feed would be a number that measured a
+          different thing from the one it names. */}
+      <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.5, color: "var(--faint)", fontFamily: "var(--font-mono)" }}>
+        {done.toLocaleString()} of {total.toLocaleString()} reviewed {scope} · {onScreen} on screen · {waiting.toLocaleString()} waiting
+      </p>
+
+      <p className="t-cap" style={{ margin: "6px 0 0", lineHeight: 1.5 }}>
+        {onScreen > 0 && <>The top {onScreen} by {sortName.toLowerCase()}. </>}{rankNote}
+      </p>
+
+      {/* DECISION 3, on screen. A filter re-ranks inside the queue, so what you
+          are looking at is the top ten OF THE FILTER — said in words, with the
+          filters named and the pool size printed, and a way out. */}
+      {filters.length > 0 && (
+        <p className="t-cap" style={{ margin: "6px 0 0", lineHeight: 1.5 }}>
+          Filtered to {filters.join(" · ")} — the queue re-ranks inside that, so these are the top{" "}
+          {onScreen} of {total.toLocaleString()}, not of the whole feed.
+        </p>
+      )}
+
+      {/* Only ever printed when there is a round to have measured it against;
+          arrivedSince() returns null before the first one and the caller passes
+          null straight through rather than a 0 that reads as a measurement. */}
+      {arrived > 0 && (
+        <p className="t-cap" style={{ margin: "6px 0 0", lineHeight: 1.5 }}>
+          {arrived} of the {pool.toLocaleString()} waiting arrived since your last round opened.
+        </p>
+      )}
+
       {/* Fit reads 0 on every row until something is saved, and a zero with no
           explanation looks like a broken part rather than an absent input. */}
-      {noInterests && picks.length > 0 && (
-        <p className="t-cap" style={{ margin: "4px 0 0", lineHeight: 1.5 }}>
+      {noInterests && onScreen > 0 && (
+        <p className="t-cap" style={{ margin: "6px 0 0", lineHeight: 1.5 }}>
           Fit is 0 everywhere because nothing is saved yet — what you star is the only
           read on your interests this has.
         </p>
       )}
 
-      {picks.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 10 }}>
-          {picks.map((p, i) => {
-            const cat = categorize(p.row);
-            return (
-              <div
-                key={p.id}
-                style={{
-                  display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 10, alignItems: "start",
-                  padding: "10px 0",
-                  // Hairlines only INSIDE lists, inset — §4.2. The card itself
-                  // keeps its shadow and stays outline-free.
-                  borderTop: i === 0 ? "none" : "1px solid var(--line)",
-                }}
-              >
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--faint)", lineHeight: "20px", width: 16 }}>{i + 1}</span>
-                <div style={{ minWidth: 0 }}>
-                  <a
-                    href={p.row.url} target="_blank" rel="noreferrer noopener"
-                    style={{ color: "var(--ink)", textDecoration: "none", fontFamily: "var(--font-mono)", fontSize: 13.5, fontWeight: 600, overflowWrap: "anywhere", display: "inline-block", minHeight: 20 }}
-                  >
-                    <span style={{ color: "var(--sub)", fontWeight: 400 }}>{p.row.owner}/</span>{p.row.name}
-                  </a>
-                  <div style={{ marginTop: 5, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-                    <CategoryChip cat={cat} onClick={onOpenCategory} />
-                    {p.row.language && <LangTag language={p.row.language} />}
-                  </div>
-                  <p style={{ margin: "6px 0 0", fontSize: 12.5, lineHeight: 1.5, color: "var(--ink)" }}>{p.reason}</p>
-                  {/* The addition, printed. 45 + 20 + 8 + 0 = 73 is checkable
-                      against the table at the top of rank.js without trusting
-                      this screen. */}
-                  <p style={{ margin: "4px 0 0", fontSize: 11, lineHeight: 1.5, color: "var(--faint)", fontFamily: "var(--font-mono)" }}>
-                    {p.parts.map((part) => `${part.label} ${part.points}`).join(" + ")} = {p.score}
-                  </p>
-                </div>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 19, fontWeight: 600, color: "var(--accent)", fontVariantNumeric: "tabular-nums", lineHeight: "20px" }}>
-                  <AnimatedNumber value={p.score} format={(v) => String(Math.round(v))} />
-                </span>
-              </div>
-            );
-          })}
+      {/* Only while there is a queue to be standing in front of. With the queue
+          empty the state below carries the same three controls as its action —
+          and two rows of identical buttons 200px apart is how an operator ends
+          up wondering whether they do the same thing. */}
+      {onScreen > 0 && (lastRound > 0 || done > 0 || filters.length > 0) && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+          {lastRound > 0 && (
+            <button type="button" className="btn md quiet" onClick={onUndo}>
+              <UndoLabel round={round} count={lastRound} here={lastRoundHere} />
+            </button>
+          )}
+          {done > 0 && (
+            <button type="button" className="btn md quiet" onClick={onShowReviewed}>
+              Reviewed {done.toLocaleString()}
+            </button>
+          )}
+          {filters.length > 0 && (
+            <button type="button" className="btn md quiet" onClick={onClearFilters}>Clear filters</button>
+          )}
         </div>
       )}
     </Card>
+  );
+}
+
+/* ── the history ──────────────────────────────────────────────────────────────
+ *
+ * The answer to "what happened to the ten I just saw". They are here, in
+ * rounds, newest first, with the same card and the same score — plus one
+ * control that puts a repo back where the ranker thinks it belongs.
+ *
+ * Two controls here and the third at the FOOT of the list. Emptying the whole
+ * history is the one action in the tool that cannot be undone, and putting it
+ * beside "Back to the queue" both crowded a phone into three stacked buttons
+ * and put the irreversible one under the thumb that was reaching for the way
+ * out. At the bottom it is where you are when you have actually read the
+ * history and decided you want all of it back. */
+function ReviewedHeader({ shownCount, totalCount, round, lastRound, lastRoundHere, filters, onUndo, onBack }) {
+  return (
+    <Card style={{ marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+        <span className="t-label">Reviewed</span>
+        <span className="t-cap" style={{ fontFamily: "var(--font-mono)", flex: "none" }}>
+          {round > 0 ? <>{round} round{round === 1 ? "" : "s"}</> : "no rounds"}
+        </span>
+      </div>
+      <p className="t-cap" style={{ margin: "6px 0 0", lineHeight: 1.5 }}>
+        {shownCount === totalCount
+          ? <>All {totalCount.toLocaleString()} you have been through, newest round first.</>
+          : filters.length
+            ? <>{shownCount.toLocaleString()} of your {totalCount.toLocaleString()} reviewed repos match these filters ({filters.join(" · ")}).</>
+            // Not a filter: the scan keeps 500 rows, and a repo you reviewed
+            // weeks ago can fall out of that window. Saying so beats printing
+            // two counts that do not add up and letting the operator wonder.
+            : <>{shownCount.toLocaleString()} of your {totalCount.toLocaleString()} reviewed repos are still in the feed the scan keeps; the rest have aged out of it.</>}
+        {" "}Nothing here was deleted — put one back with ↩ and it rejoins the queue at its rank.
+      </p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+        <button type="button" className="btn md tinted" onClick={onBack}>Back to the queue</button>
+        {lastRound > 0 && (
+          <button type="button" className="btn md quiet" onClick={onUndo}>
+            <UndoLabel round={round} count={lastRound} here={lastRoundHere} />
+          </button>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/* The one irreversible control in the tool, at the foot of the list it empties.
+ * It asks first, and the confirm is the button's own words changing rather than
+ * a dialog: a sheet for a two-word question is furniture, and a destructive
+ * default nobody reads is how you lose four rounds of work. The question times
+ * out, so a tap you walked away from cannot be completed by the next one. */
+function PutAllBack({ count, onClear }) {
+  const [confirm, setConfirm] = useState(false);
+  useEffect(() => {
+    if (!confirm) return undefined;
+    const t = setTimeout(() => setConfirm(false), 6000);
+    return () => clearTimeout(t);
+  }, [confirm]);
+  return (
+    <div style={{ marginTop: 12 }}>
+      <button
+        type="button"
+        className={confirm ? "btn md danger full" : "btn md quiet full"}
+        onClick={() => (confirm ? onClear() : setConfirm(true))}
+      >
+        {confirm ? `Put all ${count.toLocaleString()} back into the queue? Tap again` : "Put them all back"}
+      </button>
+      <p className="t-cap" style={{ margin: "8px 0 0", lineHeight: 1.5, textAlign: "center" }}>
+        This one cannot be undone — every round is forgotten and all {count.toLocaleString()} rejoin the pool.
+      </p>
+    </div>
   );
 }
 
@@ -451,14 +613,40 @@ const LangTag = ({ language }) => (
   </span>
 );
 
-/* ── one repo ─────────────────────────────────────────────────────────────── */
+/* ── one repo ─────────────────────────────────────────────────────────────────
+ *
+ * `rank` and `why` only arrive on the Ideas tab. The queue is ten cards you are
+ * meant to read rather than skim past, so each one carries the score, the
+ * sentence rank.js built out of the parts that actually earned points, and the
+ * addition itself — the same three things the old three-row panel showed for
+ * the top two, now on every row you are being asked to judge.
+ *
+ * A row the ranker REFUSED shows the refusal in its own words and no number.
+ * That is the case the score-inventing bug lived in, and it is why the score
+ * slot renders an em dash rather than a value: a dash is not a quantity, cannot
+ * be read as one, and the line underneath says which input was missing. */
 
-function IdeaCard({ item, saved, onSave, verdict, onOpenCategory }) {
+// 44px of target, pulled back out of the layout with a negative margin so a row
+// does not grow to accommodate a touch floor. Shared by the star and the ↩ so
+// the two cannot drift apart.
+const rowBtn = (last) => ({
+  flexShrink: 0, background: "none", border: "none", cursor: "pointer",
+  width: 44, height: 44, margin: `-11px ${last ? -12 : 0}px -11px 0`, lineHeight: 1, fontSize: 16,
+  display: "inline-flex", alignItems: "flex-start", justifyContent: "flex-end", paddingTop: 10, paddingRight: last ? 10 : 0,
+});
+
+function IdeaCard({ item, saved, onSave, verdict, onOpenCategory, rank, why, round, onRequeue }) {
   const cat = categorize(item);
   const gained = verdict?.gained;
+  const scored = verdict?.score != null;
   return (
     <Card data-ideas-row>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8, minWidth: 0 }}>
+        {rank != null && (
+          <span style={{ flex: "none", fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--faint)", lineHeight: "20px", width: 17, fontVariantNumeric: "tabular-nums" }}>
+            {rank}
+          </span>
+        )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <a
             href={item.url}
@@ -474,23 +662,53 @@ function IdeaCard({ item, saved, onSave, verdict, onOpenCategory }) {
             {item.language && <LangTag language={item.language} />}
           </div>
         </div>
-        {/* 44px of target, pulled back out of the layout with a negative margin
-            so the row does not grow to accommodate a touch floor. */}
+        {why && (
+          <span
+            title={scored ? `${verdict.parts.map((p) => `${p.label} ${p.points}`).join(" + ")} = ${verdict.score}` : verdict?.blocked || "not scored in this pass"}
+            style={{
+              flex: "none", fontFamily: "var(--font-mono)", fontSize: scored ? 19 : 15, fontWeight: 600,
+              color: scored ? "var(--accent)" : "var(--faint)", fontVariantNumeric: "tabular-nums", lineHeight: "20px",
+            }}
+          >
+            {scored ? <AnimatedNumber value={verdict.score} format={(v) => String(Math.round(v))} /> : "—"}
+          </span>
+        )}
+        {onRequeue && (
+          <button
+            type="button"
+            onClick={() => onRequeue(item.id)}
+            aria-label={`Put ${item.full_name} back in the review queue`}
+            title="Put back in the queue"
+            style={{ ...rowBtn(false), color: "var(--sub)" }}
+          >
+            ↩
+          </button>
+        )}
         <button
           type="button"
           onClick={() => onSave(item.id)}
           aria-pressed={saved}
           aria-label={saved ? `Remove ${item.full_name} from saved` : `Save ${item.full_name} for later`}
-          style={{
-            flexShrink: 0, background: "none", border: "none", cursor: "pointer",
-            width: 44, height: 44, margin: "-11px -12px -11px 0", lineHeight: 1, fontSize: 16,
-            display: "inline-flex", alignItems: "flex-start", justifyContent: "flex-end", paddingTop: 10, paddingRight: 10,
-            color: saved ? "var(--accent)" : "var(--faint)",
-          }}
+          style={{ ...rowBtn(true), color: saved ? "var(--accent)" : "var(--faint)" }}
         >
           {saved ? "★" : "☆"}
         </button>
       </div>
+
+      {/* The reason, then the addition. 45 + 20 + 8 + 0 = 73 is checkable
+          against the table at the top of rank.js without trusting this screen. */}
+      {why && (
+        <div style={{ marginTop: 8 }}>
+          <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.5, color: scored ? "var(--ink)" : "var(--faint)" }}>
+            {scored ? verdict.reason : `Not ranked — ${verdict?.blocked || "this row was not scored in this pass"}`}
+          </p>
+          {scored && (
+            <p style={{ margin: "4px 0 0", fontSize: 11, lineHeight: 1.5, color: "var(--faint)", fontFamily: "var(--font-mono)" }}>
+              {verdict.parts.map((part) => `${part.label} ${part.points}`).join(" + ")} = {verdict.score}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Clamped to two lines. These hooks are scraped repo descriptions and run
           to five or six lines, which pushed the meta row — language, stars, age,
@@ -521,6 +739,9 @@ function IdeaCard({ item, saved, onSave, verdict, onOpenCategory }) {
             {item.skills_extracted} skill{item.skills_extracted === 1 ? "" : "s"}
           </span>
         )}
+        {/* Which round marked it. Printed only in the Reviewed list, where it is
+            what makes "undo round 4" legible against the rows it will return. */}
+        {round != null && <span>round {round}</span>}
       </div>
     </Card>
   );
@@ -595,11 +816,28 @@ export default function IdeasRoot() {
   const [query, setQuery] = useState("");
   const [rows, setRows] = useState(null);
   const [skills, setSkills] = useState(null);
-  const [run, setRun] = useState(null);
+  const [runs, setRuns] = useState(null);
   const [err, setErr] = useState(null);
   const [shown, setShown] = useState(PAGE);
   const [nonce, setNonce] = useState(0);
   const [saved, setSaved] = useState(readSaved);
+  // Seen-state. `loadQueue` is wrapped in its own try/catch, so this is also
+  // what makes the component render under react-dom/server, where there is no
+  // localStorage to read at all.
+  const [review, setReview] = useState(loadQueue);
+  // Two views inside the Ideas tab: the ten to review, and everything already
+  // reviewed. Not a fourth pill — "Reviewed" is a long word and a four-segment
+  // control on a 360px phone gives each segment 78px, which ellipsises the one
+  // that had to be legible.
+  const [view, setView] = useState("queue");
+
+  // Every write goes through saveQueue, which normalizes and persists in one
+  // step, so the state in React and the state in localStorage cannot disagree —
+  // and a private-mode failure to write still leaves the session working.
+  const commit = useCallback((fn) => setReview((prev) => saveQueue(fn(prev))), []);
+  const undoRound = useCallback(() => commit(undoLastRound), [commit]);
+  const putBack = useCallback((id) => commit((prev) => requeue(prev, id)), [commit]);
+  const putAllBack = useCallback(() => commit(clearReviewed), [commit]);
 
   const toggleSave = useCallback((id) => {
     setSaved((prev) => {
@@ -626,41 +864,98 @@ export default function IdeasRoot() {
         db().from("ideafeed_skills")
           .select("id,name,slug,description,body,verdict,published,skill_score,source,first_seen")
           .order("first_seen", { ascending: false }).limit(60),
+        // EIGHT runs, not one. The queue owes an answer the feed never did —
+        // "you are through them all, when is there more" — and the only honest
+        // source for that is the gaps between runs that actually happened. One
+        // row can date the last scan but cannot time the next one.
         db().from("ideafeed_runs")
           .select("ran_at,scanned,kept_by_filter,skills_generated,cost_usd")
-          .order("ran_at", { ascending: false }).limit(1),
+          .order("ran_at", { ascending: false }).limit(8),
       ]);
 
       if (!alive) return;
       if (c.error) { setErr(c.error.message); return; }
       setRows(c.data || []);
       setSkills(s.error ? [] : s.data || []);
-      setRun(r.error ? null : r.data?.[0] || null);
+      setRuns(r.error ? [] : r.data || []);
     })();
     return () => { alive = false; };
   }, [nonce]);
 
-  useEffect(() => { setShown(PAGE); }, [tab, sort, range, category, query]);
+  useEffect(() => { setShown(PAGE); }, [tab, sort, range, category, query, view]);
+  // Leaving the tab leaves the history behind it; and undoing your way back to
+  // an empty history returns you to the queue rather than to a blank screen
+  // with a "Back" button on it.
+  useEffect(() => { setView("queue"); }, [tab]);
+  useEffect(() => { if (view === "reviewed" && !reviewedCount(review)) setView("queue"); }, [view, review]);
 
-  // ONE ranking pass over the whole feed, reused by the panel, the sorts and
+  // ONE clock read per load of the data, handed to everything that needs an
+  // instant. rank.js and cadence.js are both pure and both take `now`; reading
+  // the clock inside either of them would make two identical repos score
+  // differently, and would make the modules untestable. It is deliberately not
+  // a per-render read: nothing on this screen ticks, and a value that changed
+  // on every keystroke in the search box would re-rank 500 rows for nothing.
+  const now = useMemo(() => Date.now(), [rows, runs]);
+
+  // ONE ranking pass over the whole feed, reused by the queue, the sorts and
   // every card's rate. Two passes would be two answers.
-  //
-  // `Date.now()` is read HERE and handed down, so rank.js stays pure and every
-  // row in one render is measured against the same instant — a clock read
-  // per row makes two identical repos score differently for no reason.
-  // Two picks on a phone, three on a desktop. Three fills a 852px screen to the
-  // last pixel before the filters, which turns the lead into a wall; the third
-  // is still the third row of the list underneath, because "Recommended" sorts
-  // by the same number.
   const ranked = useMemo(() => {
     if (!rows) return null;
-    return recommend(rows, { now: Date.now(), saved, limit: isMobile ? 2 : 3 });
-  }, [rows, saved, isMobile]);
+    return recommend(rows, { now, saved, limit: BATCH });
+  }, [rows, saved, now]);
 
   const visible = useMemo(
     () => (rows ? selectVisible(rows, { tab, sort, range, saved, query, category, scored: ranked?.scored }) : null),
     [rows, tab, sort, range, saved, query, category, ranked],
   );
+
+  /* ── the queue ───────────────────────────────────────────────────────────
+   *
+   * `visible` is already filtered by the tab, the search, the category and the
+   * age window, and already ordered by the selected sort. splitQueue only CUTS
+   * that list — which is the whole of decision 3: a filter changes the pool, so
+   * it changes the queue, because the queue is defined as the head of the pool
+   * and not as a snapshot taken before the filter ran. */
+  const split = useMemo(
+    () => (visible && tab === "ideas" ? splitQueue(visible, review, BATCH) : null),
+    [visible, review, tab],
+  );
+
+  const reviewedRows = useMemo(
+    () => (split ? sortReviewed(split.done, review) : []),
+    [split, review],
+  );
+
+  // Named filters, for the sentence that tells the operator what the queue was
+  // drawn from. Sort is not in here — it is the ordering, and it is named
+  // separately — and neither is the tab, which is the surface itself.
+  const filters = useMemo(() => [
+    query.trim() ? `“${query.trim()}”` : null,
+    category !== "all" ? CATEGORY_LABEL[category] : null,
+    range > 0 ? rangeLabel(range) : null,
+  ].filter(Boolean), [query, category, range]);
+
+  const clearFilters = useCallback(() => { setQuery(""); setCategory("all"); setRange(0); }, []);
+
+  const cadence = useMemo(() => scanCadence(runs, now), [runs, now]);
+  const run = runs?.[0] || null;
+
+  /* Pressing the button marks EXACTLY the ids that were on screen. The queue is
+   * recomputed every render, so between the paint and the tap a refresh could
+   * have changed which ten the ranker offers; marking a freshly computed slice
+   * would then stamp a repo the operator never saw. */
+  const advance = useCallback(() => {
+    const ids = (split?.queue || []).map((r) => r.id);
+    if (!ids.length) return;
+    commit((prev) => markReviewed(prev, ids));
+    // Ten new cards land above the fold, so the scroll position from the round
+    // you just finished is meaningless. Reduced motion gets the jump, not the
+    // glide — §4.6 puts all motion behind that query.
+    try {
+      const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+      window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+    } catch { /* no window to scroll; the state change still landed */ }
+  }, [split, commit]);
 
   // Only categories actually present, biggest first, so the menu can never
   // offer a filter that returns an empty list.
@@ -686,6 +981,31 @@ export default function IdeasRoot() {
   // null makes CategoryChip render a <span>, so nothing on touch even looks
   // pressable.
   const pickCategory = isMobile ? null : setCategory;
+
+  const queueMode = tab === "ideas" && view === "queue";
+  const historyMode = tab === "ideas" && view === "reviewed";
+  // The rows the list under the header actually renders. One expression, so the
+  // count line, the pager and the cards can never be counting different things.
+  const listRows = !visible ? [] : historyMode ? reviewedRows : queueMode ? split.queue : visible;
+
+  /* The ranker's own summary sentence, but only the half of it that stays true
+   * inside a queue. rank.js writes "…the top 3 are here", which is a claim
+   * about a slice taken off the top of the WHOLE feed — after two rounds the
+   * ten on screen are ranks 21–30 and that sentence is false. So the count of
+   * what clears the floor is printed (it is a claim about the feed, and it is
+   * exactly right), and rank.js's prose is used verbatim only in the two cases
+   * where it is a refusal rather than a slice. */
+  const rankNote = !ranked ? "" : ranked.above > 0
+    ? `${ranked.above.toLocaleString()} of the ${rows.length.toLocaleString()} repos in the feed clear ${RECOMMEND_FLOOR}/100 on measured star growth.`
+    : ranked.reason;
+
+  const lastRoundSet = new Set(lastRoundIds(review));
+  const lastRound = lastRoundSet.size;
+  const reviewedAll = reviewedCount(review);
+  // How many of that round are inside the current filters — the number the
+  // operator will actually watch come back. Equal to `lastRound` whenever the
+  // filters are off, in which case the label says it once.
+  const lastRoundHere = (historyMode ? reviewedRows : split?.done || []).filter((r) => lastRoundSet.has(r.id)).length;
 
   return (
     // data-kit: Ideas opts into the shared kit. It renders inside the shell's
@@ -726,12 +1046,36 @@ export default function IdeasRoot() {
           <>
             {loading && <SkeletonRows count={5} />}
 
-            {!loading && tab === "ideas" && (
-              <Recommended
-                picks={ranked.picks}
-                reason={ranked.reason}
+            {!loading && queueMode && (
+              <QueueHeader
+                round={review.round}
+                done={split.done.length}
+                pool={split.pool.length}
+                onScreen={split.queue.length}
+                waiting={split.waiting}
+                filters={filters}
+                sortName={sortLabel(sort)}
+                arrived={arrivedSince(split.pool, review)}
+                rankNote={rankNote}
                 noInterests={!ranked.interests.count}
-                onOpenCategory={pickCategory}
+                lastRound={lastRound}
+                lastRoundHere={lastRoundHere}
+                onUndo={undoRound}
+                onClearFilters={clearFilters}
+                onShowReviewed={() => setView("reviewed")}
+              />
+            )}
+
+            {!loading && historyMode && (
+              <ReviewedHeader
+                shownCount={reviewedRows.length}
+                totalCount={reviewedAll}
+                round={review.round}
+                lastRound={lastRound}
+                lastRoundHere={lastRoundHere}
+                filters={filters}
+                onUndo={undoRound}
+                onBack={() => setView("queue")}
               />
             )}
 
@@ -748,21 +1092,29 @@ export default function IdeasRoot() {
               />
             )}
 
-            {/* One line of provenance where three stat tiles used to be. Two of
-                the three numbers they carried are in here verbatim, and the
-                third (Saved) is on the pill it belongs to. */}
-            {!loading && !(tab === "saved" && saved.size === 0) && (
+            {/* One line of provenance where three stat tiles used to be. In the
+                queue the counts are dropped from it: the header card above owns
+                them, and two lines claiming the same thing is how they end up
+                disagreeing. What is left is where the rows came from. */}
+            {!loading && !(tab === "saved" && saved.size === 0) && (run || !queueMode) && (
               <p style={{ margin: "0 0 12px", fontSize: 11.5, lineHeight: 1.5, color: "var(--faint)", fontFamily: "var(--font-mono)" }}>
-                {/* The denominator is whatever set this tab is showing. On Saved
+                {/* The denominator is whatever set this view is showing. On Saved
                     it is what you saved — "0 shown of 26" there counted a feed
-                    the tab is not displaying. */}
-                {visible.length.toLocaleString()} shown of{" "}
-                {tab === "saved" ? `${saved.size.toLocaleString()} saved` : rows.length.toLocaleString()}
-                {run && <> · last scan {ago(run.ran_at)} · {run.scanned} scanned · {run.kept_by_filter} kept · {Number(run.cost_usd) > 0 ? `$${Number(run.cost_usd).toFixed(3)}` : "free"}</>}
+                    the tab is not displaying — and in the history it is what you
+                    have reviewed, not the feed either. */}
+                {!queueMode && (
+                  <>
+                    {listRows.length.toLocaleString()} shown of{" "}
+                    {tab === "saved" ? `${saved.size.toLocaleString()} saved`
+                      : historyMode ? `${reviewedAll.toLocaleString()} reviewed`
+                        : rows.length.toLocaleString()}
+                  </>
+                )}
+                {run && <>{queueMode ? "" : " · "}last scan {ago(run.ran_at)} · {run.scanned} scanned · {run.kept_by_filter} kept · {Number(run.cost_usd) > 0 ? `$${Number(run.cost_usd).toFixed(3)}` : "free"}</>}
               </p>
             )}
 
-            {!loading && visible.length === 0 && (
+            {!loading && !historyMode && visible.length === 0 && (
               <EmptyState
                 icon={tab === "saved" ? "star" : "inbox"}
                 tint="var(--accent)"
@@ -781,9 +1133,52 @@ export default function IdeasRoot() {
               />
             )}
 
+            {/* THE END OF THE QUEUE. Not a blank list: what you got through,
+                and when there will be more — the second from the gaps between
+                runs we actually fetched, never from the schedule in a comment.
+                Both ways back out are right here, because this is the screen
+                where "wait, I wanted one of those" happens. */}
+            {!loading && queueMode && visible.length > 0 && split.queue.length === 0 && (
+              <EmptyState
+                icon="star"
+                tint="var(--accent)"
+                title={filters.length
+                  ? `Reviewed all ${split.done.length.toLocaleString()} that match these filters`
+                  : `Reviewed all ${split.done.length.toLocaleString()} in the feed`}
+                sub={cadence.text}
+                action={
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+                    {lastRound > 0 && (
+                      <button type="button" className="btn md quiet" onClick={undoRound}>
+                        <UndoLabel round={review.round} count={lastRound} here={lastRoundHere} />
+                      </button>
+                    )}
+                    {split.done.length > 0 && (
+                      <button type="button" className="btn md tinted" onClick={() => setView("reviewed")}>
+                        See what you reviewed
+                      </button>
+                    )}
+                    {filters.length > 0 && (
+                      <button type="button" className="btn md quiet" onClick={clearFilters}>Clear filters</button>
+                    )}
+                  </div>
+                }
+              />
+            )}
+
+            {!loading && historyMode && reviewedRows.length === 0 && (
+              <EmptyState
+                icon="inbox"
+                tint="var(--accent)"
+                title="None of what you reviewed matches these filters"
+                sub="The history is still there — clear the filters to see all of it."
+                action={<button type="button" className="btn md quiet" onClick={clearFilters}>Clear filters</button>}
+              />
+            )}
+
             {!loading && (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {visible.slice(0, shown).map((item) => (
+                {(queueMode ? listRows : listRows.slice(0, shown)).map((item, i) => (
                   <IdeaCard
                     key={item.id}
                     item={item}
@@ -791,20 +1186,50 @@ export default function IdeasRoot() {
                     onSave={toggleSave}
                     verdict={ranked?.scored?.get(item.id)}
                     onOpenCategory={pickCategory}
+                    // The queue is an ordered ten and reads as one. The history
+                    // is grouped by round, where a running number would be a
+                    // rank in a list nothing is ranked by.
+                    rank={queueMode ? i + 1 : null}
+                    why={tab === "ideas"}
+                    round={historyMode ? roundOf(review, item.id) : null}
+                    onRequeue={historyMode ? putBack : null}
                   />
                 ))}
               </div>
             )}
 
-            {!loading && visible.length > shown && (
+            {/* DECISION 1, in the two places it has to be legible: on the button
+                and directly under it. "Done with these" is a mark, not a delete,
+                and the sentence names all three ways back before you press it —
+                not after, in a toast that has already gone. */}
+            {!loading && queueMode && split.queue.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <button type="button" className="btn md primary full" onClick={advance}>
+                  {split.waiting > 0
+                    ? `Done with these ${split.queue.length} — show the next ${Math.min(BATCH, split.waiting)}`
+                    : `Done with these ${split.queue.length} — that empties the queue`}
+                </button>
+                <p className="t-cap" style={{ margin: "8px 0 0", lineHeight: 1.5, textAlign: "center" }}>
+                  Marks them reviewed; nothing is deleted. They move to Reviewed, where ↩ puts
+                  one back at its rank — and Undo puts the whole round back.
+                </p>
+              </div>
+            )}
+
+            {!loading && !queueMode && listRows.length > shown && (
               <button
                 type="button"
                 className="btn md quiet full"
                 onClick={() => setShown((v) => v + PAGE)}
                 style={{ marginTop: 12 }}
               >
-                Show more ({(visible.length - shown).toLocaleString()} more)
+                Show more ({(listRows.length - shown).toLocaleString()} more)
               </button>
+            )}
+
+            {/* At the foot of the history, under the rows it would empty. */}
+            {!loading && historyMode && reviewedAll > 0 && (
+              <PutAllBack count={reviewedAll} onClear={putAllBack} />
             )}
           </>
         )}

@@ -49,10 +49,18 @@ const VIEW_CSS = `
 .dna-logrow:hover { background: rgba(255,255,255,0.05); }
 .dna-menuitem:hover { background: rgba(255,255,255,0.06); }
 .dna-view input[type="range"] { cursor: pointer; }
-/* The App-level GlobalAgent launcher parks fixed at the viewport's bottom-right
-   corner of every view; on this full-bleed page that's exactly where the
-   canvas parks its zoom/fit HUD (the last div after the svg). Lift the HUD
-   clear so both stay usable — !important because the HUD positions inline. */
+/* The zoom/fit HUD (the last div after the svg) rides the canvas's own bottom
+   edge, and this page's bottom edge is NOT the viewport's: the height above
+   subtracts --shell-bar, which the shell publishes as 0px on desktop where it
+   draws no top bar, while Clarify's own 52px nav still sits above this view. So
+   the canvas overhangs the fold and the HUD's native 14px inset lands under it.
+   Measured in the shell, headless Chromium, this rule deleted and the bundle
+   rebuilt: the HUD's bottom lands 38px BELOW the fold at 1440x900 and 1024x900
+   and 67px below at 393x900. With the lift it is 26px above the fold on desktop
+   and 3px under it on the phone. It was written for a different reason — it
+   used to clear the "Ask Clarify" launcher that parked in this same corner —
+   and that measurement is why it outlived it. !important because the HUD
+   positions inline. */
 .dna-view .dna-canvas ~ div:last-of-type { bottom: 78px !important; }
 @keyframes dnaGlyph { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(180deg); } }
 @media (max-width: 860px) {

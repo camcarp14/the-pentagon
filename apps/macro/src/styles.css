@@ -573,8 +573,17 @@ tr:last-child td { border-bottom: none; }
    tracking, leading) is the kit's; the ink stays on this tool's cool ladder.
    Every selector here is (0,3,0) so it wins outright rather than on file order. */
 [data-kit] .stattile > .stattile-label { color: var(--ink-3); }
-[data-kit] .ttl.t-label, [data-kit] .tc-k.t-label,
+[data-kit] .ttl.t-label,
 [data-kit] .ticket .k.t-label, [data-kit] .rd-shape-k.t-label { color: var(--ink-3); }
+/* .tc-k IS NOT IN THAT LIST, and the omission is the whole point. The answer
+   card's row keys were lifted to --ink-2 further down this sheet because
+   --ink-3 on --card-2 measures 4.44:1 — 0.06 under AA — and these are the
+   labels naming what each number on the headline card MEANS. That lift was
+   written at (0,1,0) and this rule is (0,3,0), so for one release the fix
+   existed, was documented, and never reached a pixel: a reviewer measured the
+   element still at 4.44:1 while the comment beside it claimed 5.59:1.
+   Specificity is why, and splitting the selector is the fix. */
+[data-kit] .tc-k.t-label { color: var(--ink-2); }
 [data-kit] .sub.t-foot { color: var(--ink-2); }
 [data-kit] .tiny.t-cap { color: var(--ink-3); }
 
@@ -767,10 +776,34 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 /* was 10px UPPERCASE tracked 0.8px — under the 10.5px floor, and a second
    uppercase micro-style. It wears .t-label now (12px, 0.05em), which still
    sets "Long/short" at ~78px inside the 92px key column. */
-.tc-k { color: var(--ink-3); }
+/* --ink-2, NOT --ink-3, AND THE REASON IS A MEASUREMENT.
+   These three — the row key, the row note and the working table's number — are
+   the only --ink-3 in this sheet that lands on a `--card-2` WELL rather than on
+   a card or the page, and in dark mode that pair measures
+
+       --ink-3 #7C8AA3 on --card-2 #1B2438  =  4.44:1     (AA wants 4.5 for text)
+       --ink-2 #A39A8F on --card-2 #1B2438  =  5.59:1
+
+   read off the shipped build in Chromium, both halves. The light half was
+   already clear (4.78:1) and goes to 6.0. It is 0.06 short, which is exactly the
+   size of gap that never gets fixed because it never looks broken — and all
+   three of these are 11.5-12.5px prose carrying the reason a number is what it
+   is, on the two cards in this app that tell you what to do.
+
+   Lifted here rather than per-card: `.tc-note` is worn by the cockpit's answer
+   card and the alts one, and a second ink for the same element on the second tab
+   is the two-dialects problem SeasonCard's header argues against.
+
+   THE PAIR IS STILL UNDER AA ELSEWHERE IN THIS SHEET and this does not pretend
+   otherwise — `.ticket .k`, `.tk-sub`, `.smeter-state`, `.rd-lvl`, `.rd-tag`,
+   `.alt-leadrow-k`, `.alt-group-sub` and `.c-rank` all ink --ink-3 onto a
+   --card-2 ground too. Moving --ink-3 itself is the real fix and it is a
+   token-layer change that re-measures every tool, which is not this change's to
+   make. */
+.tc-k { color: var(--ink-2); }
 .tc-v { margin: 0; min-width: 0; }
 .tc-val { display: block; font-size: 15.5px; font-weight: 700; line-height: 1.25; color: var(--ink); overflow-wrap: break-word; }
-.tc-note { display: block; font-size: 11.5px; color: var(--ink-3); line-height: 1.45; margin-top: 2px; text-wrap: pretty; }
+.tc-note { display: block; font-size: 11.5px; color: var(--ink-2); line-height: 1.45; margin-top: 2px; text-wrap: pretty; }
 .tc-val.tone-go { color: var(--good); }
 .tc-val.tone-warn { color: var(--warn); }
 .tc-val.tone-bad { color: var(--crit); }
@@ -781,7 +814,7 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .tc-mrow { background: var(--card-2); display: flex; align-items: baseline; gap: 10px; padding: 7px 11px; }
 .tc-mrow.total { background: var(--card); }
 .tc-mk { font-size: 11.5px; color: var(--ink-2); }
-.tc-mp { margin-left: auto; font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); }
+.tc-mp { margin-left: auto; font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); }
 .tc-mp.pos { color: var(--good); }
 .tc-mp.neg { color: var(--crit); }
 .tc-mrow.total .tc-mk { color: var(--ink); font-weight: 700; }
@@ -993,6 +1026,28 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .alt-panes.picked .alt-pane-board { display: none; }
 .alt-panes.picked .alt-pane-detail { display: block; }
 .alts .error-row { margin-bottom: 12px; }
+
+/* ---- the alts answer card ----
+   It is the cockpit's answer card wearing the same furniture — `.tc-head`,
+   `.tc-num`, `.tc-pips`, `.tc-rows`, `.tc-math` — so the only NEW names here are
+   the stripe and one margin. The stripe is the same inset-shadow layer `.tcard`
+   uses and for the same reason (§4.2: never a border and a shadow on one
+   element; and `[data-kit] .card { border: none }` would erase a border-only
+   rule outright). It is coloured by the BAND, which read.js derives from the
+   score, so the bar and the numeral can never say different things — and it is
+   never the only signal, because the first row states the call in words.
+
+   `band-armed` is the only warm one. `band-building`, `band-no` and
+   `band-unknown` all take --ink-3: a read that is not a call does not get to
+   look like a warning, and a permanent amber stripe on the tab's first card is
+   how a screen teaches you to stop seeing amber. */
+.altread,
+[data-kit] .card.altread { box-shadow: var(--shadow-card, var(--shadow-1)), inset 5px 0 0 var(--ink-3); }
+.altread.band-go,
+[data-kit] .card.altread.band-go { box-shadow: var(--shadow-card, var(--shadow-1)), inset 5px 0 0 var(--good); }
+.altread.band-armed,
+[data-kit] .card.altread.band-armed { box-shadow: var(--shadow-card, var(--shadow-1)), inset 5px 0 0 var(--warn); }
+.altread-empty { margin-top: 12px; }
 
 /* ---- season card ---- */
 .alt-season-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }

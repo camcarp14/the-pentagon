@@ -285,6 +285,109 @@ const detail = (over = {}) => {
 };
 
 describe("The Alts tab renders against a real payload shape", () => {
+  /* ── THE ANSWER CARD ────────────────────────────────────────────────────────
+   *
+   * The operator's complaint was not that the tab was wrong — it was that six
+   * honest surfaces of equal weight left them without a read. The fix is the
+   * cockpit's: one card that states a score and answers four questions in rows,
+   * everything else collapsed as evidence. These cases hold that shape, and hold
+   * the honesty rule the shape only earns if it is kept: nothing on the card may
+   * be a number nothing computed. */
+
+  it("opens with the answer, not with the evidence", () => {
+    const out = panel();
+    const at = (s) => out.indexOf(s);
+    expect(out).toContain('data-testid="alt-read"');
+    // ahead of every surface it summarises, including the one that used to lead
+    for (const id of ["season-card", "alt-since", "alt-shape", "alt-board"]) {
+      expect(at('data-testid="alt-read"'), `the answer card must precede ${id}`)
+        .toBeLessThan(at(`data-testid="${id}"`));
+    }
+    // a score out of ten, and the four answers
+    expect(out).toMatch(/data-testid="alt-read-score"[^>]*>\d/);
+    expect(out).toContain('data-testid="alt-read-rows"');
+    for (const k of ["Look at alts", "What&#x27;s starting", "Since last look", "Wrong if"]) {
+      expect(out, `the ${k} row is missing`).toContain(k);
+    }
+  });
+
+  it("names on the card exactly the coins the board bands as igniting", () => {
+    // THE GUARANTEE, checked through the rendered markup rather than through the
+    // lib: the headline and the board are one computation, so a symbol the card
+    // calls igniting has an igniting row under it. read.test.js proves the
+    // arithmetic; this proves the two ends are actually wired to it.
+    const out = panel();
+    const rows = screenUniverse(UNIVERSE, { btcRow: UNIVERSE[0], ethRow: UNIVERSE[1], now: NOW });
+    const igniting = rows.filter((r) => r.band === "igniting");
+    const card = out.slice(out.indexOf('data-testid="alt-read"'), out.indexOf('data-testid="season-card"'));
+    expect(card).toContain(`${igniting.length} igniting`);
+    for (const r of igniting.slice(0, 3)) expect(card).toContain(`${r.symbol} ${r.score}`);
+    // and no coin the board did not band that way
+    const named = [...card.matchAll(/\b([A-Z]{2,6}) (\d{1,3})\b/g)].map((m) => m[1]);
+    const banded = new Set(igniting.map((r) => r.symbol));
+    for (const s of named) expect(banded.has(s), `${s} is named as igniting and the board disagrees`).toBe(true);
+  });
+
+  it("refuses the whole read on a dead scan rather than answering a row off it", () => {
+    const out = panel({ scan: src({ ...SCAN_PAYLOAD, asOf: NOW - 4000_000 }, { fetchedAt: NOW - 4000_000 }) });
+    const card = out.slice(out.indexOf('data-testid="alt-read"'), out.indexOf('data-testid="season-card"'));
+    expect(card).toMatch(/data-testid="alt-read-score"[^>]*>—</);
+    expect(card).toContain("No read");
+    expect(card, "a refused payload may not answer a single row").not.toContain('data-testid="alt-read-rows"');
+    expect(card).toContain("Nothing to read yet");
+    expect(card, "every dead end gets a way out").toMatch(/>Retry</);
+    expect(card, "no coin may be named off a payload the ladder refused").not.toMatch(/SOL|PEPE/);
+  });
+
+  it("keeps Refresh at the top of the tab, above everything that can be collapsed", () => {
+    // The season card used to own the freshness chip and Refresh, and it is now
+    // closed by default. A Refresh you can only reach by expanding a card is not
+    // reachable on the platform this is mostly read on.
+    const out = panel();
+    const card = out.slice(out.indexOf('data-testid="alt-read"'), out.indexOf('data-testid="season-card"'));
+    expect(card).toMatch(/>Refresh</);
+    expect(card, "the freshness chip belongs to the scan, and the scan is this card's subject")
+      .toMatch(/class="chip (live|stale|dead)"/);
+  });
+
+  it("collapses the three evidence cards and puts live state on the closed row", () => {
+    // Cockpit.jsx's idiom: the whole title row is the control, and the collapsed
+    // row carries a measurement rather than a description of the card.
+    const out = panel();
+    for (const [id, state] of [
+      ["season-card", /class="dr-state num">\d+ \/ 100</],
+      ["alt-since", /class="dr-state">no baseline</],
+      ["alt-shape", /class="dr-state">\d+ of \d+ actionable</],
+    ]) {
+      const card = out.slice(out.indexOf(`data-testid="${id}"`));
+      const head = card.slice(0, card.indexOf("</button>"));
+      expect(head, `${id} does not use the disclosure idiom`).toContain('class="ttl ttl-btn t-label"');
+      expect(head, `${id} is not closed by default`).toContain('aria-expanded="false"');
+      expect(head, `${id} has no live state on its closed row`).toMatch(state);
+    }
+    // and the board is NOT collapsed — it is the list you act from
+    const board = out.slice(out.indexOf("alt-boardcard"));
+    expect(board.slice(0, 200)).not.toContain("ttl-btn");
+  });
+
+  it("keeps every word the evidence cards carried — nothing was deleted to make room", () => {
+    // "Delete nothing": the disclosures render their children even when closed,
+    // and these are the sentences each of the three cards exists to say.
+    const out = panel();
+    for (const line of [
+      "Beat BTC · 7d",                 // the breadth bars
+      "BTC dominance",                 // the season tiles
+      "how this scores",               // the season card's own working
+      "Since you last looked",
+      "No comparison yet",             // pulse.js's refusal, in its own words
+      "Shape of the board",
+      "Alt share of total cap",
+      "Where to look first",
+    ]) {
+      expect(out, `the tab lost: ${line}`).toContain(line);
+    }
+  });
+
   it("renders the season answer, the dashboard layer, the board and the shortlist", () => {
     const out = panel();
     expect(out).toContain('data-testid="season-card"');

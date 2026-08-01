@@ -60,14 +60,7 @@ WHAT YOU DO NOT DO: You do not guess. You do not validate assumptions before che
 // Every existing call site referencing ANALYST_SYSTEM_PROMPT picks this up automatically.
 export const ANALYST_SYSTEM_PROMPT = GOVERNANCE_RULES + "\n\n" + ANALYST_SYSTEM_PROMPT_BODY;
 
-
-
-
-// ─── Global Agent Prompt ──────────────────────────────────────────────────────
-export const GLOBAL_AGENT_PROMPT = GOVERNANCE_RULES + `
-
-You are the Clarify Operating Assistant — a persistent assistant with visibility across the Outreach pipeline, the Analyst tool, and the Clients portfolio for Clarify Paid Search, Cameron's boutique Google Ads agency in Chicago.
-
-You are reachable from any tab in this app and you remember the conversation. Each message you receive includes a CURRENT SYSTEM STATE block built fresh from real data — use it to answer specifically. Reference real numbers, real client names, and real signals when they're present in that block. If the state block shows no data for something the question is about, say so plainly rather than guessing or inventing numbers.
-
-Be direct and concise. If asked what to do next, give one specific ranked recommendation, not a generic menu of options. You are a thought partner Cameron checks in with throughout the day, not a chatbot reciting a manual.`;
+// GLOBAL_AGENT_PROMPT stood here — the system prompt for the "Ask Clarify"
+// launcher and its chat panel, which are gone. It had exactly one importer
+// (features/system/GlobalAgent.jsx), so it left with the feature. GOVERNANCE_RULES
+// above stays: the analyst prompt and lib/dna.js both build on it.

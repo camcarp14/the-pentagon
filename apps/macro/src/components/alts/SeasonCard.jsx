@@ -1,9 +1,25 @@
-// THE MARKET-WIDE ANSWER, above everything else on the tab.
+// THE REGIME, IN FULL — the evidence behind six of the answer card's ten points.
 //
-// One sentence at the top that says what today's regime means for taking alt
-// risk, then the score, then the four inputs that produced it. On a phone this
-// is the whole visit most days: if the answer is "nothing is rotating", the
-// board underneath is a list of ways to lose money slightly differently.
+// THIS USED TO BE THE TOP OF THE TAB and it is now the first piece of evidence
+// under it. Nothing was removed: the score, the coverage line, the two breadth
+// bars, the four tiles and the whole "how this scores" table are all still here,
+// exactly as they were. What changed is that ReadCard.jsx states the answer
+// first and scales THIS score into its regime points, so an always-open copy of
+// the same number directly beneath it was the tab's largest single block
+// restating its own headline. It is collapsed by default and the whole title row
+// is the control — the same disclosure idiom Cockpit.jsx uses for its market
+// reads, for the same reason.
+//
+// WHAT THE COLLAPSED ROW CARRIES IS LIVE STATE, NOT A DESCRIPTION OF ITSELF:
+// the score out of 100, or the word "no score" when season.js refused to publish
+// one. `.dr-state` is a nowrap ellipsised slot, so the regime LABEL does not go
+// in it — it can be "Majors rotating to Alt season" and would be cut mid-clause.
+// The answer card's first row already prints that label in full.
+//
+// THE FRESHNESS CHIP AND REFRESH MOVED UP to the answer card. They belong to the
+// scan rather than to this card, this card can be closed, and a Refresh you
+// cannot reach on a phone is the failure the cockpit's health strip was built to
+// fix.
 //
 // IT REUSES THE ANSWER CARD'S FURNITURE ON PURPOSE — `.tc-head`, `.tc-num`,
 // `.tc-label`, `.tc-plain`, `.tc-pips`, `.tc-math`. The cockpit already trained
@@ -27,7 +43,7 @@
 // the crowd card uses the same component, so a partial score is never stated two
 // different ways on one screen.
 import React, { useState } from 'react'
-import { Expand, FreshChip, Num } from '../primitives.jsx'
+import { Expand, Num } from '../primitives.jsx'
 
 const PHASE_BAND = {
   alt_season: 'go',
@@ -39,10 +55,8 @@ const PHASE_BAND = {
   unknown: 'unknown',
 }
 
-export default function SeasonCard({
-  season = null, fresh = null, sourceDetail = null, degraded = null,
-  cached = false, cacheAgeSec = null, onReload,
-}) {
+export default function SeasonCard({ season = null, degraded = null, onReload }) {
+  const [open, setOpen] = useState(false)
   const [work, setWork] = useState(false)
 
   // A dead scan does not get to render a remembered regime. The freshness ladder
@@ -52,17 +66,23 @@ export default function SeasonCard({
   if (!season) {
     return (
       <section className="card pad-md alt-season" data-testid="season-card">
-        <div className="ttl t-label">Alt season<span className="spacer" />{fresh && <FreshChip fresh={fresh} title={sourceDetail} />}</div>
-        <div className="empty">
-          <div className="glyph" aria-hidden>—</div>
-          <div className="empty-title">No live market scan</div>
-          <div className="empty-sub">
-            The scan is older than the freshness ladder allows, so nothing here is shown rather than showing
-            you yesterday's tape. Hit Refresh; if it keeps failing, CoinGecko is rate-limiting and the next
-            pass is 90 seconds away.
+        <button className="ttl ttl-btn t-label" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          Alt season
+          <span className="dr-state">no live scan</span>
+          <span className={`dr-chev ${open ? 'open' : ''}`} aria-hidden>▾</span>
+        </button>
+        <Expand open={open}>
+          <div className="empty">
+            <div className="glyph" aria-hidden>—</div>
+            <div className="empty-title">No live market scan</div>
+            <div className="empty-sub">
+              The scan is older than the freshness ladder allows, so nothing here is shown rather than showing
+              you yesterday's tape. Hit Refresh; if it keeps failing, CoinGecko is rate-limiting and the next
+              pass is 90 seconds away.
+            </div>
+            <button className="btn primary md alt-retry" onClick={onReload}>Retry</button>
           </div>
-          <button className="btn primary md alt-retry" onClick={onReload}>Retry</button>
-        </div>
+        </Expand>
       </section>
     )
   }
@@ -76,14 +96,12 @@ export default function SeasonCard({
 
   return (
     <section className="card pad-md alt-season" data-testid="season-card">
-      <div className="alt-season-top">
-        <span className="ttl t-label alt-season-ttl">Alt season</span>
-        {fresh && <FreshChip fresh={fresh} title={sourceDetail || undefined} />}
-        {cached && Number.isFinite(cacheAgeSec) && (
-          <span className="tiny t-cap">cached {cacheAgeSec}s</span>
-        )}
-        <button className="btn quiet sm alt-season-btn" onClick={onReload}>Refresh</button>
-      </div>
+      <button className="ttl ttl-btn t-label" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        Alt season
+        <span className="dr-state num">{season.score == null ? 'no score' : `${season.score} / 100`}</span>
+        <span className={`dr-chev ${open ? 'open' : ''}`} aria-hidden>▾</span>
+      </button>
+      <Expand open={open}>
 
       <div className={`tc-head band-${band}`}>
         <div className="tc-score">
@@ -209,6 +227,8 @@ export default function SeasonCard({
           </Expand>
         </>
       )}
+
+      </Expand>
     </section>
   )
 }

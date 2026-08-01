@@ -77,25 +77,35 @@
 // restored.
 //
 // The kit-class table was proved the way the reviewer broke it: every kit class
-// token removed from every className in ONE file, for each of the nineteen .jsx
-// files in turn. Seventeen went red on that alone; the two that author no kit
+// token removed from every className in ONE file, for each of the eighteen .jsx
+// files in turn. Sixteen went red on that alone; the two that author no kit
 // classes (Root.jsx, features/system/AgentsView.jsx) were proved the other way,
-// by ADDING one and watching the coverage assertion trip. The two halves of a
-// pair were proved separately as well — the AUTHORED half by that strip, the
-// RENDERED half by leaving the className in the file and making the element not
-// render (InboundView's `showPreview &&` → `false &&`, an early `return null`
-// in AnalyticsView's StatTile, AgentPanel's `messages.length === 0` → `=== -1`).
+// by ADDING one and watching the coverage assertion trip. (Nineteen files and
+// seventeen when this was written — features/system/GlobalAgent.jsx was the
+// nineteenth, and it left with the "Ask Clarify" assistant it drew.) The two
+// halves of a pair were proved separately as well — the AUTHORED half by that
+// strip, the RENDERED half by leaving the className in the file and making the
+// element not render (InboundView's `showPreview &&` → `false &&`, and an early
+// `return null` in AnalyticsView's StatTile).
 // Every scan-sanity floor was proved too, by breaking its own scanner's regex.
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createElement, Fragment } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (...p) => readFileSync(join(here, "..", ...p), "utf8");
+
+// Every source file this app ships, __tests__ excluded — a test that names a
+// deleted symbol in order to assert it is deleted would match itself.
+const srcFiles = (dir = join(here, "..")) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+  if (e.name === "__tests__" || e.name === "node_modules") return [];
+  const p = join(dir, e.name);
+  return e.isDirectory() ? srcFiles(p) : (/\.(jsx?|css)$/.test(e.name) ? [[p.slice(join(here, "..").length + 1), readFileSync(p, "utf8")]] : []);
+});
 const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
 // Walk from an opening `{` to its matching `}`, honouring strings and template
@@ -246,7 +256,6 @@ const { ClientDetail } = await import("../features/clients/ClientsView.jsx");
 const { StepEditor, SequenceCard } = await import("../features/sequences/SequencesView.jsx");
 const { LeadJourney } = await import("../components/LeadJourney.jsx");
 const { InboundLeadRow } = await import("../features/inbound/InboundView.jsx");
-const { AgentPanel } = await import("../features/system/GlobalAgent.jsx");
 const { AnalyticsView } = await import("../features/analytics/AnalyticsView.jsx");
 const { MissionControl, MonthCalendar } = await import("../features/mission/MissionControl.jsx");
 
@@ -307,7 +316,7 @@ const noop = () => {};
 const asyncNoop = async () => {};
 
 // The kit class tokens this app applies, and exactly the family a fresh-context
-// reviewer stripped out of all eighteen migrated files without turning this
+// reviewer stripped out of all seventeen migrated files without turning this
 // suite red. `.btn`, `.pill`, `.icon-btn` and `.dock-tab` are deliberately NOT
 // in here — the button walk above already fails when one of those goes missing.
 const KIT_TOKEN = /^(card|field|cell|tappable|pressable|seg|seg-opt|empty|pad-sm|t-[\w-]+|stattile[\w-]*|sk[\w-]*)$/;
@@ -398,11 +407,13 @@ describe("Clarify renders on the kit", () => {
     // The previous version had rows for nine files only, and excused
     // analytics / inbound / clients with "with no rows they render an
     // EmptyState or a skeleton". True, and it left EIGHT of the eighteen
-    // migrated files with no guard whatsoever: a reviewer stripped every kit
-    // class token from every className in ClientsView (55), OutreachCard (49),
-    // InboundView (17), OutreachBoard (12), AnalyticsView (9), LoginScreen (9),
-    // GlobalAgent (3) and LeadJourney (1) — 155 applications — and this suite
-    // stayed 25/25 each time. A skeleton is not a reason to have no assertion;
+    // migrated files of the day with no guard whatsoever: a reviewer stripped
+    // every kit class token from every className in ClientsView (55),
+    // OutreachCard (49), InboundView (17), OutreachBoard (12), AnalyticsView
+    // (9), LoginScreen (9), GlobalAgent (3) and LeadJourney (1) — 155
+    // applications — and this suite stayed 25/25 each time. (GlobalAgent's
+    // three went out with the "Ask Clarify" assistant; the other seven files
+    // are still guarded below.) A skeleton is not a reason to have no assertion;
     // it is a reason to render the surface with rows in it. So a surface here
     // is "whatever mount paints this file's markup": a hash route where a cold
     // paint reaches it, and a direct mount fed fixture rows where it does not.
@@ -498,11 +509,6 @@ describe("Clarify renders on the kit", () => {
         files: { "features/clients/ClientsView.jsx": ["card", "seg", "seg-opt", "stattile", "stattile-label", "stattile-value", "t-call", "t-cap", "t-foot", "t-label", "t-title1"] },
       },
       {
-        at: "the assistant panel",
-        paint: () => paint(createElement(AgentPanel, { messages: [], input: "", sending: false, endRef: { current: null }, onInput: noop, onSend: noop, onClear: noop, onClose: noop })),
-        files: { "features/system/GlobalAgent.jsx": ["field", "t-call", "t-foot"] },
-      },
-      {
         at: "#/analytics fed a pipeline",
         paint: () => paint(createElement(AnalyticsView, { cards: BOARD_CARDS })),
         files: { "features/analytics/AnalyticsView.jsx": ["card", "stattile", "stattile-label", "stattile-value", "t-cap", "t-foot", "t-label"] },
@@ -595,7 +601,9 @@ describe("Clarify renders on the kit", () => {
     // Every pair above was individually mutation-proved: broken in its own file,
     // this test went red. Deleting one silently would undo that, so the counts
     // are asserted too.
-    expect(OWN.length, "the surface table lost entries").toBe(21);
+    // 21 before the "Ask Clarify" assistant came out; its panel was the
+    // twenty-first surface and the only one GlobalAgent.jsx had.
+    expect(OWN.length, "the surface table lost entries").toBe(20);
     // 105 before the repeated page headings came out. Six of those pairs were
     // a .t-title1/.t-title2 on a heading that said what the lit pill above it
     // already said; the elements are gone, so the pairs are too. Every pair
@@ -603,22 +611,26 @@ describe("Clarify renders on the kit", () => {
     // 99 before the engine card learned to fold; its disclosure put the kit's
     // .cell/.tappable onto the cold #/mission paint, which is two pairs that
     // were UNREACHED and are now guarded.
-    expect(pairs, "the (surface, file, class) table lost entries").toBe(101);
+    // 101 before the assistant panel went: its three (field, t-call, t-foot)
+    // named a file that no longer exists.
+    expect(pairs, "the (surface, file, class) table lost entries").toBe(98);
     expect(scannedAttrs, "the className scan read almost nothing across the table — it is broken").toBeGreaterThan(400);
 
     // …and the half that makes stripping a file's kit classes WHOLESALE go red.
     // The per-pair assertions above only cover the classes some surface happens
     // to reach; this one says every kit class every migrated file authors is
     // either guarded above or written down in UNREACHED with a reason. Strip
-    // the kit tokens out of any className in any of the eighteen and the two
+    // the kit tokens out of any className in any of the seventeen and the two
     // sides stop matching.
-    // Nineteen .jsx files, not the eighteen the migration note counts: Root.jsx
-    // is a mount shim and features/system/AgentsView.jsx is a metadata module
-    // whose two components were deleted, so both author ZERO kit classes and
-    // both are covered here by the empty-set case — which is itself the guard
-    // that says "put a row in this table before you style either of them".
+    // Eighteen .jsx files, not the seventeen the migration note counts:
+    // Root.jsx is a mount shim and features/system/AgentsView.jsx is a metadata
+    // module whose two components were deleted, so both author ZERO kit classes
+    // and both are covered here by the empty-set case — which is itself the
+    // guard that says "put a row in this table before you style either of
+    // them". Nineteen until features/system/GlobalAgent.jsx left with the
+    // "Ask Clarify" assistant.
     const JSX = FILES.map(([n]) => n).filter((n) => n.endsWith(".jsx"));
-    expect(JSX.length, "the FILES table lost one of the migrated files").toBe(19);
+    expect(JSX.length, "the FILES table lost one of the migrated files").toBe(18);
     for (const file of JSX) {
       const authoredKit = [...classTokens(strip(read(...file.split("/"))))].filter((t) => KIT_TOKEN.test(t)).sort();
       const accounted = [...new Set([...(guarded[file] || []), ...(UNREACHED[file] || [])])].sort();
@@ -638,6 +650,54 @@ describe("Clarify renders on the kit", () => {
     expect(cal, "CalendarView stopped rendering the month grid").toMatch(/<MonthCalendar[^>]*cards=\{cards\}/);
     // …and it really is on screen: MonthCalendar's own stat tiles show up.
     expect(classesIn(view("calendar")).has("stattile-label"), "#/calendar no longer paints the month grid's tiles").toBe(true);
+  });
+
+  it("ships no trace of the removed Ask Clarify assistant", () => {
+    // The operator asked for the launcher to go. A removal that leaves the
+    // panel, the send handler, the system prompt or the session-memory key
+    // behind is not a removal — it is a hidden button, one import away from
+    // being back on screen and one release away from nobody remembering why the
+    // dead code is there. So the guard is written over the SOURCE TREE, not one
+    // file: every .js/.jsx/.css under src/ except this suite.
+    //
+    // What went: features/system/GlobalAgent.jsx (launcher + AgentPanel + the
+    // send/clear handlers), its `agent_conversation` sessionMemory key, App's
+    // import and <GlobalAgent> mount, App's two `.co-agent-*` phone rules, and
+    // GLOBAL_AGENT_PROMPT in lib/prompts.js.
+    //
+    // What deliberately stayed, because Ask Clarify was one caller among many:
+    // callClaude and /.netlify/functions/claude (every AI feature in this app
+    // rides them), fetchPortfolioCounts (MissionControl reads it), and
+    // GOVERNANCE_RULES (the analyst prompt and lib/dna.js build on it). Those
+    // three are asserted PRESENT below so this guard can never be "satisfied"
+    // by deleting more than was asked for.
+    // Comments are stripped first: the two files that still SAY "Ask Clarify"
+    // say it in a tombstone explaining what left and why the thing next to it
+    // stayed, which is the note a future reader needs. Code is what may not
+    // mention it.
+    const files = srcFiles();
+    expect(files.length, "the source walk found almost nothing — it is broken").toBeGreaterThan(25);
+    const DEAD = ["Ask Clarify", "GlobalAgent", "AgentPanel", "agent_conversation", "GLOBAL_AGENT_PROMPT", "global_agent", "co-agent-root", "co-agent-panel"];
+    const hits = [];
+    for (const [name, src] of files) for (const d of DEAD) if (strip(src).includes(d)) hits.push(`${name}: ${d}`);
+    expect(hits, `the assistant is still reachable from source:\n${hits.join("\n")}`).toEqual([]);
+
+    // Nothing paints it either, on any of the eleven routes — a source grep
+    // cannot see a component that came back under another name.
+    for (const [v, html] of all()) {
+      expect(html, `#/${v} still paints an Ask Clarify control`).not.toMatch(/Ask Clarify/i);
+      expect(classesIn(html).has("co-agent-root"), `#/${v} still paints the launcher's fixed root`).toBe(false);
+    }
+
+    // The shared machinery it happened to use is still here.
+    // The trailing `(`/`=` is load-bearing: without it a rename to
+    // fetchPortfolioCountsX still contains the needle, and this assertion
+    // passes over the very deletion it exists to catch.
+    const survives = [["lib/claudeApi.js", "export async function callClaude("], ["lib/prompts.js", "export const GOVERNANCE_RULES ="], ["lib/supabase.js", "export async function fetchPortfolioCounts("]];
+    for (const [f, needle] of survives) {
+      expect(read(...f.split("/")), `${f}: \`${needle}\` went with the assistant — it had other callers`).toContain(needle);
+    }
+    expect(strip(read("features", "mission", "MissionControl.jsx")), "MissionControl stopped calling fetchPortfolioCounts").toContain("fetchPortfolioCounts()");
   });
 
   it("routes every button outside the DNA canvas through a kit surface", () => {
@@ -691,7 +751,7 @@ const FILES = [
   ["Root.jsx", "Root.jsx"],
   ["components/LeadJourney.jsx", "components/LeadJourney.jsx"],
   ...["auth/LoginScreen", "outreach/OutreachCard", "outreach/OutreachBoard", "inbound/InboundView",
-      "analyst/AnalystView", "clients/ClientsView", "system/GlobalAgent", "system/SettingsView",
+      "analyst/AnalystView", "clients/ClientsView", "system/SettingsView",
       "system/AgentsView", "mission/MissionControl", "mission/EnginePanel", "calendar/CalendarView",
       "queue/QueueView", "sequences/SequencesView", "analytics/AnalyticsView", "dna/DnaView"]
     .map((p) => [`features/${p}.jsx`, `features/${p}.jsx`]),
@@ -904,7 +964,13 @@ describe("Clarify obeys the language", () => {
     // and the pull-to-refresh suppression.
     expect(app).toContain("@media (display-mode: standalone)");
     expect(app).toContain("padding-top: env(safe-area-inset-top) !important");
-    expect(app).toContain(".co-agent-root { bottom: calc(68px + var(--safe-bottom)) !important;");
+    // `.co-agent-root` used to be the first of these — the "Ask Clarify"
+    // launcher's phone inset. The launcher is gone; the bulk bar and the undo
+    // toast are the floating layers that remain, and they still have to clear
+    // the dock. Both insets are asserted so the rule that survived cannot be
+    // deleted as "the rest of the agent's CSS".
+    expect(app).toContain(".co-bulkbar { bottom: calc(76px + var(--safe-bottom)) !important;");
+    expect(app).toContain(".co-undo { bottom: calc(76px + var(--safe-bottom)) !important;");
     expect(app).toContain("body { overscroll-behavior-y: contain; }");
     // DNA's dvh height math and its lift of the canvas HUD.
     const dna = read("features", "dna", "DnaView.jsx");
@@ -1133,7 +1199,6 @@ describe("Clarify mounts every component it ships", () => {
     ["SequenceCard", () => createElement(SequenceCard, { seq: SEQUENCE, steps: [SEQ_STEP], enrolledCount: 4, onSave: asyncNoop, onDelete: noop }), "4 enrolled"],
     ["LeadJourney", () => createElement(LeadJourney, { card: REPLIED_CARD, hasInbound: true }), "Contacted"],
     ["InboundLeadRow", () => createElement(InboundLeadRow, { lead: INBOUND_LEAD, selected: false, showPreview: true, onSelect: noop, onDelete: noop }), "Northside Dental"],
-    ["AgentPanel", () => createElement(AgentPanel, { messages: [], input: "", sending: false, endRef: { current: null }, onInput: noop, onSend: noop, onClear: noop, onClose: noop }), "Clarify Assistant"],
     ["QueueItem", () => createElement(QueueItem, { msg: QUEUE_MSG, onDone: noop }), "Following up on your Google Ads"],
     // The needle was "Mission control" — the deleted <h1>. "Outreach Pipeline"
     // is the first thing MissionControl itself still paints, so the mount is
@@ -1154,7 +1219,9 @@ describe("Clarify mounts every component it ships", () => {
     }
     // Scan sanity: dropping a row here is how twenty components became
     // unwatched in the first place.
-    expect(MOUNTS.length, "the mount table lost entries").toBe(35);
+    // 35 until AgentPanel — the "Ask Clarify" assistant's panel — was deleted
+    // along with the launcher that opened it.
+    expect(MOUNTS.length, "the mount table lost entries").toBe(34);
     // …and the twenty the reviewer proved unwatched are all named in it, by the
     // exact name the mutation used.
     const named = new Set(MOUNTS.map(([n]) => n.replace(/ .*$/, "")));

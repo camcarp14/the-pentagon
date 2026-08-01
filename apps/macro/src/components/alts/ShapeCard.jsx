@@ -23,25 +23,51 @@
 // the cron wrote down. The distinction is in the caption, in the aria-label and
 // in the lib's own header, because the two are one word apart and the wrong one
 // is a claim about data that does not exist.
-import React from 'react'
+//
+// COLLAPSED BY DEFAULT, AND NOTHING WAS REMOVED. Both reads are reference
+// material once the answer card above has stated how many coins are igniting and
+// what that is worth: the strip is a picture of a population and the line is a
+// month of one series. The collapsed row carries the one number that changes
+// what you would do — `N of M actionable`.
+//
+// THE BAND CHIPS ARE A FILTER AND FOLDING THEM DOES NOT REMOVE THE CONTROL. The
+// board's own `Show` select writes the same piece of state (see AltsPanel's
+// declaration of it), and the select is the one a keyboard and a screen reader
+// reach anyway. The chips are the pointer's shortcut, one tap deeper.
+import React, { useState } from 'react'
+import { Expand } from '../primitives.jsx'
 import { sparkPoints } from './sparkline.jsx'
 import { BAND_MEANING } from '../../lib/alts/pulse.js'
 
 export default function ShapeCard({
   dist = null, series = null, activeFilter = 'all', onPickBand, live = true,
 }) {
+  const [open, setOpen] = useState(false)
+
+  /** Cockpit.jsx's idiom: the whole title row is the control, and the collapsed
+   *  row carries a measurement rather than a description of the card. */
+  const Head = ({ state }) => (
+    <button className="ttl ttl-btn t-label" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+      Shape of the board
+      <span className="dr-state">{state}</span>
+      <span className={`dr-chev ${open ? 'open' : ''}`} aria-hidden>▾</span>
+    </button>
+  )
+
   if (!live || !dist || dist.total === 0) {
     return (
       <section className="card pad-md alt-shape" data-testid="alt-shape">
-        <div className="ttl t-label">Shape of the board</div>
-        <div className="empty">
-          <div className="glyph" aria-hidden>—</div>
-          <div className="empty-title">No ranked coins to count</div>
-          <div className="empty-sub">
-            The distribution is a count over the same rows the board ranks, so an empty board leaves it
-            with no denominator. It is left blank rather than drawn at zero. Use Refresh in the card above.
+        <Head state="nothing ranked" />
+        <Expand open={open}>
+          <div className="empty">
+            <div className="glyph" aria-hidden>—</div>
+            <div className="empty-title">No ranked coins to count</div>
+            <div className="empty-sub">
+              The distribution is a count over the same rows the board ranks, so an empty board leaves it
+              with no denominator. It is left blank rather than drawn at zero. Use Refresh in the card above.
+            </div>
           </div>
-        </div>
+        </Expand>
       </section>
     )
   }
@@ -53,7 +79,9 @@ export default function ShapeCard({
 
   return (
     <section className="card pad-md alt-shape" data-testid="alt-shape">
-      <div className="ttl t-label">Shape of the board</div>
+      <Head state={`${dist.actionable} of ${dist.total} actionable`} />
+      <Expand open={open}>
+
       <p className="sub t-foot alt-shape-note">
         Every ranked coin in this scan, by the state screen.js put it in — {dist.actionable} of {dist.total} are
         igniting, waking or running. Tap a band to filter the board to it.
@@ -96,6 +124,8 @@ export default function ShapeCard({
       </div>
 
       <AltShare series={series} />
+
+      </Expand>
     </section>
   )
 }

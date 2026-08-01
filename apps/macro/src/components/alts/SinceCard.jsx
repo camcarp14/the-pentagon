@@ -1,4 +1,4 @@
-// SINCE YOU LAST LOOKED — the events, above the list.
+// SINCE YOU LAST LOOKED — the events, one line per coin.
 //
 // This is the card the tab was missing. The season card says what the regime is
 // and the board says what everything scores, and between the two there was
@@ -7,6 +7,14 @@
 // a ranking has no memory — the coin that went from basing to igniting overnight
 // looks exactly like the coin that has been igniting for a week, and both of
 // them look like a row.
+//
+// IT IS COLLAPSED BY DEFAULT AND NOTHING IN IT WAS REMOVED. The answer card
+// above states the count and names the two most important events; this is where
+// you come to open one of them. The collapsed row carries the count and the span
+// — live state, not a description of the card — and crucially it carries
+// "nothing moved" and "no baseline" as DIFFERENT words, because those are the
+// two claims this whole file exists to keep apart and the collapsed row is what
+// most visits will read.
 //
 // WHERE THE MEMORY COMES FROM. Two board snapshots, both of them real scans this
 // browser received: the one on screen, and one stored at the end of an earlier
@@ -47,24 +55,36 @@ const NOUN = {
 }
 
 export default function SinceCard({ delta = null, rowsById = null, onSelect, live = true }) {
+  const [open, setOpen] = useState(false)
   const [all, setAll] = useState(false)
+
+  /** The whole title row is the control, and the collapsed row carries the state
+   *  rather than a description of itself — Cockpit.jsx's idiom, and a 12.5px
+   *  "expand" word is a ~70px invisible target on a phone. */
+  const Head = ({ state }) => (
+    <button className="ttl ttl-btn t-label" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+      Since you last looked
+      <span className="dr-state">{state}</span>
+      <span className={`dr-chev ${open ? 'open' : ''}`} aria-hidden>▾</span>
+    </button>
+  )
 
   // A dead or missing scan has no board to diff, and a card that quietly renders
   // its last answer over one is the same failure the season card was fixed for.
   if (!live || !delta) {
     return (
       <section className="card pad-md alt-since" data-testid="alt-since">
-        <div className="alt-since-top">
-          <span className="ttl t-label alt-since-ttl">Since you last looked</span>
-        </div>
-        <div className="empty">
-          <div className="glyph" aria-hidden>—</div>
-          <div className="empty-title">No board to compare</div>
-          <div className="empty-sub">
-            Every event here is a difference between two scans, so with no live scan there is nothing to
-            difference. Use Refresh in the card above; the comparison picks up again with the next good pass.
+        <Head state="no live scan" />
+        <Expand open={open}>
+          <div className="empty">
+            <div className="glyph" aria-hidden>—</div>
+            <div className="empty-title">No board to compare</div>
+            <div className="empty-sub">
+              Every event here is a difference between two scans, so with no live scan there is nothing to
+              difference. Use Refresh in the card above; the comparison picks up again with the next good pass.
+            </div>
           </div>
-        </div>
+        </Expand>
       </section>
     )
   }
@@ -74,21 +94,23 @@ export default function SinceCard({ delta = null, rowsById = null, onSelect, liv
   if (!delta.ok) {
     return (
       <section className="card pad-md alt-since" data-testid="alt-since">
-        <div className="alt-since-top">
-          <span className="ttl t-label alt-since-ttl">Since you last looked</span>
-        </div>
-        <div className="empty">
-          <div className="glyph" aria-hidden>◷</div>
-          <div className="empty-title">No comparison yet</div>
-          {/* pulse.js's own sentence, not a paraphrase of it. It states the
-              arithmetic it refused on, the way season.js's "1 of 7 stored days
-              needed" does, and a second wording here is a second thing to keep
-              true. */}
-          <div className="empty-sub">
-            {delta.reason}. The board below is complete and current — it is only the
-            <em> what changed</em> half that needs two passes to exist.
+        {/* "no baseline", not "nothing moved" — the two claims are opposites and
+            the collapsed row is where most visits will read this card. */}
+        <Head state="no baseline" />
+        <Expand open={open}>
+          <div className="empty">
+            <div className="glyph" aria-hidden>◷</div>
+            <div className="empty-title">No comparison yet</div>
+            {/* pulse.js's own sentence, not a paraphrase of it. It states the
+                arithmetic it refused on, the way season.js's "1 of 7 stored days
+                needed" does, and a second wording here is a second thing to keep
+                true. */}
+            <div className="empty-sub">
+              {delta.reason}. The board below is complete and current — it is only the
+              <em> what changed</em> half that needs two passes to exist.
+            </div>
           </div>
-        </div>
+        </Expand>
       </section>
     )
   }
@@ -99,8 +121,12 @@ export default function SinceCard({ delta = null, rowsById = null, onSelect, liv
 
   return (
     <section className="card pad-md alt-since" data-testid="alt-since">
+      <Head state={events.length === 0
+        ? `nothing moved${age ? ` in ${age}` : ''}`
+        : `${events.length} event${events.length === 1 ? '' : 's'}${age ? ` in ${age}` : ''}`} />
+      <Expand open={open}>
+
       <div className="alt-since-top">
-        <span className="ttl t-label alt-since-ttl">Since you last looked</span>
         {/* The age of the BASELINE is the headline fact about this card: the same
             three events are urgent across twenty minutes and unremarkable across
             three days. It is a chip and not a footnote for that reason. */}
@@ -144,6 +170,8 @@ export default function SinceCard({ delta = null, rowsById = null, onSelect, liv
           </p>
         </>
       )}
+
+      </Expand>
     </section>
   )
 }

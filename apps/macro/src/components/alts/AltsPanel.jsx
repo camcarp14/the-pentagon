@@ -1,4 +1,27 @@
-// THE ALTS TAB — season answer, ranked board, one coin in depth.
+// THE ALTS TAB — one answer, then the evidence for it, then one coin in depth.
+//
+// WHAT CHANGED AND WHY. This tab used to open with six surfaces of equal visual
+// weight — a season card, a since-card, a shape card, a shortlist, a filter row
+// and a banded board — every one of them honest and not one of them telling you
+// what to think. Reading all six and leaving without a read is the failure that
+// is fixed here, and it is the same failure the cockpit had: five honest cards,
+// none of which answered the question by itself. It gets the cockpit's fix.
+// ReadCard states a 0–10 score and answers four questions in rows, each carrying
+// the number you would act on; everything below it is the SAME material, still
+// here in full, collapsed, as evidence rather than headline.
+//
+// NOTHING WAS DELETED. The rule for what stays open: a surface earns the default
+// glance only if it changes what you would do next. The board does — it is the
+// list you act from. The season card, the since-card and the shape card do not,
+// because the answer card above already carries the one number each of them
+// contributes, so they fold behind their own title rows with their live state on
+// the collapsed line (Cockpit.jsx's idiom).
+//
+// THE ANSWER CARD IS NOT A SECOND OPINION. altsRead() is handed the SAME season
+// object the season card renders and the SAME rows array the board ranks, and it
+// computes no market fact of its own — see lib/alts/read.js. The distribution it
+// counts is the one the shape card draws, because it is literally the same
+// object: `read.dist` is passed down rather than computed twice.
 //
 // LAYOUT. Desktop (≥1020px) is two panes: the board on the left, the detail
 // sticky on the right, both always mounted. Under that it is one column, and
@@ -34,7 +57,9 @@ import { api } from '../../lib/api.js'
 import { freshness } from '../../lib/freshness.js'
 import { seasonRead } from '../../lib/alts/season.js'
 import { screenUniverse } from '../../lib/alts/screen.js'
-import { boardSnapshot, boardDelta, bandDistribution, altShareSeries, bandLeaders } from '../../lib/alts/pulse.js'
+import { boardSnapshot, boardDelta, altShareSeries, bandLeaders } from '../../lib/alts/pulse.js'
+import { altsRead } from '../../lib/alts/read.js'
+import ReadCard from './ReadCard.jsx'
 import SeasonCard from './SeasonCard.jsx'
 import SinceCard from './SinceCard.jsx'
 import ShapeCard from './ShapeCard.jsx'
@@ -175,13 +200,12 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
      *     is the honest instant to measure a stored history from. */
     const snapshot = boardSnapshot(rows, { asOf: at })
     const delta = boardDelta(baselineRef.current, snapshot)
-    const dist = bandDistribution(rows)
     const shareSeries = altShareSeries(payload?.domHistory ?? null, { now: at })
     const leaders = bandLeaders(rows)
 
     return {
       payload, season, rows, byId, trending: payload?.trending ?? null,
-      dashboard: { snapshot, delta, dist, shareSeries, leaders },
+      dashboard: { snapshot, delta, shareSeries, leaders },
     }
   }, [scan.data])
 
@@ -202,6 +226,29 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
   const trendingRank = trendingChecked && sel
     ? market.trending.find((t) => t?.id === sel.id)?.rank ?? null
     : null
+
+  /* THE HEADLINE, AND IT IS NOT A SECOND OPINION. altsRead is handed the exact
+   * objects the surfaces below render — `season` is the season card's, `rows` is
+   * the board's, `dashboard.delta` is the since-card's — and it computes no
+   * market fact of its own. `read.dist` then goes DOWN to the shape card, so the
+   * distribution the strip draws and the count the headline quotes are one
+   * object rather than two that agree.
+   *
+   * ITS INPUTS ARE THE GATED ONES, so the gate above covers it too and there is
+   * no sixth read to remember to gate. A SEPARATE MEMO from the market one
+   * because it depends on that gate, and the gate is not a function of the
+   * payload alone: a scan ages into `dead` while the payload never changes.
+   *
+   * IT TAKES THE STATE STRING AND NOT THE FRESHNESS OBJECT. `freshness()`
+   * returns a new literal on App's ten-second tick, so an object in this
+   * dependency list would re-run the read every ten seconds to produce identical
+   * output — the same recompute CoinDetail's memo was fixed for. The live age
+   * stays on the chip, which is allowed to re-render. */
+  const scanState = freshScan.state
+  const read = useMemo(
+    () => altsRead({ season, rows, delta: dashboard?.delta ?? null, scanState, live }),
+    [season, rows, dashboard, scanState, live],
+  )
 
   /* WRITING THE NEXT VISIT'S BASELINE. On hide and on unmount, never on a poll:
    * a write per poll is the roll-forward the block at the top of this file
@@ -392,30 +439,39 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
 
       <div className={`alt-panes${sel ? ' picked' : ''}`}>
         <div className="alt-pane-board">
-          <SeasonCard
-            season={season}
+          {/* THE HEADLINE. It carries the scan's own health — the freshness chip,
+              the cache age and Refresh — because it is the first thing on the
+              tab and a refused scan refuses this read before it refuses anything
+              else. On a phone every other card can be shut; Refresh cannot be
+              allowed to shut with one.
+
+              The cache age is gated with the rest of the payload, not beside it.
+              Ungated, a dead scan rendered "cached 4000s" — a real number about a
+              payload nothing else is allowed to quote. `FreshChip` already says
+              how old the scan is, and it says it from `asOf`. */}
+          <ReadCard
+            read={read}
             fresh={freshScan}
             sourceDetail={market.payload?.sourceDetail ?? null}
-            degraded={live ? market.payload?.degraded : null}
-            // Gated with the rest of the payload, not beside it. Ungated, a dead
-            // scan rendered "cached 4000s" — a real number about a payload
-            // nothing else on the card is allowed to quote — with the reasons it
-            // was degraded suppressed. The age of a payload we refuse to read is
-            // not a fact about the market; `FreshChip` already says how old the
-            // scan is, and it says it from `asOf`.
             cached={live && !!market.payload?.cached}
             cacheAgeSec={live ? market.payload?.cacheAgeSec ?? null : null}
             onReload={scan.reload}
           />
 
-          {/* THE LAYER THAT WAS MISSING, AND IT SITS BETWEEN THE TWO THINGS IT
-              CONNECTS. The season card states a regime; the board lists a
-              hundred rows; nothing joined them. Events first, because that is
-              what an operator opens a screener for and a ranked list cannot show
-              it; then the shape of the population the ranking is over; then the
-              ranking. Both cards are gated on `live` exactly like the board — a
-              dead scan may not diff a remembered board any more than it may
-              print a remembered price. */}
+          {/* ── THE EVIDENCE, in the order you would ask for it, and every one of
+              these is COLLAPSED with its live state on the title row. Nothing was
+              removed; the answer card above states the one number each of them
+              contributes, so an always-open copy directly beneath it was the tab
+              restating its own headline three times before you reached the board.
+              All three stay gated on `live` exactly like the board — a dead scan
+              may not diff a remembered board any more than it may print a
+              remembered price. */}
+          <SeasonCard
+            season={season}
+            degraded={live ? market.payload?.degraded : null}
+            onReload={scan.reload}
+          />
+
           <SinceCard
             delta={dashboard?.delta ?? null}
             rowsById={live ? market.byId : null}
@@ -423,7 +479,10 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
             live={live}
           />
           <ShapeCard
-            dist={dashboard?.dist ?? null}
+            // read.dist, NOT a second bandDistribution() over the same rows. One
+            // object, so the segment the strip draws and the count the answer
+            // card quotes cannot come apart.
+            dist={live ? read.dist : null}
             series={dashboard?.shareSeries ?? null}
             activeFilter={filter}
             onPickBand={setFilter}
@@ -503,7 +562,7 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
                The instruction survives as the last line of that card. */
             <AltLeaders
               groups={dashboard?.leaders ?? []}
-              dist={dashboard?.dist ?? null}
+              dist={live ? read.dist : null}
               onSelect={onSelect}
               live={live}
             />

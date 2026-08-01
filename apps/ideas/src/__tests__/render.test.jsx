@@ -261,23 +261,136 @@ describe("the recommendation comes from the pure module, not from this file", ()
 
   it("imports the ranker rather than scoring inline", () => {
     expect(src).toMatch(/from "\.\/lib\/rank\.js"/);
-    expect(src).toMatch(/recommend\(rows, \{ now: Date\.now\(\)/);
+    expect(src).toMatch(/recommend\(rows, \{ now, saved/);
   });
 
-  it("reads the clock ONCE per render and hands it down", () => {
-    // rank.js is pure and takes `now`. A clock read per row makes two identical
-    // repos score differently for no reason, and makes the module untestable.
-    expect([...src.matchAll(/Date\.now\(\)/g)]).toHaveLength(2); // the ranker, and `ago()`
+  it("reads the clock ONCE and hands it to both pure modules", () => {
+    // rank.js and cadence.js are both pure and both take `now`. A clock read
+    // per row makes two identical repos score differently for no reason, and
+    // makes the modules untestable. There are still exactly two reads in the
+    // file: the memo that produces `now`, and `ago()`. The queue added a second
+    // consumer of the clock and NOT a second reading of it.
+    expect([...src.matchAll(/Date\.now\(\)/g)]).toHaveLength(2);
+    expect(src, "`now` is not memoised, so it moves on every keystroke").toMatch(/const now = useMemo\(\(\) => Date\.now\(\)/);
+    expect(src, "the cadence reads its own clock").toMatch(/scanCadence\(runs, now\)/);
   });
 
   it("prints the reason and the addition, not a sparkle", () => {
-    expect(src, "the row must say why it was recommended").toMatch(/\{p\.reason\}/);
-    expect(src, "the score has to be checkable by eye").toMatch(/p\.parts\.map\(\(part\) => `\$\{part\.label\} \$\{part\.points\}`\)/);
+    // Now on every card in the queue rather than on the top two or three: ten
+    // repos you are being asked to judge, each carrying the sentence rank.js
+    // built and the addition behind the number.
+    expect(src, "the row must say why it was recommended").toMatch(/\{scored \? verdict\.reason :/);
+    expect(src, "the score has to be checkable by eye").toMatch(/verdict\.parts\.map\(\(part\) => `\$\{part\.label\} \$\{part\.points\}`\)/);
+  });
+
+  it("prints the REFUSAL where a refused row would otherwise show a number", () => {
+    // The gate in rank.js exists so a repo with no history cannot be scored.
+    // The card has to carry that through: no number, the row's own reason, and
+    // an em dash in the score slot — which cannot be misread as a quantity the
+    // way a 0 or a greyed-out 50 could.
+    expect(src).toMatch(/Not ranked — \$\{verdict\?\.blocked/);
+    expect(src).toMatch(/scored \? <AnimatedNumber value=\{verdict\.score\}/);
+  });
+
+  it("never claims 'the top N are here' about a queue that has moved past N", () => {
+    // rank.js's own sentence ends "…the top 3 are here", which is a claim about
+    // a slice off the top of the whole feed. Two rounds in, the ten on screen
+    // are ranks 21–30 and that sentence is false — so the file prints the count
+    // that clears the floor (a true claim about the feed) and only falls back to
+    // rank.js's prose when there is nothing above the floor at all, where every
+    // branch of it is a refusal rather than a slice.
+    expect(src).toMatch(/ranked\.above > 0[\s\S]{0,240}: ranked\.reason/);
   });
 
   it("shows the measured rate only where it was actually measured", () => {
     // A row rank.js could not measure prints nothing here — never a zero, which
     // would sit indistinguishably beside a genuine zero.
     expect(src).toMatch(/verdict\?\.observed != null && verdict\.score != null/);
+  });
+});
+
+/* ══ the queue ══════════════════════════════════════════════════════════════
+ *
+ * Every assertion here fails against the source as it stood before this change,
+ * where Ideas was a 500-row list with a three-row "Worth a look" panel on top.
+ * The behaviour itself is tested in src/lib/__tests__/queue.test.js, which can
+ * reach it; what is checked here is the wiring — the places where a component
+ * can quietly betray a correct pure module. */
+
+describe("Ideas is a review queue", () => {
+  const src = (() => {
+    const { readFileSync } = require("node:fs");
+    const { fileURLToPath } = require("node:url");
+    const { dirname, join } = require("node:path");
+    const here = dirname(fileURLToPath(import.meta.url));
+    return readFileSync(join(here, "..", "Root.jsx"), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  })();
+
+  it("keeps seen-state in the pure module beside the ranker", () => {
+    expect(src).toMatch(/from "\.\/lib\/queue\.js"/);
+    expect(src).toMatch(/from "\.\/lib\/cadence\.js"/);
+  });
+
+  it("takes the batch size from the module rather than writing 10 into the view", () => {
+    expect(src).toMatch(/splitQueue\(visible, review, BATCH\)/);
+    // A literal 10 in the component is a second source of truth for the size of
+    // a round, and the module's tests would not be testing the shipped number.
+    expect(src, "the batch size is hardcoded in the view").not.toMatch(/\bBATCH\s*=\s*\d/);
+  });
+
+  it("marks the ids that were ON SCREEN, not a freshly computed slice", () => {
+    // The queue is recomputed every render, so between the paint and the tap a
+    // refresh can change which ten the ranker offers. Recomputing inside the
+    // handler would stamp a repo the operator never saw.
+    expect(src).toMatch(/const ids = \(split\?\.queue \|\| \[\]\)\.map\(\(r\) => r\.id\)/);
+    expect(src).toMatch(/markReviewed\(prev, ids\)/);
+  });
+
+  it("persists through saveQueue on every write, so React and storage agree", () => {
+    expect(src).toMatch(/setReview\(\(prev\) => saveQueue\(fn\(prev\)\)\)/);
+    // Everything that changes the history goes through `commit`, so there is
+    // exactly one place that writes and exactly one that normalizes.
+    for (const fn of ["undoLastRound", "requeue", "clearReviewed", "markReviewed"]) {
+      expect(src, `${fn} is called outside commit()`).not.toMatch(new RegExp(`setReview\\([^)]*${fn}`));
+    }
+    expect(src, "the queue key is being cleared behind the operator's back").not.toMatch(/removeItem/);
+  });
+
+  it("offers BOTH ways back, and says so before the button is pressed", () => {
+    // A round comes back whole; one repo comes back on its own. Either is
+    // reachable from the queue screen itself, not only after the fact.
+    // One label component, three call sites, so the queue header, the history
+    // header and the empty state cannot describe the same action differently.
+    expect(src).toMatch(/Undo round \{round\} — put \{count\.toLocaleString\(\)\} back/);
+    expect([...src.matchAll(/<UndoLabel /g)]).toHaveLength(3);
+    // Under a filter the round is not the same number as what visibly returns,
+    // and the label has to carry both rather than promise ten and return one.
+    expect(src).toMatch(/here != null && here !== count/);
+    expect(src).toMatch(/onRequeue=\{historyMode \? putBack : null\}/);
+    expect(src, "the button does not say what it does to the ten").toMatch(/Marks them reviewed; nothing is deleted/);
+  });
+
+  it("names the filters on screen, because they re-rank inside the queue", () => {
+    expect(src).toMatch(/the queue re-ranks inside that/);
+    expect(src).toMatch(/onClearFilters/);
+  });
+
+  it("times the next scan off fetched runs, never off the schedule in a comment", () => {
+    // One row can date the last scan; it cannot time the next one.
+    expect(src).toMatch(/\.order\("ran_at", \{ ascending: false \}\)\.limit\(8\)/);
+    expect(src).toMatch(/sub=\{cadence\.text\}/);
+    expect(src, "a cadence is written into the view as prose").not.toMatch(/four times a day|every 6 hours/i);
+  });
+
+  it("keeps the Saved and Skills tabs, the filters and the search", () => {
+    expect(src).toMatch(/const TABS = \["ideas", "saved", "skills"\]/);
+    expect(src).toMatch(/<Filters/);
+    for (const id of ["ideas-q", "ideas-sort", "ideas-cat", "ideas-age"]) expect(src).toContain(id);
+  });
+
+  it("puts nothing under the touch floor into the sticky bar on a phone", () => {
+    // .btn sm is 34px. Fine for a pointer, under the floor for a thumb.
+    expect(src).toMatch(/isMobile \? "btn md quiet" : "btn sm quiet"/);
   });
 });

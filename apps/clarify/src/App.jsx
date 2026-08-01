@@ -16,7 +16,6 @@ import { KanbanColumn, ChainGroup, BulkActionsBar, UndoToast, ShortcutHelp, Dail
 import { InboundView } from "./features/inbound/InboundView.jsx";
 import { AnalystView } from "./features/analyst/AnalystView.jsx";
 import { ClientsView } from "./features/clients/ClientsView.jsx";
-import { GlobalAgent } from "./features/system/GlobalAgent.jsx";
 import { SettingsView } from "./features/system/SettingsView.jsx";
 import { MissionControl } from "./features/mission/MissionControl.jsx";
 import { CalendarView } from "./features/calendar/CalendarView.jsx";
@@ -394,8 +393,6 @@ export default function App({ embedded = false }) {
         .co-scroll-x { flex-wrap: nowrap !important; overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -16px 16px; padding: 0 16px; }
 
         /* Floating layers clear the bottom bar */
-        .co-agent-root { bottom: calc(68px + var(--safe-bottom)) !important; right: 12px !important; }
-        .co-agent-panel { width: calc(100vw - 24px) !important; height: min(520px, 72vh) !important; }
         .co-bulkbar { bottom: calc(76px + var(--safe-bottom)) !important; max-width: calc(100vw - 20px); flex-wrap: wrap; justify-content: center; }
         .co-undo { bottom: calc(76px + var(--safe-bottom)) !important; left: 12px !important; }
 
@@ -930,7 +927,6 @@ export default function App({ embedded = false }) {
       <SubNav tab={activeTab} currentView={currentView} onNavigate={setCurrentView} />
       <BottomBar activeTab={activeTab} onTab={(t) => setCurrentView(t.views[0])} inboundNew={inboundNew} />
 
-      <GlobalAgent cards={cards} />
       <AgentEngine cards={cards} />
       <DnaWorker cards={cards} toneMemory={toneMemory} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} actions={paletteActions} />
