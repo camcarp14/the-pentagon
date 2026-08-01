@@ -219,7 +219,12 @@
      six-checks note at the top of this file actually validated them at. None
      clears 4.5:1, which is the bar they need as the 10.5-15.5px TEXT this sheet
      also uses them for (.tc-val.tone-bad, .alt-band.b-extended, .c-score
-     .band-extended, .stattile-value.grade-rich). Lifting them to 4.5 on that
+     .band-extended, .stattile-value.grade-rich, and — added with the Alts
+     dashboard — .alt-chip.band-extended .alt-chip-k and .alt-leadrow-score).
+     That list is the point of this paragraph, so it has to keep pace with the
+     sheet: a registered shortfall whose consumer list has gone stale under-
+     states itself, and the next reader takes the smaller number at face value.
+     Lifting them to 4.5 on that
      ground produces #E36C88 and #F2682F — crimson becomes pink and burnt orange
      becomes tangerine, on the shipping trading screen, as a side effect of a
      light-mode release. That is a product decision and it is not this change's
