@@ -385,6 +385,96 @@ describe("Runway obeys the language", () => {
     expect(allCss).toMatch(/\.paper \{[^}]*background: #ffffff; color: #111418;/);
   });
 
+  it("paints no SURFACE out of a literal — light mode is somebody's job", () => {
+    // THE ONE THAT SHIPPED. Runway drew its sub-nav out of hardcoded white and
+    // black: a rgba(255,255,255,0.055) hairline, a 4.5%-white group, #525E74
+    // labels, #F7F9FC on a --surface-2 pill under a rgba(0,0,0,0.5) shadow.
+    // That is a correct picture of a midnight room and only of a midnight room.
+    // Measured in a browser with the light theme selected, the lit tab was
+    // #F7F9FC on #F4F5F7 — 1.03:1, i.e. the word telling you where you are was
+    // the least legible thing in the bar — and the hairline was white on white.
+    //
+    // Three places a literal is still legitimate, and the scan skips exactly
+    // those: as the FALLBACK inside var(--token, …) (a value that only lands
+    // where no token layer exists), inside the printed résumé and the @media
+    // print block (paper is paper in every palette), and in the `:where(:root)`
+    // token mirror, which is data — the test above pins three of its values.
+    const withoutFallbacks = allCss.replace(/var\(\s*--[\w-]+\s*,[^()]*(?:\([^()]*\)[^()]*)*\)/g, "var(--token)");
+    const offenders = [];
+    let inPaper = false, inPrint = false, depth = 0;
+    for (const raw of withoutFallbacks.split("\n")) {
+      const line = raw.trim();
+      if (!line) continue;
+      if (/^@media print/.test(line)) { inPrint = true; depth = 0; }
+      if (inPrint) {
+        depth += (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
+        if (depth <= 0 && line.includes("}")) inPrint = false;
+        continue;
+      }
+      if (/^\.paper/.test(line)) inPaper = true;
+      if (inPaper) { if (line.includes("}")) inPaper = false; continue; }
+      if (/^--[\w-]+\s*:/.test(line)) continue;          // the token mirror
+      if (/mask-image/.test(line)) continue;             // a mask stop is not a colour
+      if (/rgba?\(\s*(255,\s*255,\s*255|0,\s*0,\s*0)/.test(line) || /#[0-9a-fA-F]{3,8}\b/.test(line)) offenders.push(line);
+    }
+    expect(offenders, `a literal where a token belongs:\n${offenders.join("\n")}`).toEqual([]);
+
+    // …and the same in the markup. A chart gridline was stroke="rgba(255,255,
+    // 255,0.07)" — invisible on a light page, on the one surface in Runway
+    // whose structure IS its gridlines — and a nested résumé card was filled
+    // 2% white, which is 2% DARKER than the card it sits in, in one room only.
+    const jsxNoEmbed = jsx.replace(/const EMBED_OVERRIDES = `[\s\S]*?`;/, "");
+    const inMarkup = jsxNoEmbed.split("\n").map((l) => l.trim())
+      .filter((l) => /rgba?\(\s*(255,\s*255,\s*255|0,\s*0,\s*0)/.test(l) || /['"]#[0-9a-fA-F]{3,8}['"]/.test(l));
+    expect(inMarkup, `a literal colour in the markup:\n${inMarkup.join("\n")}`).toEqual([]);
+  });
+
+  it("builds the sub-nav from the kit's segmented control, like ZTS and Clarify", () => {
+    const app = stripComments(read("App.jsx"));
+    // The group IS `.seg`, the tabs ARE `.seg-opt`, and the fill behind the
+    // active one is the kit's measured `.seg-thumb` — the same three objects
+    // ZTS's bar and Clarify's `.co-nav` are made of. Runway used to hand-draw
+    // the pill, which is why it read as a different product.
+    expect(app, "the tab group is the kit's .seg").toContain('className="navgroup seg"');
+    expect(app, "the tabs are the kit's .seg-opt").toMatch(/nav-item seg-opt/);
+    expect(app, "the active fill is the kit's sliding thumb").toContain('className="seg-thumb"');
+    // …measured, not guessed, and read off the DOM so it cannot disagree with
+    // the NavLink that decided which tab is lit.
+    expect(app).toMatch(/querySelector\('\.nav-item\.active'\)/);
+    // Rendered from the hoisted table, which is also what names <main>.
+    expect(app).toMatch(/RAIL\.map/);
+    expect(app).toMatch(/export const railLabel/);
+    // Sticky off the MEASURED bar. A literal 52 here is the bug that put ZTS's
+    // nav 52px below content that started at 0 the day the bar went away.
+    expect(embed).toContain("top: var(--shell-bar, 52px)");
+    expect(embed).not.toMatch(/top:\s*52px/);
+    // Same ground and same separation as the other two bars: glass, blur, and
+    // ONE hairline (no shadow beside it).
+    expect(embed).toMatch(/background: var\(--glass\)/);
+    expect(embed).toMatch(/border-bottom: 1px solid var\(--line\)/);
+    expect(embed).toMatch(/backdrop-filter: blur\(20px\) saturate\(140%\)/);
+  });
+
+  it("shows the account nowhere — the shell's rail owns it", () => {
+    // The bar carried the signed-in address on its right until the shell grew a
+    // left rail whose footer shows it. Two of them on one screen is one too many.
+    const app = stripComments(read("App.jsx"));
+    expect(app, "the sub-nav must not render the account again").not.toMatch(/user\?\.email/);
+    expect(allCss, "and the rule that styled it is gone with it").not.toContain(".rail-foot .who");
+  });
+
+  it("makes ⌘K a control rather than a caption", () => {
+    // It used to be the words "⌘K jump anywhere": an advertisement for a
+    // shortcut, which did nothing when clicked and nothing at all on a device
+    // with no ⌘. It is the same `.btn sm quiet` button ZTS and Clarify carry.
+    const app = stripComments(read("App.jsx"));
+    expect(app).toMatch(/className="btn sm quiet cmdk-btn"/);
+    expect(app).toMatch(/onClick=\{onCommand\}/);
+    expect(app).not.toContain("jump anywhere");
+    // and the palette accepts being opened from outside while still owning close
+    expect(stripComments(read("ui/primitives.jsx"))).toMatch(/openSignal/);
+  });
+
   it("touches no storage key, table, query or function path", () => {
     // A restyle that renames a key is a data-loss bug wearing a stylesheet.
     for (const t of ["'jobs'", "'pipeline_events'", "'follow_ups'", "'target_profile'",

@@ -324,6 +324,11 @@ export function AppProvider({ children }) {
   // NOTE: auto-scan-on-open lives in the Shell (App.jsx) so it can toast; it
   // calls runScan, which drives the `scanning` flag the inbox reads.
 
+  // Nothing in Runway's chrome calls this any more: the shell's left rail owns
+  // identity and the sign-out beside it, and the sub-nav that used to duplicate
+  // both now carries neither. It stays on the store because the session is
+  // shared — the shell's sign-out ends THIS client's session too — and because
+  // an auth surface with no way out is a worse default than an unused export.
   const signOut = useCallback(() => supabase.auth.signOut(), []);
 
   const metrics = useMemo(

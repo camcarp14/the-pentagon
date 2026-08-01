@@ -176,7 +176,10 @@ function CompChart({ priced, floor }) {
     <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Compensation distribution by seniority" style={{ width: '100%', height: 'auto', fontVariantNumeric: 'tabular-nums' }}>
       {ticks.map((t) => (
         <g key={t}>
-          <line x1={X(t)} y1="4" x2={X(t)} y2={axisY} stroke="rgba(255,255,255,0.07)" />
+          {/* --line, not a 7%-white literal: a white gridline is nothing at all
+              on a light page, and this chart is the one surface in Runway whose
+              structure IS its gridlines. */}
+          <line x1={X(t)} y1="4" x2={X(t)} y2={axisY} stroke="var(--line)" />
           <text x={X(t)} y={axisY + 16} fill="var(--faint)" fontSize="11" textAnchor="middle">{fmtK(t)}</text>
         </g>
       ))}

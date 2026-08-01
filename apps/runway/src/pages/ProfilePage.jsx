@@ -177,7 +177,10 @@ function ResumeCard() {
       </div>
       <label className="f">Experience</label>
       {roles.map((r, i) => (
-        <div key={i} className="card pad-md" style={{ marginBottom: 10, background: 'rgba(255,255,255,0.02)' }}>
+        // --ink-a02, not a 2%-white literal: the tint has to come off the
+        // resolved ink or a "barely lighter" card is a "barely darker" one in
+        // the other room, which is the wrong direction for a nested card.
+        <div key={i} className="card pad-md" style={{ marginBottom: 10, background: 'var(--ink-a02)' }}>
           <div className="frow c3">
             <div><label className="f" htmlFor={`rm-co-${i}`}>Company</label><input className="field" id={`rm-co-${i}`} value={r.company} onChange={(e) => setRole(i, { company: e.target.value })} /></div>
             <div><label className="f" htmlFor={`rm-ti-${i}`}>Title</label><input className="field" id={`rm-ti-${i}`} value={r.title} onChange={(e) => setRole(i, { title: e.target.value })} /></div>

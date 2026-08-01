@@ -149,7 +149,11 @@ export const useToast = () => useContext(ToastCtx) || (() => {});
 
 // ---- ⌘K command palette: navigation + actions ----
 // items: [{ label, path?, run?, hint?, k: ['keyword', ...] }]
-export function CommandK({ items = [] }) {
+// openSignal: bump the number to open it from outside — the sub-nav's ⌘K
+//   button does. A signal rather than a controlled `open` prop because this
+//   component already owns closing (Escape, a pick, the scrim), and a caller
+//   that owns opening but not closing is the shorter half of that contract.
+export function CommandK({ items = [], openSignal = 0 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [i, setI] = useState(0);
@@ -175,6 +179,8 @@ export function CommandK({ items = [] }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+  // 0 is "nobody has asked yet", so a fresh mount never opens on its own.
+  useEffect(() => { if (openSignal > 0) { setOpen(true); setQ(''); setI(0); } }, [openSignal]);
   useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 10); }, [open]);
   useEffect(() => { document.body.style.overflow = open ? 'hidden' : ''; return () => { document.body.style.overflow = ''; }; }, [open]); // scroll lock
   useEffect(() => { setI(0); }, [q]);

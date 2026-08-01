@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
 import { AppProvider, useApp, STAGES, stageLabel } from './lib/store.jsx';
 import { ToastProvider, CommandK, SkBoard, SkLine, ErrorState, useToast } from './ui/primitives.jsx';
@@ -41,14 +41,54 @@ const RAIL = [
  *  <h1> (the company and the role), which is a record name and not a repeat. */
 export const railLabel = (pathname) => RAIL.find((r) => r.to === pathname)?.label;
 
-function Rail() {
-  const { session, signOut, discoveries } = useApp();
-  const cls = ({ isActive }) => `nav-item${isActive ? ' active' : ''}`;
+// THE SUB-NAV. On a desktop this is the horizontal bar every other tool has
+// (see styles in Root.jsx's EMBED_OVERRIDES); on a phone it is the bottom tab
+// bar (styles in app.css's mobile block). One markup, two layouts.
+//
+// WHAT IT BORROWS, AND WHY: the group is the kit's `.seg`, the tabs are its
+// `.seg-opt`, and the fill behind the active one is a measured `.seg-thumb` —
+// the same three classes ZTS's bar and Clarify's `.co-nav` are built from. The
+// pill used to be hand-drawn here (its own fill, its own two-part shadow, its
+// own greys) and read like a different product: a raised pill in one tool, a
+// recessed one in this one, and in light mode a near-white label on a near-white
+// fill, because those greys were literals with no light half.
+//
+// The active tab is read off the DOM rather than re-derived from the path.
+// NavLink already decides it — `to="/"` is `end`, `/jobs/:id` matches nothing —
+// and a second copy of that rule here is a second thing to get wrong; when the
+// two disagreed the thumb would sit under the wrong word.
+function Rail({ onCommand }) {
+  const { discoveries } = useApp();
+  const cls = ({ isActive }) => `nav-item seg-opt${isActive ? ' active' : ''}`;
   const queued = (discoveries || []).length;
+  const location = useLocation();
+  const groupRef = useRef(null);
+  const [thumb, setThumb] = useState({ left: 0, width: 0, ready: false });
+
+  useLayoutEffect(() => {
+    const group = groupRef.current;
+    if (!group) return undefined;
+    const measure = () => {
+      const on = group.querySelector('.nav-item.active');
+      // No tab is lit on a job's detail page. Hiding the thumb is the honest
+      // answer — parking it under Board would claim you were somewhere else.
+      if (!on) { setThumb((t) => (t.ready ? { ...t, ready: false } : t)); return; }
+      setThumb({ left: on.offsetLeft, width: on.offsetWidth, ready: true });
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    // The group resizes when the layout flips between the bar and the bottom
+    // dock, and when the discovery badge appears next to Capture.
+    const ro = new ResizeObserver(measure);
+    ro.observe(group);
+    return () => ro.disconnect();
+  }, [location.pathname, queued]);
+
   return (
-    <nav className="rail">
+    <nav className="rail" aria-label="Runway">
       <div className="brand"><span className="dot" /><span className="t-head">Runway</span></div>
-      <div className="navgroup">
+      <div className="navgroup seg" ref={groupRef}>
+        {thumb.ready && <span className="seg-thumb" aria-hidden="true" style={{ left: `${thumb.left}px`, width: `${thumb.width}px` }} />}
         {RAIL.map((r) => (
           <NavLink key={r.to} to={r.to} end={r.end} className={cls}>
             <TabIco name={r.icon} />
@@ -59,10 +99,15 @@ function Rail() {
           </NavLink>
         ))}
       </div>
+      {/* The account lived here and does not any more: the shell's rail footer
+          shows who you are signed in as, and two of them on one screen is one
+          too many. What stays is ⌘K — and it stays because it is now a CONTROL
+          rather than a caption. It used to be the words "⌘K jump anywhere",
+          which advertised a shortcut and did nothing when you pressed it; this
+          is the same `.btn sm quiet` button ZTS and Clarify carry, so the
+          palette is reachable by pointer as well as by keyboard. */}
       <div className="rail-foot">
-        <div><kbd>⌘K</kbd> jump anywhere</div>
-        <div className="who" title={session?.user?.email}>{session?.user?.email}</div>
-        <button className="btn ghost sm" onClick={signOut}>Sign out</button>
+        <button type="button" className="btn sm quiet cmdk-btn" onClick={onCommand} title="Command palette (⌘K)" aria-label="Command palette">⌘K</button>
       </div>
     </nav>
   );
@@ -85,6 +130,11 @@ function Shell() {
   const { session, jobs, loadError, refresh, moveStage, boards, runScan } = useApp();
   const toast = useToast();
   const location = useLocation();
+  // The ⌘K button in the sub-nav and the ⌘K keystroke open the same palette.
+  // A bumped counter rather than a boolean: CommandK owns whether it is open
+  // (it closes itself on Escape, on a pick and on the scrim), and a controlled
+  // `open` prop here would mean two things believing they own that state.
+  const [commandSignal, setCommandSignal] = useState(0);
 
   // auto-scan watched boards on open, at most once per session and only when
   // the last scan is stale — new roles appear without hunting through tabs
@@ -154,7 +204,7 @@ function Shell() {
 
   return (
     <div className="shell">
-      <Rail />
+      <Rail onCommand={() => setCommandSignal((n) => n + 1)} />
       <main className="main" aria-label={railLabel(location.pathname)}>
         {loadError ? (
           <ErrorState msg={`Couldn't load your data: ${loadError}`} onRetry={refresh} />
@@ -172,7 +222,7 @@ function Shell() {
           </div>
         )}
       </main>
-      <CommandK items={paletteItems} />
+      <CommandK items={paletteItems} openSignal={commandSignal} />
     </div>
   );
 }

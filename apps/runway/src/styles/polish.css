@@ -16,9 +16,14 @@
 .big, .mono, .val, table td, .badge, .stattile-value { font-variant-numeric: tabular-nums; }
 h1, h2, h3 { text-wrap: balance; }
 ::selection { background: var(--accent-a32, rgba(139,124,255,0.32)); }
-* { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.18) transparent; }
+/* Scrollbars. The thumb was a literal 14%-WHITE, which is a thumb you cannot
+   see on a light page — and this sheet is injected into the SHARED document
+   head, so that was the scrollbar of whatever was on screen, not just Runway's.
+   --ink-a* is the same ladder tinted by the resolved --ink, so the thumb is
+   dark-on-light and light-on-dark without a second rule. */
+* { scrollbar-width: thin; scrollbar-color: var(--ink-a18) transparent; }
 *::-webkit-scrollbar { width: 9px; height: 9px; }
-*::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 99px; }
+*::-webkit-scrollbar-thumb { background: var(--ink-a14); border-radius: 99px; }
 
 /* press physics — the kit already scales every <button> on :active; these are
    the transitions that make the state changes read as motion rather than cuts */
