@@ -140,7 +140,7 @@ function BottomBar({ activeTab, onTab, inboundNew }) {
     // Canonical bottom-bar geometry — must stay identical to ZTS, Runway and
     // Macro (see the note on ZTS's BottomNav) or the bar changes height when you
     // switch tools.
-    <div className="co-bottombar" style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 400, display: "none", background: "rgba(11,15,26,0.92)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: `1px solid ${T.line}`, padding: "4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))" }}>
+    <div className="co-bottombar" style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 400, display: "none", background: "var(--glass-raised, rgba(11,15,26,0.92))", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: `1px solid ${T.line}`, padding: "4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))" }}>
       <div style={{ display: "flex" }}>
         {NAV_TABS.map(t => {
           const on = activeTab === t.key;
@@ -289,7 +289,7 @@ export default function App({ embedded = false }) {
          radial glow: brass top-left, cool blue top-right. The dark cut of the
          same signature the light era had. */
       body {
-        background-color: #0B0F1A;
+        background-color: var(--shell-canvas, #0B0F1A);
         background-image:
           radial-gradient(1200px 600px at 12% -8%, rgba(201,165,87,0.07), transparent 60%),
           radial-gradient(1000px 700px at 100% 0%, rgba(110,168,254,0.05), transparent 55%);
@@ -880,7 +880,7 @@ export default function App({ embedded = false }) {
     // wrapper that holds every tool, and nothing here touches document.body.
     <div data-kit style={{ minHeight: "100vh", background: "transparent", color: T.ink, fontFamily: T.fontBody }}>
       {/* Nav — five tabs, one product */}
-      <div className="co-nav" style={{ borderBottom: `1px solid ${T.lineSoft}`, padding: "0 24px", height: "52px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: embedded ? "var(--shell-bar, 52px)" : 0, background: "rgba(11,15,26,0.78)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", zIndex: 50 }}>
+      <div className="co-nav" style={{ borderBottom: `1px solid ${T.lineSoft}`, padding: "0 24px", height: "52px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: embedded ? "var(--shell-bar, 52px)" : 0, background: "var(--glass, rgba(11,15,26,0.78))", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "18px", minWidth: 0 }}>
           {!embedded && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>

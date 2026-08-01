@@ -130,7 +130,7 @@ function useGlobalStyles() {
       *, *::before, *::after { box-sizing: border-box; }
       * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
       html, body { margin: 0; font-family: var(--font-body, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif); }
-      body { background-color: #0B0F1A; background-image: radial-gradient(1200px 600px at 12% -8%, rgba(62,207,142,0.06), transparent 60%), radial-gradient(1000px 700px at 100% 0%, rgba(110,168,254,0.05), transparent 55%); background-attachment: fixed; }
+      body { background-color: var(--shell-canvas, #0B0F1A); background-image: radial-gradient(1200px 600px at 12% -8%, rgba(62,207,142,0.06), transparent 60%), radial-gradient(1000px 700px at 100% 0%, rgba(110,168,254,0.05), transparent 55%); background-attachment: fixed; }
       ::-webkit-scrollbar { width: 8px; height: 8px; }
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
@@ -334,7 +334,7 @@ export function BottomNav({ view, setView, tabs }) {
     // The bar keeps its own geometry rather than the kit's .dock, because .dock
     // pads with env(safe-area-inset-bottom) and this bar's safe-area formula is
     // the canonical one above, shared with three other tools.
-    <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", background: "rgba(11,15,26,0.92)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: `1px solid ${T.line}`, padding: "4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))" }}>
+    <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", background: "var(--glass-raised, rgba(11,15,26,0.92))", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: `1px solid ${T.line}`, padding: "4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))" }}>
       {tabs.map(t => {
         const active = view === t;
         const color = active ? T.greenDeep : T.faint;
@@ -1934,7 +1934,7 @@ export default function App({ embedded = false }) {
       // Glass bar: a hairline edge and NOTHING else. It used to draw the
       // hairline AND a two-part drop shadow, which is the border-plus-shadow
       // pair the language forbids — the same fix Macro's bar took.
-      <div style={{ borderBottom: `1px solid ${T.line}`, padding: isMobile ? "0 16px" : "0 24px", height: "52px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: embedded ? "52px" : 0, background: "rgba(11,15,26,0.78)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", zIndex: 50 }}>
+      <div style={{ borderBottom: `1px solid ${T.line}`, padding: isMobile ? "0 16px" : "0 24px", height: "52px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: embedded ? "var(--shell-bar, 52px)" : 0, background: "var(--glass, rgba(11,15,26,0.78))", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
           {!embedded && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>

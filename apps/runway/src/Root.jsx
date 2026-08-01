@@ -40,7 +40,7 @@ const EMBED_OVERRIDES = `
     position: sticky; top: var(--shell-bar, 52px); height: 52px; width: 100%;
     flex-direction: row; align-items: center; gap: 6px;
     border-right: none; border-bottom: 1px solid rgba(255,255,255,0.055);
-    background: rgba(11,15,26,0.78);
+    background: var(--glass, rgba(11,15,26,0.78));
     backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%);
     padding: 0 24px; z-index: 50;
   }

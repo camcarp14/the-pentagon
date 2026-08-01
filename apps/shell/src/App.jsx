@@ -182,77 +182,166 @@ function LoginScreen() {
 //
 // Mobile never sees this. The phone bar was measured and fixed in the commit
 // before last (five tools on one line, eight wrapping 5+3) and is not in scope.
-const SideRail = forwardRef(function SideRail({ active, onPick, apps, paused, systemOpen, onSystem, onSignOut }, ref) {
+// Line-art marks, one per tool, 18px on a 1.6 stroke. Board Room's rail reads as
+// a product because each row has a SHAPE before it has a word — you learn the
+// position by glyph and stop reading the label after a day. A coloured dot
+// cannot do that: eight dots are eight of the same shape in eight hues, which is
+// a legend, not an icon set.
+//
+// The dot does not disappear, it moves job: it is the paused/active state now,
+// carried on the glyph's colour instead of beside it.
+const TOOL_ICON = {
+  zts: "M12 3 4 6.5v5c0 4.4 3.2 8.3 8 9.5 4.8-1.2 8-5.1 8-9.5v-5L12 3Z",           // shield — security
+  clarify: "M4 6h16M4 12h10M4 18h7M17 15l2.5 2.5L23 13",                            // lines + check — outreach
+  runway: "M3 20h18M6 20V9l6-5 6 5v11M10 20v-5h4v5",                                // building — the job search
+  macro: "M3 17l5-6 4 3 4-6 5 4M3 21h18",                                           // chart — the market
+  looper: "M17 3l4 4-4 4M21 7H8a4 4 0 0 0-4 4v1M7 21l-4-4 4-4M3 17h13a4 4 0 0 0 4-4v-1", // loop
+  business: "M3 21V8l7-5 7 5v13M9 21v-5h4v5M21 21V12l-4-3",                          // office
+  sync: "M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1", // the day, radiating
+  ideas: "M9 21h6M10 18h4M12 3a6 6 0 0 0-3.5 10.9c.6.5.9 1.2.9 1.9v.2h5.2v-.2c0-.7.3-1.4.9-1.9A6 6 0 0 0 12 3Z", // bulb
+};
+const ToolGlyph = ({ app, color }) => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6"
+    strokeLinecap="round" strokeLinejoin="round" aria-hidden style={{ flexShrink: 0 }}>
+    <path d={TOOL_ICON[app] || "M4 4h16v16H4z"} />
+  </svg>
+);
+
+const SunIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden>
+    <circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4" />
+  </svg>
+);
+const MoonIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+  </svg>
+);
+const GearIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.08a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V11a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+  </svg>
+);
+
+// ─── the desktop rail ─────────────────────────────────────────────────────────
+//
+// The tools were a horizontal row in the top bar, which spends a desktop's
+// scarcest axis — vertical — on chrome. Vertical is what a wide screen has least
+// of and horizontal is what it has most of, so the top-level nav goes where the
+// room is.
+//
+// One nav level only. Each tool keeps its own sub-tabs at the top of the content
+// column; nesting those in here would be a different information architecture.
+// Mobile never sees this — the phone bar was measured and fixed separately and
+// renders the wrapping row exactly as it did.
+//
+// THE FOOTER IS WHERE THE THEME LIVES, and that is the whole reason the setting
+// reads as working now. It was correct before this — light mode really did flip
+// the ground, the palette really did repaint every tool — but it was three taps
+// deep inside System, so the honest report was "the theme tool doesn't seem to
+// be working." A setting nobody can find is indistinguishable from one that does
+// nothing. One tap here for the ground; the full palette picker stays in System,
+// where the sixteen-way choice belongs.
+const SideRail = forwardRef(function SideRail({ active, onPick, apps, paused, systemOpen, onSystem, onSignOut, email, mode, onToggleMode }, ref) {
+  const nextMode = mode === "dark" ? "light" : "dark";
   return (
     <div
       ref={ref}
       data-kit
-      // Sticky rather than fixed: fixed would take it out of flow and the
-      // content column would need a margin equal to a width that is measured
-      // asynchronously — a frame of overlap on every load, and a permanent
-      // second source of truth for the same number. Sticky keeps it in the flex
-      // row, so the column's width IS the remainder, with no arithmetic.
+      // Sticky rather than fixed: fixed takes it out of flow, and the content
+      // column would then need a margin equal to a width that is measured
+      // asynchronously — a frame of overlap on every load, and a second source
+      // of truth for one number. Sticky keeps it in the flex row, so the
+      // column's width IS the remainder, with no arithmetic anywhere.
       style={{
         position: "sticky", top: 0, alignSelf: "flex-start",
-        height: "100vh", flex: "0 0 auto",
-        width: 216,
+        height: "100vh", flex: "0 0 auto", width: 212,
         display: "flex", flexDirection: "column",
-        paddingTop: "max(14px, env(safe-area-inset-top))", paddingBottom: 14,
+        paddingTop: "max(12px, env(safe-area-inset-top))", paddingBottom: 10,
         borderRight: "1px solid var(--line)",
-        background: "color-mix(in srgb, var(--bg) 60%, var(--surface))",
+        background: "color-mix(in srgb, var(--bg) 55%, var(--surface))",
         zIndex: 101,
       }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "0 14px 14px", flexShrink: 0 }}>
-        <PentagonLogo size={22} />
+      <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "2px 14px 12px", flexShrink: 0 }}>
+        <PentagonLogo size={20} />
         <span className="t-head" style={{ color: "var(--ink)", whiteSpace: "nowrap" }}>The Pentagon</span>
       </div>
 
-      <nav aria-label="Switch tool" style={{ display: "flex", flexDirection: "column", gap: 2, padding: "0 8px", overflowY: "auto", flex: "1 1 auto", minHeight: 0 }}>
+      <nav aria-label="Switch tool" style={{ display: "flex", flexDirection: "column", gap: 1, padding: "0 8px", overflowY: "auto", flex: "1 1 auto", minHeight: 0 }}>
         {apps.map((a) => {
           const m = appMeta(a);
           const on = a === active && !systemOpen;
           const off = paused?.has?.(a);
           return (
-            <button key={a} type="button" onClick={() => onPick(a)} title={m.brand}
+            <button key={a} type="button" onClick={() => onPick(a)} title={off ? `${m.brand} — paused` : m.brand}
               aria-current={on ? "true" : undefined}
               style={{
-                display: "flex", alignItems: "center", gap: 9,
-                width: "100%", minWidth: 0, padding: "0 10px", minHeight: 36,
-                border: "none", borderRadius: 9, cursor: "pointer", textAlign: "left",
+                display: "flex", alignItems: "center", gap: 10,
+                width: "100%", minWidth: 0, padding: "0 10px", minHeight: 34,
+                border: "none", borderRadius: 8, cursor: "pointer", textAlign: "left",
                 // The active row is drawn, never slid — the same call the
                 // horizontal row made when it stopped measuring a thumb.
                 background: on ? "var(--surface-2, var(--surface))" : "transparent",
-                boxShadow: on ? "var(--shadow-tab)" : "none",
-                color: on ? m.accent : "var(--faint)",
+                color: on ? "var(--ink)" : "var(--muted)",
                 fontSize: 13, fontWeight: on ? 600 : 500, letterSpacing: 0,
-                opacity: off ? 0.5 : 1,
                 transition: `color ${M.durBase} ${M.easeStd}, background ${M.durBase} ${M.easeStd}`,
               }}>
-              <span aria-hidden style={{
-                width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
-                // A paused tool gets a hollow dot, not a dimmer one: "off" has to
-                // survive being read at a glance beside seven lit siblings.
-                background: off ? "transparent" : m.accent,
-                border: off ? `1.5px solid ${m.accent}` : "none",
-                boxShadow: on && !off ? `0 0 8px ${m.accent}` : "none",
-              }} />
-              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.label}</span>
+              {/* The accent lives on the GLYPH, not on a separate dot. One mark
+                  carrying both identity and state is what makes eight rows read
+                  as a set rather than as a legend with a colour key. */}
+              <ToolGlyph app={a} color={off ? "var(--faint)" : on ? m.accent : "var(--faint)"} />
+              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: off ? 0.6 : 1 }}>{m.label}</span>
               {off && <span className="t-cap" style={{ marginLeft: "auto", color: "var(--faint)", flexShrink: 0 }}>off</span>}
             </button>
           );
         })}
       </nav>
 
-      {/* System and Sign out are chrome, not tools, and the gap between them and
-          the list is what says so. */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "12px 12px 0", marginTop: 8, borderTop: "1px solid var(--line)", flexShrink: 0 }}>
+      {/* System is chrome, not a tool, so it sits under a hairline rather than
+          inside the list — but it is the same row shape, because a full-width
+          filled button down here read as a form control in a nav. */}
+      <div style={{ padding: "8px 8px 0", marginTop: 6, borderTop: "1px solid var(--line)", flexShrink: 0 }}>
         <button onClick={onSystem} type="button" aria-pressed={systemOpen}
-          title="System — usage, minds & agents across every tool"
-          className={systemOpen ? "btn sm tinted" : "btn sm quiet"}
-          style={{ justifyContent: "flex-start", width: "100%" }}>
-          <span aria-hidden style={{ width: 6, height: 6, borderRadius: "50%", background: systemOpen ? "var(--accent)" : "var(--faint)", flex: "none" }} />System
+          title="System — ops, usage, minds, agents, tabs and theme"
+          style={{
+            display: "flex", alignItems: "center", gap: 10, width: "100%",
+            padding: "0 10px", minHeight: 34, border: "none", borderRadius: 8, cursor: "pointer", textAlign: "left",
+            background: systemOpen ? "var(--surface-2, var(--surface))" : "transparent",
+            color: systemOpen ? "var(--ink)" : "var(--muted)",
+            fontSize: 13, fontWeight: systemOpen ? 600 : 500,
+            transition: `color ${M.durBase} ${M.easeStd}, background ${M.durBase} ${M.easeStd}`,
+          }}>
+          <span style={{ color: systemOpen ? "var(--accent)" : "var(--faint)", display: "flex" }}><GearIcon /></span>
+          System
         </button>
-        <button className="btn sm quiet" onClick={onSignOut} style={{ justifyContent: "flex-start", width: "100%" }}>Sign out</button>
+      </div>
+
+      {/* The account row, Board Room's shape: who you are, and the one control
+          that changes the whole page, on the same line. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px 0", marginTop: 4, flexShrink: 0 }}>
+        <span title={email || undefined} style={{
+          minWidth: 0, flex: "1 1 auto", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          fontSize: 11.5, color: "var(--faint)",
+        }}>{email || "signed in"}</span>
+        <button type="button" onClick={onToggleMode}
+          title={`Switch to ${nextMode} mode`} aria-label={`Switch to ${nextMode} mode`}
+          style={{
+            display: "grid", placeItems: "center", width: 28, height: 28, flexShrink: 0,
+            border: "none", borderRadius: 8, cursor: "pointer", background: "transparent", color: "var(--faint)",
+            transition: `color ${M.durBase} ${M.easeStd}, background ${M.durBase} ${M.easeStd}`,
+          }}>
+          {mode === "dark" ? <SunIcon /> : <MoonIcon />}
+        </button>
+        <button type="button" onClick={onSignOut} title="Sign out" aria-label="Sign out"
+          style={{
+            display: "grid", placeItems: "center", width: 28, height: 28, flexShrink: 0,
+            border: "none", borderRadius: 8, cursor: "pointer", background: "transparent", color: "var(--faint)",
+          }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+          </svg>
+        </button>
       </div>
     </div>
   );
@@ -639,8 +728,19 @@ export default function Shell() {
   const barRef = useRef(null);
   useLayoutEffect(() => {
     const el = barRef.current;
-    if (!el) return;
-    const root = el.closest("[data-app]") || document.documentElement;
+    // No bar (desktop, rail up) means no offset. Publish 0 rather than leaving
+    // the last measured height behind, or six tools sizing themselves with
+    // `calc(100vh - var(--shell-bar))` each keep a 52px hole where a bar was.
+    //
+    // Written to [data-app] and NOWHERE ELSE, including when that element does
+    // not exist yet. Falling back to documentElement looked harmless and was
+    // not: on the first paint the shell is still resolving its session, so the
+    // wrapper is absent, the 0px landed on the root — and custom properties
+    // inherit, so every tool then read `var(--shell-bar, 52px)` as 0 for the
+    // life of the page, with the real height set one element further down where
+    // it could never win. The browser harness caught it; no unit test could.
+    const root = document.querySelector("[data-app]");
+    if (!el) { if (root) root.style.setProperty("--shell-bar", "0px"); return; }
     const publish = () => {
       // +1 for the bar's own bottom border, which is on the wrapper, not here.
       root.style.setProperty("--shell-bar", `${Math.round(el.getBoundingClientRect().height) + 1}px`);
@@ -791,6 +891,13 @@ export default function Shell() {
         <SideRail
           ref={railRef} active={active} onPick={pick} apps={tabs} paused={paused}
           systemOpen={systemOpen} onSystem={() => setSystemOpen((o) => !o)} onSignOut={() => auth.signOut()}
+          email={session?.user?.email}
+          mode={mode}
+          // The rail toggles the GROUND only, and writes an explicit mode rather
+          // than cycling through "system": a one-tap control whose next state
+          // depends on the laptop's setting is a control you cannot predict.
+          // "System" stays available in the full picker, where it can be labelled.
+          onToggleMode={() => applyThemePrefs({ ...themePrefs, mode: mode === "dark" ? "light" : "dark" })}
         />
       )}
 
@@ -820,13 +927,25 @@ export default function Shell() {
         ? { flex: "1 1 auto", minWidth: 0, transform: "translateZ(0)", position: "relative" }
         : undefined}>
 
-      {/* Shell top bar — the ONE global chrome, themed to the active tool.
+      {/* THE TOP BAR IS DESKTOP-OPTIONAL NOW. With the rail up it holds the
+          mark, the tools, System and Sign out — all of which moved into the
+          rail — so what is left is 52px of empty chrome charged to the axis a
+          desktop has least of.
+
+          The first attempt at this broke ZTS: its sub-nav was `top: "52px"`,
+          a hardcoded copy of a number that had been measured and published as
+          --shell-bar for exactly this reason, so with the bar gone the nav sat
+          52px down while its content started at 0 and the two overlapped. The
+          nav reads the variable now (and so does Clarify's), which is what makes
+          removing the bar safe rather than merely tempting.
+
+          Shell top bar — the ONE global chrome, themed to the active tool.
           data-kit goes HERE and not on the wrapper above. The wrapper contains
           every tool, and @cc/ui's kit styles .btn/.card/.field/.sheet — names
           eight apps already own and mean different things by. Opting the wrapper
           in would restyle all of them at once; opting the bar in restyles the
           chrome and nothing else. */}
-      <div data-kit style={{
+      {!rail && <div data-kit style={{
         position: "sticky", top: 0, zIndex: 100,
         paddingTop: "env(safe-area-inset-top)",
         borderBottom: "1px solid var(--line)",
@@ -902,7 +1021,7 @@ export default function Shell() {
           </>}
         </div>
       </div>
-      </div>
+      </div>}
 
       {/* OUTSIDE the boundary and outside Suspense, on purpose: the tool below
           may still be downloading, or may have thrown, and "your engines are
