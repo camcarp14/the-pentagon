@@ -52,18 +52,56 @@ const SPEC = {
   synapseHi: "var(--accent-hi, #D89BFF)",
   inhibit: "var(--red, #F87171)",
   speckInk: "var(--ink, #E9EDF5)",
+  // Read for its side effects on the four derived values below, and dropped
+  // before the palette is handed over — the canvas has no `shadowFloat` key and
+  // normalizePalette() warns about anything it does not know.
+  shadowFloat: "var(--shadow-float)",
 };
 
-const STATIC = Object.freeze({
-  glassBorder: "rgba(255,255,255,0.05)",
-  line: "rgba(255,255,255,0.08)",
-  lineSoft: "rgba(255,255,255,0.05)",
-  nodeStroke: "rgba(255,255,255,0.20)",
+/**
+ * The eight tokens that are NOT read from a variable, and the one rule they
+ * follow now: derive from a resolved token, never from a literal.
+ *
+ * Every one of these used to be a literal, and every one of them was a
+ * dark-room literal — four white hairlines at 5-20%, a black three-part shadow,
+ * and the orchid accent written out by hand in three places. That was invisible
+ * while the Pentagon was dark-only and is the "half-migrated corner" the moment
+ * data-theme reaches light: a 5%-white hairline on paper is nothing at all, a
+ * 20%-white node stroke is a halo around every neuron, and 55%-black under the
+ * canvas toast is a grey smear rather than depth.
+ *
+ * They cannot move into SPEC, because the canvas takes finished colours and
+ * these need an alpha the token layer does not publish a variable for. Deriving
+ * them from `ink` and `select` — which ARE resolved, and which both have a light
+ * half — gets the same result in both rooms from one expression.
+ *
+ * On the FIRST render, before the effect below has resolved anything, `ink` and
+ * `select` are still `var(--…)` strings and chan()'s tolerant parser returns its
+ * grey sentinel for them. That is one frame, it is what `glass` has always done
+ * here, and the package documents the grey as "a colour was missing" rather than
+ * as a crash.
+ */
+function derived(p) {
+  const shadow = /\dpx/.test(p.shadowFloat || "")
+    ? p.shadowFloat
+    // Only if --shadow-float is genuinely absent (a standalone dev entry with
+    // no shell). resolveVars hands back its own grey sentinel there, which is
+    // not a valid shadow list at all, so a length check is the guard.
+    : "0 10px 28px rgba(0,0,0,0.55), 0 2px 10px rgba(0,0,0,0.4)";
+  return {
+    glassBorder: rgba(p.ink, 0.06),
+    line: rgba(p.ink, 0.10),
+    lineSoft: rgba(p.ink, 0.05),
+    nodeStroke: rgba(p.ink, 0.20),
 
-  selectLine: "rgba(195,107,255,0.32)",
-  focusRing: "rgba(195,107,255,0.34)",
-  shadow: "0 10px 28px rgba(0,0,0,0.55), 0 2px 10px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06)",
-  glow: "0 0 24px rgba(195,107,255,0.20)",
+    selectLine: rgba(p.select, 0.32),
+    focusRing: rgba(p.select, 0.34),
+    shadow,
+    glow: `0 0 24px ${rgba(p.select, 0.2)}`,
+  };
+}
+
+const STATIC = Object.freeze({
   fontDisplay: "var(--font-body)",
   fontMono: "var(--font-mono)",
   region: REGION_HUE,
@@ -86,8 +124,9 @@ export function useSyncMindPalette(ref) {
   }, [ref]);
 
   const p = { ...STATIC, ...SPEC, ...(resolved || null) };
+  const { shadowFloat, ...rest } = { ...p, ...derived(p) };
   // The HUD panel is the page colour at 80%, the way SYNC's copy always built
-  // it — so it follows --bg between Obsidian (#000000) and the shell (#0B0F1A)
-  // instead of pinning one of them.
-  return { ...p, glass: rgba(p.bg, 0.8) };
+  // it — so it follows --bg between a true-black standalone room, the Pentagon's
+  // dark ground and the Pentagon's paper one instead of pinning any of them.
+  return { ...rest, glass: rgba(p.bg, 0.8) };
 }

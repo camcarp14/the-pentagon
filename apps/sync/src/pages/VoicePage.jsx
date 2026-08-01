@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useStore } from "../data/useStore.js";
 import { setSettings } from "../data/store.js";
 import { useVoice } from "../voice/VoiceProvider.jsx";
-import { Segmented, SwitchRow, CellGroup, SectionHeader, Button, useToast } from "../ui/kit.jsx";
+import { PageHead, Segmented, SwitchRow, CellGroup, SectionHeader, Button, useToast } from "../ui/kit.jsx";
 import { IcSpeaker, IcAlert } from "../ui/icons.jsx";
 
 // ─── Voice ───────────────────────────────────────────────────────────────────
@@ -58,13 +58,32 @@ export default function VoicePage() {
     setTimeout(() => setPreviewing(false), 2500);
   };
 
+  // THE PAGE FURNITURE EVERY OTHER PAGE HAS, AND THIS ONE DID NOT.
+  //
+  // Voice was the only destination rendering its content straight into
+  // `.app-page` — no PageHead, no `.content-scroll`, no `.content-max`. The
+  // consequences were not cosmetic. `.app-page` is a fixed-height flex column
+  // inside a root that is `overflow: hidden`, so with no scroll container the
+  // bottom of this page was CLIPPED AND UNREACHABLE: 104px of it at 1440x900
+  // and 394px at 393x852, which is the wake-word switch and the whole paragraph
+  // about what a conversation streams to Deepgram. Measured in a browser; no
+  // source-text assertion could see it.
+  // The full-bleed was the other half — with no `.content-max` every card ran
+  // to both edges of the column while every other page's stopped at 900px.
+  //
+  // The <h1> does not come back with it. The heading said "Voice" underneath a
+  // lit "Voice" pill; `namedByNav` is the same call Queue and Brief already
+  // make, and the page's accessible name comes from the region App.jsx wraps it
+  // in, wired to the same TAB_LABELS entry the pill renders.
   return (
-    <div className="pagefade" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <div className="t-head" style={{ marginBottom: 2 }}>Voice</div>
-        <div className="t-foot" style={{ marginBottom: 18 }}>
-          How SYNC listens, and how it sounds. Changes take effect on the next thing it says.
-        </div>
-
+    <>
+      <PageHead
+        title="Voice"
+        namedByNav
+        sub="How SYNC listens, and how it sounds. Changes take effect on the next thing it says."
+      />
+      <div className="content-scroll">
+        <div className="content-max pagefade" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         {/* ── talking ─────────────────────────────────────────────────── */}
         <SectionHeader title="Talking" />
         <CellGroup>
@@ -194,6 +213,8 @@ export default function VoicePage() {
             </span>
           </span>
         </div>
-    </div>
+        </div>
+      </div>
+    </>
   );
 }

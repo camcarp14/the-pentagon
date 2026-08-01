@@ -18,6 +18,22 @@ export const NAV = [
   { key: "voice", label: "Voice", Icon: IcSpeaker, hint: "How it listens and sounds" },
 ];
 
+/**
+ * The hoisted label map — the same shape ZTS and Clarify publish.
+ *
+ * NAV was already the one table, but three surfaces reached past it and wrote
+ * the words again: the palette's "Go" group listed five destinations by hand
+ * (it had Memory, which is not one, and was missing Mind and Voice, which are),
+ * and the Voice page opened with its own <h1>Voice</h1> under the lit Voice
+ * pill. Both drifted because there was nothing to import. `tabLabel(key)` is
+ * that thing: the sub-nav pill, the tab bar label, the page region's accessible
+ * name and the palette entry are now one string, and a rename lands in all four
+ * or in none.
+ */
+export const TABS = NAV.map((n) => n.key);
+export const TAB_LABELS = Object.freeze(Object.fromEntries(NAV.map((n) => [n.key, n.label])));
+export const tabLabel = (k) => TAB_LABELS[k] || k;
+
 /** The count each destination shows in the rail — attention, not decoration. */
 export function navBadges(s) {
   const today = dayKey();

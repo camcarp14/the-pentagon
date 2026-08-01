@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef } from "react";
-import { NAV } from "./nav.js";
+import { TAB_LABELS } from "./nav.js";
 import { getState } from "./data/store.js";
 import { VoiceProvider, useVoice } from "./voice/VoiceProvider.jsx";
 import { useHotkey } from "./ui/hooks.js";
 import Onboarding from "./chrome/Onboarding.jsx";
-import { Sidebar, Dock } from "./chrome/Shell.jsx";
+import { SubNav, Dock } from "./chrome/Shell.jsx";
 import CommandK from "./chrome/CommandK.jsx";
 import SettingsSheet from "./chrome/SettingsSheet.jsx";
 import ConsolePage from "./pages/ConsolePage.jsx";
@@ -121,18 +121,25 @@ function Workspace() {
 
   return (
     <div className="app">
-      {!phone && <Sidebar page={page} setPage={setPage} onSettings={() => setSettingsOpen(true)} onPalette={() => setPalette(true)} />}
+      {/* The sub-nav is the desktop navigation and the desktop status line, in
+          one 52px band under the shell's chrome — the ZTS/Clarify shape. It is
+          not drawn on a phone, where the tab bar at the bottom of the column is
+          the navigation and the Console keeps its own control row; that is the
+          same call ZTS makes (`!(embedded && isMobile)`), and it is what keeps
+          a phone from wearing two navigation bars for six destinations. */}
+      {!phone && <SubNav page={page} setPage={setPage} onSettings={() => setSettingsOpen(true)} onPalette={() => setPalette(true)} />}
 
       <main className="app-main">
         {/* Keying on `page` restarts the entrance animation, so a destination
             develops instead of snapping into place.
-            The region name comes from NAV, the same table the rail and the dock
-            render from. Queue and Brief dropped their <h1> — it was the word
-            already lit beside them — and a page with no heading is a page a
-            screen reader cannot name; this is where the name went. `memory` is
-            routable but not a NAV destination, so it falls back to its own
-            still-visible heading rather than borrowing a wrong one. */}
-        <div key={page} className="app-page" role="region" aria-label={NAV.find((n) => n.key === page)?.label}>
+            The region name comes from TAB_LABELS, the same map the sub-nav pill
+            and the tab bar render from. Queue, Brief and Voice dropped their
+            <h1> — it was the word already lit beside them — and a page with no
+            heading is a page a screen reader cannot name; this is where the
+            name went. `memory` is routable but not a NAV destination, so it
+            falls back to its own still-visible heading rather than borrowing a
+            wrong one. */}
+        <div key={page} className="app-page" role="region" aria-label={TAB_LABELS[page]}>
           <Page onSettings={() => setSettingsOpen(true)} setPage={setPage} />
         </div>
 
@@ -140,7 +147,7 @@ function Workspace() {
             column. It clears the home indicator through the shell's
             --safe-bottom, which is 0 on a letterboxed install where the
             reported inset is dead space rather than real. */}
-        {phone && !keyboardOpen && <Dock page={page} setPage={setPage} onSettings={() => setSettingsOpen(true)} />}
+        {phone && !keyboardOpen && <Dock page={page} setPage={setPage} />}
       </main>
 
       <CommandK

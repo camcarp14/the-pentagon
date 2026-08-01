@@ -26,21 +26,109 @@ import { useTween } from "./hooks.js";
 // (styles.css) keeps the pair out of the layout entirely, so every fixed child
 // still measures against the viewport exactly as it did.
 //
-// cssVars("sync") is stamped inline rather than left to the cascade, and it has
-// to be. Half the properties .sy-scope reads — --muted, --border, --good,
-// --bad, --warn, --accent-ink — exist ONLY in that object; @cc/design's
-// stylesheet never emits them, the shell puts them on its wrapper at render,
-// and <body> is above that wrapper. Worse, the :root palette a portal WOULD
-// inherit is Porcelain, the light one. Left to the cascade a sheet would come
-// out half-unstyled on a light ground inside a dark app. Same call the shell
-// makes on the same helper, so there is one palette and not two.
+// ── AND THE PART THAT WAS PINNED TO ONE ROOM ────────────────────────────────
+//
+// This wrapper used to stamp the WHOLE of cssVars("sync") inline and hardcode
+// `data-theme` to appMeta("sync").mode — which is the string "dark", for ever.
+// The argument for it was sound as far as it went (half the names .sy-scope
+// reads exist only in that object) and it was written when the Pentagon was
+// dark-only, so the frozen half could not be seen. It can now: with the shell
+// in light mode, SYNC's Settings sheet, its confirms, its toasts and its ⌘K
+// palette all rendered MIDNIGHT — measured at rgb(20,27,44) on a white page,
+// which is the whole "hardcoded dark chrome" failure in one component.
+//
+// THE FIX IS TO COPY THE TREE RATHER THAN TO RE-DERIVE IT. The invariant this
+// wrapper wants is one sentence — *a portaled surface is themed exactly like the
+// tool it belongs to* — and the shell has already decided what that means: it
+// puts `data-palette` and `data-theme` on the tool's wrapper and stamps whatever
+// custom properties it wants to win inline on that same element. So this reads
+// them back off `[data-app]` and re-applies them here.
+//
+// That is deliberately NOT a second copy of the shell's rules. The shell has two
+// strategies (stamp the whole MIDNIGHT table when the operator is on the default
+// dark theme, or delete the mode-bound names so themes.css wins), and re-deriving
+// which one is live would be a branch to keep in step for ever. Copying the
+// RESULT keeps both strategies right, and any third one the shell grows later.
+//
+// The attribute pair matters as much as the values: themes.css matches
+// `[data-palette="sync"][data-theme="light"]` and tokens.css matches
+// `[data-theme="light"]` — plain attribute selectors, not `:root` — so carrying
+// the pair is what lets the generated light half reach this subtree at all.
+//
+// Watched, not read once: a sheet can be open when the operator flips the mode
+// or switches palette, and the toast host's layer is mounted for the life of the
+// tab.
+//
+// With no shell at all (a standalone dev entry) there is no `[data-app]`, and
+// the fallback is exactly what this component did before: cssVars("sync") over
+// SYNC's own dark mode.
+//
+// Two names in .sy-scope's capture block used to depend on the stamp being
+// unconditional — see styles.css, where the eight cssVars()-only aliases now
+// carry the generated token as their var() fallback.
+const FALLBACK_LAYER = Object.freeze({
+  palette: "sync",
+  mode: appMeta("sync").mode,
+  vars: Object.freeze(cssVars("sync")),
+});
+
+function readShellLayer() {
+  // `typeof document !== "undefined"` is not enough of a guard. This app is
+  // rendered to static markup by its own component suite against a partial DOM
+  // shim, where `document` exists and `querySelector` does not — and a portal
+  // layer that throws there takes every sheet, toast and palette case with it.
+  if (typeof document === "undefined" || typeof document.querySelector !== "function") return FALLBACK_LAYER;
+  const el = document.querySelector("[data-app]");
+  if (!el) return FALLBACK_LAYER;
+  const vars = {};
+  // Custom properties only, and not the --shell-* pair. The wrapper also carries
+  // minHeight/background/etc., which describe the shell's own box and would be
+  // nonsense on a display:contents bridge; --shell-bar and --shell-rail are
+  // measurements the shell rewrites on every resize frame, which nothing out
+  // here reads and which would re-render the portal for the length of a drag.
+  for (const name of el.style) {
+    if (!name.startsWith("--") || name.startsWith("--shell-")) continue;
+    vars[name] = el.style.getPropertyValue(name);
+  }
+  return {
+    palette: el.getAttribute("data-palette") || FALLBACK_LAYER.palette,
+    mode: el.getAttribute("data-theme") || FALLBACK_LAYER.mode,
+    vars,
+  };
+}
+
+const sameLayer = (a, b) =>
+  a.palette === b.palette && a.mode === b.mode &&
+  Object.keys(a.vars).length === Object.keys(b.vars).length &&
+  Object.keys(a.vars).every((k) => a.vars[k] === b.vars[k]);
+
+function useShellLayer() {
+  const [layer, setLayer] = useState(readShellLayer);
+  useEffect(() => {
+    const sync = () => setLayer((prev) => { const next = readShellLayer(); return sameLayer(prev, next) ? prev : next; });
+    sync();
+    if (typeof MutationObserver === "undefined") return;
+    // Two elements, attributes only — never the subtree. Every PortalLayer in
+    // this app is rendered from inside SYNC, which is itself inside [data-app],
+    // so the wrapper is guaranteed to exist by the time one mounts; and a
+    // subtree observer here would fire on every keystroke in the composer.
+    const mo = new MutationObserver(sync);
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    const el = document.querySelector("[data-app]");
+    if (el) mo.observe(el, { attributes: true, attributeFilter: ["style", "data-theme", "data-palette", "data-app"] });
+    return () => mo.disconnect();
+  }, []);
+  return layer;
+}
+
 export function PortalLayer({ children }) {
+  const { palette, mode, vars } = useShellLayer();
   return (
     <div
       className="sy-scope"
-      data-palette="sync"
-      data-theme={appMeta("sync").mode}
-      style={cssVars("sync")}
+      data-palette={palette}
+      data-theme={mode}
+      style={vars}
     >
       <div className="sy-root sy-layer" data-kit>{children}</div>
     </div>

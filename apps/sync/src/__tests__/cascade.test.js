@@ -189,6 +189,39 @@ describe("the iOS safe-area overrides are each individually pinned", () => {
   const kitEnvRules = S.rules.filter(
     (r) => r.sheet === "kit" && r.decls.some((d) => /env\(\s*safe-area-inset/i.test(d.value)));
 
+  // ── the one carve-out, and what keeps it honest ─────────────────────────
+  // `targetedElements` is the union of BOTH sheets' selectors, so it includes
+  // classes the kit styles and SYNC does not render. There is exactly one that
+  // matters here: the kit's `.sidebar`, which pads with a raw
+  // env(safe-area-inset-*) and which SYNC used to neutralize because it drew a
+  // 232px rail of its own. That rail is gone — the six destinations are a
+  // horizontal row now (`.sy-nav`), because with the shell's own left rail up a
+  // second vertical nav inside the content column was two stacked vertical
+  // navs. Nothing in this app emits `.sidebar` any more, so its override was
+  // dead CSS and was deleted with the rest of the rail.
+  //
+  // A carve-out that merely asserts "we don't render that" would rot the moment
+  // someone did, so it is checked rather than claimed: the guard below reads
+  // this app's own JSX and fails if the class comes back.
+  const UNRENDERED = /\bsidebar\b/;
+  it("does not render the kit class it stops defending against", () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const src = join(here, "..");
+    const files = [];
+    (function walk(d) {
+      for (const e of readdirSync(d, { withFileTypes: true })) {
+        if (e.name === "__tests__" || e.name === "node_modules") continue;
+        const full = join(d, e.name);
+        if (e.isDirectory()) walk(full);
+        else if (/\.jsx?$/.test(e.name)) files.push(full);
+      }
+    })(src);
+    expect(files.length, "source files to scan").toBeGreaterThan(20);
+    const offenders = files.filter((f) => /["'`][^"'`]*\bsidebar\b/.test(readFileSync(f, "utf8")));
+    expect(offenders.map((f) => f.slice(src.length + 1)),
+      "SYNC renders a .sidebar again — put its safe-area override back and drop this carve-out").toEqual([]);
+  });
+
   it("knows which kit rules it is defending against", () => {
     // Scan sanity with teeth. If the kit stopped using env() altogether, the
     // leak sweep below would pass against nothing and this file would go on
@@ -211,7 +244,7 @@ describe("the iOS safe-area overrides are each individually pinned", () => {
       "height", "max-height", "min-height",
     ];
     const leaks = [];
-    for (const t of targetedElements(S))
+    for (const t of targetedElements(S).filter((t) => !UNRENDERED.test(t.key)))
       for (const m of MEDIA)
         for (const p of GEOMETRY) {
           const r = resolve(S, t.chain, p, m);
@@ -229,7 +262,8 @@ describe("the iOS safe-area overrides are each individually pinned", () => {
     [".sheet",      "max-height",     "",                            /^calc\(100% - 24px\)$/],
     [".sheet",      "max-height",     "@media (min-width: 761px)",   /^calc\(100% - 96px\)$/],
     [".sheet-foot", "padding-bottom", "",                            /var\(--safe-bottom/],
-    [".sidebar",    "padding-bottom", "",                            /var\(--safe-bottom/],
+    // `.sidebar` used to have a row here. SYNC no longer renders one — see the
+    // carve-out above, which is what stops that from being an unchecked claim.
     [".toasts",     "bottom",         "",                            /var\(--safe-bottom/],
     [".entrance",   "padding-bottom", "",                            /var\(--safe-bottom/],
   ];
@@ -266,7 +300,11 @@ describe("every hover tint SYNC adds fades rather than cuts", () => {
   // migration caught it for .side-item and .icon-btn (both carry a comment
   // saying "the kit declares none, so the hover would hard-cut") and missed it
   // for .pill, which is the control the Brief, Queue and Console filter with.
-  const TINTED = [".pill", ".side-item", ".icon-btn"];
+  // `.side-item` used to be in this list and left with the rail. `.seg-opt` did
+  // NOT replace it here: the kit draws the segmented control's active state as a
+  // sliding .seg-thumb rather than as a hover tint, so there is no SYNC tint on
+  // it to fade.
+  const TINTED = [".pill", ".icon-btn"];
 
   /** The property names a `transition` shorthand actually animates. */
   const transitioned = (v) =>
@@ -335,12 +373,12 @@ describe("SYNC still supplies the type properties the kit leaves out", () => {
 
   it("keeps the app's typeface on the controls the kit renders as bare buttons", () => {
     // `.sy-root button { font-family: inherit }` is the one rule the app's whole
-    // typeface depends on: .cell, .seg-opt, .pill, .side-item and .dock-tab are
-    // all <button>s, and the kit sets font-family on .btn and .field and on
+    // typeface depends on: .cell, .seg-opt, .pill and .dock-tab are all
+    // <button>s, and the kit sets font-family on .btn and .field and on
     // nothing else. Without it those five render in the UA's default control
     // face — Helvetica on iOS, in an app whose entire type scale is Inter.
     // Deleting the rule was GREEN before this assertion existed.
-    for (const cls of ["cell", "seg-opt", "pill", "side-item", "dock-tab"]) {
+    for (const cls of ["cell", "seg-opt", "pill", "dock-tab"]) {
       const r = resolve(S, el({ tag: "button", classes: [cls] }), "font-family");
       expect(r, `a <button class="${cls}"> has no font-family — it will render in the UA's control face`).not.toBeNull();
       expect(/^(inherit|var\(--font-)/.test(r.value), `.${cls} font-family: ${where(r)}`).toBe(true);

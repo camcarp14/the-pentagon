@@ -62,15 +62,36 @@ export default function VoiceOrb({
 
     // Additive blending is right on black and wrong on white: on a pale
     // surface "lighter" drives every overlap toward white, and the orb
-    // dissolves. QUARTZ gets ordinary alpha compositing instead, which reads
-    // like ink in water rather than light in a dark room.
+    // dissolves. A light room gets ordinary alpha compositing instead, which
+    // reads like ink in water rather than light in a dark room.
+    //
+    // TWO THINGS WERE READ OFF THE WRONG ELEMENT HERE, and both were invisible
+    // for as long as the Pentagon was dark-only:
+    //
+    //   1. `--orb-1/2/3` were read from <html>. They are declared on .sy-root
+    //      (styles.css, the adoption block), so the lookup found nothing and
+    //      every orb in the app fell through to the three literals below —
+    //      standalone SYNC's blue/violet/green, not the Pentagon's SYNC accent.
+    //      The canvas is inside .sy-root, and custom properties inherit, so
+    //      asking the canvas is what makes the adoption block reach the one
+    //      element it was written for.
+    //   2. the room was `data-theme === "day"`, which was QUARTZ's attribute
+    //      value. Quartz is gone; the shell writes "light" or "dark". So the
+    //      light branch below — an entire second rendering of the orb, written
+    //      deliberately for a pale page — has never once executed inside the
+    //      Pentagon, and light mode shipped with the dark room's additive path
+    //      painting a washed grey smudge where the orb should be.
+    //      Anything that is not "dark" takes the light path: a room this code
+    //      has not heard of is far likelier to be pale than to be true black,
+    //      and the light path degrades to "flat and slightly dull" where the
+    //      dark one degrades to "invisible".
     const readPalette = () => {
       colors = [
-        readVar(root, "--orb-1", "#6AA8FF"),
-        readVar(root, "--orb-2", "#A98BF5"),
-        readVar(root, "--orb-3", "#35C08A"),
+        readVar(canvas, "--orb-1", "#6AA8FF"),
+        readVar(canvas, "--orb-2", "#A98BF5"),
+        readVar(canvas, "--orb-3", "#35C08A"),
       ];
-      light = root.getAttribute("data-theme") === "day";
+      light = (root.getAttribute("data-theme") || "dark") !== "dark";
     };
     readPalette();
 

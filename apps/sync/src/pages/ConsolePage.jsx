@@ -193,9 +193,21 @@ export default function ConsolePage({ onSettings }) {
     <div className="console">
       {/* ── the stage ─────────────────────────────────────────────────── */}
       <div className="stage">
-        {/* In flow, not absolutely positioned: on an installed PWA the stage
+        {/* PHONE ONLY, and that is the whole change here.
+            These three were a second copy of controls the rail already drew a
+            few hundred pixels to the left — speak, settings and the microphone,
+            twice on one screen. The sub-nav now carries all three (plus ⌘K and
+            the phase readout) and is reachable from every destination, so on
+            anything wider than a phone this row would be the duplicate.
+            On a phone there is no sub-nav — the tab bar is the navigation — so
+            this row stays exactly as it was and is still the only way to reach
+            Settings there. Deleting it outright is the regression the Dock's
+            own comment describes: an unreachable gear is how the API key came
+            to be unset on the one device that gets used.
+            In flow, not absolutely positioned: on an installed PWA the stage
             carries the status-bar inset as padding, and anything pinned to its
             border box would sit underneath the clock. */}
+        {phone && (
         <div className="console-bar">
           <IconButton
             label={s.settings.speak ? "Mute SYNC" : "Let SYNC speak"}
@@ -220,6 +232,7 @@ export default function ConsolePage({ onSettings }) {
             {s.settings.ambient ? <IcMic size={17} /> : <IcMicOff size={17} />}
           </IconButton>
         </div>
+        )}
 
         <VoiceOrb
           size={orbSize}

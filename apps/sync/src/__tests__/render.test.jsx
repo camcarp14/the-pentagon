@@ -321,9 +321,9 @@ const firstRun = () => {
   return render(createElement(App));
 };
 
-// The workspace: sidebar, console, orb, composer. matchMedia in the shim
-// answers false to everything, so this is the desktop layout — the rail rather
-// than the tab bar.
+// The workspace: sub-nav, console, orb, composer. matchMedia in the shim
+// answers false to everything, so this is the desktop layout — the horizontal
+// sub-nav rather than the phone's tab bar.
 const workspace = () => {
   setSettings({ onboarded: true });
   return render(createElement(App));
@@ -337,7 +337,11 @@ describe("SYNC renders", () => {
 
   it("renders the workspace without throwing", () => {
     expect(() => workspace()).not.toThrow();
-    expect(workspace()).toContain("console-bar");
+    // `sy-nav`, not `console-bar`: the six destinations moved out of a vertical
+    // rail and into the horizontal row every other tool has, and the Console's
+    // own control row is drawn on a phone only now that the row carries the
+    // same three controls from every page.
+    expect(workspace()).toContain("sy-nav");
   });
 
   it("holds the first paint until its stylesheet is in the document", () => {
@@ -371,9 +375,13 @@ describe("SYNC is on the shared kit", () => {
   it("draws the workspace out of the kit", () => {
     const out = workspace();
     for (const cls of [
-      'class="side-item active"', 'class="icon-btn on"', 'class="card pad-lg"',
+      'class="seg-opt active"', 'class="icon-btn on"', 'class="card pad-lg"',
       'class="t-head"', 'class="t-foot"', 'class="pill"', 'class="btn quiet md"',
-      'class="dotstatus"', 'class="t-cap"',
+      // The phase readout, which is where .t-cap reaches the workspace. It is
+      // the rail's own status line, moved into the sub-nav's actions with the
+      // kit class it always wore — asserted as the WHOLE attribute, per the
+      // note above, so a rename of either half lands here.
+      'class="dotstatus"', 'class="t-cap sy-nav-phase"',
     ]) {
       expect(out, `expected the kit's ${cls} in the workspace`).toContain(cls);
     }
@@ -383,6 +391,13 @@ describe("SYNC is on the shared kit", () => {
     // Sheets, toasts and the palette land outside .sy-root, where neither this
     // app's stylesheet nor the Pentagon's tokens reach. PortalLayer is the
     // bridge; it is a component, so it can be run rather than described.
+    // No shell in this renderer — no [data-app] to read back — so this is the
+    // standalone fallback path, which is byte-for-byte what this component did
+    // before it learned to follow the shell. Inside the Pentagon it copies the
+    // wrapper's own data-palette/data-theme and custom properties instead, which
+    // is what stopped every SYNC sheet, toast and palette from rendering
+    // MIDNIGHT on a light page; that half is asserted in a browser, because a
+    // string render has no shell to follow.
     const out = render(createElement(PortalLayer, null, createElement("div", { className: "sheet" })));
     expect(out).toMatch(/<div class="sy-scope"[^>]*data-palette="sync"[^>]*data-theme="dark"/);
     expect(out).toMatch(/<div class="sy-root sy-layer" data-kit=/);

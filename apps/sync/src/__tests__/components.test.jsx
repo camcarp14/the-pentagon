@@ -80,7 +80,7 @@ const { default: OnboardingC } = await import("../chrome/Onboarding.jsx");
 const { default: CommandKC } = await import("../chrome/CommandK.jsx");
 const { default: SettingsSheetC } = await import("../chrome/SettingsSheet.jsx");
 const { default: PentagonPanelC } = await import("../chrome/PentagonPanel.jsx");
-const { Sidebar: SidebarC, Dock: DockC } = await import("../chrome/Shell.jsx");
+const { SubNav: SubNavC, Dock: DockC } = await import("../chrome/Shell.jsx");
 const { default: VoiceOrbC } = await import("../voice/VoiceOrb.jsx");
 const { default: AppC } = await import("../App.jsx");
 const { default: RootC } = await import("../Root.jsx");
@@ -311,12 +311,29 @@ const CASES = {
     el: () => inApp(h(SettingsSheetC, { onClose: () => {} })),
     must: ['role="dialog"', 'class="sheet-head"', 'class="field"', "Pentagon"],
   },
-  "chrome/Shell.jsx#Sidebar": {
-    el: () => inApp(h(SidebarC, { page: "day", setPage: () => {}, onSettings: () => {}, onPalette: () => {} })),
-    must: ['class="sidebar"', 'class="side-item active"', 'class="side-foot"', "Commands"],
+  // The horizontal sub-nav that replaced the 232px vertical rail. The needles
+  // are the four things the move had to keep as well as the six destinations:
+  // the kit's segmented control with a lit pill, the phase readout the rail's
+  // foot used to carry, the microphone and the gear.
+  "chrome/Shell.jsx#SubNav": {
+    el: () => inApp(h(SubNavC, { page: "day", setPage: () => {}, onSettings: () => {}, onPalette: () => {} })),
+    must: [
+      // <nav aria-label="Main"> — the landmark the rail was. A tablist inside
+      // a plain <div> would have deleted SYNC's navigation for anyone moving
+      // by landmark, which is a silent regression a screenshot cannot show.
+      '<nav class="sy-nav" aria-label="Main">', 'role="tablist"',
+      'class="seg sy-nav-tabs"', 'class="seg-opt active"', 'role="tab"', 'aria-selected="true"',
+      'class="sy-nav-actions"', "Standing by", "⌘K", 'aria-label="Settings"',
+    ],
+    // The microphone reports which way it is pointing, so its label is the
+    // fixture's own state rather than a constant — and the count beside a
+    // destination is the rail's `.side-badge`, which only exists once there is
+    // something to count.
+    cold: ['aria-label="Listen for the wake word"', 'aria-label="Mute SYNC"'],
+    loaded: ['aria-label="Stop listening"', 'class="sy-nav-badge t-num"'],
   },
   "chrome/Shell.jsx#Dock": {
-    el: () => inApp(h(DockC, { page: "console", setPage: () => {}, onSettings: () => {} })),
+    el: () => inApp(h(DockC, { page: "console", setPage: () => {} })),
     must: ['class="dock"', 'class="dock-tab active"', 'class="dock-icon"', 'class="dock-label"'],
   },
 
@@ -325,7 +342,12 @@ const CASES = {
   "voice/VoiceProvider.jsx#VoiceProvider": { el: () => h(VoiceProvider, null, h("i", { className: "probe" })), must: ['class="probe"'] },
 
   /* ── pages ─────────────────────────────────────────────────────────────── */
-  "pages/ConsolePage.jsx#ConsolePage": { el: () => inApp(h(P.ConsolePage, { onSettings: () => {} })), must: ['class="console"', 'class="console-bar"', 'class="composer"', 'class="orb-wrap"'] },
+  // `console-bar` is deliberately NOT a needle here. It is the phone-only copy
+  // of three controls the sub-nav carries on every wider screen, and this table
+  // renders at the desktop breakpoint (see the matchMedia shim). The pair of
+  // breakpoints is asserted where it belongs — "the app still composes the
+  // surfaces it mounts", below, which drives matchMedia both ways.
+  "pages/ConsolePage.jsx#ConsolePage": { el: () => inApp(h(P.ConsolePage, { onSettings: () => {} })), must: ['class="console"', 'class="composer"', 'class="orb-wrap"'] },
   "pages/DayPage.jsx#DayPage": { el: () => inApp(h(P.DayPage)), must: ['class="content-head"', 'class="content-scroll"'], cold: ['class="empty"'], loaded: ['class="tl"', 'class="tl-hour-label"', 'class="tl-now"'] },
   "pages/QueuePage.jsx#QueuePage": { el: () => inApp(h(P.QueuePage)), must: ['class="content-head"', 'class="seg"', "Waiting on"], cold: ['class="empty"'], loaded: ['class="pillrow"', 'class="pill active"', "tickbox"] },
   // The needle was "Brief" — the <h1> at the top, which is gone: the dock and
@@ -336,7 +358,10 @@ const CASES = {
   "pages/BriefPage.jsx#BriefPage": { el: () => inApp(h(P.BriefPage)), must: ['class="content-head"', 'class="seg"', "Morning"], cold: ['class="empty"'] },
   "pages/MindPage.jsx#MindPage": { el: () => inApp(h(P.MindPage, { setPage: () => {} })), must: ['class="mind-stage"', 'class="mind-hud"', 'class="mind-legend"', "stattile"] },
   "pages/MemoryPage.jsx#MemoryPage": { el: () => inApp(h(P.MemoryPage)), must: ['class="content-head"', 'class="seg"', "Standing directives"], cold: ['class="empty"'], loaded: ['class="cellgroup"', "Clarify Paid Search"] },
-  "pages/VoicePage.jsx#VoicePage": { el: () => inApp(h(P.VoicePage)), must: ['class="pagefade"', 'class="v-row"', 'class="seg"', 'class="sec-head"'] },
+  // content-head + content-scroll are new needles, and they are the bug: with
+  // no scroll container this page's last 104px (desktop) / 394px (phone) were
+  // clipped inside an overflow:hidden column and could not be scrolled to.
+  "pages/VoicePage.jsx#VoicePage": { el: () => inApp(h(P.VoicePage)), must: ['class="content-head"', 'class="content-scroll"', 'class="v-row"', 'class="seg"', 'class="sec-head"'] },
 
   /* ── entries ───────────────────────────────────────────────────────────── */
   "App.jsx#SyncApp": { el: () => h(AppC), must: ['class="app"', 'class="app-main"', 'class="app-page"'] },
@@ -369,7 +394,7 @@ describe("the mount table covers every component this app exports", () => {
       "ui/kit.jsx#Field", "ui/kit.jsx#TextArea",
       "pages/MindPage.jsx#MindPage", "pages/QueuePage.jsx#QueuePage", "pages/MemoryPage.jsx#MemoryPage",
       "pages/DayPage.jsx#DayPage", "pages/BriefPage.jsx#BriefPage", "pages/VoicePage.jsx#VoicePage",
-      "chrome/Shell.jsx#Dock", "chrome/Shell.jsx#Sidebar", "chrome/SettingsSheet.jsx#SettingsSheet",
+      "chrome/Shell.jsx#Dock", "chrome/Shell.jsx#SubNav", "chrome/SettingsSheet.jsx#SettingsSheet",
       "chrome/PentagonPanel.jsx#PentagonPanel", "App.jsx#SyncApp", "Root.jsx#SyncRoot",
     ]) expect(keys, `discovery must reach ${known}`).toContain(known);
   });
@@ -502,7 +527,7 @@ describe("the app still composes the surfaces it mounts", () => {
   };
   afterAll(() => phone(false));
 
-  it("renders the rail on a desktop and the tab bar on a phone", () => {
+  it("renders the sub-nav on a desktop and the tab bar on a phone", () => {
     // Deleting `<Dock>` from App.jsx was GREEN, because the whole suite renders
     // at the desktop breakpoint where the dock is not drawn at all. matchMedia
     // is the app's own switch, so flipping it is the honest way to reach the
@@ -510,8 +535,25 @@ describe("the app still composes the surfaces it mounts", () => {
     loadedInstall();
     phone(false);
     const desktop = render(h(AppC));
-    expect(desktop, "the rail is the desktop navigation").toContain('class="sidebar"');
+    expect(desktop, "the sub-nav is the desktop navigation").toContain('class="sy-nav"');
     expect(desktop, "and the tab bar is not drawn there").not.toContain('class="dock"');
+    // THE RAIL IS GONE AND STAYS GONE. It was the only vertical nav inside a
+    // content column in the estate, and with the shell's own rail up it read as
+    // two stacked vertical navs. Reintroducing it lands here.
+    expect(desktop, "no second vertical rail inside the tool").not.toContain('class="sidebar"');
+    // Every destination reaches the row, by the label the map publishes.
+    for (const label of ["Console", "Day", "Queue", "Brief", "Mind", "Voice"])
+      expect(desktop, `the ${label} pill`).toContain(`>${label}<`);
+    // The rail's foot carried live state and controls as well as destinations.
+    // Losing any of the four in the move would have been a functional
+    // regression, so each is pinned by the thing that names it.
+    expect(desktop, "the phase readout").toContain("Standing by");
+    expect(desktop, "the palette affordance").toContain("⌘K");
+    expect(desktop, "the wake-word microphone").toMatch(/aria-label="(Listen for the wake word|Stop listening)"/);
+    expect(desktop, "the settings gear").toContain('aria-label="Settings"');
+    expect(desktop, "the speak toggle").toMatch(/aria-label="(Mute SYNC|Let SYNC speak)"/);
+    // …and the Console's own copy of three of them is not drawn beside it.
+    expect(desktop, "the Console's phone control row is not drawn twice").not.toContain('class="console-bar"');
 
     phone(true);
     const mobile = render(h(AppC));
@@ -522,6 +564,15 @@ describe("the app still composes the surfaces it mounts", () => {
     for (const label of ["Console", "Day", "Queue", "Brief", "Mind", "Voice"])
       expect(mobile, `the ${label} tab`).toContain(`>${label}</span>`);
     expect(mobile, "and the rail is not drawn there").not.toContain('class="sidebar"');
+    // A phone has no sub-nav — six pills and a tab bar for the same six
+    // destinations is the doubled navigation this whole change removes.
+    expect(mobile, "and no sub-nav either").not.toContain('class="sy-nav"');
+    // So the Console's own control row is the ONLY way to Settings there, and
+    // it is drawn. This is the regression the Dock's comment describes: an
+    // unreachable gear is how the API key came to be unset on the one device
+    // that gets used.
+    expect(mobile, "the phone keeps the Console's control row").toContain('class="console-bar"');
+    expect(mobile, "…including the gear").toContain('aria-label="Settings"');
   });
 
   it("keeps every destination routable", () => {
@@ -540,7 +591,7 @@ describe("the app still composes the surfaces it mounts", () => {
     expect(app, "the command palette").toMatch(/<CommandK\b/);
     expect(app, "the settings sheet").toMatch(/\{settings && <SettingsSheet\b/);
     expect(app, "the tab bar").toMatch(/<Dock\b/);
-    expect(app, "the rail").toMatch(/<Sidebar\b/);
+    expect(app, "the sub-nav").toMatch(/<SubNav\b/);
     expect(app, "the entrance").toMatch(/<Onboarding\b/);
   });
 

@@ -349,36 +349,72 @@
 
 /* ═══ CHROME ═════════════════════════════════════════════════════════════════ */
 
-/* Sidebar rail — tablet / desktop.
-   The kit's .sidebar is written for a page that scrolls the document: it is
-   100vh/100dvh tall, position:sticky, and pads itself with
-   env(safe-area-inset-*). SYNC's rail is a flex child of a column that has
-   ALREADY subtracted the shell's bar, so a viewport-height rail overflows it
-   by exactly that bar, and the raw inset is the letterbox bug --safe-bottom
-   exists to avoid. `position: static` is declared rather than left off: the
-   kit sets sticky, and a property this rule does not name is a property the
-   kit still wins.
-   [data-kit] is on the selector for the same reason it is on the sheet and the
-   dock tab: the kit's own .sidebar pads with raw env(safe-area-inset-*), and at
-   (0,2,0) the winner would be whichever sheet the browser parsed last. One
-   extra attribute takes the question off the table. */
-.sy-root[data-kit] .sidebar {
-  width: 232px; flex: none;
-  border-right: 0.5px solid var(--line);
-  padding: 16px 10px calc(14px + var(--safe-bottom, 0px));
-  display: flex; flex-direction: column; gap: 14px;
-  height: 100%; overflow: hidden; position: static;
+/* ── the sub-nav — tablet / desktop ─────────────────────────────────────────
+   SYNC's 232px VERTICAL rail is gone. It was the one nav in the estate that ran
+   down the side of the content column, and once the shell grew a rail of its own
+   the operator was looking at two stacked vertical navs — the thing the shell's
+   rail was added to stop. This is the row every other tool has: the ZTS/Clarify
+   band (apps/zts/src/App.jsx, apps/clarify/src/App.jsx `.co-nav`).
+
+   Nothing here paints a colour of its own. --glass, --line and --ink all carry
+   a light half from the Pentagon's palette, which SYNC republishes at the foot
+   of this sheet; a literal midnight here is the bug three tools shipped on the
+   day light mode landed.
+
+   `top: var(--shell-bar, 52px)`, NEVER a literal 52. With the shell's rail up
+   there is no top bar at all and the variable is 0px; on a phone the bar is two
+   rows and the variable is ~143. A constant is wrong in both.
+
+   The sticky is belt-and-braces rather than decoration: SYNC's column does not
+   scroll the document today — each page owns its own scroll region — so this
+   row is already pinned by the layout. Declaring it the same way as the two
+   reference bars means the row survives if that ever stops being true, and
+   costs one property. */
+.sy-root .sy-nav {
+  flex: none;
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  height: 52px; padding: 0 24px;
+  position: sticky; top: var(--shell-bar, 52px); z-index: 50;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4); backdrop-filter: blur(20px) saturate(1.4);
+  /* A hairline and NOTHING else — the border-plus-shadow pair §4.2 forbids is
+     exactly what ZTS's bar had to have taken off it. */
+  border-bottom: 1px solid var(--line);
 }
-/* The rail rows are the kit's .side-item. These are the three things it does
-   not carry: a colour shift on hover, a badge for the count on a destination,
-   and that badge picking up the accent when the destination is the live one.
-   The transition is here for the same reason — the kit declares none, so the
-   hover would hard-cut. */
-.sy-root .side-item { transition: background var(--dur-1) ease, color var(--dur-1) ease; }
-@media (hover: hover) { .sy-root .side-item:hover { background: var(--ink-a04); color: var(--ink); } }
-.sy-root .side-item:active { transform: none; }
-.sy-root .side-badge { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--faint); font-variant-numeric: tabular-nums; }
-.sy-root .side-item.active .side-badge { color: var(--accent); }
+/* The tablist is the kit's .seg, thumb and all. It may scroll rather than
+   squash: six labels fit a 1024px column comfortably (measured), but the row
+   also lives at 761px, where the actions beside it take their width first. */
+.sy-root .sy-nav-tabs {
+  position: relative; min-width: 0;
+  overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none;
+}
+.sy-root .sy-nav-tabs::-webkit-scrollbar { display: none; }
+.sy-root .sy-nav-tabs .seg-opt { flex: 0 0 auto; white-space: nowrap; padding: 4px 14px; }
+/* The count the rail carried as `.side-badge`. 10.5px is the floor in this
+   language and this is the only place SYNC sits on it besides the tab bar. */
+.sy-root .sy-nav-badge {
+  margin-left: 6px; font-size: 10.5px; font-weight: 700; color: var(--faint);
+}
+.sy-root .seg-opt.active .sy-nav-badge { color: var(--accent); }
+.sy-root .sy-nav-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+/* The phase readout. The dot alone is the signal; the word is the explanation,
+   and it is the first thing to go when the row runs out of width — the status
+   never disappears, it just stops spelling itself out. */
+.sy-root .sy-nav-status { display: inline-flex; align-items: center; gap: 6px; flex: none; margin-right: 4px; }
+.sy-root .sy-nav-phase { font-weight: 600; white-space: nowrap; }
+.sy-root .sy-nav-cmdk { font-family: var(--font-mono); }
+/* 999px, measured rather than picked. The row's content is 391px of pills plus
+   ~265px of actions plus 48px of padding ≈ 690px, and the column is the
+   viewport minus the shell's rail, which measures 212px — so the whole row fits
+   from 1024 (a 812px column) and does not at 900 (688px, one pixel short of it).
+   Under that the phase WORD and the ⌘K hint go, in that order,
+   because both are explanations of something else that stays: the status dot
+   still reports the phase in colour, and ⌘K still opens the palette. The four
+   controls never go — a mute you cannot reach is a bug, not a breakpoint. */
+@media (max-width: 999px) {
+  .sy-root .sy-nav { padding: 0 16px; gap: 10px; }
+  .sy-root .sy-nav-phase, .sy-root .sy-nav-cmdk { display: none; }
+}
 
 /* mobile dock — safe-area padding lives inside each tab.
    The bar itself stays SYNC's: the kit's .dock has no `flex: none`, and this
@@ -869,12 +905,12 @@
    that drifts is worse than no rule at all. */
 
 /* the document-level scrollbar treatment, applied to every scroll region */
-.sy-root .content-scroll, .sy-root .stream, .sy-root .sheet-body, .sy-root .side-nav, .sy-root .cmdk-list {
+.sy-root .content-scroll, .sy-root .stream, .sy-root .sheet-body, .sy-root .cmdk-list {
   scrollbar-width: thin;
   scrollbar-color: var(--line-strong) transparent;
 }
-.sy-root .content-scroll::-webkit-scrollbar, .sy-root .stream::-webkit-scrollbar, .sy-root .sheet-body::-webkit-scrollbar, .sy-root .side-nav::-webkit-scrollbar, .sy-root .cmdk-list::-webkit-scrollbar { width: 8px; }
-.sy-root .content-scroll::-webkit-scrollbar-thumb, .sy-root .stream::-webkit-scrollbar-thumb, .sy-root .sheet-body::-webkit-scrollbar-thumb, .sy-root .side-nav::-webkit-scrollbar-thumb, .sy-root .cmdk-list::-webkit-scrollbar-thumb {
+.sy-root .content-scroll::-webkit-scrollbar, .sy-root .stream::-webkit-scrollbar, .sy-root .sheet-body::-webkit-scrollbar, .sy-root .cmdk-list::-webkit-scrollbar { width: 8px; }
+.sy-root .content-scroll::-webkit-scrollbar-thumb, .sy-root .stream::-webkit-scrollbar-thumb, .sy-root .sheet-body::-webkit-scrollbar-thumb, .sy-root .cmdk-list::-webkit-scrollbar-thumb {
   background: var(--line-strong); border-radius: 4px;
   border: 2px solid transparent; background-clip: padding-box;
 }
@@ -917,23 +953,37 @@
    is captured and republished here, or it is deliberately local and says so.
    Only --orb-* is local, and it is derived from captured values anyway.
    ═══════════════════════════════════════════════════════════════════════════ */
+/* ── THE EIGHT NAMES WITH A FALLBACK, AND WHY THEY HAVE ONE ─────────────────
+   --accent-ink, --muted, --border, --border-strong, --good, --bad, --warn and
+   --info are cssVars()' own vocabulary: @cc/design's STYLESHEET never emits
+   them, the shell stamps them on its wrapper, and this block reads them there.
+   That works everywhere .sy-scope sits inside the shell — and not at the portal
+   target, which is <body>, above the wrapper.
+
+   The var() fallback is the generated token that means the same thing:
+   --on-accent, --sub, --line, --line-strong, --green, --red, --amber, --blue.
+   Every one of those IS authored by themes.css and tokens.css, on
+   `[data-palette][data-theme]` and `[data-theme]` — plain attribute selectors
+   the portal layer's own wrapper carries. So in the tree the shell's alias wins
+   and nothing changes by a single byte; at the portal the fallback resolves and
+   a sheet stops being a dark-room artefact on a light page. See ui/kit.jsx. */
 .sy-scope {
   --sy-p-accent: var(--accent);
   --sy-p-accent-hi: var(--accent-hi);
   --sy-p-accent-deep: var(--accent-deep);
-  --sy-p-accent-ink: var(--accent-ink);
+  --sy-p-accent-ink: var(--accent-ink, var(--on-accent));
   --sy-p-bg: var(--bg);
   --sy-p-surface: var(--surface);
   --sy-p-surface-2: var(--surface-2);
   --sy-p-ink: var(--ink);
-  --sy-p-muted: var(--muted);
+  --sy-p-muted: var(--muted, var(--sub));
   --sy-p-faint: var(--faint);
-  --sy-p-border: var(--border);
-  --sy-p-border-strong: var(--border-strong);
-  --sy-p-good: var(--good);
-  --sy-p-bad: var(--bad);
-  --sy-p-warn: var(--warn);
-  --sy-p-info: var(--info);
+  --sy-p-border: var(--border, var(--line));
+  --sy-p-border-strong: var(--border-strong, var(--line-strong));
+  --sy-p-good: var(--good, var(--green));
+  --sy-p-bad: var(--bad, var(--red));
+  --sy-p-warn: var(--warn, var(--amber));
+  --sy-p-info: var(--info, var(--blue));
   /* --purple / --pink have no cssVars() alias — they are tokens.css's own, and
      tokens.css authors both halves on the [data-theme] blocks the wrapper also
      matches, so they are read straight rather than through a shell alias. */
@@ -999,20 +1049,38 @@
 
 /* ── geometry, now that the host owns the window ────────────────────────────
    Everything SYNC used to compute — a position:fixed frame sized to
-   visualViewport, a .notch-cap flex child, .lbx — is gone. The shell renders a
-   sticky bar of 0px + 51px + 1px above this tool and
+   visualViewport, a .notch-cap flex child, .lbx — is gone. The shell measures
+   whatever chrome it renders above this tool, publishes it as --shell-bar, and
    publishes --safe-bottom for the home indicator, so the whole problem reduces
    to one subtraction and one padding.
+
+   The shell also publishes --shell-rail and makes the content column a
+   containing block for fixed descendants, so SYNC's six fixed surfaces — the
+   sheet, its scrim, the toast stack, the palette and its scrim — resolve
+   against the column rather than the viewport with nothing to change here.
+   Nothing below reads --shell-rail: a measurement worth having is not a
+   measurement worth doing arithmetic with.
 
    100vh, not 100dvh: on an installed iOS app dvh/svh report the screen MINUS
    the top inset from a cold start (WebKit 254868) while vh reports it whole.
    Subtracting the inset explicitly is correct in both. */
 .sy-root {
-  /* The shell's bar is env(safe-area-inset-top) + 51px + 1px, NOT 52px — the
-     52 is only its inner row plus border. Forgetting the inset hands this
-     column ~59pt more height than the window has on a notched phone, and the
-     overflow lands exactly where it is least visible: the tab bar's labels,
-     pushed below the fold while its icons still show. */
+  /* --shell-bar, NEVER a literal 52, and this app was the last call site in the
+     repo still holding one. The shell MEASURES its bar and publishes the height
+     on [data-app] precisely so nothing has to guess, and the guess was wrong in
+     both directions at once:
+
+       · desktop, rail up: there IS no top bar, --shell-bar is 0px, and
+         `100dvh - 52px` left a 52px dead strip along the bottom of every SYNC
+         screen at every desktop width. Measured at 1440x900: the column ended
+         at y=848.
+       · phone: the bar is two rows plus the status-bar inset, so it measured
+         143px at 393px wide. `100dvh - 52px` made the column 91px TALLER than
+         the space under it, and the overflow landed exactly where the comment
+         below predicts — on the tab bar, whose labels sat below the fold.
+         Measured at 393x852: the column's bottom edge was y=943.
+
+     Both numbers are in the report; both are 0 now. */
   /* Two declarations, and the order matters.
      100vh on an installed iOS app reports the SCREEN (852pt on a 15 Pro), but
      under the shell's `black` status-bar style the web view sits below the
@@ -1022,16 +1090,19 @@
      bar's labels, pushed under the fold while its icons still show.
      100dvh is the window, which is what this column actually gets. The vh line
      stays underneath as the fallback for anything too old to know dvh. */
-  height: calc(100vh - 52px);
-  height: calc(100dvh - 52px);
+  height: calc(100vh - var(--shell-bar, 52px));
+  height: calc(100dvh - var(--shell-bar, 52px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-.sy-root .app { flex: 1; min-height: 0; display: flex; }
+/* One column at every width now that the rail is gone: the sub-nav is the first
+   child, the page fills, and on a phone the tab bar is the last. This used to
+   be a ROW with `flex-direction: column` restored under 760px, which is what a
+   232px rail beside the content needs and nothing else does. */
+.sy-root .app { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .sy-root .app-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .sy-root .app-page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-@media (max-width: 760px) { .sy-root .app { flex-direction: column; } }
 
 /* The tab bar is the last in-flow child of the column and clears the home
    indicator with the shell's variable — never var(--safe-bottom, 0px)

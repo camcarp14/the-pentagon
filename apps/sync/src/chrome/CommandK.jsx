@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  IcSearch, IcConsole, IcDay, IcQueue, IcBrief, IcMemory, IcMic, IcMicOff,
-  IcSettings, IcSun, IcMoon, IcSparkle, IcSend, IcTrash, IcFocus,
+  IcSearch, IcBrief, IcMemory, IcMic, IcMicOff,
+  IcSettings, IcSparkle, IcSend, IcTrash, IcFocus,
 } from "../ui/icons.jsx";
+import { NAV, tabLabel } from "../nav.js";
 import { PortalLayer } from "../ui/kit.jsx";
 import { getState, setSettings, clearConversation } from "../data/store.js";
 
@@ -31,10 +32,12 @@ export default function CommandK({ open, onClose, setPage, voice, onSettings }) 
   const commands = useMemo(() => {
     const s = getState();
     return [
-      { group: "Go", label: "Console", Icon: IcConsole, run: () => setPage("console") },
-      { group: "Go", label: "Day", Icon: IcDay, run: () => setPage("day") },
-      { group: "Go", label: "Queue", Icon: IcQueue, run: () => setPage("queue") },
-      { group: "Go", label: "Brief", Icon: IcBrief, run: () => setPage("brief") },
+      // Straight off NAV — the same table the sub-nav pill and the tab bar
+      // render from. Written out by hand this list had drifted twice over: it
+      // was missing Mind and Voice, which ARE destinations, and it offered
+      // Memory, which is not one (it is routable, and reached from the Mind
+      // page's Knows button — so it keeps a row of its own, below the six).
+      ...NAV.map(({ key, Icon }) => ({ group: "Go", label: tabLabel(key), Icon, run: () => setPage(key) })),
       { group: "Go", label: "Memory", Icon: IcMemory, run: () => setPage("memory") },
 
       {
@@ -71,12 +74,13 @@ export default function CommandK({ open, onClose, setPage, voice, onSettings }) 
         run: () => { setSettings({ speak: !s.settings.speak }); if (s.settings.speak) voice.shutUp(); },
       },
 
-      {
-        group: "App",
-        label: s.settings.theme === "day" ? "Switch to Obsidian" : "Switch to Quartz",
-        Icon: s.settings.theme === "day" ? IcMoon : IcSun,
-        run: () => setSettings({ theme: s.settings.theme === "day" ? "night" : "day" }),
-      },
+      // "Switch to Obsidian / Switch to Quartz" used to sit here. Quartz was
+      // SYNC's private light room and it was deleted when this tool adopted the
+      // Pentagon's palette — the command survived it, flipping a `settings.theme`
+      // that nothing has read since, so the one thing it did was nothing. Light
+      // and dark are the shell's now, one preference for the whole estate, and a
+      // per-tool copy would be the private system this migration removed. A
+      // control that visibly does nothing is worse than no control (§4.7).
       { group: "App", label: "Settings", Icon: IcSettings, run: onSettings },
       { group: "App", label: "Clear this conversation", Icon: IcTrash, run: () => { clearConversation(); setPage("console"); } },
     ];

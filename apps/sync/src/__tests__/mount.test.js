@@ -110,8 +110,46 @@ describe("stylesheet isolation", () => {
     //
     // Order is the whole point: the dvh line must come after the vh line, or
     // the fallback wins in every browser that supports both.
-    const frame = [...css.matchAll(/height:\s*calc\(100(vh|dvh)\s*-\s*52px\);/g)].map((m) => m[1]);
+    const frame = [...css.matchAll(/height:\s*calc\(100(vh|dvh)\s*-\s*var\(--shell-bar, 52px\)\);/g)].map((m) => m[1]);
     expect(frame).toEqual(["vh", "dvh"]);
+  });
+
+  it("subtracts the MEASURED bar, never a literal 52", () => {
+    // SYNC was the last call site in the repo holding the constant, and it was
+    // wrong in both directions on the day the shell grew a left rail:
+    //   · desktop, rail up — there is no top bar, --shell-bar is 0px, and
+    //     `100dvh - 52px` left a 52px dead strip under every SYNC screen
+    //     (measured: the column ended at y=848 in a 900px window).
+    //   · phone — the bar is two rows plus the status-bar inset, measured at
+    //     143px, so the column ran 91px PAST the window and the tab bar's
+    //     labels went under the fold (measured: bottom edge y=943 of 852).
+    // Both are 0 now. This is a source assertion because the browser harness
+    // that found it does not run in CI; it fails against the pre-change sheet.
+    const literal = [...css.matchAll(/calc\(100d?vh\s*-\s*\d+px\)/g)].map((m) => m[0]);
+    expect(literal, "a hardcoded shell-bar height is back in the sheet").toEqual([]);
+    expect(css, "the sticky sub-nav offsets off the same variable")
+      .toMatch(/\.sy-nav\s*\{[^}]*top:\s*var\(--shell-bar, 52px\)/);
+  });
+
+  it("gives the sub-nav a ground with a light half", () => {
+    // The whole "three tools painted their own chrome with a literal midnight"
+    // failure, pinned on the one row this app added. --glass and --line are
+    // republished from the Pentagon's palette at the foot of this sheet, and
+    // that palette has both halves; a hex here would have exactly one.
+    const nav = /\.sy-root \.sy-nav\s*\{([^}]*)\}/.exec(css);
+    expect(nav, ".sy-nav is no longer declared").not.toBeNull();
+    expect(nav[1]).toMatch(/background:\s*var\(--glass\)/);
+    expect(nav[1]).toMatch(/border-bottom:\s*1px solid var\(--line\)/);
+    expect(nav[1], "a border AND a shadow is the pair §4.2 forbids").not.toMatch(/box-shadow/);
+    expect(nav[1], "no literal colour in the tool's own chrome").not.toMatch(/#[0-9a-f]{3,8}|rgba?\(/i);
+  });
+
+  it("renders no vertical rail of its own", () => {
+    // The shell owns the left rail now. A second one inside the content column
+    // is two stacked vertical navs, which is the thing that rail was added to
+    // stop — so SYNC's copy of the kit's .sidebar / .side-item / .side-badge
+    // rules is gone, and this is what keeps it gone.
+    expect(css).not.toMatch(/\.sy-root[^{,]*\.side(bar|-item|-badge|-nav|-foot)\b/);
   });
 
   it("keeps its blanket rules under the kit's, not over them", () => {
