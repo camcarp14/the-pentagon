@@ -61,12 +61,12 @@
   
 /* ZTS · light — Emerald — Zero To Secure */
 [data-palette="zts"][data-theme="light"] {
-  --bg: #EFF1F5;
+  --bg: #F0F4F3;
   --surface: #FEFEFE;
-  --surface-2: #F4F5F7;
-  --ink: #22242B;
-  --sub: #656C7B;
-  --faint: #676D79;
+  --surface-2: #F4F7F6;
+  --ink: #222B27;
+  --sub: #5C7069;
+  --faint: #60716B;
   --accent: #1F7A51;
   --accent-hi: #279B67;
   --accent-deep: #155639;
@@ -75,12 +75,12 @@
 
 /* ZTS · dark — Emerald — Zero To Secure */
 [data-palette="zts"][data-theme="dark"] {
-  --bg: #0B0E14;
-  --surface: #191D27;
-  --surface-2: #272C38;
-  --ink: #D1D4DB;
-  --sub: #8F95A3;
-  --faint: #8E939F;
+  --bg: #0D1210;
+  --surface: #1B2521;
+  --surface-2: #283731;
+  --ink: #D1DBD8;
+  --sub: #8FA39C;
+  --faint: #8E9F99;
   --accent: #4BD296;
   --accent-hi: #74DCAE;
   --accent-deep: #2BAB72;
@@ -89,12 +89,12 @@
 
 /* Clarify · light — Brass — outreach and pipeline */
 [data-palette="clarify"][data-theme="light"] {
-  --bg: #EFF1F5;
+  --bg: #F4F3F0;
   --surface: #FEFEFE;
-  --surface-2: #F4F5F7;
-  --ink: #22242B;
-  --sub: #656C7B;
-  --faint: #676D79;
+  --surface-2: #F7F6F4;
+  --ink: #2B2722;
+  --sub: #736B5E;
+  --faint: #746D63;
   --accent: #83672A;
   --accent-hi: #A27F34;
   --accent-deep: #604C1F;
@@ -103,12 +103,12 @@
 
 /* Clarify · dark — Brass — outreach and pipeline */
 [data-palette="clarify"][data-theme="dark"] {
-  --bg: #0B0E14;
-  --surface: #191D27;
-  --surface-2: #272C38;
-  --ink: #D1D4DB;
-  --sub: #8F95A3;
-  --faint: #8E939F;
+  --bg: #12100D;
+  --surface: #25211B;
+  --surface-2: #373128;
+  --ink: #DBD8D1;
+  --sub: #A39C8F;
+  --faint: #9F998E;
   --accent: #C8A456;
   --accent-hi: #D5B97C;
   --accent-deep: #A27F34;
@@ -117,12 +117,12 @@
 
 /* Runway · light — Violet — the job search */
 [data-palette="runway"][data-theme="light"] {
-  --bg: #EFF1F5;
+  --bg: #F1F0F4;
   --surface: #FEFEFE;
-  --surface-2: #F4F5F7;
-  --ink: #22242B;
-  --sub: #656C7B;
-  --faint: #676D79;
+  --surface-2: #F5F4F7;
+  --ink: #23222B;
+  --sub: #6B677E;
+  --faint: #6D6A7C;
   --accent: #2D1CAB;
   --accent-hi: #3622CE;
   --accent-deep: #221584;
@@ -131,12 +131,12 @@
 
 /* Runway · dark — Violet — the job search */
 [data-palette="runway"][data-theme="dark"] {
-  --bg: #0B0E14;
-  --surface: #191D27;
-  --surface-2: #272C38;
-  --ink: #D1D4DB;
-  --sub: #8F95A3;
-  --faint: #8E939F;
+  --bg: #0E0D12;
+  --surface: #1C1B25;
+  --surface-2: #2A2837;
+  --ink: #D3D1DB;
+  --sub: #9592A5;
+  --faint: #918E9F;
   --accent: #9489EC;
   --accent-hi: #BCB4F3;
   --accent-deep: #5D4BE2;
@@ -145,26 +145,26 @@
 
 /* Macro · light — Amber — the trading account */
 [data-palette="macro"][data-theme="light"] {
-  --bg: #EFF1F5;
+  --bg: #F4F3F0;
   --surface: #FEFEFE;
-  --surface-2: #F4F5F7;
-  --ink: #22242B;
-  --sub: #656C7B;
-  --faint: #676D79;
-  --accent: #906109;
-  --accent-hi: #B67A0C;
-  --accent-deep: #654406;
+  --surface-2: #F7F6F4;
+  --ink: #2B2722;
+  --sub: #736A5E;
+  --faint: #746C63;
+  --accent: #956409;
+  --accent-hi: #BB7E0C;
+  --accent-deep: #694707;
   --on-accent: #FDFDFC;
 }
 
 /* Macro · dark — Amber — the trading account */
 [data-palette="macro"][data-theme="dark"] {
-  --bg: #0B0E14;
-  --surface: #191D27;
-  --surface-2: #272C38;
-  --ink: #D1D4DB;
-  --sub: #8F95A3;
-  --faint: #8E939F;
+  --bg: #12100D;
+  --surface: #25211B;
+  --surface-2: #373028;
+  --ink: #DBD7D1;
+  --sub: #A39A8F;
+  --faint: #9F988E;
   --accent: #F2AC2C;
   --accent-hi: #F5BF5C;
   --accent-deep: #C9870D;
@@ -173,12 +173,12 @@
 
 /* Looper · light — Cyan — browser mission loops */
 [data-palette="looper"][data-theme="light"] {
-  --bg: #EFF1F5;
+  --bg: #F0F3F4;
   --surface: #FEFEFE;
-  --surface-2: #F4F5F7;
-  --ink: #22242B;
-  --sub: #656C7B;
-  --faint: #676D79;
+  --surface-2: #F4F7F7;
+  --ink: #22292B;
+  --sub: #5E6F73;
+  --faint: #637074;
   --accent: #147685;
   --accent-hi: #1995A9;
   --accent-deep: #0E535D;
@@ -187,12 +187,12 @@
 
 /* Looper · dark — Cyan — browser mission loops */
 [data-palette="looper"][data-theme="dark"] {
-  --bg: #0B0E14;
-  --surface: #191D27;
-  --surface-2: #272C38;
-  --ink: #D1D4DB;
-  --sub: #8F95A3;
-  --faint: #8E939F;
+  --bg: #0D1112;
+  --surface: #1B2325;
+  --surface-2: #283437;
+  --ink: #D1D9DB;
+  --sub: #8F9FA3;
+  --faint: #919EA1;
   --accent: #3CCCE2;
   --accent-hi: #68D7E8;
   --accent-deep: #1CA5BA;
@@ -201,12 +201,12 @@
 
 /* Business · light — Magenta — the autonomous agent */
 [data-palette="business"][data-theme="light"] {
-  --bg: #EFF1F5;
+  --bg: #F4F0F3;
   --surface: #FEFEFE;
-  --surface-2: #F4F5F7;
-  --ink: #22242B;
-  --sub: #656C7B;
-  --faint: #676D79;
+  --surface-2: #F7F4F6;
+  --ink: #2B2227;
+  --sub: #7B6572;
+  --faint: #796771;
   --accent: #AF1863;
   --accent-hi: #D31D78;
   --accent-deep: #87124D;
@@ -215,12 +215,12 @@
 
 /* Business · dark — Magenta — the autonomous agent */
 [data-palette="business"][data-theme="dark"] {
-  --bg: #0B0E14;
-  --surface: #191D27;
-  --surface-2: #272C38;
-  --ink: #D1D4DB;
-  --sub: #8F95A3;
-  --faint: #8E939F;
+  --bg: #120D10;
+  --surface: #251B21;
+  --surface-2: #372830;
+  --ink: #DBD1D7;
+  --sub: #A38F9A;
+  --faint: #9F8E98;
   --accent: #EA66A8;
   --accent-hi: #F093C2;
   --accent-deep: #E22885;
@@ -229,12 +229,12 @@
 
 /* SYNC · light — Orchid — the workday layer */
 [data-palette="sync"][data-theme="light"] {
-  --bg: #EFF1F5;
+  --bg: #F3F0F4;
   --surface: #FEFEFE;
-  --surface-2: #F4F5F7;
-  --ink: #22242B;
-  --sub: #656C7B;
-  --faint: #676D79;
+  --surface-2: #F6F4F7;
+  --ink: #27222B;
+  --sub: #74677E;
+  --faint: #746A7C;
   --accent: #7316B1;
   --accent-hi: #8B1AD5;
   --accent-deep: #581188;
@@ -243,12 +243,12 @@
 
 /* SYNC · dark — Orchid — the workday layer */
 [data-palette="sync"][data-theme="dark"] {
-  --bg: #0B0E14;
-  --surface: #191D27;
-  --surface-2: #272C38;
-  --ink: #D1D4DB;
-  --sub: #8F95A3;
-  --faint: #8E939F;
+  --bg: #100D12;
+  --surface: #211B25;
+  --surface-2: #302837;
+  --ink: #D7D1DB;
+  --sub: #9A8FA3;
+  --faint: #988E9F;
   --accent: #BE77EE;
   --accent-hi: #D4A4F4;
   --accent-deep: #A037E6;
@@ -257,12 +257,12 @@
 
 /* Ideas · light — Lime — what showed up on GitHub */
 [data-palette="ideas"][data-theme="light"] {
-  --bg: #EFF1F5;
+  --bg: #F2F4F0;
   --surface: #FEFEFE;
-  --surface-2: #F4F5F7;
-  --ink: #22242B;
-  --sub: #656C7B;
-  --faint: #676D79;
+  --surface-2: #F6F7F4;
+  --ink: #272B22;
+  --sub: #67705C;
+  --faint: #697160;
   --accent: #527415;
   --accent-hi: #6A971C;
   --accent-deep: #364E0E;
@@ -271,12 +271,12 @@
 
 /* Ideas · dark — Lime — what showed up on GitHub */
 [data-palette="ideas"][data-theme="dark"] {
-  --bg: #0B0E14;
-  --surface: #191D27;
-  --surface-2: #272C38;
-  --ink: #D1D4DB;
-  --sub: #8F95A3;
-  --faint: #8E939F;
+  --bg: #0F120D;
+  --surface: #20251B;
+  --surface-2: #303728;
+  --ink: #D7DBD1;
+  --sub: #9AA38F;
+  --faint: #979F8E;
   --accent: #A3DC41;
   --accent-hi: #B8E46C;
   --accent-deep: #7FB521;

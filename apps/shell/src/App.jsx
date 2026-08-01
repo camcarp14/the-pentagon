@@ -243,7 +243,7 @@ const GearIcon = () => (
 // be working." A setting nobody can find is indistinguishable from one that does
 // nothing. One tap here for the ground; the full palette picker stays in System,
 // where the sixteen-way choice belongs.
-const SideRail = forwardRef(function SideRail({ active, onPick, apps, paused, systemOpen, onSystem, onSignOut, email, mode, onOpenTheme }, ref) {
+const SideRail = forwardRef(function SideRail({ active, onPick, apps, paused, systemOpen, onSystem, onSignOut, email, mode, onOpenTheme, themed }, ref) {
   // Hover lives in JS because every control in this rail is inline-styled, and a
   // :hover rule cannot reach an inline style. Tracking one id rather than a
   // boolean per row keeps it to a single state change per pointer move.
@@ -315,7 +315,14 @@ const SideRail = forwardRef(function SideRail({ active, onPick, apps, paused, sy
                   as a set rather than as a legend with a colour key. On hover it
                   previews its own accent, so the colour answers "which tool is
                   this" before the click rather than after it. */}
-              <ToolGlyph app={a} color={off ? "var(--faint)" : on || hov ? m.accent : "var(--faint)"} />
+              {/* Under a CHOSEN palette the glyph follows the theme, not the
+                  tool. Picking one palette is the operator saying "I want this
+                  product to be one colour", and a rail that answers with eight
+                  is arguing with the setting — the ring around the active row
+                  already reads var(--accent), so leaving the glyph on the tool's
+                  own hue put two different colours on one row. On the default
+                  ("Match the tool") nothing changes: the accent IS the tool. */}
+              <ToolGlyph app={a} color={off ? "var(--faint)" : on || hov ? (themed ? "var(--accent)" : m.accent) : "var(--faint)"} />
               <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: off ? 0.6 : 1 }}>{m.label}</span>
               {off && <span className="t-cap" style={{ marginLeft: "auto", color: "var(--faint)", flexShrink: 0 }}>off</span>}
             </button>
@@ -937,6 +944,7 @@ export default function Shell() {
           email={session?.user?.email}
           mode={mode}
           onOpenTheme={() => { setSystemTab("theme"); setSystemOpen(true); }}
+          themed={themed}
         />
       )}
 

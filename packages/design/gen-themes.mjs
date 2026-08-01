@@ -83,14 +83,40 @@ const THEMES = [
   // emits both modes from one row, so a light Pentagon costs a stylesheet
   // rather than a redesign — and leaving dL unauthored would mean inventing it
   // later, under pressure, without the contrast checks.
-  { key: "zts",      label: "ZTS",      blurb: "Emerald — Zero To Secure",          nH: 222, nS: 28, aH: 153, aS: 60, dL: 95, nL: 6 },
-  { key: "clarify",  label: "Clarify",  blurb: "Brass — outreach and pipeline",     nH: 222, nS: 28, aH: 41,  aS: 51, dL: 95, nL: 6 },
-  { key: "runway",   label: "Runway",   blurb: "Violet — the job search",           nH: 222, nS: 28, aH: 247, aS: 72, dL: 95, nL: 6 },
-  { key: "macro",    label: "Macro",    blurb: "Amber — the trading account",       nH: 222, nS: 28, aH: 39,  aS: 88, dL: 95, nL: 6 },
-  { key: "looper",   label: "Looper",   blurb: "Cyan — browser mission loops",      nH: 222, nS: 28, aH: 188, aS: 74, dL: 95, nL: 6 },
-  { key: "business", label: "Business", blurb: "Magenta — the autonomous agent",    nH: 222, nS: 28, aH: 330, aS: 76, dL: 95, nL: 6 },
-  { key: "sync",     label: "SYNC",     blurb: "Orchid — the workday layer",        nH: 222, nS: 28, aH: 276, aS: 78, dL: 95, nL: 6 },
-  { key: "ideas",    label: "Ideas",    blurb: "Lime — what showed up on GitHub",   nH: 222, nS: 28, aH: 82,  aS: 69, dL: 95, nL: 6 },
+  // ── THE GROUND CARRIES THE THEME, NOT JUST THE ACCENT ──────────────────────
+  //
+  // Every row here used to read nH: 222, nS: 28 — the identical navy neutral,
+  // eight times. So choosing a palette moved the accent and nothing else, and
+  // the accent is deliberately scarce (DESIGN.md §4.4 spends it on the active
+  // tab, the primary action and live indicators, "nowhere else"). The result
+  // was a theme picker that repainted maybe a dozen small elements on a page
+  // of a thousand, which reads exactly as reported: "the theme isn't changing
+  // anything, or at least nothing noticeable."
+  //
+  // Board Room's themes are felt because the GROUND is tinted: its gold theme
+  // is a warm near-black, not a neutral one with gold buttons on it. So each
+  // palette's neutral now takes its own accent's hue at a low saturation. The
+  // page goes warm for Macro's amber, cool for Runway's violet, green-black
+  // for ZTS — a whole-screen change from one setting, which is what a theme is.
+  //
+  // nS 16 rather than 28: at 28 with a matching hue the surfaces stop reading
+  // as near-black and start reading as coloured, which is a skin, not a theme.
+  // 16 is enough to see side by side and little enough that a screenshot still
+  // looks like a serious tool. The generator contrast-checks every emitted
+  // value against the floors either way, so this cannot quietly make text
+  // unreadable — it fails the build instead.
+  //
+  // "Match the tool" is untouched and remains the default: it renders the
+  // shared midnight canvas so switching tools does not strobe the page. The
+  // tinted grounds are what you get when you deliberately CHOOSE a palette.
+  { key: "zts",      label: "ZTS",      blurb: "Emerald — Zero To Secure",          nH: 158, nS: 16, aH: 153, aS: 60, dL: 95, nL: 6 },
+  { key: "clarify",  label: "Clarify",  blurb: "Brass — outreach and pipeline",     nH: 38,  nS: 16, aH: 41,  aS: 51, dL: 95, nL: 6 },
+  { key: "runway",   label: "Runway",   blurb: "Violet — the job search",           nH: 250, nS: 16, aH: 247, aS: 72, dL: 95, nL: 6 },
+  { key: "macro",    label: "Macro",    blurb: "Amber — the trading account",       nH: 34,  nS: 16, aH: 39,  aS: 88, dL: 95, nL: 6 },
+  { key: "looper",   label: "Looper",   blurb: "Cyan — browser mission loops",      nH: 192, nS: 16, aH: 188, aS: 74, dL: 95, nL: 6 },
+  { key: "business", label: "Business", blurb: "Magenta — the autonomous agent",    nH: 326, nS: 16, aH: 330, aS: 76, dL: 95, nL: 6 },
+  { key: "sync",     label: "SYNC",     blurb: "Orchid — the workday layer",        nH: 274, nS: 16, aH: 276, aS: 78, dL: 95, nL: 6 },
+  { key: "ideas",    label: "Ideas",    blurb: "Lime — what showed up on GitHub",   nH: 88,  nS: 16, aH: 82,  aS: 69, dL: 95, nL: 6 },
 ];
 
 // ─── derivation ──────────────────────────────────────────────────────────────
