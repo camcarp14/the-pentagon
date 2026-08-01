@@ -55,7 +55,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 import { useCallback, useEffect, useRef, useState } from "react";
 import { APPS } from "@cc/design";
-import { auth } from "@cc/supabase";
+import { auth, supabase } from "@cc/supabase";
 
 export const TOOL_POWER_ENDPOINT = "/api/tool-power";
 
@@ -279,8 +279,103 @@ async function call(method, body) {
   return payload;
 }
 
-export const fetchToolPower = () => call("GET");
-export const putToolPower = (tool, paused) => call("PUT", { tool, paused });
+// ─── the direct half, and why it exists ───────────────────────────────────────
+//
+// /api/tool-power reaches ops_control with the SERVICE-ROLE client, which is
+// correct for a scheduled job and unnecessary here — and it is why every row on
+// the Tabs page read "Unknown: OPS_ENV_MISSING: SUPABASE_SERVICE_ROLE_KEY" on
+// the live deploy. The switch was built, wired, tested and dead, because it
+// asked for a key the deploy does not have.
+//
+// It never needed one. Migration 0002 grants `authenticated` SELECT and UPDATE
+// on ops_control (ops_control_read / ops_control_update, both `using (true)`),
+// which is exactly how apps/shell/src/Ops.jsx's global stop has always worked
+// from the browser. The operator IS an authenticated session; the key buys
+// nothing the policy has not already given.
+//
+// So the endpoint stays the first choice — it is the only path a future
+// non-browser caller could use, and it stamps paused_reason/paused_at in one
+// place — and this is the fallback when it cannot answer. The crons still need
+// the service key to READ the same table server-side, which is a different
+// problem and is not fixed here; what is fixed is that the operator's own
+// switch no longer depends on it.
+//
+// Engine rows are derived from ENGINE_LABELS rather than from the table, so a
+// tool whose row has never been registered still reports its engines instead of
+// looking like a tool with none.
+const ENGINES_BY_TOOL = Object.keys(ENGINE_LABELS).reduce((acc, key) => {
+  const tool = key.split(".")[0];
+  (acc[tool] ||= []).push(key);
+  return acc;
+}, {});
+
+function toolsFromControlRows(rows) {
+  const byKey = new Map((rows || []).map((r) => [r.key, r]));
+  const tools = {};
+  for (const [tool, keys] of Object.entries(ENGINES_BY_TOOL)) {
+    if (!isTool(tool)) continue;
+    tools[tool] = {
+      engines: keys.map((key) => {
+        const row = byKey.get(key);
+        return {
+          key,
+          // A row that has never been written is not "running": the table ships
+          // every subsystem disabled, and registerSubsystem only inserts on the
+          // first pass. Absent means not yet registered, and the honest read of
+          // that is paused.
+          enabled: row ? !!row.enabled : false,
+          pausedReason: row?.paused_reason ?? null,
+          pausedAt: row?.paused_at ?? null,
+        };
+      }),
+    };
+  }
+  return tools;
+}
+
+async function directFetch() {
+  if (!supabase) throw new Error("no Supabase client in this build");
+  const { data, error } = await supabase.from("ops_control").select("key, enabled, paused_reason, paused_at");
+  if (error) throw new Error(error.message || "ops_control is unreadable from this session");
+  return { tools: toolsFromControlRows(data) };
+}
+
+async function directPut(tool, paused) {
+  if (!supabase) throw new Error("no Supabase client in this build");
+  const keys = ENGINES_BY_TOOL[tool] || [];
+  if (!keys.length) throw new Error(`${tool} has no background engines`);
+  // Same shape Ops.jsx writes for the global stop: an explicit pause is
+  // RECORDED, not merely `enabled: false`, so a later reader can tell a
+  // deliberate stop from a subsystem that was never switched on.
+  const { error } = await supabase.from("ops_control").update({
+    enabled: !paused,
+    paused_reason: paused ? "paused from System → Tabs" : null,
+    paused_at: paused ? new Date().toISOString() : null,
+    updated_at: new Date().toISOString(),
+  }).in("key", keys);
+  if (error) throw new Error(error.message || "this session is not allowed to change it");
+  return directFetch();
+}
+
+/** Endpoint first, the operator's own session second. Both are the same table. */
+async function viaEndpointThen(directly, method, body) {
+  try {
+    return await call(method, body);
+  } catch (endpointErr) {
+    try {
+      return await directly();
+    } catch (directErr) {
+      // The ENDPOINT's message is the one worth showing: it names the missing
+      // env var, which is the thing an operator can act on. The fallback's
+      // failure is reported second so a genuine RLS refusal is not hidden
+      // behind an env complaint.
+      throw new Error(`${endpointErr.message} (and directly: ${directErr.message})`);
+    }
+  }
+}
+
+export const fetchToolPower = () => viaEndpointThen(directFetch, "GET");
+export const putToolPower = (tool, paused) => viaEndpointThen(() => directPut(tool, paused), "PUT", { tool, paused });
 
 /**
  * One reader for the whole shell.
