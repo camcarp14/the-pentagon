@@ -515,15 +515,35 @@ function PowerRow({ app, label, entry, loading, error, busy, onToggle }) {
           <span style={{ display: "block", fontSize: 11.5, color: P.muted, marginTop: 3, lineHeight: 1.55 }}>{keeps}</span>
         )}
       </span>
-      {engines.length > 0 && (
+      {/* THE SWITCH IS ALWAYS DRAWN, and disabled when it cannot honestly act.
+          It used to render only when engines.length > 0, which is defensible as
+          a rule — a control whose state could not be READ must not offer to
+          write — and wrong as an interface. In production SUPABASE_SERVICE_ROLE_KEY
+          is unset, so every row reads "unknown", every switch vanished, and the
+          paragraph at the top of this page went on promising "Power is the other
+          switch" above eight rows that had exactly one. An absent control cannot
+          explain itself; a disabled one can, and the reason is already printed
+          beside it.
+
+          `actionable` is the whole gate: unknown (could not read) and none
+          (nothing scheduled) both refuse the write for different stated
+          reasons, and busy refuses it because one is already in flight. */}
+      {(() => {
+        const actionable = state !== "unknown" && state !== "none";
+        const why = state === "unknown"
+          ? "Can't pause what we couldn't read — see the reason on the left"
+          : state === "none"
+            ? "Nothing runs in the background for this tool"
+            : paused ? "Start these running again" : "Stop these until you turn them back on";
+        return (
         <button
           type="button"
           role="switch"
-          aria-checked={!paused}
+          aria-checked={actionable ? !paused : false}
           aria-label={`${paused ? "Resume" : "Pause"} ${label}'s background engines`}
-          disabled={!!busy}
-          title={paused ? "Start these running again" : "Stop these until you turn them back on"}
-          onClick={() => onToggle(!paused)}
+          disabled={!!busy || !actionable}
+          title={why}
+          onClick={() => actionable && onToggle(!paused)}
           style={{
             // A DIFFERENT SHAPE, not just a different colour. ZTS's accent is
             // emerald, so on that row a green pill would sit directly under a
@@ -533,21 +553,22 @@ function PowerRow({ app, label, entry, loading, error, busy, onToggle }) {
             // corners survive every accent, every palette and both modes; a
             // colour choice survives none of them.
             width: 46, height: 28, flex: "none", padding: 3, borderRadius: 8,
-            border: `1px solid ${paused ? P.warn : P.good}`,
-            background: `color-mix(in srgb, ${paused ? P.warn : P.good} 20%, transparent)`,
-            cursor: busy ? "progress" : "pointer",
-            opacity: busy ? 0.5 : 1,
+            border: `1px solid ${!actionable ? P.line : paused ? P.warn : P.good}`,
+            background: !actionable ? "transparent" : `color-mix(in srgb, ${paused ? P.warn : P.good} 20%, transparent)`,
+            cursor: busy ? "progress" : actionable ? "pointer" : "not-allowed",
+            opacity: busy ? 0.5 : actionable ? 1 : 0.45,
             display: "flex", justifyContent: paused ? "flex-start" : "flex-end", alignItems: "center",
             transition: "background var(--dur-2, 240ms) ease, border-color var(--dur-2, 240ms) ease, justify-content var(--dur-2, 240ms) ease",
           }}
         >
           <span aria-hidden="true" style={{
             width: 20, height: 20, borderRadius: 5, display: "block",
-            background: paused ? P.warn : P.good,
+            background: !actionable ? P.faint : paused ? P.warn : P.good,
             transition: "background var(--dur-2, 240ms) ease",
           }} />
         </button>
-      )}
+        );
+      })()}
     </div>
   );
 }
