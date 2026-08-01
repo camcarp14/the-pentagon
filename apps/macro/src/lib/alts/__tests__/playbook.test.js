@@ -93,7 +93,7 @@ const CLOSE_ONLY = (() => {
 })()
 
 const screened = (over = {}) => ({
-  symbol: 'TEST', band: 'basing', chg24h: 1, chg7d: 2, chg30d: 3,
+  symbol: 'TEST', band: 'quiet', chg24h: 1, chg7d: 2, chg30d: 3,
   rsVsBtc7d: 1, rsVsBtc30d: -5, turnover: 0.04,
   accel: { d24VsWeek: 0.5, weekVsMonth: 0.1, daily7d: 0.29, daily30d: 0.1 },
   flags: { stablecoin: false, wrapper: false, parabolic: false, thinLiquidity: false, freshBreak: false, newListing: false },
@@ -520,7 +520,7 @@ describe('phaseOf', () => {
   })
 
   it('calls a coiling base accumulation, with the readings that made the call', () => {
-    const p = phaseOf({ screened: screened({ band: 'basing' }), candles: COILING })
+    const p = phaseOf({ screened: screened({ band: 'quiet' }), candles: COILING })
     expect(p.id).toBe('accumulation')
     expect(p.why.join(' ')).toMatch(/percentile of its own last 180 days|volume baseline is/)
     expect(p.why.join(' ')).toMatch(/trigger, the invalidation and the size/)
@@ -528,7 +528,7 @@ describe('phaseOf', () => {
 
   it('calls a fresh break ignition and quotes the coin\'s own base rate', () => {
     const p = phaseOf({
-      screened: screened({ band: 'igniting', rsVsBtc7d: 12 }),
+      screened: screened({ band: 'starting', rsVsBtc7d: 12 }),
       candles: COILING,
       precedent: { ok: true, episodes: 4, baseRates: { medianFwd21: 41.2, worstFwd21: -12.5 } },
     })
@@ -538,13 +538,13 @@ describe('phaseOf', () => {
   })
 
   it('says so plainly when there is no precedent to lean on', () => {
-    const p = phaseOf({ screened: screened({ band: 'igniting' }), candles: COILING, precedent: { ok: false, reason: 'x' } })
+    const p = phaseOf({ screened: screened({ band: 'starting' }), candles: COILING, precedent: { ok: false, reason: 'x' } })
     expect(p.why.join(' ')).toMatch(/no usable precedent for this coin — size it on the plan/)
   })
 
   it('outranks ignition with euphoria, so a parabolic break is never called a setup', () => {
     const p = phaseOf({
-      screened: screened({ band: 'igniting', chg24h: 62, chg7d: 180, flags: { ...screened().flags, parabolic: true } }),
+      screened: screened({ band: 'starting', chg24h: 62, chg7d: 180, flags: { ...screened().flags, parabolic: true } }),
       candles: COILING,
     })
     expect(p.id).toBe('euphoria')
@@ -559,7 +559,7 @@ describe('phaseOf', () => {
       ...seg(20, () => -0.012 + noise(r, 0.01)),
     ], { seed: 41 })
     const p = phaseOf({
-      screened: screened({ band: 'running', chg7d: -8, chg30d: 70 }),
+      screened: screened({ band: 'underway', chg7d: -8, chg30d: 70 }),
       candles: rolled,
       crowd: { state: 'hot', score: 78 },
     })
@@ -574,7 +574,7 @@ describe('phaseOf', () => {
       ...seg(70, () => -0.02 + noise(r, 0.01)),
       ...seg(4, () => 0.05),
     ], { seed: 42 })
-    const p = phaseOf({ screened: screened({ band: 'igniting', chg7d: 18, chg30d: -55 }), candles: busted })
+    const p = phaseOf({ screened: screened({ band: 'starting', chg7d: 18, chg30d: -55 }), candles: busted })
     expect(p.id).toBe('bust')
     expect(p.why.join(' ')).toMatch(/not an ignition until it takes back the 200-day/)
   })
@@ -582,21 +582,21 @@ describe('phaseOf', () => {
   it('calls a trending, structurally-sound coin markup', () => {
     const r = rng(43)
     const trending = candlesFrom([...seg(200, () => noise(r, 0.008)), ...seg(60, () => 0.008 + noise(r, 0.008))], { seed: 43 })
-    const p = phaseOf({ screened: screened({ band: 'running', chg7d: 6, chg30d: 28 }), candles: trending })
+    const p = phaseOf({ screened: screened({ band: 'underway', chg7d: 6, chg30d: 28 }), candles: trending })
     expect(p.id).toBe('markup')
     expect(p.why.join(' ')).toMatch(/the stop only moves up/)
   })
 
   it('defaults to dormant and says what would change its mind', () => {
-    const p = phaseOf({ screened: screened({ band: 'dead', chg7d: -1, chg30d: -4 }), candles: QUIET.slice(0, 40) })
+    const p = phaseOf({ screened: screened({ band: 'cold', chg7d: -1, chg30d: -4 }), candles: QUIET.slice(0, 40) })
     expect(p.id).toBe('dormant')
     expect(p.why.join(' ')).toMatch(/watchlist row until compression or a volume baseline shows up/)
   })
 
   it('rates confidence by how many independent inputs answered, not by how loud they were', () => {
-    const one = phaseOf({ screened: screened({ band: 'basing' }) })
+    const one = phaseOf({ screened: screened({ band: 'quiet' }) })
     const four = phaseOf({
-      screened: screened({ band: 'basing' }),
+      screened: screened({ band: 'quiet' }),
       candles: COILING,
       precedent: { ok: true, episodes: 5, matchPct: 71, baseRates: { medianFwd21: 30, worstFwd21: -9 } },
       crowd: { state: 'ignored', score: 12 },

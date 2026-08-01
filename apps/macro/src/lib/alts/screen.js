@@ -61,7 +61,7 @@
 //
 // WHY A PARABOLIC COIN STILL SCORES WELL ON THE WAY UP AND THEN LOSES: a coin
 // up 47% today maxes out d24VsWeek (18) and turnover (15) — the same readings an
-// igniting coin gives, because they are the same readings. −25 is what separates
+// starting coin gives, because they are the same readings. −25 is what separates
 // "this is starting" from "this already went", and it is deliberately large
 // enough to drop a blow-off below a clean ignition. Worked example in the tests.
 //
@@ -330,7 +330,7 @@ export function screenCoin(row, ctx = {}) {
     const why = stablecoin ? 'a stablecoin' : 'a wrapped/staked derivative of another asset'
     return {
       ...base,
-      score: null, band: 'dead', tier, kind,
+      score: null, band: 'cold', tier, kind,
       parts: [],
       facts: [`${sym || 'this row'} is ${why} — excluded from the board, not ranked`],
       flags: { stablecoin, wrapper, parabolic: false, thinLiquidity: false, freshBreak: false, newListing: false },
@@ -467,7 +467,7 @@ export function screenCoin(row, ctx = {}) {
   if (newListing) facts.push('no 30-day history — listed recently, treat every longer-window read as absent')
 
   const band = bandOf({ chg7d, chg30d, rsVsBtc7d, d24VsWeek, turnover, pos: range7d.pos, flags })
-  if ((band === 'igniting' || band === 'waking') && (season?.phase === 'risk_off' || season?.phase === 'btc_only')) {
+  if ((band === 'starting' || band === 'warming') && (season?.phase === 'risk_off' || season?.phase === 'btc_only')) {
     facts.push(`this is lifting into a ${season.label} regime (${season.score}/100) — the setup is real, the tape is not helping it`)
   }
 
@@ -483,19 +483,19 @@ export function screenCoin(row, ctx = {}) {
  * The band is a STATE, not a score bucket — first match wins, in the order a
  * move actually happens, so it can be read without the number. It cannot
  * disagree with the score because the score's biggest blocks reward exactly the
- * configuration `igniting` describes and the penalty fires on exactly the
- * configuration `extended` describes.
+ * configuration `starting` describes and the penalty fires on exactly the
+ * configuration `late` describes.
  */
 function bandOf({ chg7d, chg30d, rsVsBtc7d, d24VsWeek, turnover, pos, flags }) {
-  if (flags.parabolic || (chg30d != null && chg30d > 150 && pos != null && pos >= 0.75)) return 'extended'
+  if (flags.parabolic || (chg30d != null && chg30d > 150 && pos != null && pos >= 0.75)) return 'late'
   // `chg7d <= 40` is the ceiling on ignition: a coin already up 60% this week
   // breaking to new highs is running, not lighting.
   if (flags.freshBreak && d24VsWeek != null && d24VsWeek >= 2 && rsVsBtc7d != null && rsVsBtc7d > 0 &&
-      chg7d != null && chg7d <= 40) return 'igniting'
-  if (chg7d != null && chg7d >= 15 && rsVsBtc7d != null && rsVsBtc7d > 0 && pos != null && pos >= 0.5) return 'running'
-  if (d24VsWeek != null && d24VsWeek >= 0.5 && rsVsBtc7d != null && rsVsBtc7d >= 0 && (pos == null || pos >= 0.4)) return 'waking'
-  if (chg7d != null && Math.abs(chg7d) <= 12 && turnover != null && turnover >= 0.005 && !flags.thinLiquidity) return 'basing'
-  return 'dead'
+      chg7d != null && chg7d <= 40) return 'starting'
+  if (chg7d != null && chg7d >= 15 && rsVsBtc7d != null && rsVsBtc7d > 0 && pos != null && pos >= 0.5) return 'underway'
+  if (d24VsWeek != null && d24VsWeek >= 0.5 && rsVsBtc7d != null && rsVsBtc7d >= 0 && (pos == null || pos >= 0.4)) return 'warming'
+  if (chg7d != null && Math.abs(chg7d) <= 12 && turnover != null && turnover >= 0.005 && !flags.thinLiquidity) return 'quiet'
+  return 'cold'
 }
 
 /**

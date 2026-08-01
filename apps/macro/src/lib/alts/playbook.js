@@ -544,10 +544,10 @@ export function phaseOf({ screened = null, precedent = null, crowd = null, candl
   }
 
   // 3 — euphoria
-  if (flags.parabolic || band === 'extended' || crowd?.state === 'euphoric') {
+  if (flags.parabolic || band === 'late' || crowd?.state === 'euphoric') {
     return call('euphoria', [
       flags.parabolic ? `parabolic: ${signed(chg7d)}% over 7 days, ${signed(screened?.chg24h)}% in 24h` : null,
-      band === 'extended' ? 'the board has this banded `extended` — the move is behind it, not ahead' : null,
+      band === 'late' ? 'the board has this banded `late` — the move is behind it, not ahead' : null,
       crowd?.state === 'euphoric' ? 'sentiment reads the crowd as euphoric' : null,
       fp?.distEma50Pct != null ? `price is ${signed(fp.distEma50Pct)}% from the EMA50` : null,
       'new risk here is a chase; this is the phase to sell into, in pieces',
@@ -555,10 +555,10 @@ export function phaseOf({ screened = null, precedent = null, crowd = null, candl
   }
 
   // 4 — markup
-  if (band === 'running' ||
+  if (band === 'underway' ||
       (e20[last] != null && e50[last] != null && close > e20[last] && e20[last] > e50[last] && chg30d != null && chg30d >= 20)) {
     return call('markup', [
-      band === 'running' ? 'the board has this banded `running`' : null,
+      band === 'underway' ? 'the board has this banded `underway`' : null,
       e20[last] != null && e50[last] != null ? `close ${px(close)} over EMA20 ${px(e20[last])} over EMA50 ${px(e50[last])}` : null,
       chg30d != null ? `${signed(chg30d)}% over 30 days` : null,
       'adds belong on pullbacks into structure, and the stop only moves up',
@@ -566,9 +566,9 @@ export function phaseOf({ screened = null, precedent = null, crowd = null, candl
   }
 
   // 5 — ignition
-  if (band === 'igniting' || (flags.freshBreak && num(screened?.accel?.d24VsWeek) != null && screened.accel.d24VsWeek >= 2)) {
+  if (band === 'starting' || (flags.freshBreak && num(screened?.accel?.d24VsWeek) != null && screened.accel.d24VsWeek >= 2)) {
     return call('ignition', [
-      band === 'igniting' ? 'the board has this banded `igniting`' : 'the last 24h broke the prior 6-day high with the day running ahead of the week\'s pace',
+      band === 'starting' ? 'the board has this banded `starting`' : 'the last 24h broke the prior 6-day high with the day running ahead of the week\'s pace',
       num(screened?.rsVsBtc7d) != null ? `${signed(screened.rsVsBtc7d)} points of relative strength vs BTC over 7 days` : null,
       precedent?.ok && precedent.baseRates?.medianFwd21 != null
         ? `this coin's own ${precedent.episodes} prior ignitions ran a median ${signed(precedent.baseRates.medianFwd21)}% over the next 21 days, worst ${signed(precedent.baseRates.worstFwd21)}%`
@@ -580,9 +580,9 @@ export function phaseOf({ screened = null, precedent = null, crowd = null, candl
   // 6 — accumulation
   const compressed = fp?.atrPctile != null && fp.atrPctile <= COMPRESSION_PCTILE
   const absorbing = fp?.volTrend != null && fp.volTrend >= 1.1
-  if (band === 'basing' || compressed || absorbing) {
+  if (band === 'quiet' || compressed || absorbing) {
     return call('accumulation', [
-      band === 'basing' ? 'the board has this banded `basing`' : null,
+      band === 'quiet' ? 'the board has this banded `quiet`' : null,
       compressed ? `ATR is in the ${ord(fp.atrPctile)} percentile of its own last 180 days — the range has contracted` : null,
       absorbing ? `the 20-day volume baseline is ${r2(fp.volTrend)}× the 60-day` : null,
       fp?.higherLows === true ? 'swing lows are ascending' : null,

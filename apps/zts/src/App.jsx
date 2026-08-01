@@ -1734,7 +1734,7 @@ export function LoginScreen() {
     return (
       // data-kit: the unconfigured gate is a separate root from the form below,
       // so it opts in on its own.
-      <div data-kit style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, color: T.ink, background: "#0B0F1A" }}>
+      <div data-kit style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, color: T.ink, background: "var(--bg)" }}>
         <div className="card pad-lg" style={{ width: 380, maxWidth: "94vw" }}>
           <h1 className="t-head" style={{ margin: "0 0 8px" }}>Supabase isn't configured yet</h1>
           <p className="t-foot" style={{ margin: 0, lineHeight: 1.6 }}>Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY, then redeploy — sign-in needs a real Supabase project to check against.</p>
@@ -1760,7 +1760,7 @@ export function LoginScreen() {
   return (
     // data-kit: the sign-in screen is a root of its own (it renders instead of
     // the app, not inside it), so it opts into the kit here.
-    <div data-kit style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "#0B0F1A" }}>
+    <div data-kit style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "var(--bg)" }}>
       {/* .entrance-card is the kit's own sign-in surface: one material, a deep
           shadow, no outline. It carried a 1px line AND a two-part shadow. */}
       {/* animationDelay 0: the kit's .entrance-card holds the card invisible for
@@ -1913,7 +1913,7 @@ export default function App({ embedded = false }) {
     // data-kit: the boot gate is its own root, and .spinner is the kit's drawn
     // arc — including its reduced-motion stop, which a hand-rolled
     // `animation: spin infinite` does not get.
-    <div data-kit style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0B0F1A" }}>
+    <div data-kit style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)" }}>
       <span className="spinner" role="status" aria-label="Checking your session" style={{ width: "32px", height: "32px" }} />
     </div>
   );

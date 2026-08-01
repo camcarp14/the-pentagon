@@ -465,7 +465,7 @@ function readCrowding({ derivs, perp: perpState, now, parts, facts, sym }) {
  *
  * `capitulating` is the overlay because it is not a heat LEVEL. It is cold heat
  * with a specific cause: price has been beaten down and the leverage/greed
- * gauges have followed it. Cold-and-basing and cold-and-bleeding are the same
+ * gauges have followed it. Cold-and-quiet and cold-and-bleeding are the same
  * score and completely different trades.
  */
 function stateOf(score, { crowding, fg, screened, facts }) {
@@ -488,7 +488,7 @@ function stateOf(score, { crowding, fg, screened, facts }) {
  * ON "ATTENTION RISING FROM A LOW BASE": we have no attention TIME SERIES. The
  * community payload is a single snapshot with no timestamp, and CoinGecko
  * publishes no history for it. So the rise is inferred from the only evidence we
- * actually hold — price is already doing something (a basing/waking/igniting
+ * actually hold — price is already doing something (a quiet/warming/starting
  * band with non-negative relative strength) while the crowd gauges are still
  * cold. That is the tradeable version of the same idea, and it is stated here
  * rather than dressed up as a measured trend.
@@ -513,7 +513,7 @@ function contrarianOf({ score, state, crowding, attention, trendingRank, screene
   }
 
   const band = screened?.band ?? null
-  const earlyBand = band === 'basing' || band === 'waking' || band === 'igniting'
+  const earlyBand = band === 'quiet' || band === 'warming' || band === 'starting'
   const rsOk = !Number.isFinite(screened?.rsVsBtc7d) || screened.rsVsBtc7d >= 0
 
   if (score <= 35 && earlyBand && rsOk) {
@@ -531,7 +531,7 @@ function contrarianOf({ score, state, crowding, attention, trendingRank, screene
     facts.push(`TAILWIND: crowd score ${score}/100 measured across ${attentionMeasured} points of attention while the chart is ${band} — price is moving before the attention is, which is the only order that pays`)
     return { contrarian: 'tailwind', extremes }
   }
-  if (Number.isFinite(crowding?.fundingAnnualPct) && crowding.fundingAnnualPct < 0 && band === 'basing') {
+  if (Number.isFinite(crowding?.fundingAnnualPct) && crowding.fundingAnnualPct < 0 && band === 'quiet') {
     facts.push(`TAILWIND: shorts are paying ${Math.abs(Math.round(crowding.fundingAnnualPct))}%/yr while price bases — the leverage is leaning the wrong way into a flat chart`)
     return { contrarian: 'tailwind', extremes }
   }

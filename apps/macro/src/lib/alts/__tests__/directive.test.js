@@ -73,7 +73,7 @@ const NO_SPARK = structure7d(null)
 
 const screened = (over = {}) => ({
   id: 'test-coin', symbol: 'TEST', name: 'Test Coin', price: 11, mcap: 3e8, vol24h: 2e7,
-  chg24h: 4, chg7d: 9, chg30d: 12, score: 72, band: 'igniting', tier: 'small', kind: 'utility',
+  chg24h: 4, chg7d: 9, chg30d: 12, score: 72, band: 'starting', tier: 'small', kind: 'utility',
   parts: [], facts: ['7d +9.0% vs BTC +3.0% — +6.0 pts of relative strength'],
   flags: { stablecoin: false, wrapper: false, parabolic: false, thinLiquidity: false, freshBreak: true, newListing: false },
   turnover: 0.066, rsVsBtc7d: 6, rsVsBtc30d: 5,
@@ -226,7 +226,7 @@ describe('exits outrank everything except NO_DATA', () => {
   it('TRIMs a parabolic coin it is already long, instead of telling you to AVOID it', () => {
     const d = altDirective(ready({
       position: held,
-      screened: screened({ price: 18, chg24h: 47, chg7d: 130, band: 'extended', flags: { ...screened().flags, parabolic: true } }),
+      screened: screened({ price: 18, chg24h: 47, chg7d: 130, band: 'late', flags: { ...screened().flags, parabolic: true } }),
     }))
     expect(d.action).toBe('TRIM')
     expect(d.severity).toBe('act')
@@ -243,7 +243,7 @@ describe('exits outrank everything except NO_DATA', () => {
   it('holds when there is nothing to do, and shows R, P&L and the stop', () => {
     const d = altDirective(ready({
       position: held,
-      screened: screened({ price: 10.0, band: 'running', flags: { ...screened().flags, freshBreak: false } }),
+      screened: screened({ price: 10.0, band: 'underway', flags: { ...screened().flags, freshBreak: false } }),
     }))
     expect(d.action).toBe('WATCH')
     expect(d.headline).toMatch(/Hold your 120 TEST/)
@@ -259,7 +259,7 @@ describe('AVOID', () => {
   it('refuses a stablecoin and a wrapper outright', () => {
     for (const flag of ['stablecoin', 'wrapper']) {
       const d = altDirective(ready({
-        screened: screened({ score: null, band: 'dead', flags: { ...screened().flags, [flag]: true } }),
+        screened: screened({ score: null, band: 'cold', flags: { ...screened().flags, [flag]: true } }),
       }))
       expect(d.action).toBe('AVOID')
       expect(d.reasons.join(' ')).toMatch(/no independent move to catch/)
@@ -278,7 +278,7 @@ describe('AVOID', () => {
 
   it('refuses the chase, and points at what would make it interesting again', () => {
     const d = altDirective(ready({
-      screened: screened({ price: 18, chg24h: 47, chg7d: 130, band: 'extended', flags: { ...screened().flags, parabolic: true } }),
+      screened: screened({ price: 18, chg24h: 47, chg7d: 130, band: 'late', flags: { ...screened().flags, parabolic: true } }),
     }))
     expect(d.action).toBe('AVOID')
     expect(d.headline).toMatch(/already went — \+47\.0% in 24h, \+130\.0% in 7d/)
@@ -296,7 +296,7 @@ describe('AVOID', () => {
 
   // The documented departure from the contract's ladder order, pinned.
   it('never fires against a position you already hold — that book needs an exit plan', () => {
-    const thin = screened({ price: 10, vol24h: 180_000, band: 'running', flags: { ...screened().flags, thinLiquidity: true, freshBreak: false } })
+    const thin = screened({ price: 10, vol24h: 180_000, band: 'underway', flags: { ...screened().flags, thinLiquidity: true, freshBreak: false } })
     expect(altDirective(ready({ screened: thin })).action).toBe('AVOID')
     const held = altDirective(ready({ screened: thin, position: { units: 120, avgEntry: 9.5 } }))
     expect(held.action).not.toBe('AVOID')
@@ -434,7 +434,7 @@ describe('ENTER', () => {
       expect(d.reasons.join(' ')).toMatch(/every point of that band is a tape alt risk is fighting/)
       expect(d.guardrails.join(' ')).toMatch(/alt risk is fighting the tape today/)
       // ARM is vetoed by the same gate, for the same reason.
-      expect(altDirective(ready({ season: s, screened: screened({ price: 9.95, band: 'waking' }) })).action).not.toBe('ARM')
+      expect(altDirective(ready({ season: s, screened: screened({ price: 9.95, band: 'warming' }) })).action).not.toBe('ARM')
     })
 
     it('does not veto a band that only reaches into the hostile rungs', () => {
@@ -623,7 +623,7 @@ describe('STARTER — a trigger with a leg missing is half a position, quantifie
 
 describe('ARM, STALK and WATCH', () => {
   it('ARMs at the level, and refuses to front-run it', () => {
-    const d = altDirective(ready({ screened: screened({ price: 9.95, band: 'waking' }) }))
+    const d = altDirective(ready({ screened: screened({ price: 9.95, band: 'warming' }) }))
     expect(d.action).toBe('ARM')
     expect(d.headline).toMatch(/triggers on a close above \$10\.10/)
     expect(d.reasons.join(' ')).toMatch(/1\.5% below the trigger/)
@@ -632,10 +632,10 @@ describe('ARM, STALK and WATCH', () => {
 
   it('STALKs a base that rhymes with the last one, and names both levels', () => {
     const d = altDirective(ready({
-      screened: screened({ price: 9.95, band: 'basing', score: 44, flags: { ...screened().flags, freshBreak: false } }),
+      screened: screened({ price: 9.95, band: 'quiet', score: 44, flags: { ...screened().flags, freshBreak: false } }),
       precedent: precedent({ matchPct: 81 }),
     }))
-    // A basing band at 44 is not armable — there is no setup yet, only a shape
+    // A quiet band at 44 is not armable — there is no setup yet, only a shape
     // that rhymes with one. That is the difference between STALK and ARM.
     expect(d.action).toBe('STALK')
     expect(d.headline).toMatch(/looks 81% like the day before its last ignition/)
@@ -645,7 +645,7 @@ describe('ARM, STALK and WATCH', () => {
 
   it('WATCHes something moving that cannot be acted on', () => {
     const d = altDirective(ready({
-      screened: screened({ price: 9.95, band: 'running', score: 38, flags: { ...screened().flags, freshBreak: false } }),
+      screened: screened({ price: 9.95, band: 'underway', score: 38, flags: { ...screened().flags, freshBreak: false } }),
       freshness: { scan: { state: 'live' }, coin: { state: 'stale' } },
     }))
     expect(d.action).toBe('WATCH')
@@ -654,7 +654,7 @@ describe('ARM, STALK and WATCH', () => {
 
   it('falls through to cash, and says so in those words', () => {
     const d = altDirective(ready({
-      screened: screened({ price: 9.95, band: 'dead', score: 11, flags: { ...screened().flags, freshBreak: false } }),
+      screened: screened({ price: 9.95, band: 'cold', score: 11, flags: { ...screened().flags, freshBreak: false } }),
     }))
     expect(d.action).toBe('WATCH')
     expect(d.headline).toMatch(/Nothing here in TEST\. Cash is a position\./)
@@ -825,7 +825,7 @@ describe('the level window is the same window for the trigger and the invalidati
     ]
     const d = altDirective(ready({
       candles: falling,
-      screened: screened({ price: 60, band: 'dead', score: 20, flags: { ...screened().flags, freshBreak: false } }),
+      screened: screened({ price: 60, band: 'cold', score: 20, flags: { ...screened().flags, freshBreak: false } }),
       position: { units: 10, avgEntry: 200 },
       plan: plan({ stop: { stop: 10, basis: 'pct', detail: '', warning: null, floored: false } }),
     }))
@@ -967,7 +967,7 @@ describe('the sparkline fallback is one window too, and it excludes today', () =
 
     const d = altDirective(ready({
       candles: null,
-      screened: screened({ price: broke.last, range7d: broke, band: 'dead', score: 20 }),
+      screened: screened({ price: broke.last, range7d: broke, band: 'cold', score: 20 }),
       position: { units: 10, avgEntry: 10.2 },
       plan: plan({ stop: { stop: 5, basis: 'pct', detail: '', warning: null, floored: false } }),
     }))
@@ -1008,7 +1008,7 @@ describe('the sparkline fallback is one window too, and it excludes today', () =
  */
 
 describe('the sentinel\'s call shape', () => {
-  const BANDS = ['dead', 'basing', 'waking', 'igniting', 'running', 'extended']
+  const BANDS = ['cold', 'quiet', 'warming', 'starting', 'underway', 'late']
   const SEASONS = ['risk_off', 'btc_only', 'btc_leads', 'majors_rotating', 'alt_season', 'euphoric', 'unknown']
   // Real structure7d over a real series, like everything else in this file:
   // prior six days 9.00–11.00, today 10.10 up to 11.50.
@@ -1075,8 +1075,8 @@ describe('the sentinel\'s call shape', () => {
     const thin = screened({ vol24h: 1.4e5, flags: { ...screened().flags, thinLiquidity: true } })
     expect(safeDirective(thin, season(), NOW).action).toBe('AVOID')
 
-    const basing = screened({ price: 10, band: 'basing', score: 52, range7d: SPARK, flags: { ...screened().flags, freshBreak: false } })
-    expect(safeDirective(basing, season(), NOW).action).toBe('STALK')
+    const quiet = screened({ price: 10, band: 'quiet', score: 52, range7d: SPARK, flags: { ...screened().flags, freshBreak: false } })
+    expect(safeDirective(quiet, season(), NOW).action).toBe('STALK')
   })
 
   // The alert that matters most. The sentinel has no candles, so the levels come
@@ -1090,8 +1090,8 @@ describe('the sentinel\'s call shape', () => {
     expect(below.levels.triggerLive).toBe(false)
     expect(above.levels.triggerLive).toBe(true)
     expect(transitionOf(
-      { band: 'basing', action: 'WATCH', triggerAbove: below.levels.triggerLive, invalidated: below.levels.invalidated },
-      { band: 'basing', action: 'WATCH', triggerAbove: above.levels.triggerLive, invalidated: above.levels.invalidated },
+      { band: 'quiet', action: 'WATCH', triggerAbove: below.levels.triggerLive, invalidated: below.levels.invalidated },
+      { band: 'quiet', action: 'WATCH', triggerAbove: above.levels.triggerLive, invalidated: above.levels.invalidated },
     )).toEqual({ fired: true, why: ['trigger fired'] })
   })
 
@@ -1102,8 +1102,8 @@ describe('the sentinel\'s call shape', () => {
     // that makes a heavy day look like a light one. The alert has to carry the
     // number the board it points at is showing.
     const row = screened({ turnover: 0.12, chg24h: 12.3, chg7d: 40, score: 88, symbol: 'PEPE' })
-    const curr = { band: 'igniting', action: 'STALK', triggerAbove: true, invalidated: false }
-    const line = alertLine({ id: 'pepe', symbol: 'PEPE' }, row, ['basing → igniting'], curr, safeDirective(row, season(), NOW))
+    const curr = { band: 'starting', action: 'STALK', triggerAbove: true, invalidated: false }
+    const line = alertLine({ id: 'pepe', symbol: 'PEPE' }, row, ['quiet → starting'], curr, safeDirective(row, season(), NOW))
     expect(line).toContain('turnover 12.0% of cap')
     expect(line).not.toMatch(/turnover [\d.]+×/)
     expect(line).toContain('24h +12.3%')
@@ -1129,7 +1129,7 @@ describe('the sentinel\'s call shape', () => {
     // The sentinel has no candles, so this is the WEAKER sparkline level. A user
     // holding the alert next to the tab has to be able to tell which one moved.
     const row = screened({ price: 12, range7d: SPARK })
-    const curr = { band: 'igniting', action: 'WATCH', triggerAbove: true, invalidated: false }
+    const curr = { band: 'starting', action: 'WATCH', triggerAbove: true, invalidated: false }
     const line = alertLine({ id: 'x' }, row, ['trigger fired'], curr, safeDirective(row, season(), NOW))
     expect(line).toContain('trigger fired')
     expect(line).toContain('price $12.00 cleared $11.00 — prior 6-day high from the 7-day sparkline (no candle history)')
@@ -1183,7 +1183,7 @@ describe('the sentinel\'s call shape', () => {
     }, { btcRow: { symbol: 'BTC', chg7d: 3, chg30d: 7 } })
     const d = safeDirective(row, season(), NOW)
     const curr = { band: row.band, action: d.action, triggerAbove: d.levels.triggerLive, invalidated: d.levels.invalidated }
-    const line = alertLine({ id: 'bar', symbol: 'BAR' }, row, ['basing → igniting'], curr, d)
+    const line = alertLine({ id: 'bar', symbol: 'BAR' }, row, ['quiet → starting'], curr, d)
 
     expect(line).toContain('24h +12.3%')                                  // row.chg24h
     expect(line).toContain('7d +41.2%')                                   // row.chg7d
@@ -1207,8 +1207,8 @@ describe('the sentinel\'s call shape', () => {
     const blind = safeDirective(screened({ price: 12, range7d: NO_SPARK }), season(), NOW)
     expect(blind.levels.triggerLive).toBeNull()
     expect(transitionOf(
-      { band: 'basing', action: 'WATCH', triggerAbove: null, invalidated: null },
-      { band: 'basing', action: 'WATCH', triggerAbove: true, invalidated: false },
+      { band: 'quiet', action: 'WATCH', triggerAbove: null, invalidated: null },
+      { band: 'quiet', action: 'WATCH', triggerAbove: true, invalidated: false },
     ).fired).toBe(false)
   })
 })
@@ -1244,7 +1244,7 @@ describe('every shape of garbage is a normal input', () => {
     const ACTIONS = ['NO_DATA', 'AVOID', 'WATCH', 'STALK', 'ARM', 'STARTER', 'ENTER', 'ADD', 'TRIM', 'EXIT']
     const variants = []
     for (const price of [9.1, 9.95, 11, 18]) {
-      for (const band of ['dead', 'basing', 'waking', 'igniting', 'running', 'extended']) {
+      for (const band of ['cold', 'quiet', 'warming', 'starting', 'underway', 'late']) {
         for (const position of [null, { units: 120, avgEntry: 9.0 }, { units: 5, avgEntry: 12 }]) {
           for (const s of [season(), HOSTILE]) {
             variants.push(altDirective(ready({ screened: screened({ price, band }), position, season: s })))

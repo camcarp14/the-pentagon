@@ -10,11 +10,11 @@
 //   1. WHAT CHANGED SINCE I LAST LOOKED.  boardDelta() diffs two board snapshots
 //      — both of them real scans this browser actually received — and reports
 //      band transitions, fresh breaks, entrants to the top of the board and
-//      score moves. basing → igniting is the whole point of the tool and it is
+//      score moves. quiet → starting is the whole point of the tool and it is
 //      the one event a ranked list can never show you, because a ranking has no
 //      memory.
 //   2. WHERE THE BOARD IS.  bandDistribution() counts the six bands. "Eleven
-//      coins are igniting and sixty are dead" is a fact about the market that
+//      coins are starting and sixty are cold" is a fact about the market that
 //      no single row carries.
 //   3. WHAT THE MARKET IS DOING OVER TIME.  altShareSeries() reads the dominance
 //      history the alt-watch cron has been accumulating since it shipped and
@@ -42,48 +42,87 @@
 // below therefore states its own arithmetic the way season.js's
 // "dominance trend unknown (1 of 7 stored days needed)" does.
 
+/* ══ THE SIX STATES, AND WHY THEY ARE SPELLED IN ENGLISH ═══════════════════
+ *
+ * They used to be `igniting / waking / running / basing / dead / extended`. The
+ * operator translated every one of them on every read, which is six translations
+ * standing between a glance and a decision, and the whole tab is supposed to be
+ * a glance. They are now `starting / warming / underway / quiet / late / cold`,
+ * chosen so the word alone says what the state means for a decision:
+ *
+ *   starting  it is moving RIGHT NOW — the one this tool exists to catch
+ *   warming   it is waking up, but nothing has broken yet
+ *   underway  it is already going: you are not early
+ *   quiet     nothing has started, and that is the point
+ *   late      you missed it — this is a chase
+ *   cold      nothing here
+ *
+ * THERE IS NO LABEL MAP, ON PURPOSE, AND THAT IS THE WHOLE DESIGN. The id IS
+ * the English. Renaming only at a label layer would have meant one vocabulary on
+ * screen and another in the data — and the data escapes this app:
+ * netlify/functions/alt-watch.mjs screens the watchlist on a schedule, reads
+ * `row.band` straight off screenCoin(), and writes `${prev.band} → ${curr.band}`
+ * into the Telegram line that reaches a phone. It never sees a component, so a
+ * component-side map could not reach it and the phone would have kept getting
+ * `basing → igniting` forever. With the id spelled in English there is nothing
+ * to keep in sync and no surface that can print a raw one, because there are no
+ * raw ones left. The only cost is CSS class suffixes (`b-starting`, `seg-late`),
+ * which is why the words are single tokens.
+ *
+ * ONE-OFF COST, STATED: alt-watch stores each watched coin's last band in
+ * `alt_alert_state`, so the first scheduled pass after this deploy sees the old
+ * word against the new one and sends a single "igniting → starting"-shaped line
+ * per watched coin. It is bounded (12 lines, once) and self-heals on the next
+ * pass. The browser's own baseline cannot do the same thing: boardSnapshot's `v`
+ * is bumped below so a stored pre-rename board is dropped rather than diffed.
+ */
+
 /**
  * THE ORDER A MOVE HAPPENS IN. screen.js's bandOf() is written as a first-match
  * ladder in exactly this sequence, so a step forward here is a step forward
- * there. It is the only thing that makes "basing → igniting" a DIRECTION rather
+ * there. It is the only thing that makes "quiet → starting" a DIRECTION rather
  * than two unrelated words.
  *
- * `extended` is last because it is late in the move, NOT because it is best —
+ * `late` is last because it is late in the move, NOT because it is best —
  * see BAND_PRIORITY, which is a different order for a different job.
  */
-export const BAND_SEQUENCE = ['dead', 'basing', 'waking', 'igniting', 'running', 'extended']
+export const BAND_SEQUENCE = ['cold', 'quiet', 'warming', 'starting', 'underway', 'late']
 
 /**
  * THE ORDER AN OPERATOR WANTS THEM ON SCREEN, which is not the order they
- * happen in. `igniting` is the state this whole tool exists to catch and it sits
+ * happen in. `starting` is the state this whole tool exists to catch and it sits
  * fourth in the sequence above; sorting the board by the sequence would bury it
- * under sixty dead rows. `extended` is above `dead` only because a blow-off you
- * are already holding is worth seeing and a dead row is not.
+ * under sixty cold rows. `late` is above `cold` only because a blow-off you
+ * are already holding is worth seeing and a cold row is not.
  *
  * Two orders, two names, two jobs — the same discipline season.js applies to
  * `days` / `samples` / `spanDays`. Using one for the other silently reorders the
  * board or silently reverses every transition.
  */
-export const BAND_PRIORITY = ['igniting', 'waking', 'running', 'basing', 'extended', 'dead']
+export const BAND_PRIORITY = ['starting', 'warming', 'underway', 'quiet', 'late', 'cold']
 
 /** One line per band, in the vocabulary screen.js's bandOf() actually tests for.
  *  The group headings and the leaders pane both read from here so the board
- *  cannot describe a band one way in one place and another way in the next. */
+ *  cannot describe a band one way in one place and another way in the next.
+ *
+ *  DECISION FIRST, MECHANISM SECOND. The word on the pill already says the
+ *  state; what this line owes the reader is what to do about it and then the
+ *  arithmetic that put the row there, in that order. */
 export const BAND_MEANING = {
-  igniting: 'broke the prior 6-day high with the day running ahead of the week, and is not up 40% yet',
-  waking: 'the last day is outpacing the week and it is holding up against BTC — early, unconfirmed',
-  running: 'up 15%+ on the week, beating BTC, and high in its own range. The move is underway',
-  basing: 'flat within ±12% on the week with real turnover — nothing has started, and that is the point',
-  extended: 'parabolic, or up 150% on the month and still near the highs. This is a chase',
-  dead: 'no acceleration, no relative strength, or too thin to act on',
+  starting: 'moving right now — it just took out the prior 6-day high with the day running ahead of the week, and it is not up 40% yet. This is the one the board is built to find',
+  warming: 'it is stirring and nothing has broken yet — the last day is outpacing the week and it is holding up against BTC. Early, and unconfirmed',
+  underway: 'already going, so you are not early — up 15%+ on the week, beating BTC, and high in its own range',
+  quiet: 'nothing has started, and that is the point — flat within ±12% on the week but still trading. This is the base a start comes from',
+  late: 'you missed it — parabolic, or up 150% on the month and still near the highs. A chase, not an entry',
+  cold: 'nothing here — no acceleration, no relative strength, or too thin to act on',
 }
 
-/** Bands worth a glance before anything else. `running` is in the list because a
- *  move underway is still tradeable; `extended` and `dead` are not. */
-export const ACTIONABLE_BANDS = ['igniting', 'waking', 'running']
+/** Bands worth a glance before anything else. `underway` is in the list because a
+ *  move underway is still tradeable; `late` and `cold` are not. */
+export const ACTIONABLE_BANDS = ['starting', 'warming', 'underway']
 
 /** Where a band sits in the move. Null — not -1, and not 0 — for anything that
- *  is not one of the six, so a typo can never read as `dead`. */
+ *  is not one of the six, so a typo can never read as `cold`. */
 export function bandStep(band) {
   const i = BAND_SEQUENCE.indexOf(band)
   return i === -1 ? null : i
@@ -105,7 +144,7 @@ export function bandOrder(band) {
  * @returns { total, bands: [{band, n, pct, meaning}], actionable, unbanded }
  *
  * `pct` is NULL when there is nothing to divide by, never 0. An empty board is
- * not a board on which 0% of coins are igniting — it is a board with no reading
+ * not a board on which 0% of coins are starting — it is a board with no reading
  * on it, and a 0%-wide segment drawn from an empty scan is a measurement nobody
  * took. Every band appears in the output even at zero, so the strip does not
  * change shape between two renders of a moving market.
@@ -169,7 +208,7 @@ export function boardSnapshot(rows, { asOf = null, max = 250 } = {}) {
       brk: !!r.flags?.freshBreak,
     })
   }
-  return { v: 1, asOf: Number.isFinite(asOf) ? asOf : null, n: out.length, rows: out }
+  return { v: 2, asOf: Number.isFinite(asOf) ? asOf : null, n: out.length, rows: out }
 }
 
 /** Weight decides which single event a coin is reported under, and the order the
@@ -271,7 +310,7 @@ export function boardDelta(prev, curr, { topN = 15, minScoreMove = 10, maxEvents
     const from = bandStep(was.band)
     const to = bandStep(row.band)
     if (from != null && to != null && to > from) {
-      advanced.push(push(row.band === 'igniting' ? 'ignite' : 'advance', row, {
+      advanced.push(push(row.band === 'starting' ? 'ignite' : 'advance', row, {
         fromBand: was.band, steps: to - from, scoreDelta: row.score - was.score,
       }))
     } else if (from != null && to != null && to < from) {
@@ -327,7 +366,7 @@ export function boardDelta(prev, curr, { topN = 15, minScoreMove = 10, maxEvents
 function eventText(ev) {
   const d = Number.isFinite(ev.scoreDelta) ? ` (${signed(ev.scoreDelta, 0)} to ${ev.score})` : ''
   switch (ev.kind) {
-    case 'ignite': return `${ev.fromBand} → igniting${d}`
+    case 'ignite': return `${ev.fromBand} → starting${d}`
     case 'advance': return `${ev.fromBand} → ${ev.band}${d}`
     case 'break': return `broke its prior 6-day high${d}`
     case 'enter': return ev.from == null
@@ -480,7 +519,7 @@ function spanDaysOf(window) {
  * The best-scoring rows inside each requested band.
  *
  * A band with nothing in it is RETURNED, empty, rather than dropped. "Nothing is
- * igniting right now" is a reading of the market and it is one of the more
+ * starting right now" is a reading of the market and it is one of the more
  * useful ones; a pane that silently omits the heading says the same thing by
  * saying nothing, which is indistinguishable from a render that failed.
  */

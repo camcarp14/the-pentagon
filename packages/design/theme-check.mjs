@@ -86,9 +86,15 @@ const hex = (c) => "#" + [c.r, c.g, c.b].map((v) => Math.round(v).toString(16).p
 // deleted. An allowlist that can go stale is how a fixed bug gets a permanent
 // excuse.
 const OUTSTANDING = [
-  { match: /light\/runway: \.rail paints/, owner: "apps/runway/src/Root.jsx — EMBED_OVERRIDES pins `.rail { background: rgba(11,15,26,0.78) }` for the desktop embed" },
-  { match: /light\/runway: \.rail text/, owner: "apps/runway/src/Root.jsx — same rule; the ink is correct, the bar under it is not" },
-  { match: /light\/zts: <body> is/, owner: "apps/zts/src/App.jsx:133 — injects `body { background-color: #0B0F1A; … }` from a JS template string" },
+  // THE THREE LIGHT ENTRIES THAT USED TO BE HERE ARE GONE, AND THE HARNESS IS
+  // WHAT REMOVED THEM. Runway's EMBED_OVERRIDES no longer pins
+  // `rgba(11,15,26,0.78)` on .rail, and ZTS's injected body rule now reads
+  // `var(--shell-canvas, #0B0F1A)` — the hex survives only as a fallback for a
+  // root that never renders without the variable. Both were fixed, both stopped
+  // reproducing, and the stale-entry check below turned that into three FAILs
+  // demanding these lines be deleted rather than letting a fixed bug keep a
+  // permanent excuse. This comment is the receipt.
+  //
   // The three below are DARK, pre-date this work, and are a product call rather
   // than a theming one. Macro's cockpit inks small text with --down, --crit and
   // --serious, and on a well (#1B2438) they measure 3.48 / 3.30 / 2.99 — under

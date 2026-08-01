@@ -1,6 +1,6 @@
 // The screener's one job is to tell a coin that is STARTING to move from one
 // that has already moved. Most of this file is that assertion, made three ways:
-// by the ranking (igniting beats extended beats already-ran), by the arithmetic
+// by the ranking (starting beats late beats already-ran), by the arithmetic
 // (every worked example is computed by hand in the comments against the ladder
 // at the top of screen.js), and by the exclusion set (a board with USDT on it
 // is not a board).
@@ -74,7 +74,7 @@ const STETH = row({
 /* ── the whole ask ────────────────────────────────────────────────────────── */
 
 describe('starting to move vs already moved — the entire point of the file', () => {
-  it('ranks the igniting coin above the parabolic one and the already-ran one', () => {
+  it('ranks the starting coin above the parabolic one and the already-ran one', () => {
     const ctx = { btcRow: BTC }
     const ign = screenCoin(IGNITING, ctx)
     const ext = screenCoin(EXTENDED, ctx)
@@ -100,9 +100,9 @@ describe('starting to move vs already moved — the entire point of the file', (
   })
 
   it('bands the three by state, not by score bucket', () => {
-    expect(screenCoin(IGNITING, { btcRow: BTC }).band).toBe('igniting')
-    expect(screenCoin(EXTENDED, { btcRow: BTC }).band).toBe('extended')
-    expect(screenCoin(ALREADY_RAN, { btcRow: BTC }).band).toBe('basing')
+    expect(screenCoin(IGNITING, { btcRow: BTC }).band).toBe('starting')
+    expect(screenCoin(EXTENDED, { btcRow: BTC }).band).toBe('late')
+    expect(screenCoin(ALREADY_RAN, { btcRow: BTC }).band).toBe('quiet')
   })
 
   it('carries the acceleration numbers the ranking was built on', () => {

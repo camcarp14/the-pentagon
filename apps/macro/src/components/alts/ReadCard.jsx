@@ -143,7 +143,7 @@ export default function ReadCard({
 
             <p className="sub t-foot tc-foot">
               Six of the ten points are the regime — is capital rotating into alts at all — scaled straight off
-              the alt-season score below. Three are whether anything on the board is actually igniting, which is
+              the alt-season score below. Three are whether anything on the board is actually starting, which is
               a completed break of the prior 6-day high and not a shape that might resolve either way. The last
               point is a tilt for which way the board has moved since you last looked, and it is left out
               entirely rather than scored zero when there is no earlier board. Advisory only &mdash; every entry,

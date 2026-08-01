@@ -5,10 +5,10 @@
 // the cases below are weighted the same way pulse.test.js is — towards the
 // REFUSALS and towards the two structural guarantees:
 //
-//   1. THE HEADLINE CANNOT CONTRADICT THE BOARD. The igniting count on the card
-//      and the igniting segment on the distribution strip are one computation,
+//   1. THE HEADLINE CANNOT CONTRADICT THE BOARD. The starting count on the card
+//      and the starting segment on the distribution strip are one computation,
 //      not two that agree. There is a search below that proves 8 of 10 is
-//      unreachable over an empty igniting band, for every combination of the
+//      unreachable over an empty starting band, for every combination of the
 //      three components — a theorem about the weights, not a spot check.
 //   2. A MISSING INPUT DEGRADES TO A STATED REASON. Three refusals, three
 //      different sentences, and two of them still answer the rows they measured.
@@ -93,15 +93,15 @@ const textOf = (r) => [r.label, r.plain, ...r.rows.flatMap((x) => [x.v, x.note])
 /* ══ 1. the guarantee: the headline is the board ════════════════════════════ */
 
 describe('the headline and the board are one computation', () => {
-  it('counts igniting rows out of the same object the distribution strip is drawn from', () => {
+  it('counts starting rows out of the same object the distribution strip is drawn from', () => {
     const { season, rows } = marketOf()
     const r = altsRead({ season, rows, scanState: LIVE, live: true })
     const strip = bandDistribution(rows)
 
     // three routes to the same number: the card, the strip, and the rows the
     // board's own band filter would show
-    expect(r.ignition.n).toBe(strip.bands.find((b) => b.band === 'igniting').n)
-    expect(r.ignition.n).toBe(rows.filter((x) => x.band === 'igniting').length)
+    expect(r.ignition.n).toBe(strip.bands.find((b) => b.band === 'starting').n)
+    expect(r.ignition.n).toBe(rows.filter((x) => x.band === 'starting').length)
     expect(r.dist.total).toBe(strip.total)
     expect(r.dist.actionable).toBe(strip.actionable)
   })
@@ -109,7 +109,7 @@ describe('the headline and the board are one computation', () => {
   it('names only coins that are on the board, in the board’s own order', () => {
     const { season, rows } = marketOf()
     const r = altsRead({ season, rows, scanState: LIVE, live: true })
-    const onBoard = rows.filter((x) => x.band === 'igniting')
+    const onBoard = rows.filter((x) => x.band === 'starting')
     expect(r.ignition.top.length).toBeGreaterThan(0)
     expect(r.ignition.top.map((x) => x.symbol)).toEqual(onBoard.slice(0, 3).map((x) => x.symbol))
     // descending by score, because screenUniverse already sorted it that way and
@@ -122,25 +122,25 @@ describe('the headline and the board are one computation', () => {
     for (const s of r.ignition.top) expect(note).toContain(`${s.symbol} ${s.score}`)
   })
 
-  it('CANNOT say yes over a board with nothing igniting — by search, not by spot check', () => {
+  it('CANNOT say yes over a board with nothing starting — by search, not by spot check', () => {
     // THE THEOREM. The regime is worth 6 and the drift tilt 1, so the ceiling
-    // with an empty igniting band is 7 and the `go` rung starts at 8. This walks
+    // with an empty starting band is 7 and the `go` rung starts at 8. This walks
     // the whole reachable component space rather than asserting one case,
     // because the failure this guards against is a future weight change that
     // makes the sentence in the header quietly untrue.
     let checked = 0
     for (let seasonScore = 0; seasonScore <= 100; seasonScore++) {
-      for (const igniting of [0, 1, 2, 4, 5, 9]) {
+      for (const starting of [0, 1, 2, 4, 5, 9]) {
         for (const drift of [-1, 0, 1]) {
           const r = altsRead({
             season: fakeSeason(seasonScore),
-            rows: boardWith(igniting),
+            rows: boardWith(starting),
             delta: fakeDelta(drift),
             scanState: LIVE, live: true,
           })
           checked++
           if (r.band === 'go') {
-            expect(r.ignition.n, `a "go" over ${r.ignition.n} igniting rows`).toBeGreaterThanOrEqual(1)
+            expect(r.ignition.n, `a "go" over ${r.ignition.n} starting rows`).toBeGreaterThanOrEqual(1)
             // …and a go always rests on a rotating tape too: 8 − 3 − 1 = 4 of 6
             // regime points, which is 59 out of 100 at the least.
             expect(r.regime.score).toBeGreaterThanOrEqual(59)
@@ -153,11 +153,11 @@ describe('the headline and the board are one computation', () => {
   })
 
   it('moves the score monotonically with the board it is describing', () => {
-    // More igniting rows can never lower the read, and a hotter regime can never
+    // More starting rows can never lower the read, and a hotter regime can never
     // lower it either. A weight table that broke this would put the card and the
     // board in opposite directions on the same market.
-    const at = (igniting, seasonScore) => altsRead({
-      season: fakeSeason(seasonScore), rows: boardWith(igniting), scanState: LIVE, live: true,
+    const at = (starting, seasonScore) => altsRead({
+      season: fakeSeason(seasonScore), rows: boardWith(starting), scanState: LIVE, live: true,
     }).score
     for (const s of [10, 40, 60, 80, 100]) {
       const series = [0, 1, 2, 5, 9].map((n) => at(n, s))
@@ -165,7 +165,7 @@ describe('the headline and the board are one computation', () => {
     }
     for (const n of [0, 2, 5]) {
       const series = [0, 25, 50, 75, 100].map((s) => at(n, s))
-      expect([...series].sort((a, b) => a - b), `score fell as the regime warmed at ${n} igniting`).toEqual(series)
+      expect([...series].sort((a, b) => a - b), `score fell as the regime warmed at ${n} starting`).toEqual(series)
     }
   })
 })
@@ -181,10 +181,10 @@ describe('the ten points add up the way the header says', () => {
     }
   })
 
-  it('runs the igniting ladder first-threshold-wins, like every other ladder here', () => {
+  it('runs the starting ladder first-threshold-wins, like every other ladder here', () => {
     for (const [n, pts] of [[0, 0], [1, 1], [2, 2], [4, 2], [5, 3], [40, 3]]) {
       const r = altsRead({ season: fakeSeason(50), rows: boardWith(n), scanState: LIVE, live: true })
-      expect(r.ignition.points, `${n} igniting should be ${pts} of 3`).toBe(pts)
+      expect(r.ignition.points, `${n} starting should be ${pts} of 3`).toBe(pts)
     }
   })
 
@@ -300,7 +300,7 @@ describe('a missing input becomes a stated reason, never a default', () => {
 
     // the measured half still speaks, with real numbers in it
     expect(rowByKey(r, 'look').v).toBe('No read')
-    expect(rowByKey(r, 'starting').v).toMatch(/\d+ igniting|nothing igniting/)
+    expect(rowByKey(r, 'starting').v).toMatch(/\d+ starting|nothing starting/)
     expect(rowByKey(r, 'since').v).toBe('no baseline')
     // `no_regime` leads the fragility list — but the row does not repeat what
     // the first row of the same card already said four lines above it.
@@ -338,15 +338,15 @@ describe('a missing input becomes a stated reason, never a default', () => {
     expect(absent.drift.scored).toBe(false)
   })
 
-  it('says the board is quiet with a count when nothing is igniting', () => {
+  it('says the board is quiet with a count when nothing is starting', () => {
     // A zero that was measured looks nothing like a zero that was assumed: this
     // one states the two neighbouring bands and the denominator.
     const cold = UNIVERSE.map((r) => (r.symbol === 'BTC' ? r : { ...r, chg24h: -3, chg7d: -9, sparkline7d: spark(1, -0.1) }))
     const { season, rows } = marketOf(cold)
     const r = altsRead({ season, rows, scanState: LIVE, live: true })
     expect(r.ignition.n).toBe(0)
-    expect(rowByKey(r, 'starting').v).toBe('nothing igniting')
-    expect(rowByKey(r, 'starting').note).toMatch(/\d+ waking and \d+ running out of \d+ ranked/)
+    expect(rowByKey(r, 'starting').v).toBe('nothing starting')
+    expect(rowByKey(r, 'starting').note).toMatch(/\d+ warming and \d+ underway out of \d+ ranked/)
     expect(rowByKey(r, 'starting').note).toMatch(/prior 6-day high/)
   })
 })
@@ -446,7 +446,7 @@ describe('the fragilities are computed, not a standing disclaimer', () => {
     expect(r2.risks.find((x) => x.key === 'dominance_filling').text).toMatch(/0 of the 7 stored days/)
   })
 
-  it('says an igniting count is not a shortlist when the rows are untradeable', () => {
+  it('says an starting count is not a shortlist when the rows are untradeable', () => {
     const thinCoin = row({
       id: 'thin', symbol: 'THIN', name: 'Thin Thing', rank: 180, price: 0.5, mcap: 2e8,
       vol24h: 120_000, chg24h: 9, chg7d: 12, chg30d: 15, sparkline7d: spark(0.4, 0.22),
@@ -561,25 +561,25 @@ function fakeSeason(score, { of = 100, low = score, high = score } = {}) {
 }
 
 /**
- * A board with exactly `n` igniting rows, in the shape bandDistribution and the
+ * A board with exactly `n` starting rows, in the shape bandDistribution and the
  * naming filter both read.
  *
  * The filler matters. `boardWith(0)` MUST be a board on which nothing is
- * igniting, not an empty board — those are different inputs and read.js answers
+ * starting, not an empty board — those are different inputs and read.js answers
  * them differently on purpose (the second is a refusal). The first version of
  * this helper returned `[]` for n = 0 and every zero-ignition case in this file
  * was silently testing the empty-board refusal instead of the weighting.
  */
 function boardWith(n, filler = 45) {
-  const igniting = Array.from({ length: n }, (_, i) => ({
-    id: `ig${i}`, symbol: `IG${i}`, name: `Igniting ${i}`, score: 90 - i, band: 'igniting',
+  const starting = Array.from({ length: n }, (_, i) => ({
+    id: `ig${i}`, symbol: `IG${i}`, name: `Igniting ${i}`, score: 90 - i, band: 'starting',
     flags: { freshBreak: true, thinLiquidity: false, newListing: false, parabolic: false },
   }))
   const rest = Array.from({ length: filler }, (_, i) => ({
-    id: `bs${i}`, symbol: `BS${i}`, name: `Basing ${i}`, score: 40 - (i % 30), band: 'basing',
+    id: `bs${i}`, symbol: `BS${i}`, name: `Basing ${i}`, score: 40 - (i % 30), band: 'quiet',
     flags: { freshBreak: false, thinLiquidity: false, newListing: false, parabolic: false },
   }))
-  return [...igniting, ...rest]
+  return [...starting, ...rest]
 }
 
 function fakeDeltaCounts(counts) {

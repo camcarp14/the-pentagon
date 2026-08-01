@@ -24,15 +24,15 @@
 // bandDistribution() — the same call, on the same `rows` array the board
 // renders, that draws the distribution strip. It is not a second count over the
 // same coins; there is no second count to drift. The named coins are those rows,
-// filtered on the same `band === 'igniting'` the board's own band filter uses,
+// filtered on the same `band === 'starting'` the board's own band filter uses,
 // in the order screenUniverse already sorted them. And the regime half is
 // season.js's published score, untouched — this file never re-reads breadth,
 // dominance or fear & greed, so it cannot form a second opinion about them.
 //
 // A worked consequence, and it is a THEOREM about the arithmetic rather than a
-// promise: 8 of 10 is unreachable without at least one igniting row on the board
+// promise: 8 of 10 is unreachable without at least one `starting` row on the board
 // (the regime is worth 6 and the drift tilt 1, so 7 is the ceiling with an empty
-// igniting band). The card can never say "yes" over a board with nothing on it.
+// `starting` band). The card can never say "yes" over a board with nothing on it.
 // read.test.js proves that by search rather than by assertion.
 //
 // ─────────────────────────────────────────────────────────────────────────────
@@ -46,11 +46,11 @@
 //     setup that bleeds with everything else. 58/100 is 3 points and you can
 //     check that by eye.
 //
-//   STARTING ....... 0–3    igniting rows on the board
+//   STARTING ....... 0–3    `starting` rows on the board
 //                           ≥5 → 3 · ≥2 → 2 · ≥1 → 1 · 0 → 0
 //     Is there anything to actually buy. This is the cliff, not a gradient: the
 //     difference between a tape that would pay you and a tape that would pay you
-//     for something. `igniting` and not `waking` because igniting is the one
+//     for something. `starting` and not `warming` because `starting` is the one
 //     band that requires a completed event — a break of the prior 6-day high —
 //     rather than a shape that might resolve either way.
 //
@@ -187,7 +187,7 @@ export function altsRead({ season = null, rows = null, delta = null, scanState =
 
   const parts = [
     { key: 'regime', label: `regime ${regime.score} of 100`, points: regime.points, max: REGIME_MAX },
-    { key: 'starting', label: ign.n === 0 ? 'nothing igniting' : `${ign.n} igniting`, points: ign.points, max: START_MAX },
+    { key: 'starting', label: ign.n === 0 ? 'nothing starting' : `${ign.n} starting`, points: ign.points, max: START_MAX },
   ]
   if (drift.scored) {
     parts.push({
@@ -318,18 +318,18 @@ function missingNames(season) {
  */
 function ignitionRead(board, dist) {
   const countOf = (b) => dist.bands.find((x) => x.band === b)?.n ?? 0
-  const n = countOf('igniting')
-  const igniting = board.filter((r) => r?.band === 'igniting')
-  const thin = igniting.filter((r) => r?.flags?.thinLiquidity || r?.flags?.newListing)
+  const n = countOf('starting')
+  const starting = board.filter((r) => r?.band === 'starting')
+  const thin = starting.filter((r) => r?.flags?.thinLiquidity || r?.flags?.newListing)
   return {
     n,
     points: ladder(n, START_LADDER),
     // screenUniverse already sorted by score descending, so "the first three"
     // is "the best three" without a second sort that could order them otherwise.
-    top: igniting.slice(0, 3),
+    top: starting.slice(0, 3),
     thin: thin.length,
-    waking: countOf('waking'),
-    running: countOf('running'),
+    warming: countOf('warming'),
+    underway: countOf('underway'),
     total: dist.total,
     actionable: dist.actionable,
   }
@@ -390,10 +390,10 @@ function buildRows({ score, band, label, regime, ign, drift, dist, wrong }) {
   rows.push({
     key: 'starting',
     k: "What's starting",
-    v: ign.n === 0 ? 'nothing igniting' : `${ign.n} igniting`,
+    v: ign.n === 0 ? 'nothing starting' : `${ign.n} starting`,
     tone: ign.n > 0 ? 'go' : 'flat',
     note: ign.n === 0
-      ? `${ign.waking} waking and ${ign.running} running out of ${ign.total} ranked — but nothing took out its prior 6-day high in this pass`
+      ? `${ign.warming} warming and ${ign.underway} underway out of ${ign.total} ranked — but nothing took out its prior 6-day high in this pass`
       : `${ign.top.map((r) => `${r.symbol} ${r.score}`).join(' · ')}${ign.n > ign.top.length ? ` and ${ign.n - ign.top.length} more` : ''} — best first, out of ${ign.total} ranked`,
   })
 
@@ -444,7 +444,7 @@ function buildRows({ score, band, label, regime, ign, drift, dist, wrong }) {
  * which is every first visit, on every device — the one fragility on the card
  * was the least interesting one available, and a 13-minute-old scan sat behind
  * it unmentioned. A stale scan invalidates every number here at once; an unread
- * regime gauge moves the score; an untradeable igniting row changes what the
+ * regime gauge moves the score; an untradeable `starting` row changes what the
  * shortlist is worth. A missing baseline only costs the tilt, and the row above
  * it already says so in its own words.
  */
@@ -492,7 +492,7 @@ function buildRisks({ regime, ign, drift, dist, scanState, low, high, season }) 
     out.push({
       key: 'thin_starts',
       short: `${ign.thin} of ${ign.n} starts are thin`,
-      text: `${ign.thin} of the ${ign.n} igniting rows are either under $250k of daily volume or have less than a month of history, so "${ign.n} igniting" is not ${ign.n} names you can size.`,
+      text: `${ign.thin} of the ${ign.n} starting rows are either under $250k of daily volume or have less than a month of history, so "${ign.n} starting" is not ${ign.n} names you can size.`,
     })
   }
 
@@ -560,7 +560,7 @@ function buildFacts({ score, regime, ign, drift, low, high, pinned, dist }) {
     facts.push(regime.reason)
   }
   if (dist.total > 0) {
-    facts.push(`${ign.n} igniting of ${dist.total} ranked rows → ${ign.points} of ${START_MAX} (≥5 → 3 · ≥2 → 2 · ≥1 → 1 · 0 → 0)`)
+    facts.push(`${ign.n} starting of ${dist.total} ranked rows → ${ign.points} of ${START_MAX} (≥5 → 3 · ≥2 → 2 · ≥1 → 1 · 0 → 0)`)
   }
   if (drift.scored) {
     const clamped = Number.isFinite(drift.raw) && drift.raw !== drift.points

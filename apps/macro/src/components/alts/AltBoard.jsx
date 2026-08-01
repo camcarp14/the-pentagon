@@ -157,8 +157,8 @@ export default function AltBoard({
   const [sort, setSort] = useState('score')
   const [q, setQ] = useState('')
   const [limit, setLimit] = useState(PAGE)
-  // GROUPED BY DEFAULT. A flat ranked list makes you scroll past forty extended
-  // and dead rows to reach the next igniting one, and igniting is the state this
+  // GROUPED BY DEFAULT. A flat ranked list makes you scroll past forty late
+  // and cold rows to reach the next starting one, and `starting` is the state this
   // whole tool exists to catch. Inside a group the chosen sort still decides the
   // order, so nothing about the ranking is lost — it is partitioned, not
   // replaced — and "Flat list" is one control away for anyone who wants the pure
@@ -193,7 +193,7 @@ export default function AltBoard({
   const heads = group === 'band' && new Set(visible.map((r) => r.band)).size > 1
   // Counted over `shown`, not over `visible`. The number beside a heading is the
   // size of the GROUP, and paging is a property of the view — with 50 of 120
-  // rows drawn, a heading reading "igniting 4" when eleven are igniting is the
+  // rows drawn, a heading reading "starting 4" when eleven are starting is the
   // page's arithmetic wearing the market's clothes. The foot line already says
   // how many of the total are on screen.
   const groupCounts = useMemo(() => {
@@ -360,7 +360,7 @@ function cap(s) { return String(s).charAt(0).toUpperCase() + String(s).slice(1) 
  *
  * The meaning line is screen.js's rule in words, from pulse.js's single copy of
  * it. It is the piece that makes the grouping mean something rather than sort
- * something: "igniting" is a label, "broke the prior 6-day high with the day
+ * something: "starting" is a label, "broke the prior 6-day high with the day
  * running ahead of the week" is why the eleven rows under it are together.
  */
 function GroupHead({ band, n }) {

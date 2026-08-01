@@ -218,9 +218,11 @@
      All three clear the 3:1 floor for a graphical mark, which is the bar the
      six-checks note at the top of this file actually validated them at. None
      clears 4.5:1, which is the bar they need as the 10.5-15.5px TEXT this sheet
-     also uses them for (.tc-val.tone-bad, .alt-band.b-extended, .c-score
-     .band-extended, .stattile-value.grade-rich, and — added with the Alts
-     dashboard — .alt-chip.band-extended .alt-chip-k and .alt-leadrow-score).
+     also uses them for (.tc-val.tone-bad, .alt-band.b-late, .c-score
+     .band-late, .stattile-value.grade-rich, and — added with the Alts
+     dashboard — .alt-chip.band-late .alt-chip-k and .alt-leadrow-score; and
+     with the price chart, .alt-chart-move.tone-down, which is --down at 12.5px
+     on a CARD rather than a well and measures 3.86:1 there).
      That list is the point of this paragraph, so it has to keep pace with the
      sheet: a registered shortfall whose consumer list has gone stale under-
      states itself, and the next reader takes the smaller number at face value.
@@ -1151,12 +1153,12 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .alt-shape-note { margin: -2px 0 12px; line-height: 1.5; text-wrap: pretty; }
 .alt-dist { display: flex; width: 100%; height: 10px; border-radius: 99px; overflow: hidden; background: var(--ink-a05); }
 .alt-dist-seg { display: block; min-width: 3px; flex-basis: 0; transition: box-shadow var(--dur-1) ease; }
-.alt-dist-seg.seg-igniting { background: var(--good); }
-.alt-dist-seg.seg-waking { background: var(--ink); }
-.alt-dist-seg.seg-running { background: var(--warn); }
-.alt-dist-seg.seg-basing { background: var(--ink-2); }
-.alt-dist-seg.seg-extended { background: var(--serious); }
-.alt-dist-seg.seg-dead { background: var(--ink-a16); }
+.alt-dist-seg.seg-starting { background: var(--good); }
+.alt-dist-seg.seg-warming { background: var(--ink); }
+.alt-dist-seg.seg-underway { background: var(--warn); }
+.alt-dist-seg.seg-quiet { background: var(--ink-2); }
+.alt-dist-seg.seg-late { background: var(--serious); }
+.alt-dist-seg.seg-cold { background: var(--ink-a16); }
 /* An INSET ring in the card's own colour, not a border: a notch cut out of the
    strip. `.alt-dist-seg` has a background and this shadow and no border, which
    is the rule this sheet is tested on. */
@@ -1179,11 +1181,11 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .alt-chip-n { font-size: 12px; font-weight: 600; color: var(--ink); }
 /* Same band → same colour as the pill on the row, so the chip, the strip, the
    group heading and the board row are one vocabulary. */
-.alt-chip.band-igniting .alt-chip-k { color: var(--good); }
-.alt-chip.band-running .alt-chip-k { color: var(--warn); }
-.alt-chip.band-extended .alt-chip-k { color: var(--serious); }
-.alt-chip.band-waking .alt-chip-k { color: var(--ink); }
-.alt-chip.band-dead .alt-chip-k { color: var(--ink-3); }
+.alt-chip.band-starting .alt-chip-k { color: var(--good); }
+.alt-chip.band-underway .alt-chip-k { color: var(--warn); }
+.alt-chip.band-late .alt-chip-k { color: var(--serious); }
+.alt-chip.band-warming .alt-chip-k { color: var(--ink); }
+.alt-chip.band-cold .alt-chip-k { color: var(--ink-3); }
 
 /* ---- alt share of total cap, from the stored dominance history ---- */
 .alt-share { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
@@ -1226,9 +1228,9 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .alt-leadrow:active { background: var(--ink-a06); }
 .alt-leadrow-id { grid-area: id; display: flex; align-items: baseline; gap: 7px; min-width: 0; }
 .alt-leadrow-score { grid-area: score; font-family: var(--mono); font-size: 14px; font-weight: 600; text-align: right; color: var(--ink); }
-.alt-leadrow-score.band-igniting { color: var(--good); }
-.alt-leadrow-score.band-running { color: var(--warn); }
-.alt-leadrow-score.band-extended { color: var(--serious); }
+.alt-leadrow-score.band-starting { color: var(--good); }
+.alt-leadrow-score.band-underway { color: var(--warn); }
+.alt-leadrow-score.band-late { color: var(--serious); }
 .alt-leadrow-nums { grid-area: nums; display: flex; align-items: baseline; gap: 5px; min-width: 0; font-size: 11.5px; }
 .alt-leadrow-nums .num { font-family: var(--mono); font-weight: 600; }
 .alt-leadrow-k { color: var(--ink-3); font-size: 10.5px; margin-right: 4px; }
@@ -1251,6 +1253,99 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .alt-boardnote { margin: -4px 0 12px; line-height: 1.5; }
 .alt-boardfoot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
 .alt-boardfoot .tiny { margin-right: auto; }
+
+/* ---- "In the news", inside the board card ----
+   NOT a card. The tab opens with an answer card and four folds; a fifth surface
+   for a feed that changes no number on the board is the busyness this whole
+   redesign exists to remove, so this is one 44px line inside the card the rows
+   are already in, carrying its count on the collapsed row the way the folds
+   above it do.
+
+   The head is `.ttl-btn`'s idiom hand-rolled rather than the class itself,
+   because `.ttl-btn` is a CARD title (`.card > .ttl-btn` drives the collapsed
+   card padding at :912) and this is a strip inside one. Same furniture —
+   `.dr-state` for the live count, `.dr-chev` for the arrow — so the two read as
+   the same control. */
+.alt-news { margin: 0 0 12px; border-top: 1px solid var(--line); }
+.alt-news-head {
+  display: flex; align-items: baseline; gap: 8px; width: 100%; min-height: 38px;
+  padding: 9px 0 8px; background: none; border: none; font: inherit; color: inherit;
+  text-align: left; cursor: pointer;
+}
+.alt-news-k { margin-bottom: 0; color: var(--ink-2); }
+.alt-news-head:hover .alt-news-k { color: var(--ink); }
+.alt-news-note { margin: 0 0 10px; line-height: 1.5; text-wrap: pretty; }
+.alt-newslist { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; background: var(--line); border-radius: var(--r-md); overflow: hidden; }
+/* One row per COIN, headline(s) beside it. The coin half is the control and the
+   headline half is evidence — a headline that opened the coin's directive would
+   be a link that goes somewhere other than where it says. */
+/* THE ROWS SIT ON THE CARD'S OWN GROUND, NOT IN A WELL, AND THAT IS A CONTRAST
+   DECISION RATHER THAN A TASTE ONE. `--card-2` is the LIGHTEST of the three
+   dark grounds, which makes it the hardest for light text: measured in a
+   browser, `--ink-3` on `--card-2` is 4.44:1 and on `--card` it is 4.92:1. The
+   metadata line and the per-coin count are both --ink-3 at 10.5-11px, so a well
+   here would have shipped two new sub-4.5 readings into the sheet whose header
+   registers every one it already has. Rows on `--card`, separated by the 1px
+   `--line` gaps the list's background shows through, measure 4.92 dark and 5.12
+   light and read as rows either way. */
+.alt-newsrow { background: var(--card); display: grid; grid-template-columns: 1fr; gap: 2px; padding: 8px 11px; }
+.alt-newsrow-coin {
+  display: flex; align-items: center; gap: 7px; min-height: 28px; min-width: 0;
+  background: none; border: none; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.alt-newsrow-coin:hover .alt-sym { color: var(--accent); }
+.alt-newsrow-n { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+.alt-newsrow-body { min-width: 0; }
+.alt-newsitem { margin: 3px 0 0; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.alt-newsitem-t { font-size: 12px; color: var(--ink-2); line-height: 1.45; text-wrap: pretty; }
+a.alt-newsitem-t { color: var(--ink-2); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 2px; }
+a.alt-newsitem-t:hover { color: var(--ink); text-decoration-color: var(--accent); }
+.alt-newsitem-m { font-size: 10.5px; color: var(--ink-3); }
+.alt-newsitem-more { margin: 4px 0 0; }
+.alt-news-foot { margin: 8px 0 0; line-height: 1.5; text-wrap: pretty; }
+
+/* ---- the price chart, inside the directive card ----
+   Inline SVG over the candles /api/alt-coin already returned. `currentColor` on
+   the stroke is what makes it theme-aware without a canvas: the direction class
+   sets the colour and the fill derives from it, so both halves of the palette
+   get the same drawing. No border and no shadow anywhere in this block. */
+.alt-chart { margin: 12px 0 2px; }
+.alt-chart-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.alt-chart-k { margin-bottom: 0; color: var(--ink-3); }
+.alt-chart-move { font-family: var(--mono); font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.alt-chart-move.tone-up { color: var(--up); }
+.alt-chart-move.tone-down { color: var(--down); }
+.alt-chart-movek { font-family: var(--font); font-size: 10.5px; font-weight: 500; color: var(--ink-3); }
+/* `.seg` is the kit's, so the range switch is the same instrument as the Chart
+   tab's MSTR/BTC toggle — one dialect for one job.
+
+   THE AUTO MARGIN IS ON THE EXPAND CONTROL, NOT ON THE SWITCH. This row wraps at
+   360-414: with `margin-left: auto` on the switch, the wrapped second line was
+   [gap][30d 90d 1y Max][Smaller] — the switch shoved into the middle of the row
+   with dead space to its left, because an auto margin takes the slack on
+   WHICHEVER line the item lands on. Moved to the last item, line one is the
+   heading and the move, and line two is the switch flush left with Smaller flush
+   right, at every width. */
+.alt-chart-seg { flex: none; }
+.alt-chart-seg .seg-opt { padding: 4px 9px; font-size: 11px; }
+.alt-chart-exp { flex: none; margin-left: auto; }
+.alt-chart-box { position: relative; width: 100%; min-width: 0; }
+.alt-chartsvg { display: block; width: 100%; color: var(--ink-2); overflow: visible; }
+.alt-chartsvg.dir-up { color: var(--up); }
+.alt-chartsvg.dir-down { color: var(--down); }
+.alt-chart-grid { stroke: var(--line); stroke-width: 1; }
+/* 12% of the line's own colour. `color-mix` against `currentColor` is what keeps
+   the wash correct in both themes without a second literal per direction. */
+.alt-chart-fill { fill: color-mix(in srgb, currentColor 12%, transparent); }
+.alt-chart-dot { fill: currentColor; }
+/* 10.5px is the floor and these are AT it — an axis label is the smallest thing
+   on this tab that is allowed to be. Not uppercase: `.t-label` is the only
+   class that gets that. */
+.alt-chart-ylab, .alt-chart-xlab {
+  font-family: var(--mono); font-size: 10.5px; fill: var(--ink-3);
+}
+.alt-chart-none { margin: 10px 0; line-height: 1.5; text-wrap: pretty; }
+.alt-chart-foot { margin: 5px 0 0; line-height: 1.45; text-wrap: pretty; }
 
 /* ---- the board ----
    ONE DOM, TWO LAYOUTS. Every cell carries a grid-area name; the phone template
@@ -1297,7 +1392,7 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
      a board with no row rhythm, and the raggedness landed on exactly the rows
      that carry the two flags. Spanning gives the cell 137px at 360, 167 at 390,
      191 at 414, which holds the widest combination this screen can produce
-     (`extended` + `par` + `thin`) on one line. What is given up is a 7-day
+     (`starting`/`underway` + `par` + `thin`) on one line. What is given up is a 7-day
      shape drawn 8px from the 7-day percentage it is a picture of; what is
      bought is that `par` and `thin` are legible without a taller row. */
   grid-template-areas:
@@ -1327,7 +1422,7 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
    at both breakpoints to hold the pill and both flags on one line (see the phone
    template above and the 136px band track at 768), so nothing wraps on any
    combination this board can produce. If a future band word is longer than
-   `extended`, the row grows by a line rather than trimming `par` — at 768 that
+   `starting`, the row grows by a line rather than trimming `par` — at 768 that
    used to be 95px of content in a 74px cell with `par` cut in half, and the two
    marks that say the row is not tradeable were the ones being trimmed. */
 .c-band { grid-area: band; display: flex; align-items: center; flex-wrap: wrap; gap: 3px 4px; min-width: 0; }
@@ -1354,9 +1449,9 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 
 /* The score is inked by BAND, so the ranking number and the state word can never
    read as two different opinions. */
-.c-score.band-igniting { color: var(--good); }
-.c-score.band-running { color: var(--warn); }
-.c-score.band-extended { color: var(--serious); }
+.c-score.band-starting { color: var(--good); }
+.c-score.band-underway { color: var(--warn); }
+.c-score.band-late { color: var(--serious); }
 
 /* Band pills: background only — no border, so nothing here can ever pair one
    with a shadow. The word is always printed, so colour is never the only
@@ -1366,11 +1461,11 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.01em; text-transform: capitalize;
   background: var(--ink-a05); color: var(--ink-3); white-space: nowrap;
 }
-.alt-band.b-basing { color: var(--ink-2); }
-.alt-band.b-waking { color: var(--ink); background: var(--ink-a10); }
-.alt-band.b-igniting { color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
-.alt-band.b-running { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
-.alt-band.b-extended { color: var(--serious); background: color-mix(in srgb, var(--serious) 16%, transparent); }
+.alt-band.b-quiet { color: var(--ink-2); }
+.alt-band.b-warming { color: var(--ink); background: var(--ink-a10); }
+.alt-band.b-starting { color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
+.alt-band.b-underway { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.alt-band.b-late { color: var(--serious); background: color-mix(in srgb, var(--serious) 16%, transparent); }
 
 /* The two flags that decide whether a row is tradeable at all, marked on the
    board rather than waiting for the detail — they are the reason a top-of-board
@@ -1431,6 +1526,19 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .alt-detail-grid { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: start; }
 .alt-detail-grid > * { min-width: 0; }
 .alt-dhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+/* TWO WAYS OUT, ONE PER LAYOUT, AND NEVER BOTH AT ONCE.
+   `.alt-back` is the phone's — under 1020 the board is swapped out for this
+   pane, so leaving is going back and the control says where you land. `.alt-close`
+   is the desktop's — there the board never left, so "back" is the wrong verb and
+   the pane needs a dismiss. Each is `display: none` at the other's width, so
+   exactly one is focusable at any width rather than two controls doing one job.
+
+   BOTH SELECTORS ARE WRITTEN TWICE. `[data-kit] .btn` is (0,2,0) and sets
+   `display: inline-flex`; a bare `.alt-close { display: none }` at (0,1,0) loses
+   to it outright and the button renders at every width — which is exactly what
+   `.alt-back` did before the twin at :1619 was added (measured 81×34 at x=771 on
+   a 1440 desktop, sitting on top of the board's Show filter). DESIGN.md §5. */
+.alt-close, [data-kit] .alt-close { display: none; }
 .alt-ident { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
 .alt-ident-sym { font-size: 17px; font-weight: 800; letter-spacing: -0.2px; color: var(--ink); }
 .alt-ident-name { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1557,7 +1665,10 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
      carries the star, the rank, the coin, the score and the band, so all of it
      is on screen at the narrowest desktop with 157px to spare.
 
-     BAND 136, not 76. `extended` + `par` + `thin` measures 128px; at 76 it
+     BAND 136, not 76. `underway` + `par` + `thin` measures 128px (the six band
+     words are 4-8 characters and `starting`/`underway` are the widest, exactly
+     as `igniting`/`extended` were before the rename, so this budget is
+     unchanged); at 76 it
      wrapped to a second line and stood those rows at 55px against 44px
      neighbours. 136 is the widest content plus 8, and the 60px it adds is 60px
      of scroll extent in the half of the table that is already scrolling. */
@@ -1617,6 +1728,12 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
      top of the board's "Show" filter. Same failure as `.nav button:active` at
      :214, same fix, and DESIGN.md §5 is the reason both are written twice. */
   .alt-back, [data-kit] .alt-back { display: none; }
+  /* …and the desktop's own way out takes its place. `margin-left: auto` moves
+     only this control to the far end of the header — the identity, the shape and
+     the star keep the left-packed order they have always had — so the dismiss is
+     where a pane's dismiss is looked for. Escape does the same thing (AltsPanel
+     wires it); this is the affordance, that is the shortcut. */
+  .alt-close, [data-kit] .alt-close { display: inline-flex; margin-left: auto; }
   /* Four stat tiles across a ~400px pane is four unreadable columns, and
      attention-beside-crowding stops being side-by-side at that width. The
      season card, in the wider left pane, keeps its 4-up. */
@@ -1632,11 +1749,20 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
   .alt-star { min-height: 44px; min-width: 44px; }
   .alt-season-btn, .alt-boardfoot .btn { min-height: 44px; }
   /* The dashboard layer's own controls. The band chips are the fastest route
-     from "eleven are igniting" to the eleven rows, and a 30px chip on a phone is
+     from "eleven are starting" to the eleven rows, and a 30px chip on a phone is
      a route you miss. `.alt-ev-main` is a link to a coin's directive and is the
      same case. */
   .alt-chip, .alt-ev-main.is-link, .alt-leadrow { min-height: 44px; }
   .alt-since .disclose { min-height: 44px; }
+  /* The news strip's three targets. MEASURED, not assumed: the strip's own
+     defaults render at 39px (the disclosure), 28px (the coin button) and 17px
+     (a one-line headline link) on a 360-414 phone — the first two are the same
+     kind of control as `.alt-leadrow` and `.disclose` above and the third is a
+     link out to a publisher, which is the one tap on this tab that leaves the
+     app. `align-items: center` on the link so a headline that wraps to two lines
+     grows the box downward rather than sitting on top of it. */
+  .alt-news-head, .alt-newsrow-coin { min-height: 44px; }
+  a.alt-newsitem-t { display: flex; align-items: center; min-height: 44px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

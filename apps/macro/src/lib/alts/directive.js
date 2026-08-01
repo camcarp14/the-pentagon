@@ -149,9 +149,9 @@ export function altDirective(raw = {}) {
     /* ── 3 — held position, soft warnings → trim ──────────────────────────── */
     const soft = []
     if (screened.flags?.parabolic) soft.push(`parabolic: ${pct(screened.chg24h)} in 24h / ${pct(screened.chg7d)} in 7d — this is the part of the move that gives itself back`)
-    if (screened.band === 'extended') soft.push('band is EXTENDED — the run is behind it, not in front of it')
+    if (screened.band === 'late') soft.push('the board has this banded LATE — the run is behind it, not in front of it')
     if (crowd?.state === 'euphoric') soft.push(`the crowd is euphoric (${crowd.score}/100) — that is who you sell to`)
-    if (crowd?.contrarian === 'headwind' && screened.band === 'running') soft.push('running into a crowd headwind — the marginal buyer is already long')
+    if (crowd?.contrarian === 'headwind' && screened.band === 'underway') soft.push('already underway into a crowd headwind — the marginal buyer is already long')
     if (soft.length > 0) {
       return out('TRIM', `Take some ${sym} off — this is late in the move, not early.`, [
         ...soft, rLine(r), pnlLine(openPct), stopLine(stop, price),
@@ -309,7 +309,7 @@ export function altDirective(raw = {}) {
 
   /* ── 8 — ARM: everything met, waiting on a price ────────────────────────── */
   const armable = Number.isFinite(levels.trigger) && allLive && !!size?.ok && !hostileSeason(season) &&
-    (screened.band === 'igniting' || screened.band === 'waking' || (Number.isFinite(screened.score) && screened.score >= 55))
+    (screened.band === 'starting' || screened.band === 'warming' || (Number.isFinite(screened.score) && screened.score >= 55))
   if (armable) {
     const away = Number.isFinite(price) && price > 0 ? ((levels.trigger - price) / price) * 100 : null
     return out('ARM', `${sym} is armed — it triggers on a close above ${px(levels.trigger)}.`, [
@@ -323,9 +323,9 @@ export function altDirective(raw = {}) {
   }
 
   /* ── 9 — STALK: a base is forming and it rhymes with the last one ───────── */
-  const basing = screened.band === 'basing' || screened.band === 'waking'
+  const early = screened.band === 'quiet' || screened.band === 'warming'
   const matches = Number.isFinite(precedent?.matchPct) && precedent.matchPct >= 60
-  if (basing && (matches || (Number.isFinite(screened.score) && screened.score >= 45))) {
+  if (early && (matches || (Number.isFinite(screened.score) && screened.score >= 45))) {
     return out('STALK', `Stalk ${sym} — a base is forming${matches ? ` and it looks ${Math.round(precedent.matchPct)}% like the day before its last ignition` : ''}.`, [
       matches ? precedentLine(precedent) : null,
       Number.isFinite(levels.trigger) ? `the level that would change this: a close above ${px(levels.trigger)}${levels.triggerBasis ? ` (${levels.triggerBasis})` : ''}` : 'no trigger level yet — not enough history to define one',

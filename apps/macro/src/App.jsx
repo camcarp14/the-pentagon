@@ -135,6 +135,13 @@ export default function App({ embedded = false }) {
   // The watchlist is written by the star toggle, not polled: re-fetching it on a
   // timer would race the optimistic write and blink a just-lit star back off.
   const altWatch = useSource('alt-watchlist', 0, onAuthFail)
+  // Headlines, five-minutely. NOT 90s like the scan: news moves in hours, the
+  // section it feeds changes no number on the tab, and a failing poll every
+  // minute and a half is quota spent to re-print the same stated reason. It is
+  // its own source rather than a field on alt-scan so a news outage can never
+  // take the board down with it — `useSource` keeps the last good data on error
+  // and NewsStrip states the failure in its own line.
+  const altNews = useSource('alt-news', 300_000, onAuthFail)
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 10_000)
@@ -291,7 +298,7 @@ export default function App({ embedded = false }) {
               order a screen reader and a keyboard walk the page in, and a nav
               that reads Alts-first over a document that reads Cockpit-first is
               two different answers to "what is this tab" on one screen. */}
-          <TabPanel active={tab === 'alts'}><AltsPanel scan={altScan} watchlistSrc={altWatch} settings={settings} now={now} /></TabPanel>
+          <TabPanel active={tab === 'alts'}><AltsPanel scan={altScan} watchlistSrc={altWatch} newsSrc={altNews} settings={settings} now={now} /></TabPanel>
           <TabPanel active={tab === 'cockpit'}><Cockpit derived={derived} settings={settings} position={position} sources={sources} onReload={reloadAll} /></TabPanel>
           <TabPanel active={tab === 'chart'}><ChartPanel derived={derived} settings={settings} position={position} /></TabPanel>
           <TabPanel active={tab === 'journal'}><Journal journalSrc={journalSrc} /></TabPanel>

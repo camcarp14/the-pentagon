@@ -10,7 +10,7 @@
 // direction comes from screen.js's own ladder rather than from a second list
 // written here. There is a test below that reads screen.js's source to prove the
 // two orders are still the same order, because the day they drift every
-// "basing → igniting" on the dashboard silently reverses.
+// "quiet → starting" on the dashboard silently reverses.
 import { describe, it, expect } from 'vitest'
 import {
   BAND_SEQUENCE, BAND_PRIORITY, BAND_MEANING, ACTIONABLE_BANDS,
@@ -25,7 +25,7 @@ const NOW = Date.UTC(2026, 6, 31, 12, 0, 0)
 
 /** A screened-looking row. Only the five fields boardSnapshot reads matter. */
 const row = (over = {}) => ({
-  id: 'x', symbol: 'X', name: 'Coin X', score: 50, band: 'basing',
+  id: 'x', symbol: 'X', name: 'Coin X', score: 50, band: 'quiet',
   flags: { freshBreak: false, parabolic: false, thinLiquidity: false }, ...over,
 })
 
@@ -48,8 +48,8 @@ describe('the two band orders are two different things', () => {
     // nothing happened on the day a coin crossed into the new state.
     //
     // It is a SET comparison and deliberately not an order one. bandOf() is a
-    // first-match ladder and its order is not the move's order: `igniting` is
-    // tested before `running` because it is the stricter test (it caps 7d at
+    // first-match ladder and its order is not the move's order: `starting` is
+    // tested before `underway` because it is the stricter test (it caps 7d at
     // 40%), not because ignition happens after a run. The sequence is authored
     // here, with that reason, and the two files share only the vocabulary.
     const { readFileSync } = require('node:fs')
@@ -66,17 +66,17 @@ describe('the two band orders are two different things', () => {
   })
 
   it('gives an unknown band no step and sorts it last, never first', () => {
-    expect(bandStep('igniting')).toBe(3)
-    expect(bandStep('nope')).toBeNull()          // NOT -1, which would read as before 'dead'
+    expect(bandStep('starting')).toBe(3)
+    expect(bandStep('nope')).toBeNull()          // NOT -1, which would read as before 'cold'
     expect(bandStep(undefined)).toBeNull()
-    expect(bandOrder('igniting')).toBe(0)
+    expect(bandOrder('starting')).toBe(0)
     expect(bandOrder('nope')).toBe(BAND_PRIORITY.length)
   })
 
-  it('puts igniting first for the reader and fourth in the move', () => {
-    expect(BAND_PRIORITY[0]).toBe('igniting')
-    expect(BAND_SEQUENCE.indexOf('igniting')).toBe(3)
-    expect(ACTIONABLE_BANDS).toEqual(['igniting', 'waking', 'running'])
+  it('puts starting first for the reader and fourth in the move', () => {
+    expect(BAND_PRIORITY[0]).toBe('starting')
+    expect(BAND_SEQUENCE.indexOf('starting')).toBe(3)
+    expect(ACTIONABLE_BANDS).toEqual(['starting', 'warming', 'underway'])
   })
 })
 
@@ -85,15 +85,15 @@ describe('the two band orders are two different things', () => {
 describe('bandDistribution counts the board without inventing a denominator', () => {
   it('counts every band and reports shares that sum to 100', () => {
     const rows = [
-      ...Array.from({ length: 4 }, (_, i) => row({ id: `i${i}`, band: 'igniting' })),
-      ...Array.from({ length: 6 }, (_, i) => row({ id: `b${i}`, band: 'basing' })),
-      ...Array.from({ length: 10 }, (_, i) => row({ id: `d${i}`, band: 'dead' })),
+      ...Array.from({ length: 4 }, (_, i) => row({ id: `i${i}`, band: 'starting' })),
+      ...Array.from({ length: 6 }, (_, i) => row({ id: `b${i}`, band: 'quiet' })),
+      ...Array.from({ length: 10 }, (_, i) => row({ id: `d${i}`, band: 'cold' })),
     ]
     const d = bandDistribution(rows)
     expect(d.total).toBe(20)
     expect(d.bands.map((b) => b.band)).toEqual(BAND_PRIORITY)
-    expect(d.bands.find((b) => b.band === 'igniting').n).toBe(4)
-    expect(d.bands.find((b) => b.band === 'igniting').pct).toBeCloseTo(20)
+    expect(d.bands.find((b) => b.band === 'starting').n).toBe(4)
+    expect(d.bands.find((b) => b.band === 'starting').pct).toBeCloseTo(20)
     expect(d.actionable).toBe(4)
     expect(Math.round(d.bands.reduce((s, b) => s + (b.pct ?? 0), 0))).toBe(100)
   })
@@ -111,7 +111,7 @@ describe('bandDistribution counts the board without inventing a denominator', ()
   })
 
   it('does not silently absorb a row whose band is not one of the six', () => {
-    const d = bandDistribution([row({ band: 'basing' }), row({ id: 'y', band: 'sideways' })])
+    const d = bandDistribution([row({ band: 'quiet' }), row({ id: 'y', band: 'sideways' })])
     expect(d.total).toBe(1)
     expect(d.unbanded).toBe(1)
   })
@@ -128,9 +128,9 @@ describe('bandDistribution counts the board without inventing a denominator', ()
 
 describe('boardSnapshot stores what the diff needs and nothing else', () => {
   it('keeps five fields per row and drops the payload', () => {
-    const s = board([row({ id: 'sol', symbol: 'SOL', score: 71, band: 'igniting', sparkline7d: new Array(168).fill(1), parts: [{ key: 'rs7' }], facts: ['a'], flags: { freshBreak: true } })])
+    const s = board([row({ id: 'sol', symbol: 'SOL', score: 71, band: 'starting', sparkline7d: new Array(168).fill(1), parts: [{ key: 'rs7' }], facts: ['a'], flags: { freshBreak: true } })])
     expect(Object.keys(s.rows[0]).sort()).toEqual(['band', 'brk', 'id', 'place', 'score', 'symbol'])
-    expect(s.rows[0]).toMatchObject({ id: 'sol', symbol: 'SOL', score: 71, band: 'igniting', place: 1, brk: true })
+    expect(s.rows[0]).toMatchObject({ id: 'sol', symbol: 'SOL', score: 71, band: 'starting', place: 1, brk: true })
     expect(JSON.stringify(s).length, 'a snapshot must not carry the sparkline').toBeLessThan(400)
   })
 
@@ -154,7 +154,7 @@ describe('boardDelta refuses in words rather than reporting a quiet market', () 
   const cases = [
     ['no baseline at all', null, /no earlier board stored/i],
     ['an empty baseline', { v: 1, asOf: NOW - DAY, n: 0, rows: [] }, /no earlier board stored/i],
-    ['a baseline with no timestamp', { v: 1, asOf: null, n: 1, rows: [{ id: 'a', symbol: 'A', score: 60, band: 'basing', place: 1, brk: false }] }, /no scan timestamp/i],
+    ['a baseline with no timestamp', { v: 1, asOf: null, n: 1, rows: [{ id: 'a', symbol: 'A', score: 60, band: 'quiet', place: 1, brk: false }] }, /no scan timestamp/i],
     ['the same pass twice', board([row({ id: 'a', score: 80 })], NOW), /same pass/i],
     ['a baseline newer than the board', board([row({ id: 'a', score: 60 })], NOW + DAY), /NEWER than the scan/i],
   ]
@@ -195,18 +195,18 @@ describe('boardDelta reports the events an operator opens the tab for', () => {
 
   it('calls out an ignition by name and puts it at the top of the list', () => {
     const before = board([
-      row({ id: 'sol', symbol: 'SOL', score: 40, band: 'basing' }),
-      row({ id: 'pepe', symbol: 'PEPE', score: 35, band: 'dead' }),
+      row({ id: 'sol', symbol: 'SOL', score: 40, band: 'quiet' }),
+      row({ id: 'pepe', symbol: 'PEPE', score: 35, band: 'cold' }),
     ], at(4))
     const after = board([
-      row({ id: 'pepe', symbol: 'PEPE', score: 55, band: 'waking' }),
-      row({ id: 'sol', symbol: 'SOL', score: 72, band: 'igniting', flags: { freshBreak: true } }),
+      row({ id: 'pepe', symbol: 'PEPE', score: 55, band: 'warming' }),
+      row({ id: 'sol', symbol: 'SOL', score: 72, band: 'starting', flags: { freshBreak: true } }),
     ], at(0))
 
     const d = boardDelta(before, after)
     expect(d.ok).toBe(true)
     expect(d.events[0]).toMatchObject({ kind: 'ignite', symbol: 'SOL', tone: 'go' })
-    expect(d.events[0].text).toBe('basing → igniting (+32 to 72)')
+    expect(d.events[0].text).toBe('quiet → starting (+32 to 72)')
     expect(d.events[1]).toMatchObject({ kind: 'advance', symbol: 'PEPE' })
     expect(d.counts.ignite).toBe(1)
     expect(d.counts.advance).toBe(1)
@@ -217,10 +217,10 @@ describe('boardDelta reports the events an operator opens the tab for', () => {
     // true statements, one of which is the reason to look.
     const before = board([
       ...Array.from({ length: 20 }, (_, i) => row({ id: `f${i}`, symbol: `F${i}`, score: 90 - i })),
-      row({ id: 'sol', symbol: 'SOL', score: 40, band: 'basing' }),
+      row({ id: 'sol', symbol: 'SOL', score: 40, band: 'quiet' }),
     ], at(6))
     const after = board([
-      row({ id: 'sol', symbol: 'SOL', score: 95, band: 'igniting', flags: { freshBreak: true } }),
+      row({ id: 'sol', symbol: 'SOL', score: 95, band: 'starting', flags: { freshBreak: true } }),
       ...Array.from({ length: 20 }, (_, i) => row({ id: `f${i}`, symbol: `F${i}`, score: 90 - i })),
     ], at(0))
 
@@ -237,8 +237,8 @@ describe('boardDelta reports the events an operator opens the tab for', () => {
   })
 
   it('reports a break only the pass it appears, not every pass it persists', () => {
-    const withBreak = (id) => row({ id, symbol: id.toUpperCase(), score: 60, band: 'waking', flags: { freshBreak: true } })
-    const first = boardDelta(board([row({ id: 'a', symbol: 'A', score: 60, band: 'waking' })], at(4)), board([withBreak('a')], at(2)))
+    const withBreak = (id) => row({ id, symbol: id.toUpperCase(), score: 60, band: 'warming', flags: { freshBreak: true } })
+    const first = boardDelta(board([row({ id: 'a', symbol: 'A', score: 60, band: 'warming' })], at(4)), board([withBreak('a')], at(2)))
     expect(first.events.map((e) => e.kind)).toEqual(['break'])
     const second = boardDelta(board([withBreak('a')], at(2)), board([withBreak('a')], at(0)))
     expect(second.ok).toBe(true)
@@ -303,7 +303,7 @@ describe('boardDelta reports the events an operator opens the tab for', () => {
 
   it('caps the list and says how many it dropped', () => {
     const mk = (t, band) => board(Array.from({ length: 30 }, (_, i) => row({ id: `c${i}`, symbol: `C${i}`, score: 50, band })), t)
-    const d = boardDelta(mk(at(3), 'basing'), mk(at(0), 'running'), { maxEvents: 5, topN: 0 })
+    const d = boardDelta(mk(at(3), 'quiet'), mk(at(0), 'underway'), { maxEvents: 5, topN: 0 })
     expect(d.events).toHaveLength(5)
     expect(d.truncated).toBe(25)
     expect(d.advanced).toHaveLength(30)
@@ -434,18 +434,18 @@ describe('altShareSeries reads the stored history and refuses when it is thin', 
 
 describe('bandLeaders keeps an empty band visible', () => {
   it('returns every requested band, including the ones with nothing in them', () => {
-    const rows = [row({ id: 'a', band: 'igniting', score: 80 }), row({ id: 'b', band: 'igniting', score: 70 })]
+    const rows = [row({ id: 'a', band: 'starting', score: 80 }), row({ id: 'b', band: 'starting', score: 70 })]
     const out = bandLeaders(rows, { perBand: 3 })
     expect(out.map((g) => g.band)).toEqual(ACTIONABLE_BANDS)
     expect(out[0].rows).toHaveLength(2)
-    expect(out[1], 'a band with nothing in it must still be reported').toMatchObject({ band: 'waking', n: 0 })
+    expect(out[1], 'a band with nothing in it must still be reported').toMatchObject({ band: 'warming', n: 0 })
     expect(out[1].rows).toEqual([])
-    expect(out[0].meaning).toBe(BAND_MEANING.igniting)
+    expect(out[0].meaning).toBe(BAND_MEANING.starting)
   })
 
   it('takes the first N in the order it was given, and does not re-rank', () => {
-    const rows = Array.from({ length: 6 }, (_, i) => row({ id: `i${i}`, symbol: `I${i}`, band: 'igniting', score: 90 - i }))
-    const out = bandLeaders(rows, { bands: ['igniting'], perBand: 2 })
+    const rows = Array.from({ length: 6 }, (_, i) => row({ id: `i${i}`, symbol: `I${i}`, band: 'starting', score: 90 - i }))
+    const out = bandLeaders(rows, { bands: ['starting'], perBand: 2 })
     expect(out[0].rows.map((r) => r.symbol)).toEqual(['I0', 'I1'])
     expect(out[0].n).toBe(6)
   })

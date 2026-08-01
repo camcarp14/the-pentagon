@@ -48,6 +48,7 @@ import { tierDefaults, altStop, altSize } from '../../lib/alts/altrisk.js'
 import { altDirective } from '../../lib/alts/directive.js'
 import { fmtAltPx, usdCompact, pctText, ptsText, turnText, toneOf } from './AltBoard.jsx'
 import { Sparkline } from './sparkline.jsx'
+import PriceChart from './PriceChart.jsx'
 
 /* Verb first, and never a bare enum name on screen. `tone` inks the value the
  * way TradeCard's rows are inked; `band` picks the head colour from the classes
@@ -176,19 +177,47 @@ export default function CoinDetail({
       candleQuality: quality, now,
     })
 
-    return { candles, quality, precedent, crowd, phase, checklist, defaults, plan, stop, stopMode, size, directive, atrNow, price }
+    // `candleSource` is carried into the read so the chart's footer can name
+    // where its line came from ("binance SOLUSDT", "coingecko market_chart,
+    // close-only") without this file passing the whole payload down two levels.
+    const candleSource = payload?.candleSource ?? null
+    return { candles, candleSource, quality, precedent, crowd, phase, checklist, defaults, plan, stop, stopMode, size, directive, atrNow, price }
   }, [payload, screened, season, settings, scanState, coinState, fearGreed, trendingRank, trendingChecked, now])
 
+  /* THE WAY OUT, AND THERE ARE TWO OF THEM BECAUSE THERE ARE TWO LAYOUTS.
+   *
+   * Under 1020px the board is SWAPPED OUT for this pane, so leaving is going
+   * back: `← Board` says where you land. At 1020 and up the board never left —
+   * it is the left column — so "back" is the wrong verb and `.alt-back` is
+   * `display: none` there. Which, until now, meant there was NO control that
+   * cleared the selection on a desktop at all: this pane stayed filled with the
+   * last row you tapped for the rest of the session, and the shortlist that is
+   * supposed to live here ("Where to look first") was unreachable after one tap.
+   *
+   * So the desktop gets `.alt-close` — a ✕ that says Close, at the end of the
+   * header where a pane's dismiss belongs, plus Escape (wired in AltsPanel).
+   * EXACTLY ONE of the two is ever displayed, so exactly one is in the tab
+   * order at any width; `display: none` takes the other out of it entirely.
+   *
+   * BOTH RULES ARE WRITTEN TWICE IN THE STYLESHEET, `.alt-close` and
+   * `[data-kit] .alt-close`. `[data-kit] .btn` is (0,2,0) and sets
+   * `display: inline-flex`; a bare `.alt-close { display: none }` at (0,1,0)
+   * loses to it and the control renders at every width. That is not a
+   * hypothetical — it is what `.alt-back` shipped as, measured 81×34 at x=771 on
+   * a 1440 desktop sitting on top of the board's Show filter, and the fix is
+   * recorded at the 1020 breakpoint in styles.css. */
   const head = (
     <div className="alt-dhead">
-      {/* Mobile only (hidden at ≥1020px, where the board is still on screen).
-          A back CONTROL, not a modal dismiss — the detail is a panel in the
-          document flow, so the page scroll is never trapped behind it. */}
       <button className="btn quiet sm alt-back" onClick={onBack}>← Board</button>
       <div className="alt-ident">
         <span className="alt-ident-sym">{sym || '—'}</span>
         <span className="alt-ident-name">{name}</span>
       </div>
+      {/* The 7-day shape off the BOARD ROW, which is a different feed from the
+          candles the chart below draws. It stays: the row is present on every
+          state of this pane — loading, errored, no candles at all — and it is
+          the only picture available when /api/alt-coin is the thing that
+          failed. */}
       <span className="alt-ident-spark">
         <Sparkline data={screened?.sparkline7d} width={104} height={26} label={`${sym} 7-day shape`} />
       </span>
@@ -202,6 +231,13 @@ export default function CoinDetail({
         aria-label={starred ? `Remove ${sym} from the watchlist` : `Add ${sym} to the watchlist`}
       >
         <span aria-hidden>{starred ? '★' : '☆'}</span>
+      </button>
+      <button
+        type="button" className="btn quiet sm alt-close" onClick={onBack}
+        title={`Close ${sym || 'this coin'} — the pane goes back to the shortlist`}
+        aria-label={`Close ${sym || 'this coin'} and go back to the shortlist`}
+      >
+        <span aria-hidden>✕</span> Close
       </button>
     </div>
   )
@@ -325,6 +361,23 @@ function DirectiveCard({ d, act, read, screened, sym }) {
           </span>
         )}
       </div>
+
+      {/* THE CHART, IN THIS CARD AND NOT IN ONE OF ITS OWN.
+          It is the picture of the four prices printed immediately under it —
+          entry, trigger, stop, abandon — so putting it here makes the call and
+          its tape one instrument rather than two cards you read in sequence. It
+          also keeps the tab's surface count flat: the operator's bar for this
+          whole pass is "simple but informative topline", and a sixth card in the
+          detail pane to hold a line that the fifth card is already about would
+          have failed that on its own terms.
+          It costs no request: `read.candles` is the payload CoinDetail already
+          ran ATR, swings and the precedent engine over. */}
+      <PriceChart
+        candles={read.candles}
+        quality={read.quality}
+        source={read.candleSource}
+        symbol={sym}
+      />
 
       <dl className="tc-rows" data-testid="coin-rows">
         <Row k="Do what" v={act.text} tone={act.tone} note={d.headline} />

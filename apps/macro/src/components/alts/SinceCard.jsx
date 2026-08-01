@@ -4,8 +4,8 @@
 // and the board says what everything scores, and between the two there was
 // nothing that answered the only question an operator actually opens a screener
 // with: what happened while I was away. A ranked list cannot answer it, because
-// a ranking has no memory — the coin that went from basing to igniting overnight
-// looks exactly like the coin that has been igniting for a week, and both of
+// a ranking has no memory — the coin that went from quiet to starting overnight
+// looks exactly like the coin that has been starting for a week, and both of
 // them look like a row.
 //
 // IT IS COLLAPSED BY DEFAULT AND NOTHING IN IT WAS REMOVED. The answer card
@@ -196,7 +196,7 @@ function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1) }
 
 /**
  * One event. It is a BUTTON when the coin is still on the board, because the
- * next thing you want after "SOL went basing → igniting" is SOL's directive, and
+ * next thing you want after "SOL went quiet → starting" is SOL's directive, and
  * making you find it in a hundred rows is the list problem this card exists to
  * solve. A coin that has left the scan has nothing to open, so it renders as
  * plain text rather than as a control that does nothing — a dead button is worse
@@ -206,7 +206,7 @@ function EventRow({ ev, row, onSelect }) {
   const body = (
     <>
       <span className="alt-ev-sym">{ev.symbol}</span>
-      <span className={`alt-band b-${ev.band ?? 'dead'}`}>{ev.band ?? '—'}</span>
+      <span className={`alt-band b-${ev.band ?? 'cold'}`}>{ev.band ?? '—'}</span>
       <span className={`alt-ev-t tone-${ev.tone}`}>{ev.text}</span>
     </>
   )

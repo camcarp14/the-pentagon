@@ -59,6 +59,8 @@ import { seasonRead } from '../../lib/alts/season.js'
 import { screenUniverse } from '../../lib/alts/screen.js'
 import { boardSnapshot, boardDelta, altShareSeries, bandLeaders } from '../../lib/alts/pulse.js'
 import { altsRead } from '../../lib/alts/read.js'
+import { altNewsRead } from '../../lib/alts/news.js'
+import NewsStrip from './NewsStrip.jsx'
 import ReadCard from './ReadCard.jsx'
 import SeasonCard from './SeasonCard.jsx'
 import SinceCard from './SinceCard.jsx'
@@ -103,7 +105,15 @@ function readBaseline() {
     // `v` is the snapshot schema version. A stored blob from a future or older
     // shape is dropped rather than diffed: a rename in boardSnapshot would
     // otherwise read every coin as new and report a hundred arrivals once.
-    return s && s.v === 1 && Array.isArray(s.rows) ? s : null
+    //
+    // IT WENT TO 2 WHEN THE BAND WORDS BECAME ENGLISH. A snapshot written before
+    // that rename carries `igniting`/`basing`, and `bandStep()` returns null for
+    // both — so every coin on the board would have read as a band the sequence
+    // does not contain, and the one board this browser had stored would have
+    // produced a screenful of events that never happened. Dropped once, silently
+    // in the data and out loud on the card: the since-card says "no earlier
+    // board stored in this browser" for exactly one visit.
+    return s && s.v === 2 && Array.isArray(s.rows) ? s : null
   } catch { return null }
 }
 
@@ -113,13 +123,13 @@ function writeBaseline(snap) {
   } catch { /* storage unavailable or full — the next visit reports no baseline, in words */ }
 }
 
-export default function AltsPanel({ scan, watchlistSrc, settings = null, now = Date.now() }) {
+export default function AltsPanel({ scan, watchlistSrc, newsSrc = null, settings = null, now = Date.now() }) {
   const toast = useToast()
   const [sel, setSel] = useState(null)
   /* THE BOARD'S "Show" FILTER LIVES HERE, not in AltBoard, because two surfaces
    * write to it: the select inside the board and the band chips on the shape
    * card above it. Two copies of this state would be two answers to "what am I
-   * looking at" — the chip row lit on `igniting` while the select still reads
+   * looking at" — the chip row lit on `starting` while the select still reads
    * "All coins" — and the select is the one a keyboard and a screen reader
    * reach. Everything else about the board (search, sort, grouping, paging) is
    * still the board's own. */
@@ -152,6 +162,36 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
     if (!sel) { seqRef.current++; setCoin({ data: null, loading: false, error: null, fetchedAt: null }); return }
     loadCoin(sel)
   }, [sel, loadCoin])
+
+  /* ── ESCAPE CLOSES THE COIN ────────────────────────────────────────────────
+   *
+   * The second half of the desktop way out (the first is the Close button in
+   * CoinDetail's header). At 1020 and up the detail pane is always mounted, so
+   * `.alt-back` is `display: none` there and until now there was NO control that
+   * cleared the selection at all: the pane simply stayed filled with whatever
+   * you last tapped, for the rest of the session.
+   *
+   * NOT WHILE YOU ARE TYPING. The board's own search box is a few hundred pixels
+   * to the left, and Escape in a text field means "undo what I typed" on every
+   * platform; stealing it there would close the coin under someone clearing a
+   * filter. A `<select>` is excluded for the same reason — Escape closes its
+   * popup.
+   *
+   * It is not a substitute for the button. A key with no on-screen affordance is
+   * not "a way out that reads as a way out"; it is the shortcut for the one that
+   * does. */
+  useEffect(() => {
+    if (!sel || typeof window === 'undefined') return undefined
+    const onKey = (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      const t = e.target
+      const tag = t?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || t?.isContentEditable) return
+      setSel(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sel])
 
   /* ── the market read ─────────────────────────────────────────────────────── */
 
@@ -249,6 +289,32 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
     () => altsRead({ season, rows, delta: dashboard?.delta ?? null, scanState, live }),
     [season, rows, dashboard, scanState, live],
   )
+
+  /* THE HEADLINES, AND THEY ARE NOT PART OF THE READ ABOVE. `altsRead` is not
+   * handed this object and never will be: a news mention is attention, this
+   * tab's own crowd read says attention is coincident-to-late, and the sign of a
+   * headline is unmeasured — a coin is in the news for shipping a mainnet and
+   * for being drained. Folding it into a 0-10 "should I be in alts" score would
+   * be exactly the invented-points shape this repo has already been burned by.
+   *
+   * It is matched against `rows`, so it can only ever name coins the board is
+   * already showing, and a refused scan gives it nothing to match against —
+   * which NewsStrip states rather than drawing as "nothing in the news".
+   *
+   * `now` (the ten-second tick) is deliberately NOT in the dependency list. It
+   * is used only for the "3h ago" on each headline, and re-matching every
+   * headline against 250 rows every ten seconds to move a rounded hour label is
+   * the recompute CoinDetail's memo was fixed for. The ages are as of the last
+   * poll, which is honest to within five minutes and is what the caption's
+   * window sentence describes. */
+  const newsAt = newsSrc?.fetchedAt ?? null
+  const news = useMemo(() => altNewsRead({
+    payload: newsSrc?.data ?? null,
+    rows,
+    error: newsSrc?.error ?? null,
+    loading: !!newsSrc?.loading,
+    now: newsAt,
+  }), [newsSrc?.data, newsSrc?.error, newsSrc?.loading, newsAt, rows])
 
   /* WRITING THE NEXT VISIT'S BASELINE. On hide and on unmount, never on a poll:
    * a write per poll is the roll-forward the block at the top of this file
@@ -499,6 +565,14 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
             <p className="sub t-foot alt-boardnote">
               Ranked by how likely a move is starting, not by how much it already moved.
             </p>
+            {/* IN THE BOARD CARD, NOT IN A CARD OF ITS OWN. It is a note ABOUT
+                these rows — "these ones were named in a headline" — and it is
+                one collapsed line until you open it, so the tab's surface count
+                is the same as it was before the chart and the news landed. It
+                sits above the controls because it is a property of the whole
+                board rather than of the filtered view; filtering to `starting`
+                does not un-mention a coin. */}
+            <NewsStrip read={news} onSelect={onSelect} live={live} />
             {live ? (
               <AltBoard
                 rows={rows}

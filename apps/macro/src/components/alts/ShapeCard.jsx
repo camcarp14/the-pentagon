@@ -4,10 +4,10 @@
 // Two reads, neither of which any single row can give you:
 //
 //   THE DISTRIBUTION. A hundred rows ranked 96 down to 4 tells you the ordering
-//   and nothing about the population. "Eleven igniting and sixty dead" is a
-//   different market from "one igniting and sixty running", and the ranked list
+//   and nothing about the population. "Eleven starting and sixty cold" is a
+//   different market from "one starting and sixty underway", and the ranked list
 //   renders them identically. Each segment is also the fastest route into the
-//   board — tapping `igniting` filters it — so the strip is a picture and a
+//   board — tapping `starting` filters it — so the strip is a picture and a
 //   control at once, which is the only reason it earns the vertical space.
 //
 //   THE SERIES. altShareSeries() reads the dominance history the alt-watch cron
@@ -25,7 +25,7 @@
 // is a claim about data that does not exist.
 //
 // COLLAPSED BY DEFAULT, AND NOTHING WAS REMOVED. Both reads are reference
-// material once the answer card above has stated how many coins are igniting and
+// material once the answer card above has stated how many coins are starting and
 // what that is worth: the strip is a picture of a population and the line is a
 // month of one series. The collapsed row carries the one number that changes
 // what you would do — `N of M actionable`.
@@ -84,7 +84,7 @@ export default function ShapeCard({
 
       <p className="sub t-foot alt-shape-note">
         Every ranked coin in this scan, by the state screen.js put it in — {dist.actionable} of {dist.total} are
-        igniting, waking or running. Tap a band to filter the board to it.
+        starting, warming or underway. Tap a band to filter the board to it.
       </p>
 
       <div

@@ -46,7 +46,7 @@ const derivs = (over = {}) => ({
 })
 
 const screened = (over = {}) => ({
-  symbol: 'TEST', band: 'basing', score: 40, chg24h: 1, chg7d: 2, rsVsBtc7d: 1, ...over,
+  symbol: 'TEST', band: 'quiet', score: 40, chg24h: 1, chg7d: 2, rsVsBtc7d: 1, ...over,
 })
 
 const points = (r, key) => r.parts.find((p) => p.key === key)?.points
@@ -304,14 +304,14 @@ describe('open interest is read in contracts, not in dollars', () => {
 // Identical inputs with the snapshot merely absent read `neutral`.
 describe('a refused number cannot change the action or reach the screen', () => {
   const hot = { lastFundingRate: 0.0012, globalLongShort: ls(69), topLongShort: ls(46) }   // 131%/yr, +23pts
-  const ctx = { screened: screened({ band: 'running', chg7d: 12 }), community: community(), trendingRank: 8, now: NOW }
+  const ctx = { screened: screened({ band: 'underway', chg7d: 12 }), community: community(), trendingRank: 8, now: NOW }
 
   it('reads a STALE funding snapshot exactly as it reads an ABSENT one', () => {
     // The re-review's own fixture: one coin, no community stats, not trending —
     // so the funding extreme is the one that decides the rung. With it the pair
     // ["funding at 131%/yr", "retail 23 points longer…"] is two extremes and a
     // headwind; without it, one extreme on a coin under 62 is a curiosity.
-    const cold = { screened: screened({ band: 'igniting', chg7d: 12, rsVsBtc7d: 4 }), trendingRank: null, now: NOW }
+    const cold = { screened: screened({ band: 'starting', chg7d: 12, rsVsBtc7d: 4 }), trendingRank: null, now: NOW }
     const stale = crowdRead({ ...cold, derivs: derivs({ ...hot, nextFundingTime: NOW - 9 * 24 * 3_600_000 }) })
     const absent = crowdRead({ ...cold, derivs: derivs({ ...hot, lastFundingRate: null, nextFundingTime: null }) })
     expect(stale.contrarian).toBe(absent.contrarian)
@@ -408,7 +408,7 @@ describe('contrarian', () => {
     const r = crowdRead({
       trendingRank: 4,
       derivs: derivs({ lastFundingRate: 0.001, globalLongShort: ls(78), topLongShort: ls(50) }),
-      community: community(), screened: screened({ band: 'running' }), now: NOW,
+      community: community(), screened: screened({ band: 'underway' }), now: NOW,
     })
     expect(r.crowding.fundingAnnualPct).toBeCloseTo(109.5, 6)
     expect(r.extremes.length).toBeGreaterThanOrEqual(2)
@@ -421,7 +421,7 @@ describe('contrarian', () => {
     const r = crowdRead({
       trendingRank: null,
       derivs: derivs({ lastFundingRate: 0.001, globalLongShort: ls(50), topLongShort: ls(50), openInterest: null }),
-      screened: screened({ band: 'dead', chg7d: -2 }), now: NOW,
+      screened: screened({ band: 'cold', chg7d: -2 }), now: NOW,
     })
     expect(r.extremes).toHaveLength(1)
     expect(r.score).toBeLessThan(62)
@@ -433,7 +433,7 @@ describe('contrarian', () => {
       trendingRank: null,
       community: community({ sentimentUpPct: 30, redditSubs: 4000, redditActive48h: 4, watchlistUsers: 900 }),
       derivs: null,
-      screened: screened({ band: 'waking', rsVsBtc7d: 6 }), now: NOW,
+      screened: screened({ band: 'warming', rsVsBtc7d: 6 }), now: NOW,
     })
     expect(r.score).toBeLessThanOrEqual(35)
     expect(r.attention.max).toBe(55)     // all four attention gauges answered
@@ -448,7 +448,7 @@ describe('contrarian', () => {
   // most ignored asset on the board, when all that was established is that it is
   // not one of seven coins on a search list, which is true of almost every coin.
   it('will not call a tailwind off a score that rests on one attention gauge', () => {
-    const r = crowdRead({ trendingRank: null, screened: screened({ band: 'basing' }), now: NOW })
+    const r = crowdRead({ trendingRank: null, screened: screened({ band: 'quiet' }), now: NOW })
     expect(r.score).toBe(0)
     expect(r.measured).toEqual({ earned: 0, of: 20 })
     expect(r.attention.max).toBe(20)
@@ -463,7 +463,7 @@ describe('contrarian', () => {
     const r = crowdRead({
       trendingRank: null,
       community: { redditSubs: 40_000, redditActive48h: 30 },
-      screened: screened({ band: 'basing' }), now: NOW,
+      screened: screened({ band: 'quiet' }), now: NOW,
     })
     expect(r.attention.max).toBe(35)
     expect(r.contrarian).toBe('tailwind')
@@ -474,7 +474,7 @@ describe('contrarian', () => {
   // DID measure, and suppressing a measured warning for want of other data would
   // be the same failure pointing the other way.
   it('does not put a floor on the headwind rungs', () => {
-    const r = crowdRead({ trendingRank: 1, screened: screened({ band: 'running' }), now: NOW })
+    const r = crowdRead({ trendingRank: 1, screened: screened({ band: 'underway' }), now: NOW })
     expect(r.measured).toEqual({ earned: 20, of: 20 })
     expect(r.contrarian).toBe('headwind')
   })
@@ -484,7 +484,7 @@ describe('contrarian', () => {
       trendingRank: 6,
       community: community(),
       derivs: derivs({ lastFundingRate: -0.0004, globalLongShort: ls(50), topLongShort: ls(50) }),
-      screened: screened({ band: 'basing' }), now: NOW,
+      screened: screened({ band: 'quiet' }), now: NOW,
     })
     expect(r.contrarian).toBe('tailwind')
     expect(r.facts.join(' ')).toMatch(/shorts are paying/)
@@ -530,7 +530,7 @@ describe('state', () => {
     const r = crowdRead({
       trendingRank: null,
       derivs: derivs({ lastFundingRate: -0.0006, globalLongShort: ls(40), topLongShort: ls(52), openInterest: null }),
-      screened: screened({ band: 'dead', chg7d: -34 }), now: NOW,
+      screened: screened({ band: 'cold', chg7d: -34 }), now: NOW,
     })
     expect(r.state).toBe('capitulating')
     expect(r.facts.join(' ')).toMatch(/where bases start and also where knives land/)
@@ -539,7 +539,7 @@ describe('state', () => {
   it('uses extreme fear as the other capitulation trigger, and never as points', () => {
     const r = crowdRead({
       trendingRank: null, fearGreed: { value: '11', label: 'Extreme Fear' },
-      screened: screened({ band: 'dead', chg7d: -22 }), now: NOW,
+      screened: screened({ band: 'cold', chg7d: -22 }), now: NOW,
     })
     expect(r.state).toBe('capitulating')
     // Fear & greed is market-wide and season.js already scores it — it must not

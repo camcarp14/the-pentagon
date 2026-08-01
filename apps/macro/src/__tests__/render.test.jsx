@@ -31,7 +31,7 @@ import { api, API_TIMEOUT_MS } from "../lib/api.js";
 import { sparkPoints, sparkDirection } from "../components/alts/sparkline.jsx";
 import { screenCoin, screenUniverse } from "../lib/alts/screen.js";
 import { seasonRead } from "../lib/alts/season.js";
-import { boardSnapshot, boardDelta } from "../lib/alts/pulse.js";
+import { boardSnapshot, boardDelta, BAND_PRIORITY, BAND_MEANING } from "../lib/alts/pulse.js";
 import { freshness } from "../lib/freshness.js";
 
 const warnings = [];
@@ -311,21 +311,21 @@ describe("The Alts tab renders against a real payload shape", () => {
     }
   });
 
-  it("names on the card exactly the coins the board bands as igniting", () => {
+  it("names on the card exactly the coins the board bands as starting", () => {
     // THE GUARANTEE, checked through the rendered markup rather than through the
     // lib: the headline and the board are one computation, so a symbol the card
-    // calls igniting has an igniting row under it. read.test.js proves the
+    // calls starting has an starting row under it. read.test.js proves the
     // arithmetic; this proves the two ends are actually wired to it.
     const out = panel();
     const rows = screenUniverse(UNIVERSE, { btcRow: UNIVERSE[0], ethRow: UNIVERSE[1], now: NOW });
-    const igniting = rows.filter((r) => r.band === "igniting");
+    const starting = rows.filter((r) => r.band === "starting");
     const card = out.slice(out.indexOf('data-testid="alt-read"'), out.indexOf('data-testid="season-card"'));
-    expect(card).toContain(`${igniting.length} igniting`);
-    for (const r of igniting.slice(0, 3)) expect(card).toContain(`${r.symbol} ${r.score}`);
+    expect(card).toContain(`${starting.length} starting`);
+    for (const r of starting.slice(0, 3)) expect(card).toContain(`${r.symbol} ${r.score}`);
     // and no coin the board did not band that way
     const named = [...card.matchAll(/\b([A-Z]{2,6}) (\d{1,3})\b/g)].map((m) => m[1]);
-    const banded = new Set(igniting.map((r) => r.symbol));
-    for (const s of named) expect(banded.has(s), `${s} is named as igniting and the board disagrees`).toBe(true);
+    const banded = new Set(starting.map((r) => r.symbol));
+    for (const s of named) expect(banded.has(s), `${s} is named as starting and the board disagrees`).toBe(true);
   });
 
   it("refuses the whole read on a dead scan rather than answering a row off it", () => {
@@ -418,8 +418,8 @@ describe("The Alts tab renders against a real payload shape", () => {
   });
 
   it("groups the board by band, with the count and the meaning of each group", () => {
-    // A flat ranked list makes you scroll past the extended and dead rows to
-    // reach the next igniting one, and igniting is the state the tool exists to
+    // A flat ranked list makes you scroll past the late and dead rows to
+    // reach the next starting one, and starting is the state the tool exists to
     // catch. The heading carries screen.js's own rule in words, from pulse.js's
     // single copy of it — a group that only sorts is not grouping with meaning.
     const out = panel();
@@ -433,13 +433,13 @@ describe("The Alts tab renders against a real payload shape", () => {
     // and the actionable band leads the board, ahead of the ones you scroll past
     const order = [...out.matchAll(/class="alt-band b-(\w+)"[^>]*>[^<]*<\/span><span class="alt-group-n/g)].map((m) => m[1]);
     expect(order.length).toBeGreaterThan(1);
-    expect(order.indexOf("dead") === -1 || order.indexOf("dead") === order.length - 1,
+    expect(order.indexOf("cold") === -1 || order.indexOf("cold") === order.length - 1,
       `dead is not last in the group order: ${order}`).toBe(true);
   });
 
   it("makes the distribution a control, not just a picture", () => {
     // The strip has no text, so the chips under it are its legend AND the
-    // fastest route from "eleven are igniting" to the eleven rows. Both surfaces
+    // fastest route from "eleven are starting" to the eleven rows. Both surfaces
     // write ONE filter — the chip row and the board's Show select — so the tab
     // can never be filtered to a band while the select still reads "All coins".
     const out = panel();
@@ -1347,6 +1347,187 @@ describe("Macro obeys the language", () => {
     // and a screen reader, which cannot expand an abbreviation either
     expect(board).toMatch(/Flagged parabolic:/);
     expect(board).toMatch(/Flagged thin:/);
+  });
+
+  /* ══ THE FOUR CHANGES OF THIS PASS ═══════════════════════════════════════
+   *
+   * 1 plain-English band words, all the way through to the wire
+   * 2 a way out of an open coin on a desktop
+   * 3 a real chart off candles already fetched
+   * 4 headlines, matched onto the board, that cannot read as a buy list
+   *
+   * …and the frame the four are held to: the tab may not get busier. */
+
+  it("prints no jargon band word anywhere, and there is no label map to drift", () => {
+    // THE RENAME IS OF THE IDS THEMSELVES. There is no id→label map, on purpose:
+    // netlify/functions/alt-watch.mjs reads `row.band` straight off screenCoin()
+    // and writes `${prev.band} → ${curr.band}` into a Telegram line, so a
+    // component-side map could never have reached the phone. The id IS the
+    // English, which means "nothing prints a raw id" holds by construction.
+    const out = panel() + detail();
+    for (const dead of ["igniting", "waking", "basing", "extended"]) {
+      expect(out, `the jargon word "${dead}" is still on screen`).not.toMatch(new RegExp(`\\b${dead}\\b`, "i"));
+    }
+    // every one of the six is a plain word, and the board is banded in them
+    expect(BAND_PRIORITY).toEqual(["starting", "warming", "underway", "quiet", "late", "cold"]);
+    for (const b of BAND_PRIORITY) expect(BAND_MEANING[b], `${b} has no meaning line`).toBeTruthy();
+    expect(out).toMatch(/class="alt-band b-starting"/);
+    // and the CSS follows the words rather than the old ones
+    const css = read("styles.css");
+    expect(css).toMatch(/\.alt-band\.b-starting/);
+    expect(css).not.toMatch(/b-igniting|seg-waking|band-extended/);
+    // the stored baseline's version moved with the vocabulary, so a pre-rename
+    // board is DROPPED rather than diffed into a screenful of phantom events
+    expect(stripComments(read("components/alts/AltsPanel.jsx"))).toMatch(/s\.v === 2/);
+    expect(stripComments(read("lib/alts/pulse.js"))).toMatch(/return \{ v: 2,/);
+  });
+
+  it("gives a desktop a way out of an open coin, and exactly one control at any width", () => {
+    // `.alt-back` is `display: none` above 1020, where the board never left — so
+    // until now nothing on a desktop could clear the selection and the pane
+    // stayed filled with the last row tapped for the whole session.
+    const out = detail();
+    expect(out).toMatch(/class="btn quiet sm alt-back"/);
+    expect(out).toMatch(/class="btn quiet sm alt-close"/);
+    expect(out, "the close control must say what it closes").toMatch(/aria-label="Close SOL and go back to the shortlist"/);
+
+    const css = read("styles.css");
+    // Hidden by default, shown at 1020 — the mirror of .alt-back, and BOTH
+    // written twice. `[data-kit] .btn` is (0,2,0) and sets display:inline-flex,
+    // so a bare (0,1,0) rule loses and the button renders at every width. That
+    // is not hypothetical: it is exactly what .alt-back shipped as.
+    expect(css).toMatch(/\.alt-close, \[data-kit\] \.alt-close \{ display: none; \}/);
+    expect(css).toMatch(/\.alt-close, \[data-kit\] \.alt-close \{ display: inline-flex/);
+    const at1020 = css.slice(css.indexOf("@media (min-width: 1020px)"));
+    expect(at1020.indexOf(".alt-close, [data-kit] .alt-close { display: inline-flex"))
+      .toBeGreaterThan(-1);
+
+    // and Escape, scoped so it cannot fire while the board's search box is focused
+    const src = stripComments(read("components/alts/AltsPanel.jsx"));
+    expect(src).toMatch(/e\.key !== 'Escape'/);
+    expect(src).toMatch(/tag === 'input' \|\| tag === 'textarea' \|\| tag === 'select'/);
+  });
+
+  it("draws a real chart off the candles it already had, with a range and axes", () => {
+    const out = detail();
+    expect(out).toContain('data-testid="alt-chart"');
+    // a line, not a sparkline: a polyline with real coordinates and no NaN
+    const pts = /class="alt-chart-line" points="([^"]+)"/.exec(out);
+    expect(pts, "no price line was drawn").toBeTruthy();
+    const coords = pts[1].split(" ").map((c) => c.split(",").map(Number));
+    expect(coords.length).toBeGreaterThan(20);
+    for (const [x, y] of coords) {
+      expect(Number.isFinite(x) && Number.isFinite(y), `a NaN coordinate renders NOTHING: ${x},${y}`).toBe(true);
+    }
+    // a range control the reader can reach with a keyboard…
+    expect(out).toMatch(/class="seg alt-chart-seg" role="tablist"/);
+    expect(out).toMatch(/>30d</);
+    expect(out).toMatch(/>Max</);
+    // …an expand control…
+    expect(out).toMatch(/class="btn ghost sm alt-chart-exp"[^>]*aria-expanded="false"/);
+    // …and the whole thing described for a reader who cannot see it
+    expect(out).toMatch(/aria-label="SOL daily closes over \w+: \$[\d.,]+ to \$[\d.,]+/);
+    // NO NEW REQUEST. The chart is drawn from the payload CoinDetail already ran
+    // ATR, swings and the precedent engine over.
+    const src = stripComments(read("components/alts/CoinDetail.jsx"));
+    expect(src).toMatch(/candles=\{read\.candles\}/);
+    expect(stripComments(read("components/alts/PriceChart.jsx")))
+      .not.toMatch(/\bfetch\(|api\(/);
+  });
+
+  it("says why a chart is missing rather than drawing an empty box", () => {
+    // A blank chart area says the price is flat. These say there is no line.
+    const noBars = detail({ payload: { ...COIN_PAYLOAD, candles: [] } });
+    expect(noBars).toContain('data-testid="alt-chart"');
+    expect(noBars).toMatch(/class="[^"]*alt-chart-none[^"]*">no daily candles arrived/);
+    expect(noBars, "an absent line may not be drawn as an empty polyline").not.toMatch(/alt-chart-line/);
+
+    // a close-only tape still draws — and the pane says the range inside each
+    // day is what is missing, which is also why it has no ATR stop
+    const closeOnly = detail({
+      payload: {
+        ...COIN_PAYLOAD, candleQuality: "close-only",
+        candles: COIN_PAYLOAD.candles.map((c) => ({ t: c.t, o: c.c, h: c.c, l: c.c, c: c.c, v: c.v })),
+      },
+    });
+    expect(closeOnly).toMatch(/alt-chart-line/);
+    expect(closeOnly).toMatch(/close-only candles \(CoinGecko market_chart\)/);
+  });
+
+  it("surfaces the news as attention, on the board, and never as a list to buy from", () => {
+    const news = {
+      items: [{ title: "Solana network hits a record", url: "https://example.com/a", source: "coindesk", at: NOW - 3_600_000 }],
+      matches: {
+        SOL: [{
+          title: "Solana network hits a record", url: "https://example.com/a", source: "coindesk",
+          at: NOW - 3_600_000, why: 'the full name "Solana" appears in this headline',
+          basis: "name", confidence: "high",
+        }],
+      },
+      coins: [{ symbol: "SOL", id: "solana", name: "Solana", rank: 5, starred: false, count: 1, latestAt: NOW - 3_600_000, confidence: "high" }],
+      skipped: [], coinsConsidered: 40, degraded: [], sourceDetail: "coindesk + cointelegraph",
+      asOf: NOW, cached: false, stale: false, cacheAgeSec: 0,
+    };
+    const out = panel({ newsSrc: src(news) });
+    expect(out).toContain('data-testid="alt-news"');
+
+    // IT IS IN THE BOARD CARD, ahead of the board's own controls and behind the
+    // ranking's own note — a property of these rows, not a fifth headline.
+    const boardCard = out.indexOf('class="card pad-md alt-boardcard"');
+    expect(boardCard).toBeGreaterThan(-1);
+    expect(out.indexOf('data-testid="alt-news"')).toBeGreaterThan(boardCard);
+    expect(out.indexOf('data-testid="alt-news"')).toBeLessThan(out.indexOf('class="alt-controls"'));
+
+    // the claim is bounded in words, in front of the list, every time
+    expect(out).toMatch(/A mention is ATTENTION, not a signal/);
+    expect(out).toMatch(/just got exploited/);
+    expect(out).toMatch(/no row, score or band moved because of anything on this list/i);
+    // the headline is the evidence, the match is audited, and the link is safe
+    expect(out).toMatch(/rel="noopener noreferrer nofollow"/);
+    expect(out).toMatch(/the full name .{0,12}Solana.{0,12} appears in this headline/);
+    // …and the band travels with the row, so a `late` coin in the news says late
+    const strip = out.slice(out.indexOf('data-testid="alt-news"'), out.indexOf('class="alt-controls"'));
+    expect(strip).toMatch(/class="alt-band b-\w+"/);
+  });
+
+  it("states WHY there is no news rather than rendering a quiet section", () => {
+    // The four that must never look alike. Each is a different claim.
+    const failed = panel({ newsSrc: { data: null, error: "HTTP 502", fetchedAt: null, loading: false, reload: () => {} } });
+    expect(failed).toMatch(/feed did not answer/);
+    expect(failed).toMatch(/a feed that failed is not a feed that found nothing/);
+
+    const empty = panel({ newsSrc: src({ items: [], matches: {}, coins: [], skipped: [], coinsConsidered: 40, degraded: [], asOf: NOW }) });
+    expect(empty).toMatch(/feed carried nothing/);
+
+    const noList = panel({ newsSrc: src({ items: [{ title: "x", at: NOW }], matches: {}, coins: [], skipped: [], coinsConsidered: 0, degraded: ["the watchlist is empty"], asOf: NOW }) });
+    expect(noList).toMatch(/no coin list to check/);
+
+    const wrongShape = panel({ newsSrc: src({ data: [], cursor: "x" }) });
+    expect(wrongShape).toMatch(/feed shape unknown/);
+    expect(wrongShape).toMatch(/top-level keys: data, cursor/);
+  });
+
+  it("did not get busier: the same number of surfaces before and after", () => {
+    // THE FRAME. "Simple but informative topline" is the bar for the whole tab,
+    // so the chart and the news had to land inside surfaces that already existed
+    // — the chart in the directive card whose four prices it is a picture of,
+    // the news as one collapsed line inside the board card it describes.
+    //
+    // A SURFACE is a top-level card: `<section class="card …">`. Both counts are
+    // read off the render rather than asserted from memory.
+    const cards = (html) => (html.match(/<section class="card /g) || []).length;
+
+    // board pane + the shortlist that fills the right pane when nothing is open
+    expect(cards(panel()), "the board pane grew a card").toBe(6);
+    // an open coin: directive, precedent, checklist, crowd, sizing
+    expect(cards(detail()), "the detail pane grew a card").toBe(5);
+
+    // and the two additions are demonstrably inside those, not beside them
+    expect(detail()).toContain('data-testid="alt-chart"');
+    expect(detail().indexOf('data-testid="alt-chart"'))
+      .toBeGreaterThan(detail().indexOf('data-testid="coin-directive"'));
+    expect(detail().indexOf('data-testid="alt-chart"'))
+      .toBeLessThan(detail().indexOf('data-testid="coin-precedent"'));
   });
 
   it("did not touch a single storage key or endpoint path", () => {

@@ -14,7 +14,7 @@
 // replaced survives, demoted to one line at the bottom where a first-time reader
 // will still find it.
 //
-// A BAND WITH NOTHING IN IT KEEPS ITS HEADING. "Nothing is igniting in this
+// A BAND WITH NOTHING IN IT KEEPS ITS HEADING. "Nothing is starting in this
 // scan" is one of the more useful readings this pane can give and it is the
 // reading you get most days; a pane that silently omits the group says the same
 // thing by saying nothing, which is indistinguishable from a component that
@@ -45,7 +45,7 @@ export default function AltLeaders({
     <section className="card pad-md alt-leaders" data-testid="alt-leaders">
       <div className="alt-since-top">
         <span className="ttl t-label alt-since-ttl">Where to look first</span>
-        <span className="chip" title="coins in the igniting, waking or running bands">
+        <span className="chip" title="coins the board has as starting, warming or underway">
           <span className="dot" />{dist.actionable} of {dist.total} actionable
         </span>
       </div>
