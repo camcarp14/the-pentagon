@@ -243,8 +243,17 @@ const GearIcon = () => (
 // be working." A setting nobody can find is indistinguishable from one that does
 // nothing. One tap here for the ground; the full palette picker stays in System,
 // where the sixteen-way choice belongs.
-const SideRail = forwardRef(function SideRail({ active, onPick, apps, paused, systemOpen, onSystem, onSignOut, email, mode, onToggleMode }, ref) {
-  const nextMode = mode === "dark" ? "light" : "dark";
+const SideRail = forwardRef(function SideRail({ active, onPick, apps, paused, systemOpen, onSystem, onSignOut, email, mode, onOpenTheme }, ref) {
+  // Hover lives in JS because every control in this rail is inline-styled, and a
+  // :hover rule cannot reach an inline style. Tracking one id rather than a
+  // boolean per row keeps it to a single state change per pointer move.
+  const [hot, setHot] = useState(null);
+  const hoverProps = (id) => ({
+    onMouseEnter: () => setHot(id),
+    onMouseLeave: () => setHot((h) => (h === id ? null : h)),
+    onFocus: () => setHot(id),
+    onBlur: () => setHot((h) => (h === id ? null : h)),
+  });
   return (
     <div
       ref={ref}
@@ -273,24 +282,40 @@ const SideRail = forwardRef(function SideRail({ active, onPick, apps, paused, sy
           const m = appMeta(a);
           const on = a === active && !systemOpen;
           const off = paused?.has?.(a);
+          const hov = hot === a && !on;
           return (
             <button key={a} type="button" onClick={() => onPick(a)} title={off ? `${m.brand} — paused` : m.brand}
-              aria-current={on ? "true" : undefined}
+              aria-current={on ? "true" : undefined} {...hoverProps(a)}
               style={{
                 display: "flex", alignItems: "center", gap: 10,
                 width: "100%", minWidth: 0, padding: "0 10px", minHeight: 34,
                 border: "none", borderRadius: 8, cursor: "pointer", textAlign: "left",
+                // ── THE ACTIVE ROW GLOWS IN ITS OWN ACCENT ──────────────────
                 // The active row is drawn, never slid — the same call the
-                // horizontal row made when it stopped measuring a thumb.
-                background: on ? "var(--surface-2, var(--surface))" : "transparent",
-                color: on ? "var(--ink)" : "var(--muted)",
+                // horizontal row made when it stopped measuring a thumb. What is
+                // new is that it is tinted and ringed in the TOOL's accent
+                // rather than in neutral surface grey. Board Room's rail does
+                // this and it is most of why it reads as a product: the row you
+                // are standing on is the one place the accent is spent, which is
+                // exactly the job DESIGN.md §4.4 gives it.
+                //
+                // color-mix over var(--accent) rather than a hand-mixed rgba, so
+                // the same declaration is a soft wash on the dark ground and a
+                // pale tint on the light one, with no second value to maintain.
+                background: on
+                  ? "color-mix(in srgb, var(--accent) 13%, transparent)"
+                  : hov ? "color-mix(in srgb, var(--ink) 6%, transparent)" : "transparent",
+                boxShadow: on ? "inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent)" : "none",
+                color: on ? "var(--ink)" : hov ? "var(--ink)" : "var(--muted)",
                 fontSize: 13, fontWeight: on ? 600 : 500, letterSpacing: 0,
-                transition: `color ${M.durBase} ${M.easeStd}, background ${M.durBase} ${M.easeStd}`,
+                transition: `color ${M.durBase} ${M.easeStd}, background ${M.durBase} ${M.easeStd}, box-shadow ${M.durBase} ${M.easeStd}`,
               }}>
               {/* The accent lives on the GLYPH, not on a separate dot. One mark
                   carrying both identity and state is what makes eight rows read
-                  as a set rather than as a legend with a colour key. */}
-              <ToolGlyph app={a} color={off ? "var(--faint)" : on ? m.accent : "var(--faint)"} />
+                  as a set rather than as a legend with a colour key. On hover it
+                  previews its own accent, so the colour answers "which tool is
+                  this" before the click rather than after it. */}
+              <ToolGlyph app={a} color={off ? "var(--faint)" : on || hov ? m.accent : "var(--faint)"} />
               <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: off ? 0.6 : 1 }}>{m.label}</span>
               {off && <span className="t-cap" style={{ marginLeft: "auto", color: "var(--faint)", flexShrink: 0 }}>off</span>}
             </button>
@@ -302,15 +327,18 @@ const SideRail = forwardRef(function SideRail({ active, onPick, apps, paused, sy
           inside the list — but it is the same row shape, because a full-width
           filled button down here read as a form control in a nav. */}
       <div style={{ padding: "8px 8px 0", marginTop: 6, borderTop: "1px solid var(--line)", flexShrink: 0 }}>
-        <button onClick={onSystem} type="button" aria-pressed={systemOpen}
+        <button onClick={onSystem} type="button" aria-pressed={systemOpen} {...hoverProps("__system")}
           title="System — ops, usage, minds, agents, tabs and theme"
           style={{
             display: "flex", alignItems: "center", gap: 10, width: "100%",
             padding: "0 10px", minHeight: 34, border: "none", borderRadius: 8, cursor: "pointer", textAlign: "left",
-            background: systemOpen ? "var(--surface-2, var(--surface))" : "transparent",
-            color: systemOpen ? "var(--ink)" : "var(--muted)",
+            background: systemOpen
+              ? "color-mix(in srgb, var(--accent) 13%, transparent)"
+              : hot === "__system" ? "color-mix(in srgb, var(--ink) 6%, transparent)" : "transparent",
+            boxShadow: systemOpen ? "inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent)" : "none",
+            color: systemOpen || hot === "__system" ? "var(--ink)" : "var(--muted)",
             fontSize: 13, fontWeight: systemOpen ? 600 : 500,
-            transition: `color ${M.durBase} ${M.easeStd}, background ${M.durBase} ${M.easeStd}`,
+            transition: `color ${M.durBase} ${M.easeStd}, background ${M.durBase} ${M.easeStd}, box-shadow ${M.durBase} ${M.easeStd}`,
           }}>
           <span style={{ color: systemOpen ? "var(--accent)" : "var(--faint)", display: "flex" }}><GearIcon /></span>
           System
@@ -324,19 +352,31 @@ const SideRail = forwardRef(function SideRail({ active, onPick, apps, paused, sy
           minWidth: 0, flex: "1 1 auto", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           fontSize: 11.5, color: "var(--faint)",
         }}>{email || "signed in"}</span>
-        <button type="button" onClick={onToggleMode}
-          title={`Switch to ${nextMode} mode`} aria-label={`Switch to ${nextMode} mode`}
+        {/* OPENS THE THEME SETTINGS, does not blind-toggle. It flipped the
+            ground on tap at first, which is one tap but also a control whose
+            outcome you cannot see before you commit to it and which can only
+            ever reach two of the sixteen combinations. Board Room's opens its
+            settings, and that is the better answer: the icon shows the ground
+            you are ON, and tapping it takes you to the surface where the
+            palette, the mode and "follow the system" all live together. */}
+        <button type="button" onClick={onOpenTheme} {...hoverProps("__theme")}
+          title="Theme — palette and light or dark" aria-label="Theme settings"
           style={{
             display: "grid", placeItems: "center", width: 28, height: 28, flexShrink: 0,
-            border: "none", borderRadius: 8, cursor: "pointer", background: "transparent", color: "var(--faint)",
+            border: "none", borderRadius: 8, cursor: "pointer",
+            background: hot === "__theme" ? "color-mix(in srgb, var(--ink) 8%, transparent)" : "transparent",
+            color: hot === "__theme" ? "var(--ink)" : "var(--faint)",
             transition: `color ${M.durBase} ${M.easeStd}, background ${M.durBase} ${M.easeStd}`,
           }}>
-          {mode === "dark" ? <SunIcon /> : <MoonIcon />}
+          {mode === "dark" ? <MoonIcon /> : <SunIcon />}
         </button>
-        <button type="button" onClick={onSignOut} title="Sign out" aria-label="Sign out"
+        <button type="button" onClick={onSignOut} title="Sign out" aria-label="Sign out" {...hoverProps("__out")}
           style={{
             display: "grid", placeItems: "center", width: 28, height: 28, flexShrink: 0,
-            border: "none", borderRadius: 8, cursor: "pointer", background: "transparent", color: "var(--faint)",
+            border: "none", borderRadius: 8, cursor: "pointer",
+            background: hot === "__out" ? "color-mix(in srgb, var(--ink) 8%, transparent)" : "transparent",
+            color: hot === "__out" ? "var(--ink)" : "var(--faint)",
+            transition: `color ${M.durBase} ${M.easeStd}, background ${M.durBase} ${M.easeStd}`,
           }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
@@ -631,6 +671,9 @@ export default function Shell() {
   // decides anything when it is actually present.
   const [active, setActive] = useState(
     () => parseRoute(typeof location !== "undefined" ? location.hash : "", visibleTabs(loadTabPrefs())).tool);
+  // Which System tab to land on. The rail's theme icon deep-links to "theme";
+  // everything else opens System where it was left.
+  const [systemTab, setSystemTab] = useState(null);
   const [systemOpen, setSystemOpen] = useState(
     () => parseRoute(typeof location !== "undefined" ? location.hash : "", visibleTabs(loadTabPrefs())).system);
 
@@ -893,11 +936,7 @@ export default function Shell() {
           systemOpen={systemOpen} onSystem={() => setSystemOpen((o) => !o)} onSignOut={() => auth.signOut()}
           email={session?.user?.email}
           mode={mode}
-          // The rail toggles the GROUND only, and writes an explicit mode rather
-          // than cycling through "system": a one-tap control whose next state
-          // depends on the laptop's setting is a control you cannot predict.
-          // "System" stays available in the full picker, where it can be labelled.
-          onToggleMode={() => applyThemePrefs({ ...themePrefs, mode: mode === "dark" ? "light" : "dark" })}
+          onOpenTheme={() => { setSystemTab("theme"); setSystemOpen(true); }}
         />
       )}
 
@@ -1039,7 +1078,7 @@ export default function Shell() {
       <ToolBoundary key={systemOpen ? "system" : active}>
         <Suspense fallback={<div style={{ padding: 24 }}><SkeletonBoard /></div>}>
           {systemOpen
-            ? <System onExit={() => setSystemOpen(false)} onOpenTool={pick} tabPrefs={tabPrefs} onTabPrefs={applyTabPrefs}
+            ? <System onExit={() => setSystemOpen(false)} onOpenTool={pick} initialTab={systemTab} onTabConsumed={() => setSystemTab(null)} tabPrefs={tabPrefs} onTabPrefs={applyTabPrefs}
                 themePrefs={themePrefs} onThemePrefs={applyThemePrefs} systemPrefersDark={sysDark} toolPower={toolPower} />
             : Tool ? <Tool key={active} /> : <ComingSoon app={active} />}
         </Suspense>

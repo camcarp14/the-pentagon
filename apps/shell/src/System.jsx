@@ -810,11 +810,22 @@ function Theme({ prefs, onChange, systemPrefersDark, isMobile }) {
 // tab whose contents you might need in a hurry.
 const TABS = [["overview", "Overview"], ["ops", "Ops"], ["usage", "Usage"], ["minds", "Minds"], ["agents", "Agents"], ["tabs", "Tabs"], ["theme", "Theme"]];
 
-export default function System({ onExit, onOpenTool, tabPrefs, onTabPrefs, themePrefs, onThemePrefs, systemPrefersDark, toolPower }) {
+export default function System({ onExit, onOpenTool, tabPrefs, onTabPrefs, themePrefs, onThemePrefs, systemPrefersDark, toolPower, initialTab, onTabConsumed }) {
   // The Desk used to live here. It was dissolved into ZTS Mission and Clarify
   // Today instead of relocated: a queue you navigate to is a queue you miss,
   // and the work belongs on the screen for the tool that produced it.
-  const [tab, setTab] = useState("overview");
+  // `initialTab` is a DEEP LINK, not a controlled value: the rail's theme icon
+  // opens System already standing on Theme, and after that the operator's own
+  // clicks own the tab. Seeding useState with it would be wrong in the other
+  // direction — the component stays mounted, so a second deep link from the
+  // rail would be ignored. Consumed on arrival, then cleared by the caller so
+  // it cannot re-fire on an unrelated re-render.
+  const [tab, setTab] = useState(() => (initialTab && TABS.some(([k]) => k === initialTab) ? initialTab : "overview"));
+  useEffect(() => {
+    if (!initialTab) return;
+    if (TABS.some(([k]) => k === initialTab)) setTab(initialTab);
+    onTabConsumed?.();
+  }, [initialTab, onTabConsumed]);
   const isMobile = useIsMobile();
   const btn = { background: "none", border: `1px solid ${P.line}`, color: P.muted, borderRadius: 8, padding: "6px 12px", fontSize: 11.5, cursor: "pointer", fontFamily: P.display, fontWeight: 600, whiteSpace: "nowrap" };
   return (
