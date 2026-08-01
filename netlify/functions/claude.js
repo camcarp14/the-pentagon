@@ -25,8 +25,43 @@ exports.handler = async (event) => {
 
   try {
     const body = JSON.parse(event.body);
-    const { isOpenAIModel, toOpenAIRequest, toAnthropicResponse } = await import("./lib/openai.mjs");
-    const gpt = isOpenAIModel(body?.model);
+
+    // The vendor is decided by a string test, and the ESM bridge is loaded ONLY
+    // on the GPT branch. Both halves of that are deliberate.
+    //
+    // This is a CommonJS v1 handler importing an .mjs module, which only works
+    // as a dynamic import — and whether esbuild traces that through a CJS entry
+    // is a property of the bundler, not of this code. Four apps (Clarify, ZTS,
+    // Looper, and the shell's own calls) reach Claude through this function. If
+    // the import were on the shared path and the bundle ever dropped it, adding
+    // a second vendor would have taken every AI feature in the repo down with
+    // it. On this shape the worst case is confined to GPT requests, which are
+    // new and which nothing depends on yet.
+    //
+    // The prefix test duplicates the OPENAI_MODELS set in lib/openai.mjs rather
+    // than importing it, for the same reason. It is deliberately loose: it only
+    // has to route, and the real allow-list still runs inside the bridge.
+    const gpt = /^(gpt|o\d)[-.]/i.test(String(body?.model || ""));
+
+    let bridge = null;
+    if (gpt) {
+      try {
+        bridge = await import("./lib/openai.mjs");
+      } catch (e) {
+        return {
+          statusCode: 503,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ error: { type: "config_error", message: `The OpenAI bridge failed to load in this deployment (${e.message}). Claude models are unaffected — pick one of those.` } }),
+        };
+      }
+      if (!bridge.isOpenAIModel(body.model)) {
+        return {
+          statusCode: 400,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ error: { type: "invalid_request_error", message: `Model "${body.model}" is not on this deployment's OpenAI allow-list.` } }),
+        };
+      }
+    }
 
     // 503, not 500: "this deploy has no key for that vendor" is a configuration
     // fact with one fix, and the message has to name the variable to set. A
@@ -55,7 +90,7 @@ exports.handler = async (event) => {
         headers: gpt
           ? { "Content-Type": "application/json", Authorization: `Bearer ${key}` }
           : { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify(gpt ? toOpenAIRequest(body).request : body),
+        body: JSON.stringify(gpt ? bridge.toOpenAIRequest(body).request : body),
       },
     );
 
@@ -65,7 +100,7 @@ exports.handler = async (event) => {
       headers: { "Content-Type": "application/json" },
       // Errors pass through untranslated — both vendors use `{ error: { message } }`,
       // and paraphrasing an upstream failure is how the real cause gets lost.
-      body: JSON.stringify(gpt && res.ok ? toAnthropicResponse(data) : data),
+      body: JSON.stringify(gpt && res.ok ? bridge.toAnthropicResponse(data) : data),
     };
   } catch (err) {
     return {
