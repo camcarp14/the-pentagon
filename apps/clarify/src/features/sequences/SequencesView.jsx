@@ -206,8 +206,10 @@ export function SequencesView() {
 
   return (
     <div style={{ padding: "24px 28px", maxWidth: "860px", margin: "0 auto" }}>
+      {/* The Sequences pill is lit above this row; the title said it again. The
+          action stays and keeps the row, so this reclaims the title's line only
+          where the row had nothing else in it — here it does. */}
       <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "6px" }}>
-        <h2 className="t-title2" style={{ margin: 0 }}>Sequences</h2>
         <div style={{ flex: 1 }} />
         <button onClick={createSequence} type="button" className="btn sm primary">+ New sequence</button>
       </div>

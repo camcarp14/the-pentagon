@@ -61,6 +61,27 @@ const SUB_NAVS = {
 };
 const tabForView = (view) => NAV_TABS.find(t => t.views.includes(view))?.key || "mission";
 
+/**
+ * The one name for a view.
+ *
+ * Every view used to be named twice: once by the pill you clicked to get here,
+ * and again by an <h1> at the top of the view saying roughly the same word
+ * ("Queue" / "Approval queue", "Analytics" / "Pipeline analytics"). The headings
+ * are gone — see the note on `co-viewwrap` below — and this is what replaced
+ * them, so the sub-nav, the top tab and the view's ACCESSIBLE name all resolve
+ * through one lookup. A hardcoded aria-label per view would have been a second
+ * copy of the label with nothing keeping it honest, which is the exact shape of
+ * the bug this pass exists to remove.
+ *
+ * Sub-nav first, because it is the more specific pill: `analytics` lives under
+ * the Today tab but its pill says "Analytics", and that is the word the operator
+ * is looking at.
+ */
+export const viewLabel = (view) =>
+  (SUB_NAVS[tabForView(view)] || []).find(s => s.view === view)?.label
+  || NAV_TABS.find(t => t.views.includes(view))?.label
+  || view;
+
 // Header pill: the one place send mode lives. Click to flip; going live asks once.
 function SendModePill() {
   const [live, setLive] = useState(() => sendMode.isLive());
@@ -931,7 +952,12 @@ export default function App({ embedded = false }) {
       )}
       {undoState && <UndoToast message={undoState.message} onUndo={undoState.restore} onDismiss={() => setUndoState(null)} />}
       {showShortcuts && <ShortcutHelp onClose={() => setShowShortcuts(false)} />}
-      <div className="co-viewwrap">
+      {/* One named region for whatever view is mounted. Seven views used to open
+          with a heading that repeated the pill above it; those are gone, and a
+          view with no visible heading is a view a screen reader cannot name. The
+          name comes from viewLabel() — the same string the pill renders — so the
+          two cannot drift. */}
+      <div className="co-viewwrap" role="region" aria-label={viewLabel(currentView)}>
       {currentView === "inbound" ? <InboundView cards={cards} onNavigate={setCurrentView} onCardsChange={loadData} toneMemory={toneMemory} /> : currentView === "analyst" ? <AnalystView /> : currentView === "clients" ? <ClientsView deepClientId={routeSub} onNavigate={setCurrentView} /> : currentView === "mission" ? <MissionControl cards={cards} onNavigate={setCurrentView} inboundNew={inboundNew} /> : currentView === "calendar" ? <CalendarView cards={cards} onStatusChange={handleStatusChange} onDataChange={loadData} /> : currentView === "queue" ? <QueueView onNavigate={setCurrentView} /> : currentView === "sequences" ? <SequencesView /> : currentView === "analytics" ? <AnalyticsView cards={cards} /> : currentView === "dna" ? <DnaView cards={cards} toneMemory={toneMemory} /> : currentView === "settings" ? <SettingsView /> : null}
       </div>
       {currentView === "outreach" && <div className="co-viewwrap" style={{ display: "flex", minHeight: "calc(100vh - var(--shell-bar, 52px))" }}>

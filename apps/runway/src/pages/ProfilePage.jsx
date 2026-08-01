@@ -311,8 +311,10 @@ export default function ProfilePage() {
 
   return (
     <>
+      {/* "Profile & targets" under a lit Profile item. The half the rail does
+          not say — that these are the criteria every captured role is scored
+          against — is the sentence below, and it survives. */}
       <div className="page-head">
-        <h1 className="t-title2">Profile & targets</h1>
         <span className="sub">Every captured role is scored against these criteria.</span>
       </div>
 

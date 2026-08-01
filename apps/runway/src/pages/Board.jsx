@@ -187,8 +187,13 @@ export default function Board() {
 
   return (
     <>
+      {/* The <h1>Board</h1> is gone — the rail's Board item is already lit. Be
+          honest about what that buys here: this row also holds the primary
+          action, which is taller than the title was, so the page below does NOT
+          move up. What it removes is the second name for the place, not a line
+          of space. The pages whose head was title-only (see Market's sparse
+          branch) are where the space actually comes back. */}
       <div className="page-head">
-        <h1 className="t-title2">Board</h1>
         <div style={{ display: 'flex', gap: 10 }}>
           {/* the liveness sweep is a utility, not a headline action — on
               mobile it lives at the foot of the pipeline instead */}

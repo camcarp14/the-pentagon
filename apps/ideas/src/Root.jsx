@@ -375,12 +375,17 @@ export default function IdeasRoot() {
     // data-kit: Ideas opts into the shared kit. It renders inside the shell's
     // tool slot, so this reaches this app and nothing else — the same rule the
     // shell follows by keeping data-kit off the wrapper that holds every tool.
-    <div data-kit style={{ padding: `${pad}px ${pad}px 64px`, maxWidth: 940, margin: "0 auto" }}>
+    // The <h1>Ideas</h1> is gone from the header below: the shell's tool row
+    // says Ideas and the first pill of the segment right under it says Ideas,
+    // so the page opened by saying it a third time. The name moves onto the
+    // region and tracks the SELECTED tab rather than the tool, so a screen
+    // reader on Saved hears "Saved" — which is more than the deleted heading
+    // ever said, since it read "Ideas" on all three.
+    <div data-kit role="region" aria-label={TABS.find(([k]) => k === tab)?.[1] || "Ideas"} style={{ padding: `${pad}px ${pad}px 64px`, maxWidth: 940, margin: "0 auto" }}>
       <header style={{ marginBottom: 16 }}>
-        {/* One large title per page, with a one-line sub under it — the page
-            grammar every surface in this language shares. */}
-        <h1 className="t-ltitle" style={{ margin: 0, color: "var(--ink)" }}>Ideas</h1>
-        <p className="t-foot" style={{ margin: "5px 0 0", color: "var(--sub)" }}>
+        {/* What is left is the one line the nav does not carry — where these
+            come from and what they are for. */}
+        <p className="t-foot" style={{ margin: 0, color: "var(--sub)" }}>
           What showed up on GitHub, worth a look
         </p>
       </header>

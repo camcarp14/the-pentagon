@@ -204,15 +204,27 @@ export function InboundView({ cards, onNavigate, onCardsChange, toneMemory }) {
 
   return (
     <div style={{ padding: "24px 28px", maxWidth: "1240px", margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "4px" }}>
-        <h1 className="t-title1" style={{ margin: 0 }}>Inbound leads</h1>
-        {newCount > 0 && chip(`${T.blue}1A`, T.blue, `${newCount} new`)}
-      </div>
+      {/* "Inbound leads" is gone — the Inbound tab is lit above it. The COUNT
+          chip is not a repeat (the tab shows a badge, not the wording) and it is
+          the reason this row still exists; it renders only when there is
+          something new, so on a quiet day the page now opens on its own first
+          sentence. */}
+      {newCount > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "4px" }}>
+          {chip(`${T.blue}1A`, T.blue, `${newCount} new`)}
+        </div>
+      )}
       <div className="t-foot" style={{ marginBottom: "16px" }}>Audit requests from the Clarify Paid Search site — reply right here; replying puts them in the pipeline automatically.</div>
 
       <div style={{ display: "flex", gap: "6px", marginBottom: "16px" }}>
-        {["active", "new", "reviewed", "archived"].map(f => (
-          <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)} className={filter === f ? "pill active" : "pill"} style={{ textTransform: "capitalize" }}>{f}</button>
+        {/* The label is written out rather than produced by
+            `text-transform: capitalize` over the raw id. Capitalize is a style
+            and cannot know an acronym from a word — that is precisely how ZTS's
+            tabs shipped "Seo" and "Dna" — so no control in this codebase should
+            be deriving its wording from one, even where today's ids happen to
+            survive the trip. */}
+        {[["active", "Active"], ["new", "New"], ["reviewed", "Reviewed"], ["archived", "Archived"]].map(([f, label]) => (
+          <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)} className={filter === f ? "pill active" : "pill"}>{label}</button>
         ))}
       </div>
 

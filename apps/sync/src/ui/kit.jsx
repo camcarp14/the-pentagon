@@ -440,12 +440,26 @@ export function ToastHost({ children }) {
 }
 
 /* ── page furniture ────────────────────────────────────────────────────────── */
-export function PageHead({ title, sub, trailing }) {
+/**
+ * `namedByNav` — this page's title is the word already lit in the rail/dock.
+ *
+ * Queue and Brief were exactly that: a 26px <h1>"Queue"</h1> under a lit Queue
+ * item. They pass it and render the sub alone, which is the half the nav cannot
+ * carry (how many are open, how many overdue, what day it is). Day and Memory do
+ * NOT pass it — Day's title is the DATE and Memory is routable but not a
+ * destination, so neither is repeating anything and both keep a real heading.
+ *
+ * The heading is not replaced by a hidden one here. The page's accessible name
+ * comes from the region App.jsx puts around the whole page, wired to the same
+ * NAV entry the item renders, so there is one name and it cannot drift from
+ * what is on screen.
+ */
+export function PageHead({ title, sub, trailing, namedByNav = false }) {
   return (
     <div className="content-head">
       <div style={{ minWidth: 0, flex: 1 }}>
-        <h1 className="t-ltitle" style={{ margin: 0 }}>{title}</h1>
-        {sub && <div className="t-foot" style={{ marginTop: 3 }}>{sub}</div>}
+        {!namedByNav && <h1 className="t-ltitle" style={{ margin: 0 }}>{title}</h1>}
+        {sub && <div className="t-foot" style={{ marginTop: namedByNav ? 0 : 3 }}>{sub}</div>}
       </div>
       {trailing && <div style={{ flex: "none", display: "flex", alignItems: "center", gap: 6 }}>{trailing}</div>}
     </div>

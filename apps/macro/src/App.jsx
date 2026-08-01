@@ -70,6 +70,15 @@ const TABS = [
   { id: 'settings', label: 'Settings', icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h0a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51h0a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v0a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z' },
 ]
 
+/** Extra words ⌘K should match a tab on — vocabulary, not a second name for it. */
+const TAB_KEYWORDS = {
+  cockpit: ['home', 'dash'],
+  alts: ['alt', 'coins', 'season', 'board', 'crypto'],
+  chart: ['candles', 'price'],
+  journal: ['trades', 'log'],
+  settings: ['risk', 'config'],
+}
+
 /** Tab panels stay mounted (drafts survive reference-checking other tabs);
  *  the pagefade animation restarts by class-toggle, not remount. */
 function TabPanel({ active, children }) {
@@ -264,11 +273,12 @@ export default function App({ embedded = false }) {
           <TabPanel active={tab === 'settings'}><Settings settingsSrc={settingsSrc} positionSrc={positionSrc} derived={derived} /></TabPanel>
         </main>
         <CommandK items={[
-          { label: 'Go to Cockpit', k: ['home', 'dash'], run: () => setTab('cockpit') },
-          { label: 'Go to Alts', k: ['alt', 'coins', 'season', 'board', 'crypto'], run: () => setTab('alts') },
-          { label: 'Go to Chart', k: ['candles', 'price'], run: () => setTab('chart') },
-          { label: 'Go to Journal', k: ['trades', 'log'], run: () => setTab('journal') },
-          { label: 'Go to Settings', k: ['risk', 'config'], run: () => setTab('settings') },
+          // Built from TABS, not typed out again. The palette used to carry its
+          // own five 'Go to <name>' strings, which is the arrangement that let
+          // ZTS's palette spell a tab one way while its two nav bars spelled it
+          // another. Only the search keywords are per-tab here, because they are
+          // genuinely extra vocabulary rather than a second name.
+          ...TABS.map((t) => ({ label: `Go to ${t.label}`, k: TAB_KEYWORDS[t.id], run: () => setTab(t.id) })),
           { label: 'Refresh market data', k: ['reload', 'update'], run: reloadAll },
           // Its own entry, not folded into "Refresh market data": the alt scan
           // costs a CoinGecko call against a keyless quota, and a cockpit

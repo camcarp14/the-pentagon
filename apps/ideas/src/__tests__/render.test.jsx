@@ -48,8 +48,22 @@ describe("Ideas renders on the kit", () => {
     }
   });
 
-  it("takes the page title from the scale", () => {
-    expect(html()).toContain("t-ltitle");
+  it("names the view for a screen reader now that the title is gone", () => {
+    // This used to assert `t-ltitle` — the <h1>Ideas</h1>, which sat under a
+    // tool row saying Ideas and a segment whose first pill says Ideas. It is
+    // deleted, so the class is not there to find and asserting it would pin
+    // markup nothing renders.
+    //
+    // What replaced it is the thing the heading was still doing that the
+    // deletion had to preserve: giving the view a name a screen reader can
+    // announce. The name is the SELECTED tab, so it is right on all three
+    // rather than reading "Ideas" while you stand in Saved.
+    const out = html();
+    expect(out, "the view lost its accessible name with its heading").toMatch(/role="region"/);
+    expect(out, "the region is unnamed — aria-label is the whole point of it").toMatch(/aria-label="Ideas"/);
+    expect(out, "the deleted page title came back").not.toContain("t-ltitle");
+    // The line under the title was never a repeat and had to survive.
+    expect(out, "the sub line went with the title").toContain("What showed up on GitHub");
   });
 
   it("emits no NaN and no literal 'undefined' into markup", () => {

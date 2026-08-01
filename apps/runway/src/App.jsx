@@ -23,6 +23,24 @@ const TabIco = ({ name }) => (
   <svg className="tab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{RW_ICONS[name]}</svg>
 );
 
+// The rail's destinations, and the ONE place each is named.
+//
+// Four pages used to open with an <h1> repeating the rail item you had just
+// clicked — Board under Board, Capture under Capture, Insights under Insights.
+// Those headings are gone, which takes with them the accessible name each page
+// had. The name moves onto <main> and reads from this table, so the word a
+// screen reader announces and the word lit in the rail are the same string by
+// construction rather than by two people remembering to edit both.
+const RAIL = [
+  { to: '/', end: true, icon: 'board', label: 'Board' },
+  { to: '/capture', icon: 'capture', label: 'Capture' },
+  { to: '/market', icon: 'insights', label: 'Insights' },
+  { to: '/profile', icon: 'profile', label: 'Profile' },
+];
+/** undefined for anything not in the rail — a job's detail page keeps its own
+ *  <h1> (the company and the role), which is a record name and not a repeat. */
+export const railLabel = (pathname) => RAIL.find((r) => r.to === pathname)?.label;
+
 function Rail() {
   const { session, signOut, discoveries } = useApp();
   const cls = ({ isActive }) => `nav-item${isActive ? ' active' : ''}`;
@@ -31,12 +49,15 @@ function Rail() {
     <nav className="rail">
       <div className="brand"><span className="dot" /><span className="t-head">Runway</span></div>
       <div className="navgroup">
-        <NavLink to="/" end className={cls}><TabIco name="board" /><span className="tab-label">Board</span></NavLink>
-        <NavLink to="/capture" className={cls}>
-          <TabIco name="capture" /><span className="tab-label">Capture{queued > 0 && <span className="navcount" title={`${queued} discovered role${queued === 1 ? '' : 's'} to review`}>{queued}</span>}</span>
-        </NavLink>
-        <NavLink to="/market" className={cls}><TabIco name="insights" /><span className="tab-label">Insights</span></NavLink>
-        <NavLink to="/profile" className={cls}><TabIco name="profile" /><span className="tab-label">Profile</span></NavLink>
+        {RAIL.map((r) => (
+          <NavLink key={r.to} to={r.to} end={r.end} className={cls}>
+            <TabIco name={r.icon} />
+            <span className="tab-label">
+              {r.label}
+              {r.to === '/capture' && queued > 0 && <span className="navcount" title={`${queued} discovered role${queued === 1 ? '' : 's'} to review`}>{queued}</span>}
+            </span>
+          </NavLink>
+        ))}
       </div>
       <div className="rail-foot">
         <div><kbd>⌘K</kbd> jump anywhere</div>
@@ -134,7 +155,7 @@ function Shell() {
   return (
     <div className="shell">
       <Rail />
-      <main className="main">
+      <main className="main" aria-label={railLabel(location.pathname)}>
         {loadError ? (
           <ErrorState msg={`Couldn't load your data: ${loadError}`} onRetry={refresh} />
         ) : (

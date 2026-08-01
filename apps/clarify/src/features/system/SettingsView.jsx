@@ -46,8 +46,9 @@ export function SettingsView() {
 
   return (
     <div style={{ padding: "24px 28px", maxWidth: "640px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "14px" }}>
+      {/* The Settings tab is lit above; the word does not need saying twice.
+          The sentence under it is the part that was never in the nav. */}
       <div>
-        <h2 className="t-title2" style={{ margin: "0 0 4px" }}>Settings</h2>
         <div className="t-foot">Product-level levers. Everything else lives where the work happens.</div>
       </div>
 

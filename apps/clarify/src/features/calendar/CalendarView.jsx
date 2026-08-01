@@ -166,9 +166,10 @@ export function CalendarView({ cards, onStatusChange, onDataChange }) {
 
   return (
     <div style={{ minHeight: "calc(100vh - 48px)", background: "transparent", padding: "24px 28px" }}>
+      {/* The Calendar pill above already says Calendar. The sentence under it
+          does not, so it is what is left. */}
       <div style={{ marginBottom: "20px" }}>
-        <h2 className="t-title2" style={{ margin: 0 }}>Calendar</h2>
-        <div className="t-foot" style={{ marginTop: "2px" }}>Book meetings from your pipeline, or share a link that lets prospects pick a time.</div>
+        <div className="t-foot">Book meetings from your pipeline, or share a link that lets prospects pick a time.</div>
       </div>
 
       {/* Shareable booking link — the Settings-saved value wins; config is only the build-time fallback */}

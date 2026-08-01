@@ -130,6 +130,7 @@ export default function BriefPage() {
     <>
       <PageHead
         title="Brief"
+        namedByNav
         sub={`${dayLabel(today, { long: true })} · ${drafts.length} draft${drafts.length === 1 ? "" : "s"} on hand`}
       />
 

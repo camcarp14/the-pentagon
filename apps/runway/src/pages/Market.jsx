@@ -204,7 +204,10 @@ export default function Market() {
   if (priced.length < 3) {
     return (
       <>
-        <div className="page-head"><h1 className="t-title2">Insights</h1></div>
+        {/* The whole .page-head goes, not just the <h1> inside it. It held
+            nothing else, and an empty flex row still spends its `margin: 0 0
+            18px` — deleting the heading and leaving the wrapper is the version
+            of this change that reclaims nothing. */}
         <FunnelCard />
         <CalibrationCard />
         <WaitingCard />
@@ -220,8 +223,9 @@ export default function Market() {
 
   return (
     <>
+      {/* The count is not a repeat — it is how much data these charts are built
+          on, and the rail says nothing about it. The title is, so it goes. */}
       <div className="page-head">
-        <h1 className="t-title2">Insights</h1>
         <span className="sub">{priced.length} postings with stated comp</span>
       </div>
       <FunnelCard />

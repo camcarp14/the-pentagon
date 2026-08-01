@@ -157,12 +157,19 @@ describe("ZTS renders on the kit", () => {
 
   it("uses the kit's primitives in the markup it renders cold", () => {
     // Everything below is on screen the moment ZTS opens: the tab segment, the
-    // engine panel's card and plays, the Mission tiles and the page title.
+    // engine panel's card and plays, and the Mission tiles.
+    //
+    // `t-title1` used to be in this list and is not any more, and the reason is
+    // not that Mission left the kit. Mission's only .t-title1 was the <h1>
+    // "Mission" that sat directly under a lit Mission pill; it was deleted as a
+    // repeat, so asserting the class would now pin markup nothing renders.
+    // .t-title2 replaces it — the engine panel's headline, which is on screen
+    // cold in the same column and is the largest type ZTS still paints there.
     const out = cold();
     for (const cls of [
       "seg", "seg-opt", "card", "pad-md", "pad-lg", "cell", "cell-title",
       "stattile", "stattile-label", "stattile-value", "pill", "dotstatus",
-      "btn", "t-title1", "t-label", "t-foot", "t-cap",
+      "btn", "t-title2", "t-label", "t-foot", "t-cap",
     ]) {
       expect(hasClass(out, cls), `expected the kit's .${cls} in the cold markup`).toBe(true);
     }
@@ -204,7 +211,10 @@ describe("every ZTS surface renders on the kit", () => {
     // Per surface, the classes that surface is actually built from. A surface
     // that quietly went back to inline styles fails on its own line.
     const want = {
-      "Mission": ["card", "stattile", "stattile-value", "t-title1"],
+      // Mission's .t-title1 was the deleted <h1>. .stattile-label is the class
+      // that took its place as the thing Mission is actually built from, so the
+      // line still fails if this surface drops off the kit.
+      "Mission": ["card", "stattile", "stattile-value", "stattile-label"],
       "Creators": ["card", "field", "t-label", "stattile-value", "btn"],
       "Studio": ["card", "pressable", "t-label", "btn", "dotstatus"],
       "SEO": ["card", "switch", "switch-knob", "field", "t-label"],

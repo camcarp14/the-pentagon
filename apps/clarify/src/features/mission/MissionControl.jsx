@@ -215,11 +215,14 @@ export function MissionControl({ cards, onNavigate, inboundNew = 0 }) {
       )}
       <EnginePanel onNavigate={onNavigate} />
 
-      {/* Header */}
-      <div style={{ marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "10px" }}>
-        <div>
-          <h1 className="t-title1" style={{ margin: 0 }}>Mission control</h1>
-        </div>
+      {/* Header. The <h1>"Mission control"</h1> that used to sit on the left is
+          gone: it was a second name for the tab whose pill is already lit above
+          it, and it was the only thing in that column. What is on the right is
+          not — today's pipeline movement and goal progress are live numbers the
+          sub-nav does not carry — so the row survives and only the title
+          leaves. The view's accessible name now comes from the region in
+          App.jsx, wired to the same label the pill renders. */}
+      <div style={{ marginBottom: "20px", display: "flex", justifyContent: "flex-end", alignItems: "flex-end", flexWrap: "wrap", gap: "10px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
           {(() => {
             const sentToday = trend(pipeline.sent, "sent") || 0;

@@ -270,6 +270,7 @@ export default function QueuePage() {
     <>
       <PageHead
         title="Queue"
+        namedByNav
         sub={
           tab === "tasks"
             ? `${open.length} open${overdue.length ? ` · ${overdue.length} overdue` : ""}${doneToday.length ? ` · ${doneToday.length} closed today` : ""}`

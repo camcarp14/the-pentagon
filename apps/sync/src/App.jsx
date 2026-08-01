@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { NAV } from "./nav.js";
 import { getState } from "./data/store.js";
 import { VoiceProvider, useVoice } from "./voice/VoiceProvider.jsx";
 import { useHotkey } from "./ui/hooks.js";
@@ -124,8 +125,14 @@ function Workspace() {
 
       <main className="app-main">
         {/* Keying on `page` restarts the entrance animation, so a destination
-            develops instead of snapping into place. */}
-        <div key={page} className="app-page">
+            develops instead of snapping into place.
+            The region name comes from NAV, the same table the rail and the dock
+            render from. Queue and Brief dropped their <h1> — it was the word
+            already lit beside them — and a page with no heading is a page a
+            screen reader cannot name; this is where the name went. `memory` is
+            routable but not a NAV destination, so it falls back to its own
+            still-visible heading rather than borrowing a wrong one. */}
+        <div key={page} className="app-page" role="region" aria-label={NAV.find((n) => n.key === page)?.label}>
           <Page onSettings={() => setSettingsOpen(true)} setPage={setPage} />
         </div>
 

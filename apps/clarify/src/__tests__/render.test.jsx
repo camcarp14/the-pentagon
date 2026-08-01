@@ -411,7 +411,12 @@ describe("Clarify renders on the kit", () => {
       {
         at: "#/mission", paint: () => view("mission"), files: {
           // Mission Control proper: the stat cards and the month grid.
-          "features/mission/MissionControl.jsx": ["card", "stattile", "stattile-label", "stattile-value", "t-label", "t-title1", "t-cap", "t-foot"],
+          // `t-title1` used to be here and is not any more. It was the <h1>
+          // "Mission control", deleted as a second name for the tab whose pill
+          // is already lit — so the pair below it guarded no longer exists, and
+          // asserting it would pin markup nothing renders. The `pairs` total
+          // further down drops by the six such pairs, one per deleted heading.
+          "features/mission/MissionControl.jsx": ["card", "stattile", "stattile-label", "stattile-value", "t-label", "t-cap", "t-foot"],
           // The engine panel it mounts underneath them.
           "features/mission/EnginePanel.jsx": ["card", "pad-sm", "pressable", "t-call", "t-cap", "t-foot", "t-head", "t-label", "t-title2"],
         },
@@ -424,14 +429,14 @@ describe("Clarify renders on the kit", () => {
       // over both. "says out loud where a kit class is taken for material only"
       // below is the guard for that half.
       { at: "#/outreach", paint: () => view("outreach"), files: { "App.jsx": ["field", "seg", "seg-opt"] } },
-      { at: "#/queue", paint: () => view("queue"), files: { "features/queue/QueueView.jsx": ["t-title2", "t-foot"] } },
-      { at: "#/sequences", paint: () => view("sequences"), files: { "features/sequences/SequencesView.jsx": ["t-title2", "t-foot"] } },
+      { at: "#/queue", paint: () => view("queue"), files: { "features/queue/QueueView.jsx": ["t-foot"] } },
+      { at: "#/sequences", paint: () => view("sequences"), files: { "features/sequences/SequencesView.jsx": ["t-foot"] } },
       // The analyst sidebar: client name / context fields and their labels.
       { at: "#/analyst", paint: () => view("analyst"), files: { "features/analyst/AnalystView.jsx": ["field", "t-label"] } },
       // Booking link card, the "Ready to book" / "Upcoming" headers. NOT
       // stattile-label — see the MonthCalendar test below for why.
-      { at: "#/calendar", paint: () => view("calendar"), files: { "features/calendar/CalendarView.jsx": ["card", "t-label", "t-title2", "t-foot"] } },
-      { at: "#/settings", paint: () => view("settings"), files: { "features/system/SettingsView.jsx": ["card", "field", "t-call", "t-cap", "t-foot", "t-label", "t-title2"] } },
+      { at: "#/calendar", paint: () => view("calendar"), files: { "features/calendar/CalendarView.jsx": ["card", "t-label", "t-foot"] } },
+      { at: "#/settings", paint: () => view("settings"), files: { "features/system/SettingsView.jsx": ["card", "field", "t-call", "t-cap", "t-foot", "t-label"] } },
       // The DNA overlay's own labels and inputs — the canvas is left alone.
       { at: "#/dna", paint: () => view("dna"), files: { "features/dna/DnaView.jsx": ["t-label"] } },
 
@@ -497,7 +502,7 @@ describe("Clarify renders on the kit", () => {
       {
         at: "#/analytics fed a pipeline",
         paint: () => paint(createElement(AnalyticsView, { cards: BOARD_CARDS })),
-        files: { "features/analytics/AnalyticsView.jsx": ["card", "stattile", "stattile-label", "stattile-value", "t-cap", "t-foot", "t-label", "t-title2"] },
+        files: { "features/analytics/AnalyticsView.jsx": ["card", "stattile", "stattile-label", "stattile-value", "t-cap", "t-foot", "t-label"] },
       },
       {
         at: "a queued draft",
@@ -531,7 +536,11 @@ describe("Clarify renders on the kit", () => {
       "App.jsx": ["t-head", "t-num"],
       // The page header and the conversation panel: both sit behind the async
       // sbFetch of /inbound_leads, which no static render can resolve.
-      "features/inbound/InboundView.jsx": ["field", "t-body", "t-title1", "t-title2"],
+      // t-title1 is no longer in this list because InboundView no longer
+      // authors it: the <h1>"Inbound leads"</h1> above a lit Inbound pill is
+      // gone. t-title2 stays — it is the open lead's subject line, still
+      // behind the same async fetch.
+      "features/inbound/InboundView.jsx": ["field", "t-body", "t-title2"],
       // The analysed-client heading — needs a parsed model response.
       "features/analyst/AnalystView.jsx": ["t-title2"],
       // The client list rows and the Add-client modal: behind the async
@@ -582,7 +591,11 @@ describe("Clarify renders on the kit", () => {
     // this test went red. Deleting one silently would undo that, so the counts
     // are asserted too.
     expect(OWN.length, "the surface table lost entries").toBe(21);
-    expect(pairs, "the (surface, file, class) table lost entries").toBe(105);
+    // 105 before the repeated page headings came out. Six of those pairs were
+    // a .t-title1/.t-title2 on a heading that said what the lit pill above it
+    // already said; the elements are gone, so the pairs are too. Every pair
+    // still listed is still mutation-proved.
+    expect(pairs, "the (surface, file, class) table lost entries").toBe(99);
     expect(scannedAttrs, "the className scan read almost nothing across the table — it is broken").toBeGreaterThan(400);
 
     // …and the half that makes stripping a file's kit classes WHOLESALE go red.
@@ -1114,9 +1127,14 @@ describe("Clarify mounts every component it ships", () => {
     ["InboundLeadRow", () => createElement(InboundLeadRow, { lead: INBOUND_LEAD, selected: false, showPreview: true, onSelect: noop, onDelete: noop }), "Northside Dental"],
     ["AgentPanel", () => createElement(AgentPanel, { messages: [], input: "", sending: false, endRef: { current: null }, onInput: noop, onSend: noop, onClear: noop, onClose: noop }), "Clarify Assistant"],
     ["QueueItem", () => createElement(QueueItem, { msg: QUEUE_MSG, onDone: noop }), "Following up on your Google Ads"],
-    ["MissionControl", () => createElement(MissionControl, { cards: BOARD_CARDS, onNavigate: noop, inboundNew: 2 }), "Mission control"],
+    // The needle was "Mission control" — the deleted <h1>. "Outreach Pipeline"
+    // is the first thing MissionControl itself still paints, so the mount is
+    // still proved by this file's own content rather than an imported one.
+    ["MissionControl", () => createElement(MissionControl, { cards: BOARD_CARDS, onNavigate: noop, inboundNew: 2 }), "Outreach Pipeline"],
     ["MonthCalendar", () => createElement(MonthCalendar, { cards: BOARD_CARDS, hideOpenLink: true }), "This month"],
-    ["AnalyticsView (with rows)", () => createElement(AnalyticsView, { cards: BOARD_CARDS }), "Pipeline analytics"],
+    // Was "Pipeline analytics", the deleted heading; "Response rate" is the
+    // first stat tile this view builds itself.
+    ["AnalyticsView (with rows)", () => createElement(AnalyticsView, { cards: BOARD_CARDS }), "Response rate"],
     ["LoginScreen", () => createElement(LoginScreen, { onLogin: noop }), "Sign in"],
   ];
 

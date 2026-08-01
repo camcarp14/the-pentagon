@@ -1,0 +1,14 @@
+import { chromium } from "playwright-core";
+const BASE = "http://127.0.0.1:4178";
+const future = Math.floor(Date.now() / 1000) + 3600;
+const session = { access_token: "t", token_type: "bearer", expires_in: 3600, expires_at: future, refresh_token: "r", user: { id: "00000000-0000-0000-0000-000000000001", aud: "authenticated", role: "authenticated", email: "stub@example.com", app_metadata: {}, user_metadata: {}, created_at: new Date(0).toISOString() } };
+const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+page.on("console", m => console.log("CONSOLE", m.type(), m.text().slice(0,200)));
+page.on("pageerror", e => console.log("PAGEERROR", String(e).slice(0,300)));
+await page.addInitScript(([s]) => { for (const k of ["sb-stub-auth-token","sb-localhost-auth-token"]) { try { localStorage.setItem(k, JSON.stringify(s)); } catch {} } }, [session]);
+await page.route("**/*", (r) => { const u = r.request().url(); if (u.startsWith(BASE)) return r.continue(); if (/\/rest\/v1\//i.test(u)) return r.fulfill({ status: 200, contentType: "application/json", body: "[]" }); if (/\/auth\/v1\//i.test(u)) return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ user: session.user, session }) }); return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) }); });
+await page.goto(`${BASE}/#/zts`, { waitUntil: "networkidle", timeout: 45000 });
+await page.waitForTimeout(3000);
+console.log(await page.evaluate(() => document.body.innerHTML.slice(0, 1500)));
+await browser.close();

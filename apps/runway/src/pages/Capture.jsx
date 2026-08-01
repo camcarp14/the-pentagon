@@ -400,8 +400,10 @@ export default function Capture() {
 
   return (
     <>
+      {/* "Capture" said what the lit rail item says. The sentence beside it is
+          the one thing here the rail cannot carry — that nothing is submitted on
+          your behalf — so it stays and becomes the head on its own. */}
       <div className="page-head">
-        <h1 className="t-title2">Capture</h1>
         <span className="sub">Runway finds and scores roles for you — nothing is ever submitted on your behalf.</span>
       </div>
 

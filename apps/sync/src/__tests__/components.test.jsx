@@ -328,7 +328,12 @@ const CASES = {
   "pages/ConsolePage.jsx#ConsolePage": { el: () => inApp(h(P.ConsolePage, { onSettings: () => {} })), must: ['class="console"', 'class="console-bar"', 'class="composer"', 'class="orb-wrap"'] },
   "pages/DayPage.jsx#DayPage": { el: () => inApp(h(P.DayPage)), must: ['class="content-head"', 'class="content-scroll"'], cold: ['class="empty"'], loaded: ['class="tl"', 'class="tl-hour-label"', 'class="tl-now"'] },
   "pages/QueuePage.jsx#QueuePage": { el: () => inApp(h(P.QueuePage)), must: ['class="content-head"', 'class="seg"', "Waiting on"], cold: ['class="empty"'], loaded: ['class="pillrow"', 'class="pill active"', "tickbox"] },
-  "pages/BriefPage.jsx#BriefPage": { el: () => inApp(h(P.BriefPage)), must: ['class="content-head"', 'class="seg"', "Brief"], cold: ['class="empty"'] },
+  // The needle was "Brief" — the <h1> at the top, which is gone: the dock and
+  // the rail already have Brief lit when you are here. "Morning" is the first
+  // option of the segment this page owns, so the mount is still proved by this
+  // page's own content, and `class="content-head"` still proves the head itself
+  // survived with its date-and-drafts line.
+  "pages/BriefPage.jsx#BriefPage": { el: () => inApp(h(P.BriefPage)), must: ['class="content-head"', 'class="seg"', "Morning"], cold: ['class="empty"'] },
   "pages/MindPage.jsx#MindPage": { el: () => inApp(h(P.MindPage, { setPage: () => {} })), must: ['class="mind-stage"', 'class="mind-hud"', 'class="mind-legend"', "stattile"] },
   "pages/MemoryPage.jsx#MemoryPage": { el: () => inApp(h(P.MemoryPage)), must: ['class="content-head"', 'class="seg"', "Standing directives"], cold: ['class="empty"'], loaded: ['class="cellgroup"', "Clarify Paid Search"] },
   "pages/VoicePage.jsx#VoicePage": { el: () => inApp(h(P.VoicePage)), must: ['class="pagefade"', 'class="v-row"', 'class="seg"', 'class="sec-head"'] },

@@ -209,14 +209,16 @@ export function QueueView({ onNavigate }) {
 
   return (
     <div style={{ padding: "24px 28px", maxWidth: "760px", margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: "12px", marginBottom: "6px", flexWrap: "wrap" }}>
-        <h2 className="t-title2" style={{ margin: 0 }}>Approval queue</h2>
-        {queue && queue.length > 0 && (
+      {/* "Approval queue" is the Queue pill, spelled longer. The counts beside
+          it are not — they are the state of the queue and nothing else on screen
+          says it — so the count line stays and the title goes. */}
+      {queue && queue.length > 0 && (
+        <div style={{ display: "flex", alignItems: "baseline", gap: "12px", marginBottom: "6px", flexWrap: "wrap" }}>
           <span className="t-cap" style={{ color: T.faint, fontFamily: T.fontMono }}>
             {queue.length} waiting{counts.reply ? ` · ${counts.reply} repl${counts.reply === 1 ? "y" : "ies"}` : ""}{counts.followup ? ` · ${counts.followup} follow-up${counts.followup === 1 ? "" : "s"}` : ""}
           </span>
-        )}
-      </div>
+        </div>
+      )}
       <div className="t-foot" style={{ marginBottom: "18px", lineHeight: 1.6 }}>
         Everything the engine and the AI want to send, held for your call. Nothing goes out without a click here.
       </div>

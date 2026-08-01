@@ -668,9 +668,14 @@ function ChatView({ L }) {
 
   return (
     <section className="card pad-md">
+      {/* This card IS the Chat tab, so its label was the tab's name a second
+          time — the one place in Looper where a .lp-ttl was a page title rather
+          than one of several card labels. The pill is not a repeat: it says when
+          what you type will actually be read, which the nav cannot. It loses the
+          `.sp` spacer with the word, because a right-pinned pill with nothing on
+          its left reads as a stray. No height comes back here — the row still
+          carries the status — but the tab is no longer named twice. */}
       <div className="t-label lp-ttl">
-        Chat
-        <span className="sp" />
         <span className="pill">{L.run.status === "running" ? "read next iteration" : L.run.status === "paused" ? "a reply resumes it" : "queued"}</span>
       </div>
 

@@ -268,6 +268,24 @@ function ModalShell({ onClose, isMobile, width = 560, children }) {
   );
 }
 
+// ─── The tabs, and their ONE set of labels ──────────────────────────────────
+//
+// The id is what the code switches on; the label is what a human reads, and the
+// two are not the same string. They used to be: the desktop segment and the
+// phone dock both rendered the raw id under `text-transform: capitalize`, which
+// is a STYLE and cannot know that SEO and DNA are acronyms — it shipped "Seo"
+// and "Dna" on both bars. The ⌘K palette had a private map with them right, so
+// the same tab was spelled two ways in one app depending on which control you
+// were looking at.
+//
+// One map, three consumers (segment, dock, palette), and the capitalize is
+// gone. An acronym belongs in the label's TEXT; §4.3 reserves uppercase-as-style
+// for `.t-label` and this is not that.
+export const TABS = ["mission", "creators", "studio", "seo", "dna"];
+export const TAB_LABELS = { mission: "Mission", creators: "Creators", studio: "Studio", seo: "SEO", dna: "DNA" };
+/** Never returns undefined: an id with no entry reads as itself rather than blank. */
+export const tabLabel = (t) => TAB_LABELS[t] || t;
+
 // Bottom-nav icon set — plain geometry only (circles/lines/polygons), no
 // icon library dependency, matches the app's existing minimal glyph style.
 const TAB_ICONS = {
@@ -341,7 +359,7 @@ export function BottomNav({ view, setView, tabs }) {
                 Reading the size off the kit closes that gap too. Macro's and
                 Runway's labels still inherit a 1.5 body line-height and run
                 ~5px taller again; that is theirs to fix, not this file's. */}
-            <span className="dock-label" style={{ fontWeight: active ? 700 : 600, color, textTransform: "capitalize", fontFamily: syne }}>{t}</span>
+            <span className="dock-label" style={{ fontWeight: active ? 700 : 600, color, fontFamily: syne }}>{tabLabel(t)}</span>
           </button>
         );
       })}
@@ -694,13 +712,14 @@ export function StudioView({ shorts, setShorts, isMobile, loading, openSignal = 
   const byStage = (k) => shorts.filter(s => s.stage === k);
 
   return (
-    <div style={{ minHeight: "calc(100vh - 52px)", padding: viewPad(isMobile) }}>
+    <div role="region" aria-label={TAB_LABELS.studio} style={{ minHeight: "calc(100vh - 52px)", padding: viewPad(isMobile) }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
         <div>
-          {/* One large title per page with a one-line sub under it — the page
-              grammar every surface in this language shares. */}
-          <h1 className="t-title2" style={{ margin: 0 }}>Studio</h1>
-          <p className="t-foot" style={{ margin: "3px 0 0" }}>Generate Shorts and every asset — script, thumbnail, title, description — then ship.</p>
+          {/* The title said "Studio" directly under a lit Studio pill. The line
+              under it does NOT repeat the sub-nav — it says what this surface is
+              for — so it stays and the title goes, rather than deleting the one
+              sentence here that carries information. */}
+          <p className="t-foot" style={{ margin: 0 }}>Generate Shorts and every asset — script, thumbnail, title, description — then ship.</p>
         </div>
         <Btn primary onClick={() => setComposing(true)}>✦ New Short</Btn>
       </div>
@@ -1032,11 +1051,10 @@ export function CreatorsView({ creators, setCreators, isMobile, loading, openSig
   const totalReach = creators.filter(c => !["rejected"].includes(c.stage)).reduce((s, c) => s + creatorValue(c).score, 0);
 
   return (
-    <div style={{ minHeight: "calc(100vh - 52px)", padding: viewPad(isMobile) }}>
+    <div role="region" aria-label={TAB_LABELS.creators} style={{ minHeight: "calc(100vh - 52px)", padding: viewPad(isMobile) }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
         <div>
-          <h1 className="t-title2" style={{ margin: 0 }}>Creators</h1>
-          <p className="t-foot" style={{ margin: "3px 0 0" }}>Find, contact, and track YouTube creators for ZTS collabs — prioritized by audience fit.</p>
+          <p className="t-foot" style={{ margin: 0 }}>Find, contact, and track YouTube creators for ZTS collabs — prioritized by audience fit.</p>
         </div>
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           <select className="field" aria-label="Sort creators" value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ width: "auto" }}>
@@ -1383,11 +1401,10 @@ export function SeoView({ articles, setArticles, onAddArticle, isMobile, loading
   const nextAuto = autoDraft && lastAuto ? new Date(lastAuto + everyDays * 86400000) : null;
 
   return (
-    <div style={{ minHeight: "calc(100vh - 52px)", padding: viewPad(isMobile) }}>
+    <div role="region" aria-label={TAB_LABELS.seo} style={{ minHeight: "calc(100vh - 52px)", padding: viewPad(isMobile) }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
         <div>
-          <h1 className="t-title2" style={{ margin: 0 }}>SEO</h1>
-          <p className="t-foot" style={{ margin: "3px 0 0" }}>The agent drafts search content on a cadence — nothing publishes without your approval.</p>
+          <p className="t-foot" style={{ margin: 0 }}>The agent drafts search content on a cadence — nothing publishes without your approval.</p>
         </div>
         <Btn primary onClick={() => setComposing(true)}>✦ New Article</Btn>
       </div>
@@ -1619,9 +1636,10 @@ export function MissionView({ creators, shorts, onNavigate, isMobile, loading })
 
   if (loading) {
     return (
+      // The two lines that stood in for the title and its sub are gone with the
+      // title itself. A skeleton that reserves space nothing will fill drops the
+      // whole page 70px the moment the data lands.
       <div style={{ minHeight: "calc(100vh - 52px)", padding: viewPad(isMobile) }}>
-        <SkeletonLine width="240px" height="22px" style={{ marginBottom: "6px" }} />
-        <SkeletonLine width="160px" height="11px" style={{ marginBottom: "22px" }} />
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: isMobile ? "10px" : "14px" }}>
           {[0,1,2,3].map(i => <SkeletonRows key={i} count={1} />)}
         </div>
@@ -1630,14 +1648,14 @@ export function MissionView({ creators, shorts, onNavigate, isMobile, loading })
   }
 
   return (
-    <div style={{ minHeight: "calc(100vh - 52px)", padding: viewPad(isMobile) }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "18px", flexWrap: "wrap", gap: "8px" }}>
-        <div>
-          <h1 className={isMobile ? "t-title2" : "t-title1"} style={{ margin: 0 }}>Mission</h1>
-          <p className="t-foot" style={{ margin: "3px 0 0" }}>Zero To Secure</p>
-        </div>
-      </div>
-
+    // role/aria-label, not a heading: the visible <h1>Mission</h1> and the
+    // "Zero To Secure" line under it are gone — the sub-nav's Mission pill is
+    // already lit and the shell's tool row already says ZTS, so both were
+    // spending 70px to repeat two things on screen. A screen reader had been
+    // getting the view's name from that h1, so the name moves onto the region
+    // and reads from TAB_LABELS: the pill and the accessible name are now the
+    // same string by construction and cannot drift apart.
+    <div role="region" aria-label={TAB_LABELS.mission} style={{ minHeight: "calc(100vh - 52px)", padding: viewPad(isMobile) }}>
       {/* The engine states its own condition. The hardcoded green "Live" dot
           that used to sit here was a constant in a file — it rendered the same
           whether the system was armed, disarmed, or had never run once. */}
@@ -1858,8 +1876,6 @@ export default function App({ embedded = false }) {
     if (data?.[0]) setArticles(prev => [data[0], ...prev]);
   };
 
-  const TABS = ["mission", "creators", "studio", "seo", "dna"];
-
   // Sliding tab indicator — measured from the active tab's DOM position so the
   // white pill glides between tabs instead of teleporting.
   const tabRefs = useRef({});
@@ -1879,8 +1895,10 @@ export default function App({ embedded = false }) {
   // render; the list is small and the handlers aren't stable refs anyway.
   const paletteActions = (() => {
     const acts = [];
-    const TAB_LABELS = { mission: "Mission", creators: "Creators", studio: "Studio", seo: "SEO", dna: "DNA" };
-    TABS.forEach(t => acts.push({ id: `nav_${t}`, group: "Go to", icon: "→", label: TAB_LABELS[t] || t, run: () => setView(t) }));
+    // The palette's copy of this map is what shipped SEO/DNA correctly here and
+    // nowhere else. It now reads the hoisted one, so the palette entry and the
+    // pill it navigates to cannot say different words again.
+    TABS.forEach(t => acts.push({ id: `nav_${t}`, group: "Go to", icon: "→", label: tabLabel(t), run: () => setView(t) }));
     acts.push({ id: "act_short", group: "Create", icon: "✦", label: "New Short", sub: "Generate a full Shorts package", run: () => { signalCreate("studio"); setView("studio"); } });
     acts.push({ id: "act_article", group: "Create", icon: "✦", label: "New Article", sub: "Draft an SEO article into review", run: () => { signalCreate("seo"); setView("seo"); } });
     acts.push({ id: "act_creator", group: "Create", icon: "+", label: "Add Creator", sub: "Add a YouTube creator to the pipeline", run: () => { signalCreate("creators"); setView("creators"); } });
@@ -1936,7 +1954,7 @@ export default function App({ embedded = false }) {
               )}
               {TABS.map(t => (
                 <button key={t} type="button" role="tab" aria-selected={view === t} ref={el => { tabRefs.current[t] = el; }} onClick={() => setView(t)}
-                  className={view === t ? "seg-opt active" : "seg-opt"} style={{ textTransform: "capitalize" }}>{t}</button>
+                  className={view === t ? "seg-opt active" : "seg-opt"}>{tabLabel(t)}</button>
               ))}
             </div>
           )}

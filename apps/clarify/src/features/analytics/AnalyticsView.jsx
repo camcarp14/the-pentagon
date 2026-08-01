@@ -264,7 +264,8 @@ export function AnalyticsView({ cards }) {
 
   return (
     <div style={{ padding: "24px 28px", maxWidth: "1060px", margin: "0 auto" }}>
-      <h2 className="t-title2" style={{ margin: "0 0 4px" }}>Pipeline analytics</h2>
+      {/* "Pipeline analytics" under a lit Analytics pill — the same word, made
+          longer. The line under it survives; it is what the pill cannot say. */}
       <div className="t-foot" style={{ marginBottom: "18px" }}>Conversion, response, and sequence performance — computed live from the pipeline.</div>
 
       {/* Headline stats */}
