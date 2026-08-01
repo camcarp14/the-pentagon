@@ -14,7 +14,7 @@
 // beneath (two clear layers), and is lazy-loaded so opening one never
 // downloads the others.
 // ═══════════════════════════════════════════════════════════════════════════
-import { Component, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Component, forwardRef, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { appMeta, cssVars } from "@cc/design";
 import { SkeletonBoard, EmptyIcon, M, useIsMobile } from "@cc/ui";
 import { auth, isConfigured } from "@cc/supabase";
@@ -167,6 +167,96 @@ function LoginScreen() {
     </div>
   );
 }
+
+// ─── the desktop rail ─────────────────────────────────────────────────────────
+//
+// The tools were a horizontal row in the top bar. On a wide screen that spends
+// the scarcest axis — vertical — on chrome, and stacks a tool row above a
+// sub-tab row above a page, so the actual content starts a couple of hundred
+// pixels down. Vertical space is what a desktop has least of and horizontal is
+// what it has most of, so the top-level nav goes where the room is.
+//
+// One nav level only, deliberately. Each tool keeps its own sub-tabs at the top
+// of the content column; nesting those into the rail would be a different
+// information architecture than the one this was asked to match.
+//
+// Mobile never sees this. The phone bar was measured and fixed in the commit
+// before last (five tools on one line, eight wrapping 5+3) and is not in scope.
+const SideRail = forwardRef(function SideRail({ active, onPick, apps, paused, systemOpen, onSystem, onSignOut }, ref) {
+  return (
+    <div
+      ref={ref}
+      data-kit
+      // Sticky rather than fixed: fixed would take it out of flow and the
+      // content column would need a margin equal to a width that is measured
+      // asynchronously — a frame of overlap on every load, and a permanent
+      // second source of truth for the same number. Sticky keeps it in the flex
+      // row, so the column's width IS the remainder, with no arithmetic.
+      style={{
+        position: "sticky", top: 0, alignSelf: "flex-start",
+        height: "100vh", flex: "0 0 auto",
+        width: 216,
+        display: "flex", flexDirection: "column",
+        paddingTop: "max(14px, env(safe-area-inset-top))", paddingBottom: 14,
+        borderRight: "1px solid var(--line)",
+        background: "color-mix(in srgb, var(--bg) 60%, var(--surface))",
+        zIndex: 101,
+      }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "0 14px 14px", flexShrink: 0 }}>
+        <PentagonLogo size={22} />
+        <span className="t-head" style={{ color: "var(--ink)", whiteSpace: "nowrap" }}>The Pentagon</span>
+      </div>
+
+      <nav aria-label="Switch tool" style={{ display: "flex", flexDirection: "column", gap: 2, padding: "0 8px", overflowY: "auto", flex: "1 1 auto", minHeight: 0 }}>
+        {apps.map((a) => {
+          const m = appMeta(a);
+          const on = a === active && !systemOpen;
+          const off = paused?.has?.(a);
+          return (
+            <button key={a} type="button" onClick={() => onPick(a)} title={m.brand}
+              aria-current={on ? "true" : undefined}
+              style={{
+                display: "flex", alignItems: "center", gap: 9,
+                width: "100%", minWidth: 0, padding: "0 10px", minHeight: 36,
+                border: "none", borderRadius: 9, cursor: "pointer", textAlign: "left",
+                // The active row is drawn, never slid — the same call the
+                // horizontal row made when it stopped measuring a thumb.
+                background: on ? "var(--surface-2, var(--surface))" : "transparent",
+                boxShadow: on ? "var(--shadow-tab)" : "none",
+                color: on ? m.accent : "var(--faint)",
+                fontSize: 13, fontWeight: on ? 600 : 500, letterSpacing: 0,
+                opacity: off ? 0.5 : 1,
+                transition: `color ${M.durBase} ${M.easeStd}, background ${M.durBase} ${M.easeStd}`,
+              }}>
+              <span aria-hidden style={{
+                width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+                // A paused tool gets a hollow dot, not a dimmer one: "off" has to
+                // survive being read at a glance beside seven lit siblings.
+                background: off ? "transparent" : m.accent,
+                border: off ? `1.5px solid ${m.accent}` : "none",
+                boxShadow: on && !off ? `0 0 8px ${m.accent}` : "none",
+              }} />
+              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.label}</span>
+              {off && <span className="t-cap" style={{ marginLeft: "auto", color: "var(--faint)", flexShrink: 0 }}>off</span>}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* System and Sign out are chrome, not tools, and the gap between them and
+          the list is what says so. */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "12px 12px 0", marginTop: 8, borderTop: "1px solid var(--line)", flexShrink: 0 }}>
+        <button onClick={onSystem} type="button" aria-pressed={systemOpen}
+          title="System — usage, minds & agents across every tool"
+          className={systemOpen ? "btn sm tinted" : "btn sm quiet"}
+          style={{ justifyContent: "flex-start", width: "100%" }}>
+          <span aria-hidden style={{ width: 6, height: 6, borderRadius: "50%", background: systemOpen ? "var(--accent)" : "var(--faint)", flex: "none" }} />System
+        </button>
+        <button className="btn sm quiet" onClick={onSignOut} style={{ justifyContent: "flex-start", width: "100%" }}>Sign out</button>
+      </div>
+    </div>
+  );
+});
 
 // ─── the app toggle ───────────────────────────────────────────────────────────
 function AppToggle({ active, onPick, compact, apps, paused }) {
@@ -518,6 +608,34 @@ export default function Shell() {
   // Measured rather than computed because the height depends on how many tools
   // are visible, how they wrap, and the font: any arithmetic here would be a
   // second source of truth that drifts. A ResizeObserver just watches it.
+  // ── the rail, and its width, measured the same way ──────────────────────────
+  //
+  // The tools moved out of the top bar and onto a left rail on desktop. That
+  // publishes a SECOND dimension nothing in this repo had before: the content
+  // column no longer starts at x=0. --shell-rail is its twin of --shell-bar,
+  // measured for exactly the same reason (the width depends on the longest
+  // label and the font, and arithmetic would be a second source of truth), and
+  // it is 0px whenever the rail is not rendered so a phone and a standalone dev
+  // entry are unchanged.
+  //
+  // The content column is a containing block for fixed descendants, so tools do
+  // not have to read this at all — see the comment at that element. It is
+  // published because a measurement that exists is worth more than one that has
+  // to be re-derived, and because the harness asserts against it.
+  const rail = !isMobile;
+  const railRef = useRef(null);
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    const el = railRef.current;
+    if (!rail || !el) { root.style.setProperty("--shell-rail", "0px"); return; }
+    const publish = () => root.style.setProperty("--shell-rail", `${Math.round(el.getBoundingClientRect().width)}px`);
+    publish();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    return () => { ro.disconnect(); root.style.setProperty("--shell-rail", "0px"); };
+  }, [rail, tabs]);
+
   const barRef = useRef(null);
   useLayoutEffect(() => {
     const el = barRef.current;
@@ -667,7 +785,41 @@ export default function Shell() {
   const activePower = powerFor(toolPower.power, active);
 
   return (
-    <div data-app={systemOpen ? "system" : active} data-palette={palette} data-theme={mode} style={{ ...vars, minHeight: "100vh", background: "var(--bg)", color: "var(--ink)", fontFamily: "var(--font-body)", transition: `background ${M.durSlow} ${M.easeStd}` }}>
+    <div data-app={systemOpen ? "system" : active} data-palette={palette} data-theme={mode} style={{ ...vars, minHeight: "100vh", background: "var(--bg)", color: "var(--ink)", fontFamily: "var(--font-body)", transition: `background ${M.durSlow} ${M.easeStd}`, display: rail ? "flex" : "block", alignItems: rail ? "stretch" : undefined }}>
+
+      {rail && (
+        <SideRail
+          ref={railRef} active={active} onPick={pick} apps={tabs} paused={paused}
+          systemOpen={systemOpen} onSystem={() => setSystemOpen((o) => !o)} onSignOut={() => auth.signOut()}
+        />
+      )}
+
+      {/* ── THE CONTENT COLUMN, AND WHY IT IS TRANSFORMED ────────────────────
+          `transform: translateZ(0)` is not a paint hint here. It makes this
+          element the CONTAINING BLOCK for every `position: fixed` descendant,
+          which is the entire reason the rail is safe to add.
+
+          The eight tools own 28 fixed elements between them — Clarify 12, SYNC
+          6, Runway 5, Macro 3, ZTS 1, Looper 1: bottom navs, bottom sheets,
+          toast stacks, command palettes, modal scrims. Every one is anchored to
+          the VIEWPORT, because until now the content column started at x=0 and
+          the two were the same rectangle. Add a rail and they are not: anything
+          at `left: 0` slides under it and anything centred with `left: 50%`
+          sits off-centre by half the rail.
+
+          The alternative was to find all 28 and inset each by hand, in eight
+          apps nobody would remember to check again — and to be wrong the first
+          time someone adds a 29th. One containing block fixes the whole class,
+          including the ones not written yet, and it is why `--shell-rail` below
+          is published for measurement rather than for arithmetic in tool CSS.
+
+          `100vh` still means the viewport, so every `calc(100vh - var(--shell-bar))`
+          call site is untouched. Horizontal is the axis that changed, and this is
+          the axis this fixes. */}
+      <div style={rail
+        ? { flex: "1 1 auto", minWidth: 0, transform: "translateZ(0)", position: "relative" }
+        : undefined}>
+
       {/* Shell top bar — the ONE global chrome, themed to the active tool.
           data-kit goes HERE and not on the wrapper above. The wrapper contains
           every tool, and @cc/ui's kit styles .btn/.card/.field/.sheet — names
@@ -696,7 +848,10 @@ export default function Shell() {
         flexDirection: isMobile ? "column" : "row", gap: isMobile ? 6 : 0,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, minWidth: 0, width: isMobile ? "100%" : undefined, flex: isMobile ? "none" : "0 1 auto", order: isMobile ? 2 : 0 }}>
-          {!isMobile && (
+          {/* On desktop the mark and the tools BOTH live in the rail, so the top
+              bar keeps only what is about the current tool. On a phone there is
+              no rail and this is the identity line, unchanged. */}
+          {!isMobile && !rail && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
               <PentagonLogo size={23} />
               {/* SESSION: system stack, sentence case, hierarchy from size and
@@ -705,7 +860,7 @@ export default function Shell() {
               <span className="t-head" style={{ color: "var(--ink)", whiteSpace: "nowrap" }}>The Pentagon</span>
             </span>
           )}
-          <AppToggle active={active} onPick={pick} compact={isMobile} apps={tabs} paused={paused} />
+          {!rail && <AppToggle active={active} onPick={pick} compact={isMobile} apps={tabs} paused={paused} />}
         </div>
         <div style={{
           display: "flex", alignItems: "center", gap: 8, flexShrink: 0,
@@ -721,7 +876,10 @@ export default function Shell() {
             </span>
           )}
           {/* Icon-only on mobile: it keeps a 44px target without spending width
-              the tool grid below needs. */}
+              the tool grid below needs. With the rail up both of these live at
+              the bottom of it, so rendering them here too would be the same two
+              controls twice on one screen. */}
+          {!rail && <>
           <button onClick={() => setSystemOpen((o) => !o)} type="button"
             title="System — usage, minds & agents across every tool"
             aria-label="System — usage, minds & agents across every tool"
@@ -741,6 +899,7 @@ export default function Shell() {
             // absolute. The kit's .btn.sm sits at the floor.
             <button className="btn sm quiet" onClick={() => auth.signOut()}>Sign out</button>
           )}
+          </>}
         </div>
       </div>
       </div>
@@ -766,6 +925,8 @@ export default function Shell() {
             : Tool ? <Tool key={active} /> : <ComingSoon app={active} />}
         </Suspense>
       </ToolBoundary>
+
+      </div>{/* /content column */}
     </div>
   );
 }

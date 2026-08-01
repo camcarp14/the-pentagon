@@ -35,10 +35,16 @@ const session = {
 // Every tool visible, which is both the default and the worst case for width.
 const ORDER = (process.env.TOOLS || "zts,clarify,runway,macro,looper,business,sync,ideas").split(",");
 
-// Desktop widths first — the collapse was desktop-only and identical across all
-// of them, so a single width would have found it, but the whole range is cheap
-// and the narrow end is where wrapping has to behave.
-const DESKTOP = [768, 900, 1024, 1180, 1280, 1440, 1920];
+// MOBILE ONLY, NOW. The wrapping tool row was the desktop layout when this
+// harness was written; the tools have since moved to a left rail above 768px,
+// and scripts/rail-check.mjs measures that — including that the rail is what
+// renders, so "no .toolrow on desktop" is asserted there rather than being
+// silently unowned by both files.
+//
+// The row itself is unchanged on a phone, which is the platform it was built
+// for and the one the 5+3 wrap was measured against. Everything below still
+// applies there, so this is a narrowing of scope, not a retreat from it.
+const DESKTOP = [];
 const MOBILE = [360, 393, 414];
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" });
