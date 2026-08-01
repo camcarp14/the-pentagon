@@ -122,7 +122,24 @@ const aliasFor = (a, ramp) => {
 const MIDNIGHT = {
   mode: "dark",
   bg: "#0B0F1A", surface: "#141B2C", surface2: "#1B2438", subtle: "#0F1626", raised: "#1B2438",
-  ink: "#E9EDF5", inkDeep: "#F7F9FC", muted: "#94A1B5", faint: "#66738A",
+  // faint was #66738A, which is 3.59:1 on this table's own card and 3.99:1 on
+  // its bg — under AA for body copy on the surface it is most often read
+  // against. 3:1 is the WCAG floor for LARGE text and for component
+  // boundaries; this token is spent on 11.5px captions, timestamps, "Standing
+  // by", the sub-line under a row. That is body copy, and body copy owes 4.5.
+  //
+  // The generated themes.css half was raised in the same change (FLOOR.faint
+  // 3.05 → 4.5 in gen-themes.mjs). Both halves had to move, and finding that
+  // out is the useful part: App.jsx stamps cssVars() INLINE, and an inline
+  // custom property beats a stylesheet one, so on the default theme this table
+  // wins and the generated value never renders. Fixing only the generator
+  // would have produced a contrast report that passes and a screen that does
+  // not — which is this repo's recurring failure wearing a new hat.
+  //
+  // #7C8AA3 is the smallest step that clears the floor on BOTH grounds
+  // (4.92:1 on card, 5.49:1 on bg) — chosen to move the least ink possible
+  // while still being honest, rather than the lightest value that would pass.
+  ink: "#E9EDF5", inkDeep: "#F7F9FC", muted: "#94A1B5", faint: "#7C8AA3",
   ghost: "#525E74", placeholder: "#5A6780",
   line: "rgba(255,255,255,0.085)", lineSoft: "rgba(255,255,255,0.055)", lineStrong: "rgba(255,255,255,0.16)", lineInk: "rgba(255,255,255,0.07)",
   good: "#3ECF8E", goodHi: "#5EE0A8", info: "#6EA8FE", warn: "#F5B84D", warnHi: "#FFC96B", bad: "#F87171", pink: "#F472B6",

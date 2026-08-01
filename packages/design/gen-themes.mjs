@@ -97,7 +97,23 @@ const THEMES = [
 // Contrast floors. `ink` is body copy; `sub` is secondary copy that must still
 // read comfortably; `faint` is captions and timestamps — the app leans on it more
 // than a typical "disabled" grey, so it gets a real floor rather than 1.5:1.
-const FLOOR = { ink: 8, sub: 4.6, faint: 3.05, accent: 4.6, onAccent: 4.6 };
+//
+// FAINT WAS 3.05 AND THAT WAS THE RIGHT NUMBER FOR THE WRONG TEXT. 3:1 is the
+// WCAG floor for LARGE text and for UI component boundaries; this token is spent
+// on 11.5px captions — timestamps, "Standing by", the sub-line under a row —
+// which is body copy by any measure, and body copy owes 4.5:1.
+//
+// It went unnoticed while the Pentagon shipped dark-only: the dark half computes
+// to 5.7:1 and never came near the floor, so the floor only ever bound in the
+// light half nobody could reach. The light mode that shipped this week made it
+// reachable, and an adversarial review measured 3.1-3.5:1 on real pixels in all
+// eight tools at once — one token, every surface.
+//
+// Raising it darkens faint in light mode and leaves dark mode alone, because
+// dark was already clear of it. The generator contrast-checks every emitted
+// value against these floors before writing, so this is enforced rather than
+// intended.
+const FLOOR = { ink: 8, sub: 4.6, faint: 4.5, accent: 4.6, onAccent: 4.6 };
 
 function build(t, mode) {
   const dark = mode === "night";
