@@ -16,7 +16,27 @@ const {
 
 /* ── the model registry ────────────────────────────────────────────────────── */
 describe("the model registry", () => {
-  it("three models offered", () => expect(MODELS.length).toEqual(3));
+  // Not a count. The registry grew from three to five when the proxy learned to
+  // speak OpenAI, and it will grow again — asserting a number just means editing
+  // this line every time. What has to stay true is that every offered model is
+  // fully specified: a row missing `id` picks nothing, and a row missing
+  // `vendor` breaks the Settings sheet's per-vendor grouping silently.
+  it("every offered model is complete", () =>
+    MODELS.forEach((m) => {
+      expect(typeof m.key).toBe("string");
+      expect(typeof m.id).toBe("string");
+      expect(typeof m.label).toBe("string");
+      expect(["claude", "openai"]).toContain(m.vendor);
+    }));
+  it("picker keys are unique", () => expect(new Set(MODELS.map((m) => m.key)).size).toEqual(MODELS.length));
+  // Every model must be priceable, or the spend meter reports a cross-vendor
+  // total that quietly omits whichever one is missing.
+  it("every model has a rate", () => MODELS.forEach((m) => expect(estimateCost(m.key, 1e6, 1e6) > 0).toBe(true)));
+  it("both vendors are reachable from the picker", () => {
+    const vendors = new Set(MODELS.map((m) => m.vendor));
+    expect(vendors.has("claude")).toBe(true);
+    expect(vendors.has("openai")).toBe(true);
+  });
   it("sonnet is the default fallback", () => expect(modelId("nonsense")).toEqual("claude-sonnet-5"));
   it("haiku id", () => expect(modelId("haiku")).toEqual("claude-haiku-4-5"));
   it("opus id", () => expect(modelId("opus")).toEqual("claude-opus-5"));

@@ -41,6 +41,14 @@ export const handler = async () => {
     anon_key_present: !!SUPA_ANON,
     anon_key_role: jwtRole(SUPA_ANON), // expect 'anon'
     anthropic_key_present: !!process.env.ANTHROPIC_API_KEY,
+    // The second vendor. Deliberately NOT in `missing` below: the deploy is
+    // fully healthy without it — every Claude model works, and the GPT half of
+    // the model picker answers 503 naming this variable. Listing it as missing
+    // would make an intentional single-vendor deploy look broken forever. This
+    // field is here so the answer to "did my key actually land?" is one request
+    // rather than a trip to the dashboard, where a variable set after the last
+    // build shows as present while the running function has never seen it.
+    openai_key_present: !!process.env.OPENAI_API_KEY,
     allowed_email_present: !!process.env.ALLOWED_EMAIL,
     // SYNC's microphone. Worth a field of its own because this one has a
     // failure mode the dashboard hides: a function-scoped variable is resolved
