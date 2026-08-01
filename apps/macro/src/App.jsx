@@ -60,20 +60,41 @@ function useSource(path, intervalMs, onAuthFail) {
   return { ...state, reload: load }
 }
 
+// ORDER IS THE PRODUCT DECISION, AND THE APP READS IT FROM HERE.
+//
+// Alts is FIRST and it is where the app lands. MSTR is one position that is
+// either open or not and whose cockpit answers a question you already know the
+// shape of; the alt board is the hunt, it turns over every two hours on its own
+// cron, and it is the only tab where something can have happened while you were
+// away. A dashboard opens on the thing that changed.
+//
+// Nothing else in this file names a tab id. `DEFAULT_TAB` is derived below
+// rather than typed, and the ⌘K palette is built from this array — a second
+// literal 'cockpit' in either place is exactly how a reorder ships half-done.
 const TABS = [
-  { id: 'cockpit', label: 'Cockpit', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
-  // Second, right after the cockpit: MSTR is the position, alts are the hunt,
-  // and everything below is reference material for one of the two.
   { id: 'alts', label: 'Alts', icon: 'M12 3 3 7.5 12 12l9-4.5L12 3M3 16.5 12 21l9-4.5M3 12l9 4.5 9-4.5' },
+  { id: 'cockpit', label: 'Cockpit', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
   { id: 'chart', label: 'Chart', icon: 'M3 3v18h18M7 14l4-4 3 3 5-6' },
   { id: 'journal', label: 'Journal', icon: 'M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z' },
   { id: 'settings', label: 'Settings', icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h0a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51h0a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v0a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z' },
 ]
 
-/** Extra words ⌘K should match a tab on — vocabulary, not a second name for it. */
+/** The tab the app opens on — the first one, by construction. Written as a
+ *  derivation and not as a string so the landing tab cannot disagree with the
+ *  nav's own order; a literal here is the second place a reorder has to
+ *  remember, and the one it forgets. */
+export const DEFAULT_TAB = TABS[0].id
+
+/** Extra words ⌘K should match a tab on — vocabulary, not a second name for it.
+ *
+ *  'home' and 'dash' MOVED with the landing tab. They used to sit on cockpit
+ *  because cockpit was where the app opened; leaving them there after the
+ *  reorder would mean typing "home" into the palette takes you somewhere that is
+ *  no longer home. Cockpit keeps the words that describe what it actually is —
+ *  the MSTR position — and nothing matches both tabs. */
 const TAB_KEYWORDS = {
-  cockpit: ['home', 'dash'],
-  alts: ['alt', 'coins', 'season', 'board', 'crypto'],
+  alts: ['alt', 'coins', 'season', 'board', 'crypto', 'home', 'dash'],
+  cockpit: ['mstr', 'position', 'stop'],
   chart: ['candles', 'price'],
   journal: ['trades', 'log'],
   settings: ['risk', 'config'],
@@ -96,7 +117,7 @@ function TabPanel({ active, children }) {
 
 export default function App({ embedded = false }) {
   const [needToken, setNeedToken] = useState(false)
-  const [tab, setTab] = useState('cockpit')
+  const [tab, setTab] = useState(DEFAULT_TAB)
   const [now, setNow] = useState(Date.now())
   const onAuthFail = useCallback(() => setNeedToken(true), [])
 
@@ -266,8 +287,12 @@ export default function App({ embedded = false }) {
           </div>
         </header>
         <main>
-          <TabPanel active={tab === 'cockpit'}><Cockpit derived={derived} settings={settings} position={position} sources={sources} onReload={reloadAll} /></TabPanel>
+          {/* DOM order follows TABS. Every panel stays mounted, so this is the
+              order a screen reader and a keyboard walk the page in, and a nav
+              that reads Alts-first over a document that reads Cockpit-first is
+              two different answers to "what is this tab" on one screen. */}
           <TabPanel active={tab === 'alts'}><AltsPanel scan={altScan} watchlistSrc={altWatch} settings={settings} now={now} /></TabPanel>
+          <TabPanel active={tab === 'cockpit'}><Cockpit derived={derived} settings={settings} position={position} sources={sources} onReload={reloadAll} /></TabPanel>
           <TabPanel active={tab === 'chart'}><ChartPanel derived={derived} settings={settings} position={position} /></TabPanel>
           <TabPanel active={tab === 'journal'}><Journal journalSrc={journalSrc} /></TabPanel>
           <TabPanel active={tab === 'settings'}><Settings settingsSrc={settingsSrc} positionSrc={positionSrc} derived={derived} /></TabPanel>

@@ -34,15 +34,71 @@ import { api } from '../../lib/api.js'
 import { freshness } from '../../lib/freshness.js'
 import { seasonRead } from '../../lib/alts/season.js'
 import { screenUniverse } from '../../lib/alts/screen.js'
+import { boardSnapshot, boardDelta, bandDistribution, altShareSeries, bandLeaders } from '../../lib/alts/pulse.js'
 import SeasonCard from './SeasonCard.jsx'
+import SinceCard from './SinceCard.jsx'
+import ShapeCard from './ShapeCard.jsx'
+import AltLeaders from './AltLeaders.jsx'
 import AltBoard from './AltBoard.jsx'
 import CoinDetail from './CoinDetail.jsx'
 
 const MAX_WATCH = 60   // mirrors alt-watchlist.mjs; see the comment at the toggle
 
+/* ── the one thing on this tab that outlives a page load ────────────────────
+ *
+ * WHY THERE IS STORAGE HERE AT ALL. "What changed since I last looked" needs a
+ * board from before you looked, and nothing in this system has one: /api/alt-scan
+ * serves the CURRENT pass and a 90-second cache of it, and the alt-watch cron's
+ * per-coin state is server-side, keyed to the watchlist, and never leaves the
+ * function. The browser is the only place that knows when you were last here, so
+ * the browser is where the baseline lives.
+ *
+ * THE BASELINE IS THE END OF YOUR LAST VISIT, AND IT IS FROZEN FOR THIS ONE.
+ * It is read once, at mount, into a ref — never re-read — and rewritten only
+ * when the tab is hidden or unmounted. Rolling it forward on every 90-second
+ * poll would be the obvious implementation and it is the wrong one: the diff
+ * would reset to empty the moment it became interesting, and the card would say
+ * "nothing moved" ninety seconds after saying three coins ignited. Held frozen,
+ * the events accumulate for as long as you watch, which is what "since I last
+ * looked" means.
+ *
+ * IT IS NOT AUTHORITATIVE AND NOTHING IS SIZED OFF IT. Every number in the diff
+ * is a difference of two scans this browser actually received; a cleared cache
+ * or a new device produces "no earlier board stored", stated in those words,
+ * rather than a quiet empty list. Storage that throws (Safari private mode,
+ * quota) is treated the same way — see `readBaseline`.
+ */
+const BASELINE_KEY = 'torque_alt_board_prev'
+
+function readBaseline() {
+  try {
+    const raw = window.localStorage.getItem(BASELINE_KEY)
+    if (!raw) return null
+    const s = JSON.parse(raw)
+    // `v` is the snapshot schema version. A stored blob from a future or older
+    // shape is dropped rather than diffed: a rename in boardSnapshot would
+    // otherwise read every coin as new and report a hundred arrivals once.
+    return s && s.v === 1 && Array.isArray(s.rows) ? s : null
+  } catch { return null }
+}
+
+function writeBaseline(snap) {
+  try {
+    if (snap?.rows?.length) window.localStorage.setItem(BASELINE_KEY, JSON.stringify(snap))
+  } catch { /* storage unavailable or full — the next visit reports no baseline, in words */ }
+}
+
 export default function AltsPanel({ scan, watchlistSrc, settings = null, now = Date.now() }) {
   const toast = useToast()
   const [sel, setSel] = useState(null)
+  /* THE BOARD'S "Show" FILTER LIVES HERE, not in AltBoard, because two surfaces
+   * write to it: the select inside the board and the band chips on the shape
+   * card above it. Two copies of this state would be two answers to "what am I
+   * looking at" — the chip row lit on `igniting` while the select still reads
+   * "All coins" — and the select is the one a keyboard and a screen reader
+   * reach. Everything else about the board (search, sort, grouping, paging) is
+   * still the board's own. */
+  const [filter, setFilter] = useState('all')
   const [coin, setCoin] = useState({ data: null, loading: false, error: null, fetchedAt: null })
   const seqRef = useRef(0)
 
@@ -78,6 +134,17 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
   const freshScan = freshness(asOf, 'alt_scan', now)
   const freshCoin = freshness(coin.fetchedAt, 'alt_coin', now)
 
+  /* The board this browser saw at the end of the previous visit. A REF, read
+   * once: as state it would re-read on every render and as a dependency it
+   * would re-run the diff, and either way the baseline would chase the board it
+   * is supposed to be measured against. Lazy so nothing touches `window` before
+   * the component exists — this file is rendered by react-dom/server in the
+   * suite, where there is no localStorage at all. */
+  const baselineRef = useRef(undefined)
+  if (baselineRef.current === undefined) {
+    baselineRef.current = typeof window === 'undefined' ? null : readBaseline()
+  }
+
   const market = useMemo(() => {
     const payload = scan.data ?? null
     const universe = Array.isArray(payload?.universe) ? payload.universe : []
@@ -95,7 +162,27 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
     })
     const rows = screenUniverse(universe, { btcRow, ethRow, season, now: at })
     const byId = new Map(rows.map((r) => [r.id, r]))
-    return { payload, season, rows, byId, trending: payload?.trending ?? null }
+
+    /* THE DASHBOARD LAYER, computed in the SAME memo as the board and keyed on
+     * the same payload. Three reasons it is not three memos or an effect:
+     *   · the diff must be taken against the board these rows produce, not
+     *     against a later one — screening and snapshotting in one pass is what
+     *     guarantees `snapshot.rows[i]` is `rows[i]`;
+     *   · `now` ticks every ten seconds in App and re-running this on the clock
+     *     would re-diff 250 rows to produce identical output (the same reason
+     *     the header gives for keying the heavy reads on the payload);
+     *   · the dominance series is aged against the payload's own `asOf`, which
+     *     is the honest instant to measure a stored history from. */
+    const snapshot = boardSnapshot(rows, { asOf: at })
+    const delta = boardDelta(baselineRef.current, snapshot)
+    const dist = bandDistribution(rows)
+    const shareSeries = altShareSeries(payload?.domHistory ?? null, { now: at })
+    const leaders = bandLeaders(rows)
+
+    return {
+      payload, season, rows, byId, trending: payload?.trending ?? null,
+      dashboard: { snapshot, delta, dist, shareSeries, leaders },
+    }
   }, [scan.data])
 
   // Past `dead` the payload is not read at all — see the header. EVERY read of
@@ -109,11 +196,42 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
   const live = freshScan.state !== 'dead' && !!market.payload
   const rows = live ? market.rows : []
   const season = live ? market.season : null
+  const dashboard = live ? market.dashboard : null
   const screened = live && sel ? market.byId.get(sel.id) ?? null : null
   const trendingChecked = live && Array.isArray(market.trending)
   const trendingRank = trendingChecked && sel
     ? market.trending.find((t) => t?.id === sel.id)?.rank ?? null
     : null
+
+  /* WRITING THE NEXT VISIT'S BASELINE. On hide and on unmount, never on a poll:
+   * a write per poll is the roll-forward the block at the top of this file
+   * rejects, and it would also be a JSON serialisation of 250 rows every ninety
+   * seconds on a phone.
+   *
+   * `pagehide` as well as `visibilitychange`, because iOS Safari fires only the
+   * former when the app is swiped away, and a baseline that is never written is
+   * a "since you last looked" that stays permanently "no earlier board stored".
+   * The cleanup writes too: inside the Pentagon the shell unmounts this whole
+   * tool when you switch to another one, and that is a visit ending.
+   *
+   * It writes only what the freshness ladder let through. Storing a dead scan's
+   * board would make it the baseline the NEXT visit diffs against — every gate
+   * on this tab exists to stop a refused payload reaching a number, and one
+   * written to disk reaches every number for as long as it sits there. */
+  const snapshotRef = useRef(null)
+  snapshotRef.current = live ? market.dashboard.snapshot : null
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+    const save = () => { if (snapshotRef.current) writeBaseline(snapshotRef.current) }
+    const onVis = () => { if (document.visibilityState === 'hidden') save() }
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('pagehide', save)
+    return () => {
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('pagehide', save)
+      save()
+    }
+  }, [])
 
   /* ── the watchlist, optimistic ───────────────────────────────────────────── */
 
@@ -289,6 +407,29 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
             cacheAgeSec={live ? market.payload?.cacheAgeSec ?? null : null}
             onReload={scan.reload}
           />
+
+          {/* THE LAYER THAT WAS MISSING, AND IT SITS BETWEEN THE TWO THINGS IT
+              CONNECTS. The season card states a regime; the board lists a
+              hundred rows; nothing joined them. Events first, because that is
+              what an operator opens a screener for and a ranked list cannot show
+              it; then the shape of the population the ranking is over; then the
+              ranking. Both cards are gated on `live` exactly like the board — a
+              dead scan may not diff a remembered board any more than it may
+              print a remembered price. */}
+          <SinceCard
+            delta={dashboard?.delta ?? null}
+            rowsById={live ? market.byId : null}
+            onSelect={onSelect}
+            live={live}
+          />
+          <ShapeCard
+            dist={dashboard?.dist ?? null}
+            series={dashboard?.shareSeries ?? null}
+            activeFilter={filter}
+            onPickBand={setFilter}
+            live={live}
+          />
+
           <section className="card pad-md alt-boardcard">
             <div className="ttl t-label">Board</div>
             {/* Under the title, not in `.dr-state`. That class is a nowrap state
@@ -308,6 +449,9 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
                 // are disabled. See the writer above for why this is a set and
                 // not a lock.
                 pendingIds={pendingIds}
+                // One filter, two surfaces — see the state declaration above.
+                filter={filter}
+                onFilter={setFilter}
                 onSelect={onSelect}
                 onToggleWatch={toggleWatch}
               />
@@ -351,16 +495,18 @@ export default function AltsPanel({ scan, watchlistSrc, settings = null, now = D
               onToggleWatch={toggleWatch}
             />
           ) : (
-            <section className="card pad-md alt-placeholder">
-              <div className="empty">
-                <div className="glyph" aria-hidden>◎</div>
-                <div className="empty-title">Pick a coin</div>
-                <div className="empty-sub">
-                  Tap any row for its directive, what happened the last time this setup appeared in that coin's
-                  own history, the early-signal checklist, and a size the liquidity can actually support.
-                </div>
-              </div>
-            </section>
+            /* WAS: a permanent "Pick a coin" placeholder. At 1020 and up that is
+               330-466px of the screen holding an instruction for the whole of
+               every visit where nothing is selected — which is every visit until
+               you act. It holds the shortlist now: the best-scoring rows in the
+               bands worth acting on, each one a control that selects the coin.
+               The instruction survives as the last line of that card. */
+            <AltLeaders
+              groups={dashboard?.leaders ?? []}
+              dist={dashboard?.dist ?? null}
+              onSelect={onSelect}
+              live={live}
+            />
           )}
         </div>
       </div>

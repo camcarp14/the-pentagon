@@ -33,6 +33,7 @@
 // live movement — the same reason `screenUniverse` breaks its own ties.
 import React, { useMemo, useState } from 'react'
 import { Sparkline } from './sparkline.jsx'
+import { BAND_PRIORITY, BAND_MEANING, bandOrder } from '../../lib/alts/pulse.js'
 
 /* ══ display formats ═══════════════════════════════════════════════════════
  *
@@ -100,27 +101,71 @@ const SORTS = [
   { value: 'mcap', label: 'Market cap' },
 ]
 
-const FILTERS = [
-  { value: 'all', label: 'All coins' },
-  { value: 'watchlist', label: 'Watchlist only' },
-  { value: 'meme', label: 'Memes' },
-  { value: 'utility', label: 'Utility' },
-  { value: 'major', label: 'Majors · $10B+' },
-  { value: 'mid', label: 'Mid · $1–10B' },
-  { value: 'small', label: 'Small · $100M–1B' },
-  { value: 'micro', label: 'Micro · under $100M' },
+/**
+ * THE FILTER LIST, IN GROUPS, AND THE BANDS ARE IN IT.
+ *
+ * The band chips on the shape card and this select are ONE control in two skins,
+ * not two controls that have to be kept agreeing: `filter` lives in AltsPanel
+ * and both surfaces write to it. That is the whole reason the bands are options
+ * here rather than a second piece of state — a chip row that filtered the board
+ * while the select still read "All coins" is two answers to "what am I looking
+ * at" on one screen, and the select is the one a keyboard reaches.
+ */
+const FILTER_GROUPS = [
+  {
+    label: null,
+    options: [
+      { value: 'all', label: 'All coins' },
+      { value: 'watchlist', label: 'Watchlist only' },
+    ],
+  },
+  { label: 'Band', options: BAND_PRIORITY.map((b) => ({ value: b, label: cap(b) })) },
+  {
+    label: 'Kind',
+    options: [
+      { value: 'meme', label: 'Memes' },
+      { value: 'utility', label: 'Utility' },
+    ],
+  },
+  {
+    label: 'Size',
+    options: [
+      { value: 'major', label: 'Majors · $10B+' },
+      { value: 'mid', label: 'Mid · $1–10B' },
+      { value: 'small', label: 'Small · $100M–1B' },
+      { value: 'micro', label: 'Micro · under $100M' },
+    ],
+  },
 ]
 
+const GROUPS = [
+  { value: 'band', label: 'By band' },
+  { value: 'none', label: 'Flat list' },
+]
+
+const BANDS = new Set(BAND_PRIORITY)
 const PAGE = 50
 const EMPTY = new Set()
 
 export default function AltBoard({
   rows = [], watched, onSelect, selectedId = null, onToggleWatch, pendingIds = EMPTY,
+  // Controlled from AltsPanel so the shape card's band chips and this board's
+  // "Show" select are the same control. Defaulted so the component still stands
+  // up on its own in a test or a fixture render.
+  filter = 'all', onFilter,
 }) {
   const [sort, setSort] = useState('score')
-  const [filter, setFilter] = useState('all')
   const [q, setQ] = useState('')
   const [limit, setLimit] = useState(PAGE)
+  // GROUPED BY DEFAULT. A flat ranked list makes you scroll past forty extended
+  // and dead rows to reach the next igniting one, and igniting is the state this
+  // whole tool exists to catch. Inside a group the chosen sort still decides the
+  // order, so nothing about the ranking is lost — it is partitioned, not
+  // replaced — and "Flat list" is one control away for anyone who wants the pure
+  // ranking back.
+  const [group, setGroup] = useState('band')
+
+  const setFilter = (v) => { onFilter?.(v); setLimit(PAGE) }
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase()
@@ -128,13 +173,34 @@ export default function AltBoard({
       if (filter === 'watchlist' && !watched?.has(r.id)) return false
       if ((filter === 'meme' || filter === 'utility') && r.kind !== filter) return false
       if (TIERS.has(filter) && r.tier !== filter) return false
+      if (BANDS.has(filter) && r.band !== filter) return false
       if (!needle) return true
       return String(r.symbol).toLowerCase().includes(needle) || String(r.name).toLowerCase().includes(needle)
     })
-    return filtered.sort(comparator(sort))
-  }, [rows, watched, filter, q, sort])
+    const within = comparator(sort)
+    // Band first, then the chosen comparator INSIDE the band. Not a second
+    // sort key bolted onto the front of the comparator: the fallthrough in
+    // `comparator` is what keeps the order total, and burying band ahead of it
+    // would leave the ties it resolves resolved differently in each group.
+    return filtered.sort(group === 'band'
+      ? (a, b) => bandOrder(a.band) - bandOrder(b.band) || within(a, b)
+      : within)
+  }, [rows, watched, filter, q, sort, group])
 
   const visible = shown.slice(0, limit)
+  // Headings only where there is more than one band to separate. Filtered to a
+  // single band, the heading would restate the control that produced the view.
+  const heads = group === 'band' && new Set(visible.map((r) => r.band)).size > 1
+  // Counted over `shown`, not over `visible`. The number beside a heading is the
+  // size of the GROUP, and paging is a property of the view — with 50 of 120
+  // rows drawn, a heading reading "igniting 4" when eleven are igniting is the
+  // page's arithmetic wearing the market's clothes. The foot line already says
+  // how many of the total are on screen.
+  const groupCounts = useMemo(() => {
+    const m = new Map()
+    for (const r of shown) m.set(r.band, (m.get(r.band) ?? 0) + 1)
+    return m
+  }, [shown])
 
   return (
     <>
@@ -156,9 +222,28 @@ export default function AltBoard({
           </select>
         </div>
         <div className="fld alt-fld">
+          <label htmlFor="alt-group">Group</label>
+          <select className="field" id="alt-group" value={group} onChange={(e) => setGroup(e.target.value)}>
+            {GROUPS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+          </select>
+        </div>
+        <div className="fld alt-fld">
           <label htmlFor="alt-filter">Show</label>
-          <select className="field" id="alt-filter" value={filter} onChange={(e) => { setFilter(e.target.value); setLimit(PAGE) }}>
-            {FILTERS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+          <select className="field" id="alt-filter" value={filter} onChange={(e) => setFilter(e.target.value)}>
+            {FILTER_GROUPS.map((g) => (g.label
+              ? (
+                <optgroup key={g.label} label={g.label}>
+                  {g.options.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                </optgroup>
+              )
+              : (
+                // A Fragment with a key, not a bare array: an unkeyed array
+                // nested inside a mapped list is a React warning, and this
+                // app's render test fails on any React warning at all.
+                <React.Fragment key="top">
+                  {g.options.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                </React.Fragment>
+              )))}
           </select>
         </div>
       </div>
@@ -213,21 +298,31 @@ export default function AltBoard({
                 <span className="alt-c c-turn">Turnover</span>
                 <span className="alt-c c-spark">7d shape</span>
               </div>
-              {visible.map((r) => (
-                <BoardRow
-                  key={r.id ?? r.symbol}
-                  r={r}
-                  selected={r.id === selectedId}
-                  starred={!!watched?.has(r.id)}
-                  // ONLY the rows whose own change has not landed. A single
-                  // in-flight PUT used to disable all 26 stars plus the detail
-                  // pane's, with no timeout, no toast and no way back; the
-                  // writer in AltsPanel now queues instead of locking, so a
-                  // second tap on a different row is a write, not a refusal.
-                  saving={!!pendingIds?.has(r.id)}
-                  onSelect={onSelect}
-                  onToggleWatch={onToggleWatch}
-                />
+              {visible.map((r, i) => (
+                <React.Fragment key={r.id ?? r.symbol}>
+                  {/* A heading whenever the band changes, which with the rows
+                      sorted by band is once per group. Emitted as a sibling grid
+                      item rather than a wrapper: `.alt-board` is one column of
+                      rows, and wrapping each group in a <div> would make the
+                      group the grid item and collapse every row inside it onto a
+                      single track. */}
+                  {heads && (i === 0 || visible[i - 1].band !== r.band) && (
+                    <GroupHead band={r.band} n={groupCounts.get(r.band) ?? 0} />
+                  )}
+                  <BoardRow
+                    r={r}
+                    selected={r.id === selectedId}
+                    starred={!!watched?.has(r.id)}
+                    // ONLY the rows whose own change has not landed. A single
+                    // in-flight PUT used to disable all 26 stars plus the detail
+                    // pane's, with no timeout, no toast and no way back; the
+                    // writer in AltsPanel now queues instead of locking, so a
+                    // second tap on a different row is a write, not a refusal.
+                    saving={!!pendingIds?.has(r.id)}
+                    onSelect={onSelect}
+                    onToggleWatch={onToggleWatch}
+                  />
+                </React.Fragment>
               ))}
             </div>
           </div>
@@ -249,6 +344,36 @@ export default function AltBoard({
 }
 
 const TIERS = new Set(['major', 'mid', 'small', 'micro'])
+
+function cap(s) { return String(s).charAt(0).toUpperCase() + String(s).slice(1) }
+
+/**
+ * The band separator inside the board.
+ *
+ * WHY THE TEXT IS STICKY-LEFT. At 768 and up the board is 885px of tracks inside
+ * a 576-670px scroller, so a heading that simply sat at the start of an 885px
+ * grid item would scroll off the left edge with the rank column the moment
+ * anybody looked at turnover — and the reader would then be inside a group whose
+ * name is off screen, which is worse than no grouping at all. `left: 0` on the
+ * inner element pins the words to the visible edge while the rule they sit on
+ * still spans the full table.
+ *
+ * The meaning line is screen.js's rule in words, from pulse.js's single copy of
+ * it. It is the piece that makes the grouping mean something rather than sort
+ * something: "igniting" is a label, "broke the prior 6-day high with the day
+ * running ahead of the week" is why the eleven rows under it are together.
+ */
+function GroupHead({ band, n }) {
+  return (
+    <div className="alt-group" role="presentation">
+      <div className="alt-group-in">
+        <span className={`alt-band b-${band}`}>{band}</span>
+        <span className="alt-group-n num">{n}</span>
+        <span className="alt-group-sub">{BAND_MEANING[band] ?? ''}</span>
+      </div>
+    </div>
+  )
+}
 
 /**
  * What `par` and `thin` mean, in the document, on every platform.

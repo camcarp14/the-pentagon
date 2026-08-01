@@ -131,7 +131,7 @@ const TOOLS = {
       ["Profile", "Every captured role is scored against these criteria"],
     ],
   },
-  macro: { nav: ".navbar .nav > button", tabs: [["Cockpit", null], ["Alts", null], ["Chart", null], ["Journal", null], ["Settings", null]] },
+  macro: { nav: ".navbar .nav > button", tabs: [["Alts", null], ["Cockpit", null], ["Chart", null], ["Journal", null], ["Settings", null]] },
   looper: { nav: ".lp-nav > button", tabs: [["Run", null], ["Mission", null], ["Chat", null], ["Log", null]] },
   sync: {
     nav: ".sidebar .side-nav .side-item",

@@ -417,8 +417,11 @@ describe("Clarify renders on the kit", () => {
           // asserting it would pin markup nothing renders. The `pairs` total
           // further down drops by the six such pairs, one per deleted heading.
           "features/mission/MissionControl.jsx": ["card", "stattile", "stattile-label", "stattile-value", "t-label", "t-cap", "t-foot"],
-          // The engine panel it mounts underneath them.
-          "features/mission/EnginePanel.jsx": ["card", "pad-sm", "pressable", "t-call", "t-cap", "t-foot", "t-head", "t-label", "t-title2"],
+          // The engine panel it mounts underneath them. `cell`/`tappable` moved
+          // up from UNREACHED when the card learned to fold: the disclosure IS
+          // the title row, so the kit's 46px cell is now on the FIRST paint
+          // rather than only on a draft that arrives from Supabase.
+          "features/mission/EnginePanel.jsx": ["card", "cell", "pad-sm", "pressable", "tappable", "t-call", "t-cap", "t-foot", "t-head", "t-label", "t-title2"],
         },
       },
       // The outreach board is rendered inline by App.jsx: its toolbar search
@@ -546,9 +549,11 @@ describe("Clarify renders on the kit", () => {
       // The client list rows and the Add-client modal: behind the async
       // clients fetch. ClientDetail (the surface above) is the rest of the tab.
       "features/clients/ClientsView.jsx": ["field", "pressable", "t-head"],
-      // The action-queue editor fields and the observation disclosure: both
-      // need engine state that arrives from Supabase.
-      "features/mission/EnginePanel.jsx": ["cell", "field", "tappable"],
+      // The direction editor's inputs, behind a click on a card that only
+      // draws once engine state has arrived from Supabase. `cell`/`tappable`
+      // used to sit here too and are guarded on #/mission now — the fold's
+      // disclosure carries them on the cold paint.
+      "features/mission/EnginePanel.jsx": ["field"],
       // The booking-link value, printed only once a real scheduling URL has
       // replaced config.js's placeholder.
       "features/calendar/CalendarView.jsx": ["t-call"],
@@ -595,7 +600,10 @@ describe("Clarify renders on the kit", () => {
     // a .t-title1/.t-title2 on a heading that said what the lit pill above it
     // already said; the elements are gone, so the pairs are too. Every pair
     // still listed is still mutation-proved.
-    expect(pairs, "the (surface, file, class) table lost entries").toBe(99);
+    // 99 before the engine card learned to fold; its disclosure put the kit's
+    // .cell/.tappable onto the cold #/mission paint, which is two pairs that
+    // were UNREACHED and are now guarded.
+    expect(pairs, "the (surface, file, class) table lost entries").toBe(101);
     expect(scannedAttrs, "the className scan read almost nothing across the table — it is broken").toBeGreaterThan(400);
 
     // …and the half that makes stripping a file's kit classes WHOLESALE go red.

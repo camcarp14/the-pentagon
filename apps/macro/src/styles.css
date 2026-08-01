@@ -1037,8 +1037,151 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
    the number is standing on its own and the line says so in --warn. */
 .alt-cover.thin { color: var(--warn); }
 
-/* ---- board controls ---- */
-.alt-controls { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 12px; }
+/* ============================================================
+   THE DASHBOARD LAYER — what sits between the regime and the list.
+
+   Three new surfaces, all built out of furniture this sheet already owns
+   (`.card`, `.chip`, `.empty`, `.alt-band`, `.alt-sym`, `.alt-name`, the ink
+   ladder) plus the minimum of new names, every one prefixed `alt-`. NO
+   @keyframes anywhere in here, for the reason at the top of the ALTS block:
+   the name would be document-global and would shadow the kit's for all nine
+   tools. Everything that moves does it with a transition.
+   ============================================================ */
+
+/* ---- since you last looked ----
+   The events card. `.alt-evs` is a list of rows that are mostly buttons, so it
+   gets the same treatment the board's rows get: a hairline stack on the recessed
+   surface, hover on the ink wash, and a 44px floor on touch. */
+.alt-since-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+/* The refusal is the state this card ships in — no baseline on the first visit,
+   and after any cache clear — so it is the state that gets seen most. The kit's
+   `.empty` centres a glyph in 40px of padding, which is right for a whole pane
+   that has nothing in it and wrong for one card in a stack of four: measured
+   250px of a 900px screen to say "come back next time". Same furniture, same
+   glyph, a third of the height. */
+.alt-since .empty { padding: 6px 0 2px; }
+.alt-since .empty .glyph { font-size: 20px; margin-bottom: 2px; }
+.alt-since-ttl { margin-bottom: 0; }
+/* The headline sentence. Bigger than body copy and smaller than a card title:
+   it is the answer, and the rows under it are the working. */
+.alt-since-lead { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--ink); line-height: 1.45; text-wrap: pretty; }
+.alt-since-note { margin: 10px 0 0; line-height: 1.5; text-wrap: pretty; }
+.alt-evs { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; background: var(--border); border-radius: var(--r-md); overflow: hidden; }
+.alt-ev { min-width: 0; }
+.alt-ev-main {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  width: 100%; min-width: 0; min-height: 38px; padding: 8px 11px;
+  background: var(--card-2); border: none; text-align: left; font: inherit; color: inherit;
+}
+.alt-ev-main.is-link { cursor: pointer; transition: background var(--dur-1) ease; }
+.alt-ev-main.is-link:hover { background: var(--ink-a03); }
+.alt-ev-main.is-link:active { background: var(--ink-a06); }
+.alt-ev-sym { font-size: 12.5px; font-weight: 700; color: var(--ink); flex: none; }
+/* The sentence pulse.js wrote. `flex: 1 1 auto` with `min-width: 0` so it takes
+   the rest of the row and WRAPS rather than ellipsising — it is a clause, and a
+   clause cut mid-word is the `.dr-state` mistake this sheet already made once. */
+.alt-ev-t { flex: 1 1 auto; min-width: 0; font-size: 12px; color: var(--ink-2); line-height: 1.45; text-wrap: pretty; }
+.alt-ev-t.tone-go { color: var(--good); }
+.alt-ev-t.tone-warn { color: var(--warn); }
+
+/* ---- shape of the board ----
+   The distribution strip is a picture AND a control: each segment is a band, and
+   the chips under it filter the board to one. Segments carry no text, so the
+   chip row beneath is the legend — nothing here is signalled by colour alone. */
+.alt-shape-note { margin: -2px 0 12px; line-height: 1.5; text-wrap: pretty; }
+.alt-dist { display: flex; width: 100%; height: 10px; border-radius: 99px; overflow: hidden; background: var(--ink-a05); }
+.alt-dist-seg { display: block; min-width: 3px; flex-basis: 0; transition: box-shadow var(--dur-1) ease; }
+.alt-dist-seg.seg-igniting { background: var(--good); }
+.alt-dist-seg.seg-waking { background: var(--ink); }
+.alt-dist-seg.seg-running { background: var(--warn); }
+.alt-dist-seg.seg-basing { background: var(--ink-2); }
+.alt-dist-seg.seg-extended { background: var(--serious); }
+.alt-dist-seg.seg-dead { background: var(--ink-a16); }
+/* An INSET ring in the card's own colour, not a border: a notch cut out of the
+   strip. `.alt-dist-seg` has a background and this shadow and no border, which
+   is the rule this sheet is tested on. */
+.alt-dist-seg.on { box-shadow: inset 0 0 0 2px var(--card); }
+
+.alt-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
+.alt-chip {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  padding: 5px 10px; border-radius: 99px; border: none;
+  background: var(--card-2); color: var(--ink-2); font: inherit; cursor: pointer;
+  transition: background var(--dur-1) ease, box-shadow var(--dur-1) ease;
+}
+.alt-chip:hover { background: var(--ink-a06); }
+.alt-chip:active { transform: scale(0.97); }
+/* The accent, on a SELECTED state — which is one of the four jobs DESIGN.md §4.4
+   keeps it for. An inset hairline rather than a border, so this element never
+   pairs the two. */
+.alt-chip.on { box-shadow: inset 0 0 0 1px var(--accent-line); background: var(--accent-soft); }
+.alt-chip-k { font-size: 11.5px; font-weight: 700; text-transform: capitalize; color: var(--ink-2); }
+.alt-chip-n { font-size: 12px; font-weight: 600; color: var(--ink); }
+/* Same band → same colour as the pill on the row, so the chip, the strip, the
+   group heading and the board row are one vocabulary. */
+.alt-chip.band-igniting .alt-chip-k { color: var(--good); }
+.alt-chip.band-running .alt-chip-k { color: var(--warn); }
+.alt-chip.band-extended .alt-chip-k { color: var(--serious); }
+.alt-chip.band-waking .alt-chip-k { color: var(--ink); }
+.alt-chip.band-dead .alt-chip-k { color: var(--ink-3); }
+
+/* ---- alt share of total cap, from the stored dominance history ---- */
+.alt-share { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.alt-share-top { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.alt-share-k { font-size: 12px; font-weight: 600; color: var(--ink); }
+.alt-share-v { margin-left: auto; font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--ink-2); }
+.alt-share-v.tone-up { color: var(--up); }
+.alt-share-v.tone-down { color: var(--down); }
+.alt-sharechart { display: block; width: 100%; height: 44px; color: var(--ink-2); }
+.alt-sharechart.dir-up { color: var(--up); }
+.alt-sharechart.dir-down { color: var(--down); }
+.alt-share-note { margin: 6px 0 0; line-height: 1.5; text-wrap: pretty; }
+/* The refusal state is the one that ships on day one of the cron. It is not
+   greyed out into invisibility — a stated absence is information. */
+.alt-share.thin .alt-share-note { color: var(--ink-2); }
+
+/* ---- band group headings inside the board ---- */
+.alt-group { background: var(--card); }
+.alt-group-in { display: flex; align-items: baseline; gap: 6px 8px; flex-wrap: wrap; padding: 9px 12px; }
+.alt-group-n { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.alt-group-sub { flex: 1 1 auto; min-width: 0; font-size: 11.5px; color: var(--ink-3); line-height: 1.45; text-wrap: pretty; }
+
+/* ---- the shortlist that replaced "Pick a coin" ---- */
+.alt-lead-grp { margin-top: 14px; }
+.alt-lead-grp:first-of-type { margin-top: 4px; }
+.alt-lead-head { display: flex; align-items: baseline; gap: 8px; }
+.alt-lead-n { margin-left: auto; font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.alt-lead-why { margin: 5px 0 8px; line-height: 1.45; text-wrap: pretty; }
+.alt-lead-none { margin: 0; line-height: 1.45; }
+.alt-leadlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; background: var(--border); border-radius: var(--r-md); overflow: hidden; }
+.alt-leadrow {
+  display: grid; width: 100%; min-width: 0; min-height: 44px;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  grid-template-areas: "id score" "nums spark";
+  align-items: center; gap: 2px 8px; padding: 7px 11px;
+  background: var(--card-2); border: none; text-align: left; font: inherit; color: inherit;
+  cursor: pointer; transition: background var(--dur-1) ease;
+}
+.alt-leadrow:hover { background: var(--ink-a03); }
+.alt-leadrow:active { background: var(--ink-a06); }
+.alt-leadrow-id { grid-area: id; display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.alt-leadrow-score { grid-area: score; font-family: var(--mono); font-size: 14px; font-weight: 600; text-align: right; color: var(--ink); }
+.alt-leadrow-score.band-igniting { color: var(--good); }
+.alt-leadrow-score.band-running { color: var(--warn); }
+.alt-leadrow-score.band-extended { color: var(--serious); }
+.alt-leadrow-nums { grid-area: nums; display: flex; align-items: baseline; gap: 5px; min-width: 0; font-size: 11.5px; }
+.alt-leadrow-nums .num { font-family: var(--mono); font-weight: 600; }
+.alt-leadrow-k { color: var(--ink-3); font-size: 10.5px; margin-right: 4px; }
+.alt-leadrow-spark { grid-area: spark; display: flex; justify-content: flex-end; }
+.alt-leadrow-spark .alt-spark { width: 34px; height: 16px; }
+.alt-lead-foot { margin: 14px 0 0; line-height: 1.5; text-wrap: pretty; }
+
+/* ---- board controls ----
+   Four fields now (search, sort, group, show). On a phone they are two columns
+   with the search box spanning both: stacked one-per-row that is four 44px
+   controls plus four labels above a board you came here to read. */
+.alt-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.alt-controls > .alt-fld:first-child { grid-column: 1 / -1; }
 .alt-fld { margin-bottom: 0; min-width: 0; }
 /* The one-line explanation of what the ranking means, WRAPPED. It used to ride
    `.dr-state`, which is a nowrap state word for the right-hand end of a card
@@ -1055,7 +1198,17 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
    leaves out MUST be display:none rather than merely unplaced — an item whose
    named area does not exist in the active template falls back to auto-placement
    and silently grows a third row of orphans. */
-.alt-board { display: grid; gap: 1px; background: var(--border); border-radius: var(--r-md); overflow: hidden; }
+/* `clip`, NOT `hidden`, and the difference is the group heading.
+   Both clip the row backgrounds to the radius identically, which is the only
+   job this declaration was ever doing. But `overflow: hidden` makes an element a
+   SCROLL CONTAINER — a scrollport that simply cannot be scrolled by hand — and
+   `position: sticky` anchors to the nearest such ancestor. So the band heading's
+   `left: 0` was pinning it to a box that never scrolls, and it rode the table
+   off the left edge exactly as if the rule were absent: measured -237px after a
+   300px scroll of the board at 1440. `overflow: clip` does not establish a
+   scrollport, so the heading now anchors to `.tbl-wrap`, which is the thing that
+   actually moves. Measured 0px drift through the same scroll. */
+.alt-board { display: grid; gap: 1px; background: var(--border); border-radius: var(--r-md); overflow: clip; }
 .alt-head { display: none; }
 /* minmax(min-content, 1fr), not minmax(0, 1fr): the row is the only element that
    knows how wide the table's fixed columns actually are, and a 0 minimum threw
@@ -1283,9 +1436,21 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 
 /* ---- 768px: the board becomes a table ---- */
 @media (min-width: 768px) {
-  .alt-controls { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); }
+  .alt-controls { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1.15fr); }
+  .alt-controls > .alt-fld:first-child { grid-column: auto; }
   .alt-bars { grid-template-columns: 1fr 1fr; }
   .alt-two { grid-template-columns: 1fr 1fr; }
+
+  /* THE GROUP HEADING IS PINNED TO THE VISIBLE LEFT EDGE. From 768 up the board
+     is 885px of tracks inside a 576-670px scroller, so a heading that simply sat
+     at the start of the row scrolled away with the rank column the moment
+     anyone looked at turnover — leaving the reader inside a group whose name was
+     off screen, which is worse than no grouping. `width: max-content` is what
+     makes `left: 0` actually pin: a full-width sticky element has nowhere to
+     stick. It is scoped to this breakpoint because under 768 the board does not
+     scroll sideways and `max-content` would give `.tbl-wrap` a scroller it has
+     no reason to have. */
+  .alt-group-in { position: sticky; left: 0; width: max-content; max-width: 100%; }
 
   /* The eleven-column shape. It is wider than a 620px pane on purpose — the
      board is a dense instrument and `.tbl-wrap` is the one place in this app
@@ -1406,8 +1571,15 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
      protect. */
   .alt-star { min-height: 44px; min-width: 44px; }
   .alt-season-btn, .alt-boardfoot .btn { min-height: 44px; }
+  /* The dashboard layer's own controls. The band chips are the fastest route
+     from "eleven are igniting" to the eleven rows, and a 30px chip on a phone is
+     a route you miss. `.alt-ev-main` is a link to a coin's directive and is the
+     same case. */
+  .alt-chip, .alt-ev-main.is-link, .alt-leadrow { min-height: 44px; }
+  .alt-since .disclose { min-height: 44px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .alt-row-main, .alt-star, .alt-bar .meter > div { transition: none !important; }
+  .alt-row-main, .alt-star, .alt-bar .meter > div,
+  .alt-chip, .alt-ev-main, .alt-leadrow, .alt-dist-seg { transition: none !important; }
 }

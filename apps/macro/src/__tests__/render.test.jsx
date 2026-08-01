@@ -21,15 +21,17 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import App from "../App.jsx";
+import App, { DEFAULT_TAB } from "../App.jsx";
 import AltsPanel from "../components/alts/AltsPanel.jsx";
 import AltBoard from "../components/alts/AltBoard.jsx";
 import CoinDetail from "../components/alts/CoinDetail.jsx";
 import SeasonCard from "../components/alts/SeasonCard.jsx";
+import SinceCard from "../components/alts/SinceCard.jsx";
 import { api, API_TIMEOUT_MS } from "../lib/api.js";
 import { sparkPoints, sparkDirection } from "../components/alts/sparkline.jsx";
 import { screenCoin, screenUniverse } from "../lib/alts/screen.js";
 import { seasonRead } from "../lib/alts/season.js";
+import { boardSnapshot, boardDelta } from "../lib/alts/pulse.js";
 import { freshness } from "../lib/freshness.js";
 
 const warnings = [];
@@ -79,7 +81,7 @@ describe("Macro renders on the kit", () => {
     expect(out).not.toMatch(/<div class="seg"[^>]*>\s*<button[^>]*class="on"/);
   });
 
-  it("mounts the Alts tab cold, second in the nav", () => {
+  it("mounts the Alts tab cold, FIRST in the nav and first in the document", () => {
     // All five panels stay mounted in this app, so the Alts panel's body runs on
     // every cold render whether or not the tab is selected — which is exactly
     // the coverage this file exists for. At t=0 it is skeletons, because its
@@ -88,9 +90,55 @@ describe("Macro renders on the kit", () => {
     const out = html();
     expect(out).toContain('aria-label="Alts"');
     expect(out).toContain('data-testid="alts-panel"');
-    // second: cockpit, then alts, then chart
-    expect(out.indexOf('aria-label="Cockpit"')).toBeLessThan(out.indexOf('aria-label="Alts"'));
-    expect(out.indexOf('aria-label="Alts"')).toBeLessThan(out.indexOf('aria-label="Chart"'));
+    // Alts, then cockpit, then chart — in the NAV…
+    expect(out.indexOf('aria-label="Alts"')).toBeLessThan(out.indexOf('aria-label="Cockpit"'));
+    expect(out.indexOf('aria-label="Cockpit"')).toBeLessThan(out.indexOf('aria-label="Chart"'));
+    // …and in the DOCUMENT, which is the order a screen reader and a keyboard
+    // walk. Every panel stays mounted, so a nav that reads Alts-first over a
+    // document that reads Cockpit-first is two answers to "what is this tab".
+    // The chart's replay toggle is the anchor because the cockpit is skeletons
+    // at t=0 and has no testid of its own to sit between them; the panel ORDER
+    // itself is read off the source below.
+    expect(out.indexOf('data-testid="alts-panel"')).toBeLessThan(out.indexOf('data-testid="replay-toggle"'));
+    const panels = [...stripComments(read("App.jsx")).matchAll(/<TabPanel active=\{tab === '(\w+)'\}/g)].map((m) => m[1]);
+    expect(panels).toEqual(["alts", "cockpit", "chart", "journal", "settings"]);
+  });
+
+  it("LANDS on Alts, and takes the landing tab from the nav's own order", () => {
+    // The tab that is NOT hidden is the one the app opened on. `hidden` is
+    // TabPanel's own attribute, so this reads the real landing state rather than
+    // the constant that is supposed to produce it.
+    const out = html();
+    const alts = out.indexOf('data-testid="alts-panel"');
+    const before = out.slice(0, alts).lastIndexOf("<div");
+    expect(out.slice(before, alts), "the Alts panel is not the visible one at t=0")
+      .not.toMatch(/hidden/);
+    // …and a second literal cannot drift from the array: the default IS TABS[0].
+    expect(DEFAULT_TAB).toBe("alts");
+    const src = stripComments(read("App.jsx"));
+    expect(src, "the landing tab must be derived from TABS, not typed again")
+      .toMatch(/export const DEFAULT_TAB = TABS\[0\]\.id/);
+    expect(src).toMatch(/useState\(DEFAULT_TAB\)/);
+    expect(src, "no tab id may be typed into useState")
+      .not.toMatch(/useState\('cockpit'\)/);
+  });
+
+  it("moves the palette's 'home' vocabulary with the landing tab", () => {
+    // ⌘K builds its entries from TABS, so 'Go to Alts' leads the list for free.
+    // The KEYWORDS are the part that had to move by hand: 'home' and 'dash' sat
+    // on cockpit because cockpit was where the app opened, and leaving them
+    // there would make typing "home" into the palette go somewhere that is not.
+    const src = stripComments(read("App.jsx"));
+    const kw = /const TAB_KEYWORDS = \{([\s\S]*?)\n\}/.exec(src);
+    expect(kw, "TAB_KEYWORDS moved or was renamed").toBeTruthy();
+    const alts = /alts:\s*\[([^\]]*)\]/.exec(kw[1])[1];
+    const cockpit = /cockpit:\s*\[([^\]]*)\]/.exec(kw[1])[1];
+    for (const w of ["'home'", "'dash'"]) {
+      expect(alts, `${w} belongs to the landing tab`).toContain(w);
+      expect(cockpit, `${w} must not still match two tabs`).not.toContain(w);
+    }
+    // and the palette still builds itself from TABS rather than five literals
+    expect(src).toMatch(/\.\.\.TABS\.map\(\(t\) => \(\{ label: `Go to \$\{t\.label\}`/);
   });
 
   it("renders the chart panel's real content, not just its shell", () => {
@@ -237,14 +285,178 @@ const detail = (over = {}) => {
 };
 
 describe("The Alts tab renders against a real payload shape", () => {
-  it("renders the season answer, the board and the pick-a-coin state", () => {
+  it("renders the season answer, the dashboard layer, the board and the shortlist", () => {
     const out = panel();
     expect(out).toContain('data-testid="season-card"');
     expect(out).toContain('data-testid="alt-board"');
-    expect(out).toContain("Pick a coin");
     expect(out).toContain("Solana");
     // the watched coin's star is lit, from the watchlist source and not local state
     expect(out).toContain('aria-label="Remove SOL from the watchlist"');
+
+    // THE LAYER THAT WAS MISSING, and it is BETWEEN the regime and the list.
+    // The tab used to be a season card, four tiles and a hundred flat rows: the
+    // top of the screen stated a regime and the rest was an undifferentiated
+    // list with nothing joining them.
+    for (const id of ["alt-since", "alt-shape", "alt-leaders"]) {
+      expect(out, `missing ${id}`).toContain(`data-testid="${id}"`);
+    }
+    const at = (id) => out.indexOf(`data-testid="${id}"`);
+    expect(at("season-card")).toBeLessThan(at("alt-since"));
+    expect(at("alt-since")).toBeLessThan(at("alt-shape"));
+    expect(at("alt-shape")).toBeLessThan(at("alt-board"));
+
+    // The right-hand pane is no longer a permanent instruction occupying half a
+    // desktop screen. What it says instead is computed from this scan.
+    expect(out, "the placeholder must be gone").not.toContain("Pick a coin");
+    expect(out).toContain("Where to look first");
+    expect(out).toMatch(/\d+ of \d+ actionable/);
+    // …and the instruction it replaced survives, demoted to one line.
+    expect(out).toMatch(/opens that coin.{0,8}s directive/);
+  });
+
+  it("groups the board by band, with the count and the meaning of each group", () => {
+    // A flat ranked list makes you scroll past the extended and dead rows to
+    // reach the next igniting one, and igniting is the state the tool exists to
+    // catch. The heading carries screen.js's own rule in words, from pulse.js's
+    // single copy of it — a group that only sorts is not grouping with meaning.
+    const out = panel();
+    const heads = [...out.matchAll(/<div class="alt-group"[\s\S]{0,400}?<\/div><\/div>/g)].map((m) => m[0]);
+    expect(heads.length, "the board rendered no band groups at all").toBeGreaterThan(1);
+    for (const h of heads) {
+      expect(h, `a group heading with no band pill:\n${h}`).toMatch(/class="alt-band b-\w+"/);
+      expect(h, `a group heading with no count:\n${h}`).toMatch(/class="alt-group-n num">\d+</);
+      expect(h, `a group heading with no meaning:\n${h}`).toMatch(/class="alt-group-sub">\w[^<]{20,}</);
+    }
+    // and the actionable band leads the board, ahead of the ones you scroll past
+    const order = [...out.matchAll(/class="alt-band b-(\w+)"[^>]*>[^<]*<\/span><span class="alt-group-n/g)].map((m) => m[1]);
+    expect(order.length).toBeGreaterThan(1);
+    expect(order.indexOf("dead") === -1 || order.indexOf("dead") === order.length - 1,
+      `dead is not last in the group order: ${order}`).toBe(true);
+  });
+
+  it("makes the distribution a control, not just a picture", () => {
+    // The strip has no text, so the chips under it are its legend AND the
+    // fastest route from "eleven are igniting" to the eleven rows. Both surfaces
+    // write ONE filter — the chip row and the board's Show select — so the tab
+    // can never be filtered to a band while the select still reads "All coins".
+    const out = panel();
+    expect(out).toMatch(/class="alt-dist"/);
+    expect(out).toMatch(/class="alt-dist-seg seg-\w+"/);
+    const chips = [...out.matchAll(/<button[^>]*class="alt-chip band-(\w+)[^"]*"[^>]*>/g)].map((m) => m[1]);
+    expect(chips.length, "no band chips rendered").toBeGreaterThan(1);
+    // every chip names a band that the select can also reach — one control, two skins
+    const options = [...out.matchAll(/<option value="(\w+)"/g)].map((m) => m[1]);
+    for (const c of chips) expect(options, `the Show select cannot reach band ${c}`).toContain(c);
+    expect(out).toMatch(/<optgroup label="Band">/);
+    // the filter itself lives above the board, so both surfaces share it
+    const src = stripComments(read("components/alts/AltsPanel.jsx"));
+    expect(src, "the board's filter must be lifted, or the chips are a second copy of it")
+      .toMatch(/const \[filter, setFilter\] = useState\('all'\)/);
+    expect(src).toMatch(/onPickBand=\{setFilter\}/);
+    expect(src).toMatch(/filter=\{filter\}/);
+  });
+
+  it("says there is no earlier board rather than reporting a quiet market", () => {
+    // THE STATE THIS SHIPS IN, and the one that has to be unmistakable. Rendered
+    // in Node there is no localStorage, so no baseline exists — and "nothing
+    // changed" and "there is nothing to compare against" are opposite claims
+    // that render as the same blank strip unless something forces them apart.
+    const out = panel();
+    expect(out).toContain("Since you last looked");
+    expect(out).toContain("No comparison yet");
+    expect(out).toMatch(/no earlier board stored in this browser/);
+    expect(out, "a refusal must not be dressed as a measured zero").not.toMatch(/Nothing moved/);
+  });
+
+  it("says the alt-share line needs seven stored days, in season.js’s own words", () => {
+    // domHistory is null on day one of the cron, exactly as the season card's
+    // dominance tile already reports. The chart refuses in the same shape rather
+    // than drawing a flat line off no readings.
+    const out = panel();
+    expect(out).toContain("Alt share of total cap");
+    expect(out).toMatch(/0 of 7 days needed/);
+    expect(out, "no chart may be drawn off an absent series").not.toMatch(/class="alt-sharechart/);
+  });
+
+  it("draws the alt-share line once the cron has enough days, and says what it is not", () => {
+    const domHistory = Array.from({ length: 12 }, (_, i) => ({
+      d: new Date(NOW - (11 - i) * DAY).toISOString().slice(0, 10),
+      btcDom: 56 - i * 0.3, ethDom: 12, totalMcap: 3.4e12,
+    }));
+    const out = panel({ scan: src({ ...SCAN_PAYLOAD, domHistory }) });
+    expect(out).toMatch(/class="alt-sharechart dir-up"/);
+    expect(out).toMatch(/\+3\.30 points rising across 11 days · 12 readings/);
+    // It is ALT SHARE and it does not claim to be breadth. Breadth is not stored
+    // anywhere, so a breadth history would have to be invented.
+    const shape = out.slice(out.indexOf('data-testid="alt-shape"'));
+    expect(shape.slice(0, shape.indexOf("</section>")), "the stored series must not be called breadth")
+      .not.toMatch(/breadth/i);
+  });
+
+  it("renders a real diff, with one line per coin at its most important change", () => {
+    // The panel cannot hold a baseline in Node, so the card is driven directly
+    // from pulse.js's own output — which is the same object the panel passes it.
+    const rows = (over) => screenUniverse(UNIVERSE.map((r) => ({ ...r, ...(over[r.id] ?? {}) })),
+      { btcRow: UNIVERSE[0], ethRow: UNIVERSE[1], now: NOW });
+    const before = boardSnapshot(rows({ solana: { chg24h: -1, chg7d: -3 } }), { asOf: NOW - 3 * 3600_000 });
+    const after = boardSnapshot(rows({}), { asOf: NOW });
+    const delta = boardDelta(before, after);
+    expect(delta.ok, "the fixture produced no diff to render").toBe(true);
+    expect(delta.events.length).toBeGreaterThan(0);
+
+    const byId = new Map(rows({}).map((r) => [r.id, r]));
+    const out = renderToStaticMarkup(createElement(SinceCard, { delta, rowsById: byId, onSelect: () => {} }));
+    expect(out).toMatch(/3h of tape/);
+    // every event row is a control that opens the coin — the point of the card
+    // is that you do not then have to find it in a hundred rows
+    expect(out).toMatch(/class="alt-ev-main is-link"/);
+    expect(out).toMatch(/Open its directive/);
+    expect(out).not.toMatch(/undefined|NaN/);
+    // one line per coin
+    const syms = [...out.matchAll(/class="alt-ev-sym">([^<]+)</g)].map((m) => m[1]);
+    expect(new Set(syms).size, `a coin got more than one line: ${syms}`).toBe(syms.length);
+  });
+
+  it("draws a measured quiet market differently from a missing baseline", () => {
+    const rows = screenUniverse(UNIVERSE, { btcRow: UNIVERSE[0], ethRow: UNIVERSE[1], now: NOW });
+    const snap = (t) => boardSnapshot(rows, { asOf: t });
+    const quiet = boardDelta(snap(NOW - 2 * 3600_000), snap(NOW));
+    expect(quiet.ok).toBe(true);
+    const measured = renderToStaticMarkup(createElement(SinceCard, { delta: quiet }));
+    expect(measured).toContain("Nothing moved");
+    expect(measured, "a measurement must state its own sample").toMatch(/coins were on both boards/);
+    expect(measured).not.toContain("No comparison yet");
+
+    const absent = renderToStaticMarkup(createElement(SinceCard, { delta: boardDelta(null, snap(NOW)) }));
+    expect(absent).toContain("No comparison yet");
+    expect(absent).not.toContain("Nothing moved");
+  });
+
+  it("refuses the whole dashboard layer on a dead scan, not just the board", () => {
+    // Every one of the new reads is derived from the same payload the freshness
+    // ladder refuses, so every one of them has to be behind the same gate. A
+    // remembered diff or a remembered distribution is the same class of lie the
+    // `screened` prop already shipped once.
+    const out = panel({ scan: src({ ...SCAN_PAYLOAD, asOf: NOW - 4000_000 }, { fetchedAt: NOW - 4000_000 }) });
+    expect(out).toContain("No board to compare");
+    expect(out).toContain("No ranked coins to count");
+    expect(out).toContain("Nothing to shortlist");
+    expect(out, "a dead scan may not draw a distribution").not.toMatch(/class="alt-dist-seg/);
+    expect(out, "…nor a band chip that filters a board that is not there").not.toMatch(/class="alt-chip /);
+    expect(out).not.toMatch(/\$96,400/);
+  });
+
+  it("never writes a baseline the freshness ladder refused", () => {
+    // A dead scan's board written to storage is worse than a dead scan on
+    // screen: it becomes the baseline the NEXT visit measures everything
+    // against, for as long as it sits there.
+    const s = stripComments(read("components/alts/AltsPanel.jsx"));
+    expect(s).toMatch(/snapshotRef\.current = live \? market\.dashboard\.snapshot : null/);
+    expect(s).toMatch(/const save = \(\) => \{ if \(snapshotRef\.current\) writeBaseline/);
+    // and the baseline is READ once into a ref, not rolled forward on every poll
+    expect(s).toMatch(/baselineRef\.current === undefined/);
+    expect(s, "a write on every render is the roll-forward that empties the diff")
+      .not.toMatch(/writeBaseline\(snapshot\)/);
   });
 
   it("keeps stablecoins and wrappers off the board entirely", () => {
