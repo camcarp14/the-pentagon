@@ -33,6 +33,14 @@
 const SUPABASE_URL = "https://nrzpinvyxxorxufadvyc.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_zDV3HpSChf0bZJ5nY09s3w_rNI3sZ1m";
 
+// Two vendors, one endpoint. The name still says `claude-stream` because eight
+// call sites and a test assert that path, and the wire format the client parses
+// is Anthropic's either way — see lib/openai.mjs for why the translation lives
+// on the server rather than as a second client in the browser. Adding a route
+// would have split the model picker into "which button do I press" instead of
+// "which model do I want".
+import { isOpenAIModel, toOpenAIRequest, toAnthropicStream } from "./lib/openai.mjs";
+
 // Pin the model list on the server too. A proxy that forwards whatever it is
 // handed is a proxy that bills you for whatever it is handed — and unlike the
 // client's copy of this list, this one can't be edited from devtools.
@@ -41,6 +49,8 @@ const ALLOWED_MODELS = new Set([
   "claude-sonnet-5",
   "claude-opus-5",
 ]);
+
+const isAllowed = (model) => ALLOWED_MODELS.has(model) || isOpenAIModel(model);
 
 // Anthropic's own error envelope. Using the same shape for our own failures
 // means the client parses one thing, not two.
@@ -86,14 +96,6 @@ export default async (req) => {
   const auth = await checkSession(req);
   if (!auth.ok) return json(auth.status, auth.error);
 
-  // 503, not 500. "The deploy has no key" is a configuration fact the operator
-  // can fix in one place; a 500 would send them hunting through logs for a bug
-  // that isn't there. The client keys off this status to say so plainly.
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) {
-    return json(503, "This deployment has no ANTHROPIC_API_KEY configured, so it can't reach Claude. Set it in the site's environment variables and redeploy.");
-  }
-
   let body;
   try {
     body = await req.json();
@@ -101,12 +103,26 @@ export default async (req) => {
     return json(400, "Body was not JSON.");
   }
 
-  if (!ALLOWED_MODELS.has(body?.model)) {
+  if (!isAllowed(body?.model)) {
     return json(400, `Unsupported model "${body?.model}".`);
   }
 
   // A runaway max_tokens is the other way this gets expensive.
   if (typeof body.max_tokens !== "number" || body.max_tokens > 8000) body.max_tokens = 3000;
+
+  // 503, not 500. "The deploy has no key" is a configuration fact the operator
+  // can fix in one place; a 500 would send them hunting through logs for a bug
+  // that isn't there. The client keys off this status to say so plainly. The
+  // check moved below the model check on purpose: which key is even needed
+  // depends on which vendor was asked for, and a deploy with only one of the
+  // two keys must still work for that vendor's models.
+  const gpt = isOpenAIModel(body.model);
+  const key = gpt ? process.env.OPENAI_API_KEY : process.env.ANTHROPIC_API_KEY;
+  if (!key) {
+    const name = gpt ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY";
+    const vendor = gpt ? "OpenAI" : "Claude";
+    return json(503, `This deployment has no ${name} configured, so it can't reach ${vendor}. Set it in the site's environment variables and redeploy, or pick a model from the other provider.`);
+  }
 
   // This route only streams — that is its whole reason to exist next to
   // claude.js, and labelling a buffered reply as text/event-stream below would
@@ -114,19 +130,25 @@ export default async (req) => {
   // have the other endpoint.
   body.stream = true;
 
+  const upstreamUrl = gpt
+    ? "https://api.openai.com/v1/chat/completions"
+    : "https://api.anthropic.com/v1/messages";
+
+  const upstreamHeaders = gpt
+    ? { "content-type": "application/json", authorization: `Bearer ${key}` }
+    : { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" };
+
+  const upstreamBody = gpt ? toOpenAIRequest(body).request : body;
+
   let upstream;
   try {
-    upstream = await fetch("https://api.anthropic.com/v1/messages", {
+    upstream = await fetch(upstreamUrl, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify(body),
+      headers: upstreamHeaders,
+      body: JSON.stringify(upstreamBody),
     });
   } catch (err) {
-    return json(502, `Couldn't reach Anthropic: ${err?.message || err}`);
+    return json(502, `Couldn't reach ${gpt ? "OpenAI" : "Anthropic"}: ${err?.message || err}`);
   }
 
   // Forward Anthropic's own error body verbatim and unbuffered, so the client's
@@ -144,8 +166,10 @@ export default async (req) => {
 
   // The point of the whole file: hand back upstream.body itself. No .json(), no
   // .text(), no await on the last token — the first sentence reaches the user
-  // (and the speech synth) while the model is still writing the rest.
-  return new Response(upstream.body, {
+  // (and the speech synth) while the model is still writing the rest. The GPT
+  // path pipes through a transform rather than a buffer, so it keeps that same
+  // property: translation happens chunk by chunk, not at the end.
+  return new Response(gpt ? toAnthropicStream(upstream.body, body.model) : upstream.body, {
     status: 200,
     headers: {
       "content-type": "text/event-stream",

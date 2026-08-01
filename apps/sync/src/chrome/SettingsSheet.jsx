@@ -124,20 +124,42 @@ export default function SettingsSheet({ onClose }) {
           <PentagonPanel />
 
           {/* ── the model ───────────────────────────────────────────── */}
+          {/* One row per vendor rather than one five-wide strip. Five segments
+              in a phone-width sheet reduces every label to an ellipsis, and it
+              hides the thing the operator actually wants to see at a glance:
+              which company is about to be billed. Only one row shows a
+              selection at a time — that IS the vendor switch. */}
           <section>
             <SectionHeader title="Model" trailing={MODELS.find((m) => m.key === s.settings.model)?.blurb} />
-            <Segmented
-              options={MODELS.map((m) => ({ key: m.key, label: m.label }))}
-              value={s.settings.model}
-              onChange={(model) => setSettings({ model })}
-            />
+            {[
+              { vendor: "claude", label: "Claude" },
+              { vendor: "openai", label: "OpenAI" },
+            ].map(({ vendor, label }) => (
+              <div key={vendor} style={{ marginBottom: 8 }}>
+                <div className="t-foot" style={{ marginBottom: 4 }}>{label}</div>
+                <Segmented
+                  options={MODELS.filter((m) => m.vendor === vendor).map((m) => ({ key: m.key, label: m.label }))}
+                  value={s.settings.model}
+                  onChange={(model) => setSettings({ model })}
+                />
+              </div>
+            ))}
+            {/* Named, not buried in a doc. Switching to GPT silently drops the
+                web_search tool at the proxy; a model that stops searching
+                without saying so reads as a model that got worse. */}
+            {MODELS.find((m) => m.key === s.settings.model)?.vendor === "openai" && (
+              <div className="t-foot" style={{ marginBottom: 8 }}>
+                On OpenAI models the built-in web search is unavailable — answers come from context only.
+                Your own tools work the same on both.
+              </div>
+            )}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 10 }}>
               <StatTile value={s.usage.calls.toLocaleString()} label="model calls" />
               <StatTile value={`${Math.round((s.usage.in + s.usage.out) / 1000)}k`} label="tokens" />
               <StatTile value={`$${s.usage.cost.toFixed(2)}`} label="est. spend" />
             </div>
             <div className="t-foot" style={{ marginTop: 8 }}>
-              Spend is an estimate from published per-token rates — treat Anthropic's console as the real number.
+              Spend is an estimate from published per-token rates — treat the vendor's own console as the real number.
             </div>
           </section>
 

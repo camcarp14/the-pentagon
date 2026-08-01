@@ -16,20 +16,47 @@
 // a place any script on the page could read. Now a signed-in user with no key at
 // all is the ordinary case, not an error state.
 
+// Two vendors, one list. The picker in Settings renders whatever is here, and
+// the proxy accepts whatever it recognises — so adding a model is one line in
+// this array plus one line in netlify/functions/lib/openai.mjs (which is the
+// authority, since a browser list can be edited from devtools and the server's
+// can't).
+//
+// GPT models reach the same /.netlify/functions/claude-stream endpoint and come
+// back in the same Anthropic event shape; nothing downstream of `stream()`
+// knows or cares which vendor answered. `vendor` here exists only so the UI can
+// group and label them honestly.
+//
+// ONE CAPABILITY GAP, and it is worth knowing before you switch mid-task: the
+// web_search server tool is Anthropic-only. On a GPT model it is dropped by the
+// proxy rather than emulated, so the model answers from what it was given. Your
+// own client-side tools work identically on both.
 export const MODELS = [
-  { key: "haiku", id: "claude-haiku-4-5", label: "Haiku", blurb: "Fastest. Best for a running conversation." },
-  { key: "sonnet", id: "claude-sonnet-5", label: "Sonnet", blurb: "The daily driver — fast, and it plans well." },
-  { key: "opus", id: "claude-opus-5", label: "Opus", blurb: "Deepest reasoning. Reach for it on hard calls." },
+  { key: "haiku", id: "claude-haiku-4-5", vendor: "claude", label: "Haiku", blurb: "Fastest. Best for a running conversation." },
+  { key: "sonnet", id: "claude-sonnet-5", vendor: "claude", label: "Sonnet", blurb: "The daily driver — fast, and it plans well." },
+  { key: "opus", id: "claude-opus-5", vendor: "claude", label: "Opus", blurb: "Deepest reasoning. Reach for it on hard calls." },
+  { key: "gpt", id: "gpt-5", vendor: "openai", label: "GPT-5", blurb: "OpenAI's flagship — a second opinion on hard calls." },
+  { key: "gpt-mini", id: "gpt-5-mini", vendor: "openai", label: "GPT-5 mini", blurb: "OpenAI, cheap and quick. No web search." },
 ];
 
 export const modelId = (key) => (MODELS.find((m) => m.key === key) || MODELS[1]).id;
 
+/** Which vendor a picker key lands on. Used for the Settings label, and for the
+ *  one honest caveat the UI has to show (no web search off Anthropic). */
+export const modelVendor = (key) => (MODELS.find((m) => m.key === key) || MODELS[1]).vendor;
+
 // $ per million tokens. These drive the spend *estimate* on Settings only —
 // nothing in the app depends on them being exact. One place to correct.
+//
+// Keep in step with packages/ai/pricing.js, which is the cross-tool table the
+// System hub sums and the hourly cost cap is enforced against. This copy exists
+// because SYNC keys spend by picker key, not model id.
 export const RATES = {
   haiku: { in: 1, out: 5 },
   sonnet: { in: 3, out: 15 },
   opus: { in: 5, out: 25 },
+  gpt: { in: 1.25, out: 10 },
+  "gpt-mini": { in: 0.25, out: 2 },
 };
 
 export function estimateCost(modelKey, inTok, outTok) {

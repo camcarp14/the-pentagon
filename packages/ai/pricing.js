@@ -33,6 +33,16 @@ export const MODEL_PRICING = Object.freeze({
   "claude-sonnet-4-6": { in: 3, out: 15, label: "Sonnet 4.6" },
   "claude-opus-4-8": { in: 15, out: 75, label: "Opus 4.8" },
   "claude-opus-5": { in: 15, out: 75, label: "Opus 5" },
+
+  // OpenAI. Same table on purpose: the proxy speaks both vendors now
+  // (netlify/functions/lib/openai.mjs), so a spend total that only knew Claude
+  // ids would price every GPT call at WORST_CASE — Opus rates for a mini model,
+  // which trips the hourly cap on runs that cost almost nothing. Prices are
+  // estimates like the rest; correct them here and every surface follows.
+  "gpt-5": { in: 1.25, out: 10, label: "GPT-5" },
+  "gpt-5-mini": { in: 0.25, out: 2, label: "GPT-5 mini" },
+  "gpt-4.1": { in: 2, out: 8, label: "GPT-4.1" },
+  "gpt-4.1-mini": { in: 0.4, out: 1.6, label: "GPT-4.1 mini" },
 });
 
 /** The priciest known rate — the deliberate fallback. Derived, never hardcoded,
