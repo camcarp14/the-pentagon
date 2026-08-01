@@ -20,7 +20,29 @@
 // Modelled on watch-snapshot.mjs, including the rule that matters most here:
 // it must NEVER throw. A scheduled function that 500s writes no dominance row,
 // and a hole in that series is permanent.
+//
+// PAUSABLE — AND THE PAUSE STOPS JOB 2, NOT JOB 1. Macro's power switch stops
+// the screen, the directive, the transitions and every Telegram digest. It does
+// NOT stop the dominance sample, and that is the deliberate half of this piece:
+//
+//   Everything a pause stops here is resumed by un-pausing. A day this pass did
+//   not sample is not. Point 1 above says it in the file's own words — nothing
+//   else in the system can backfill a day this pass misses — so a pause that
+//   skipped the sample would not be a pause at all, it would be a delete with a
+//   toggle on it, and an operator pausing Macro for a fortnight would come back
+//   to a fortnight-wide hole in the one series every alt-season read is built
+//   on, with no way to fill it and no warning that it happened.
+//
+// The cost of the exception is exactly one CoinGecko /global call every two
+// hours. The expensive half — altUniverse's 250-coin fetch, which is what this
+// pass actually spends its quota on — is skipped along with everything else. So
+// a paused Macro is genuinely quiet AND the series survives it.
+//
+// toolPower.mjs carries this as `keeps` so the switch can say it out loud. A
+// pause that silently keeps doing something is the same class of lie as one that
+// silently stops nothing.
 import { json, store, sendTelegram, telegramConfigured } from '../shared/util.mjs'
+import { enginePause } from '../shared/toolPower.mjs'
 import { altGlobal, altUniverse, mergeDominanceSample, isDominanceRow, altWatchGate } from '../shared/alts.mjs'
 import { seasonRead } from '../../apps/macro/src/lib/alts/season.js'
 import { screenUniverse } from '../../apps/macro/src/lib/alts/screen.js'
@@ -69,6 +91,8 @@ const MAX_ALERT_LINES = 12
 //           band, so it is not just a restatement of the band change.
 export const ACTIONABLE = new Set(['AVOID', 'STALK'])
 
+const SUBSYSTEM = 'macro.alts'
+
 export default async (req) => {
   try {
     // WHO MAY SPEND THE QUOTA. This used to be watch-snapshot's posture — the
@@ -99,6 +123,12 @@ export default async (req) => {
     if (!gate.allowed) return json({ ok: true, skipped: gate.reason })
     const authed = gate.authed
 
+    // The quota gate above answers "may this pass spend?"; this one answers
+    // "does the operator want this engine running?". They are different
+    // questions with different answers — a paused Macro still spends the one
+    // /global call, see the header — so they are two checks and not one.
+    const power = await enginePause(SUBSYSTEM, { now })
+
     // ONE global call, feeding both jobs. The dominance row and the season read
     // want the same numbers, and this function runs 12 times a day against the
     // same quota the dashboard is polling.
@@ -113,9 +143,22 @@ export default async (req) => {
     // The history the season read wants is the one this pass just wrote, so it
     // is handed straight over rather than read back out of Blobs.
     const dom = await recordDominance(s, global, now, gate.scheduled)
-    const watch = await scanWatchlist(s, global, dom.rows, now)
+    // The paused branch does not call scanWatchlist at all — not a version of it
+    // with the sends disabled. Screening is where the 250-coin fetch and the
+    // whole per-coin directive ladder live, and "paused but still burning the
+    // quota" is the state this switch was built to make impossible.
+    const watch = power.paused
+      ? { summary: { watched: 0, transitions: 0, delivered: false, reason: `macro is paused (${power.reason}) — the dominance sample above is all this pass does` }, transitions: [] }
+      : await scanWatchlist(s, global, dom.rows, now)
 
-    const summary = { ok: true, dominance: dom.summary, watchlist: watch.summary }
+    const summary = { ok: true, paused: power.paused, dominance: dom.summary, watchlist: watch.summary }
+    // Fail-open is only defensible while it is loud. See toolPower.mjs's
+    // enginePause for why an unreadable pause runs the pass rather than skipping
+    // it, and why saying so is not optional.
+    if (power.unknown) {
+      summary.pauseUnknown = power.why
+      console.warn(`[${SUBSYSTEM}] pause state unreadable, screening anyway: ${power.why}`)
+    }
     return json(authed ? { ...summary, globalError, transitions: watch.transitions } : summary)
   } catch (e) {
     // The outer net. Anything that gets here is a bug, not a market condition,

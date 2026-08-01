@@ -15,6 +15,13 @@ export default defineConfig({
     alias: {
       "@cc/design/index.css": r("../../packages/design/index.css"),
       "@cc/ui/components.css": r("../../packages/ui/components.css"),
+      // Before the bare "@cc/design" rule, and load-bearing for the same reason
+      // the mind-canvas pair below is: these are PREFIX rewrites, so
+      // "@cc/design" alone would turn "@cc/design/palettes.js" into
+      // ".../index.js/palettes.js" and the theme picker would fail to resolve at
+      // build time. palettes.js is a real exports subpath of the package; it is
+      // only the alias that needs telling.
+      "@cc/design/palettes.js": r("../../packages/design/palettes.js"),
       "@cc/design": r("../../packages/design/index.js"),
       // More specific first: Vite matches aliases in order, and a bare
       // "@cc/mind" prefix rule would otherwise swallow "@cc/mind-canvas".

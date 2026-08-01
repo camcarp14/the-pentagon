@@ -14,11 +14,16 @@
 // beneath (two clear layers), and is lazy-loaded so opening one never
 // downloads the others.
 // ═══════════════════════════════════════════════════════════════════════════
-import { Component, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Component, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { appMeta, cssVars } from "@cc/design";
 import { SkeletonBoard, EmptyIcon, M, useIsMobile } from "@cc/ui";
 import { auth, isConfigured } from "@cc/supabase";
 import { loadTabPrefs, saveTabPrefs, visibleTabs, resolveActive, TAB_PREFS_KEY } from "./tabPrefs.js";
+import {
+  loadThemePrefs, saveThemePrefs, resolveMode, resolvePalette, isDefaultTheme,
+  themeVars, prefersDark, watchSystemTheme, THEME_PREFS_KEY,
+} from "./themePrefs.js";
+import { useToolPower, pausedTools, powerFor, stoppedSentence, keepsSentence } from "./toolPower.js";
 import { parseRoute, formatRoute, sameRoute } from "./route.js";
 
 // Lazily-mounted tools. Wired in per Phase-C increment; a tool without an entry
@@ -44,12 +49,28 @@ const System = lazy(() => import("./System.jsx"));
 // (because an unresolved var() invalidates the whole declaration) silently drops
 // the property. --surface-2 and --accent-line are load-bearing for the toggle's
 // active pill and the error-boundary button.
+// --subtle, --good, --warn and --bad joined the list when System stopped
+// hardcoding its own six-hex palette and started reading these (System.jsx's
+// `P`). Their values here are the exact hexes System used to carry, so the
+// default rendering of that screen is unchanged to the pixel; the point of the
+// move is that the same names are re-pointed at light-capable tokens the moment
+// a theme is chosen (themePrefs.js's themeVars).
 const PLATFORM_VARS = {
-  "--bg": "#0A0E15", "--surface": "#131A24", "--surface-2": "#1B2438", "--ink": "#E9EDF5", "--muted": "#93A1B5",
+  "--bg": "#0A0E15", "--surface": "#131A24", "--surface-2": "#1B2438", "--subtle": "#0F151E", "--ink": "#E9EDF5", "--muted": "#93A1B5",
   "--faint": "#66748A", "--border": "rgba(255,255,255,0.08)", "--accent": "#AAB6C6",
   "--accent-soft": "rgba(170,182,198,0.14)", "--accent-line": "rgba(170,182,198,0.32)",
+  "--good": "#4FD694", "--warn": "#F5B84D", "--bad": "#FF6F6F",
   "--shadow-tab": "0 1px 2px rgba(0,0,0,0.5)",
   "--font-display": "var(--font-body)", "--font-body": "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif", "--font-mono": "ui-monospace, 'SF Mono', Menlo, monospace",
+};
+
+// Off-screen but not hidden. `display: none` and `visibility: hidden` are both
+// removed from the accessibility tree, which is the opposite of what a
+// screen-reader-only marker needs; this is the clip-path form, which stays in
+// the tree and contributes nothing to layout.
+const SR_ONLY = {
+  position: "absolute", width: 1, height: 1, padding: 0, margin: -1,
+  overflow: "hidden", clipPath: "inset(50%)", whiteSpace: "nowrap", border: 0,
 };
 
 // ─── hooks ────────────────────────────────────────────────────────────────────
@@ -148,7 +169,7 @@ function LoginScreen() {
 }
 
 // ─── the app toggle ───────────────────────────────────────────────────────────
-function AppToggle({ active, onPick, compact, apps }) {
+function AppToggle({ active, onPick, compact, apps, paused }) {
   const refs = useRef({});
   // The sliding indicator pill and everything it needed — a layout-effect
   // measuring the active button, a resize listener because segments were
@@ -230,13 +251,23 @@ function AppToggle({ active, onPick, compact, apps }) {
       {apps.map((a) => {
         const m = appMeta(a);
         const on = a === active;
+        // PAUSED IS NOT HIDDEN, AND THE BAR HAS TO SHOW THE DIFFERENCE.
+        // A hidden tool is not here at all; a paused tool is here, still opens,
+        // still shows everything it has ever collected — its scheduled work is
+        // what stopped. So it is dimmed and its dot goes hollow rather than
+        // being dropped or disabled. Hollow, not merely a different colour:
+        // §4.7 and the toggle's own aria-current comment both refuse
+        // colour-only state, and eight accents means a "muted" dot is somebody
+        // else's normal one.
+        const off = paused?.has(a);
         return (
           <button key={a} ref={(el) => { refs.current[a] = el; }} onClick={() => onPick(a)} type="button"
             // No aria-label: it would override the visible label, so voice
             // control ("tap ZTS") would fail against an accessible name of
             // "Zero To Secure" (WCAG 2.5.3). The visible text IS the name; the
             // brand stays as the hover title only.
-            title={m.brand} aria-current={on ? "true" : undefined}
+            title={off ? `${m.brand} — paused` : m.brand} aria-current={on ? "true" : undefined}
+            data-paused={off ? "true" : undefined}
             style={{
               position: "relative", zIndex: 1,
               display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
@@ -260,9 +291,21 @@ function AppToggle({ active, onPick, compact, apps }) {
               // bought the second row its comfort.
               fontSize: compact ? 11.5 : 12, fontWeight: on ? 600 : 500,
               letterSpacing: 0, whiteSpace: "nowrap",
-              transition: `color ${M.durBase} ${M.easeStd}, background ${M.durBase} ${M.easeStd}`,
+              opacity: off ? 0.6 : 1,
+              transition: `color ${M.durBase} ${M.easeStd}, background ${M.durBase} ${M.easeStd}, opacity ${M.durBase} ${M.easeStd}`,
             }}>
-            <span aria-hidden style={{ width: 7, height: 7, borderRadius: "50%", background: m.accent, boxShadow: on ? `0 0 8px ${m.accent}` : "none", flexShrink: 0 }} />
+            {/* FIRST child, deliberately. scripts/toolrow-check.mjs measures the
+                button's LAST element for truncation, and the label has to stay
+                that element or the harness starts measuring this instead. It
+                also keeps the visible text inside the accessible name, which is
+                what voice control matches on (WCAG 2.5.3). */}
+            {off && <span style={SR_ONLY}>Paused: </span>}
+            <span aria-hidden style={{
+              width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+              background: off ? "transparent" : m.accent,
+              border: off ? `1.5px solid ${m.accent}` : "none",
+              boxShadow: on && !off ? `0 0 8px ${m.accent}` : "none",
+            }} />
             {/* The label gets its own block so it can ellipsise if a tool is
                 ever named something very long — text-overflow does nothing on a
                 flex container. At the current names nothing truncates. */}
@@ -270,6 +313,69 @@ function AppToggle({ active, onPick, compact, apps }) {
           </button>
         );
       })}
+    </div>
+  );
+}
+
+// ─── "this tool's scheduled work is stopped" ─────────────────────────────────
+//
+// THE TOOL ITSELF IS NOT PAUSED. Everything below this strip renders exactly as
+// it always did: the data is there, the buttons work, a manual run still runs.
+// What stopped is the part that happens while nobody is looking. That
+// distinction is the whole reason this is a banner over a live screen and not a
+// lock over a dead one — and it is why the strip names the engines rather than
+// saying "paused", which would be read as "this tool is off".
+//
+// It sits inside the scroll, not fixed: it is a statement of fact you read once,
+// not an alert that has to follow you down the page.
+function PausedBanner({ app, entry, onResume, busy }) {
+  const stopped = stoppedSentence(entry);
+  const keeps = keepsSentence(entry);
+  // A failed resume rolls the state back, so this strip simply stays — which on
+  // its own reads as "the button did nothing". The error has to be said out
+  // loud, next to the control that produced it, or the operator's next move is
+  // to press it again.
+  const [err, setErr] = useState("");
+  const resume = () => { setErr(""); Promise.resolve(onResume()).catch((e) => setErr(String(e?.message || e))); };
+  return (
+    // NO data-kit AND NO CLASS NAMES. This strip renders inside whichever tool
+    // is open, and DESIGN.md §5 is about exactly this: eight apps already own
+    // `.btn`, `.card` and `.field` and mean different things by them. Measured
+    // rather than reasoned — `className="btn sm"` here came out as an unreadable
+    // dark slab over light-mode Macro, because apps/macro/src/styles.css ships
+    // an UNSCOPED `.btn` with its own dark background and it wins wherever Macro
+    // is mounted. The bar above can wear data-kit because it sits outside every
+    // tool; this cannot.
+    <div role="status" style={{
+      display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+      margin: "12px 16px 0", padding: "10px 14px", borderRadius: 12,
+      // Border, no shadow — §4.2. --warn rather than the accent: the accent
+      // says which tool you are in (§4.4) and this says something about it.
+      border: "1px solid color-mix(in srgb, var(--warn) 42%, transparent)",
+      background: "color-mix(in srgb, var(--warn) 10%, transparent)",
+    }}>
+      <span aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", flex: "none", border: "1.5px solid var(--warn)" }} />
+      <span style={{ minWidth: 0, flex: "1 1 260px" }}>
+        <span style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "var(--ink)" }}>
+          {appMeta(app).label} is paused
+        </span>
+        <span style={{ display: "block", fontSize: 11.5, color: "var(--muted)", marginTop: 2, lineHeight: 1.5 }}>
+          {stopped ? `${stopped} Everything on this screen still works — nothing runs on its own until you resume.` : "Its scheduled work is stopped. Everything on this screen still works."}
+          {/* The one thing a pause does not stop, said here too: this banner is
+              the surface an operator reads WHILE paused, so it is where a wrong
+              belief about what is still sampling would do its damage. */}
+          {keeps && ` ${keeps}`}
+        </span>
+        {err && <span role="alert" style={{ display: "block", fontSize: 11.5, color: "var(--bad)", marginTop: 4, lineHeight: 1.5 }}>Couldn't resume — {err}. It is still paused.</span>}
+      </span>
+      <button type="button" onClick={resume} disabled={busy} style={{
+        flex: "none", minHeight: 34, padding: "0 16px", borderRadius: 10, cursor: busy ? "default" : "pointer",
+        border: "1px solid color-mix(in srgb, var(--warn) 55%, transparent)", background: "transparent",
+        color: "var(--ink)", fontSize: 12.5, fontWeight: 700, fontFamily: "var(--font-body)",
+        opacity: busy ? 0.55 : 1,
+      }}>
+        {busy ? "Resuming…" : "Resume"}
+      </button>
     </div>
   );
 }
@@ -349,6 +455,23 @@ export default function Shell() {
   const [systemOpen, setSystemOpen] = useState(
     () => parseRoute(typeof location !== "undefined" ? location.hash : "", visibleTabs(loadTabPrefs())).system);
 
+  // ── theme ───────────────────────────────────────────────────────────────────
+  // Two axes and the device's own answer to the second one. `sysDark` is read
+  // once at mount and then SUBSCRIBED to — "System" that only samples
+  // prefers-color-scheme at boot is not System, it is "whatever your laptop was
+  // doing when this tab last loaded", and an iOS standalone window can go weeks
+  // without a reload while the OS flips at sunset every day.
+  const [themePrefs, setThemePrefs] = useState(loadThemePrefs);
+  const [sysDark, setSysDark] = useState(prefersDark);
+  useEffect(() => watchSystemTheme(setSysDark), []);
+
+  // ── pause ───────────────────────────────────────────────────────────────────
+  // ONE reader for the whole shell, here rather than in each consumer: the tool
+  // row and the System switch that writes it must not be able to disagree about
+  // what is running.
+  const toolPower = useToolPower();
+  const paused = useMemo(() => pausedTools(toolPower.power), [toolPower.power]);
+
   // One writer for the URL, driven by state rather than by every call site, so
   // a destination reached by keyboard shortcut, by toggle, or by the tool being
   // hidden underneath you all leave the same address behind.
@@ -422,11 +545,18 @@ export default function Shell() {
     setActive((cur) => resolveActive(saved, cur));
   }, []);
 
+  const applyThemePrefs = useCallback((next) => { setThemePrefs(saveThemePrefs(next)); }, []);
+
   // Another tab of the same site editing preferences should not leave this one
   // rendering a toggle that no longer matches what was saved.
   useEffect(() => {
     const onStorage = (e) => {
-      if (e.key && e.key !== TAB_PREFS_KEY) return;
+      // Two keys now. The theme one matters more than the tab one here: the
+      // operator sets it in one window and the second window is the obvious
+      // place to notice it did not take.
+      if (e.key && e.key !== TAB_PREFS_KEY && e.key !== THEME_PREFS_KEY) return;
+      if (!e.key || e.key === THEME_PREFS_KEY) setThemePrefs(loadThemePrefs());
+      if (e.key === THEME_PREFS_KEY) return;
       const next = loadTabPrefs();
       setTabPrefs(next);
       setActive((cur) => resolveActive(next, cur));
@@ -496,14 +626,48 @@ export default function Shell() {
     return () => window.removeEventListener("keydown", onKey);
   }, [pick, tabs]);
 
+  // ── the resolved theme ──────────────────────────────────────────────────────
+  //
+  // "Match the tool" keeps the attribute the shell has always stamped — the open
+  // tool, or "sync" while System is open. A chosen palette replaces it, on both.
+  const palette = resolvePalette(themePrefs, systemOpen ? "sync" : active);
+  const mode = resolveMode(themePrefs, sysDark);
+  // `themed` decides WHICH SET OF INLINE VARIABLES gets stamped, and that is the
+  // whole feature. themes.css has carried a light half for every palette since
+  // the token layer landed, and none of it could ever reach the page, because
+  // cssVars() writes MIDNIGHT's dark hexes inline and an inline custom property
+  // beats a stylesheet one (main.jsx says so). Flipping data-theme alone would
+  // have shipped a Light button that changed an attribute and nothing else.
+  //
+  // False here means the resolved answer is exactly what production already
+  // renders — the tool's accent over midnight — so that path stays literally the
+  // old expression and cannot drift.
+  const themed = !isDefaultTheme(themePrefs, sysDark);
+  const vars = themed ? themeVars(palette) : systemOpen ? PLATFORM_VARS : cssVars(active);
+
+  // The shell paints from <div data-app> down; the DOCUMENT behind it is painted
+  // by index.html's `body` rule and by the browser's own color-scheme (form
+  // controls, scrollbars, overscroll rubber-banding). Both live above this
+  // component's root, so a light Pentagon with a black overscroll gutter and
+  // white-on-white scrollbars is what "the wrapper went light" gets you on its
+  // own. --shell-canvas is published only when the operator has chosen
+  // something, so the default document is byte-for-byte what it was.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("data-theme", mode);
+    root.style.colorScheme = mode;
+    if (themed) root.style.setProperty("--shell-canvas", "var(--bg)");
+    else root.style.removeProperty("--shell-canvas");
+  }, [mode, themed]);
+
   if (session === undefined) return <Boot />;
   if (!session) return <LoginScreen />;
 
-  const m = appMeta(active);
   const Tool = TOOLS[active];
+  const activePower = powerFor(toolPower.power, active);
 
   return (
-    <div data-app={systemOpen ? "system" : active} data-palette={systemOpen ? "sync" : active} data-theme={systemOpen ? "dark" : m.mode} style={{ ...(systemOpen ? PLATFORM_VARS : cssVars(active)), minHeight: "100vh", background: "var(--bg)", color: "var(--ink)", fontFamily: "var(--font-body)", transition: `background ${M.durSlow} ${M.easeStd}` }}>
+    <div data-app={systemOpen ? "system" : active} data-palette={palette} data-theme={mode} style={{ ...vars, minHeight: "100vh", background: "var(--bg)", color: "var(--ink)", fontFamily: "var(--font-body)", transition: `background ${M.durSlow} ${M.easeStd}` }}>
       {/* Shell top bar — the ONE global chrome, themed to the active tool.
           data-kit goes HERE and not on the wrapper above. The wrapper contains
           every tool, and @cc/ui's kit styles .btn/.card/.field/.sheet — names
@@ -541,7 +705,7 @@ export default function Shell() {
               <span className="t-head" style={{ color: "var(--ink)", whiteSpace: "nowrap" }}>The Pentagon</span>
             </span>
           )}
-          <AppToggle active={active} onPick={pick} compact={isMobile} apps={tabs} />
+          <AppToggle active={active} onPick={pick} compact={isMobile} apps={tabs} paused={paused} />
         </div>
         <div style={{
           display: "flex", alignItems: "center", gap: 8, flexShrink: 0,
@@ -581,11 +745,24 @@ export default function Shell() {
       </div>
       </div>
 
+      {/* OUTSIDE the boundary and outside Suspense, on purpose: the tool below
+          may still be downloading, or may have thrown, and "your engines are
+          stopped" is exactly the fact you still need in both of those states. */}
+      {!systemOpen && activePower.paused && (
+        <PausedBanner
+          app={active}
+          entry={activePower}
+          busy={toolPower.busy === active}
+          onResume={() => toolPower.setPaused(active, false)}
+        />
+      )}
+
       {/* System hub (cross-tool) or the active tool, both lazy-loaded */}
       <ToolBoundary key={systemOpen ? "system" : active}>
         <Suspense fallback={<div style={{ padding: 24 }}><SkeletonBoard /></div>}>
           {systemOpen
-            ? <System onExit={() => setSystemOpen(false)} onOpenTool={pick} tabPrefs={tabPrefs} onTabPrefs={applyTabPrefs} />
+            ? <System onExit={() => setSystemOpen(false)} onOpenTool={pick} tabPrefs={tabPrefs} onTabPrefs={applyTabPrefs}
+                themePrefs={themePrefs} onThemePrefs={applyThemePrefs} systemPrefersDark={sysDark} toolPower={toolPower} />
             : Tool ? <Tool key={active} /> : <ComingSoon app={active} />}
         </Suspense>
       </ToolBoundary>

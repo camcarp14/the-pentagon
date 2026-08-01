@@ -11,8 +11,10 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
+const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+const read = (f) => strip(readFileSync(join(here, "..", f), "utf8"));
 const app = readFileSync(join(here, "..", "App.jsx"), "utf8");
-const code = app.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+const code = strip(app);
 
 describe("the shell opts into the kit without dragging the tools in", () => {
   it("puts data-kit on the bar, never on the wrapper", () => {
@@ -158,6 +160,139 @@ describe("the chrome obeys the language", () => {
     // active segment and the System button's live dot, and nowhere else.
     const bar = code.slice(code.indexOf("<div data-kit"), code.indexOf("ToolBoundary"));
     expect((bar.match(/var\(--accent[^)]*\)/g) || []).length).toBeLessThanOrEqual(3);
+  });
+});
+
+// ─── the theme setting, and the pause switch ─────────────────────────────────
+//
+// EVERY VISUAL CLAIM ABOUT THESE TWO IS IN apps/shell/scripts/chrome-check.mjs,
+// not here, and that split is the point of this whole file's history. "Light
+// mode goes light" is invisible to a string match: the attribute lands, the
+// stylesheet rule matches, and eight inline hexes overrule it — source-identical
+// to the working version. That harness fails 17 checks against the source these
+// tests were written for.
+//
+// What is left here is what a file CAN state: the structural facts whose
+// violation is a design error rather than a rendering one.
+describe("pause is server state, and stays that way", () => {
+  it("never reaches for localStorage", () => {
+    // tabPrefs.js's header promises that hiding a tool changes nothing about
+    // what runs, and that "Scheduled functions do not read this file and must
+    // not". A pause kept beside it would break that promise in the most
+    // dangerous direction: a cron on Netlify has no localStorage, so the switch
+    // would flip, the tool would dim, and every engine would keep running.
+    const power = read("toolPower.js");
+    expect(power, "pause lives in ops_control, reached over /api/tool-power").not.toContain("localStorage");
+    expect(power).toContain("/api/tool-power");
+    // And the reverse: the tab preference has not quietly grown a network call.
+    const tabs = read("tabPrefs.js");
+    expect(tabs).not.toContain("fetch(");
+    expect(tabs).toContain("localStorage");
+  });
+
+  it("reads the pause from `paused`, never from `enabled`", () => {
+    // netlify/shared/toolPower.mjs is explicit: ops_control rows ship
+    // `enabled: false` because autonomy is opt-in, so four engines that run
+    // perfectly well read "disabled" and an armed engine reads "enabled" while
+    // paused. This assertion is cheap; the bug it guards renders ZTS as stopped
+    // while its content engine drafts an article every four hours.
+    const power = read("toolPower.js");
+    const norm = power.slice(power.indexOf("export function normalizeToolPower"), power.indexOf("export const EMPTY_POWER"));
+    expect(norm.length, "scan sanity — normalizeToolPower must actually be in the slice").toBeGreaterThan(200);
+    expect(norm, "`enabled` is the autonomy opt-in, not the pause").not.toMatch(/\be\.enabled\b/);
+    expect(norm).toMatch(/\be\.paused\b/);
+  });
+
+  it("says what a pause does NOT stop, wherever it says what it stops", () => {
+    // Macro's alt sentinel keeps sampling BTC dominance while paused, because
+    // that series cannot be backfilled. Naming only the stops is an
+    // over-promise, and the operator finds out by seeing a row appear on a day
+    // they believed nothing ran.
+    let checked = 0;
+    for (const f of ["App.jsx", "System.jsx"]) {
+      const src = read(f);
+      if (!src.includes("stopsSentence") && !src.includes("stoppedSentence")) continue;
+      checked++;
+      expect(src, `${f} promises what a pause stops without saying what it keeps`).toContain("keepsSentence");
+    }
+    // Scan sanity: both surfaces name what a pause stops, so both must be
+    // reached. Without this the loop passes by matching nothing.
+    expect(checked, "neither surface was found to be making the promise").toBe(2);
+  });
+});
+
+describe("the shell's own screens can go light", () => {
+  it("keeps no hardcoded neutral in a palette table", () => {
+    // This is the rule that makes a theme setting real on the surfaces the shell
+    // owns. System and Ops each carried six or seven midnight hexes; light mode
+    // drew Ops's heading, its state line and the word inside its STOP button in
+    // #E9EDF5 on #EFF1F5. Measured, not guessed — and the reason the harness now
+    // carries a contrast floor for that screen specifically.
+    for (const f of ["System.jsx", "Ops.jsx"]) {
+      const src = read(f);
+      const table = src.slice(src.indexOf("const P = {"), src.indexOf("};", src.indexOf("const P = {")));
+      expect(table.length, `scan sanity — no palette table found in ${f}`).toBeGreaterThan(80);
+      const neutrals = ["bg", "surface", "surface2", "line", "ink", "muted", "faint"];
+      for (const key of neutrals) {
+        const m = new RegExp(`\\b${key}:\\s*"([^"]+)"`).exec(table);
+        expect(m, `${f}'s palette has no ${key}`).not.toBeNull();
+        expect(m[1], `${f}: ${key} is a literal colour and cannot follow the mode`).toMatch(/^var\(--/);
+      }
+    }
+  });
+
+  it("gives a colour token an alpha with color-mix, never by concatenation", () => {
+    // The moment a token table holds `var(--faint)` instead of a hex,
+    // `${P.faint}44` stops being a colour — and an unparsable value drops the
+    // WHOLE declaration rather than falling back, so a disabled subsystem loses
+    // its outline in the one console whose job is saying what is switched off.
+    // packages/design/__tests__/token-alpha.test.js scans apps/*/src for this;
+    // apps/shell is where it just became possible.
+    let scanned = 0;
+    for (const f of ["System.jsx", "Ops.jsx", "App.jsx", "Minds.jsx"]) {
+      const src = read(f);
+      scanned += src.length;
+      const hits = [...src.matchAll(/\$\{[^}]*\bP\.[a-zA-Z0-9]+[^}]*\}[0-9a-fA-F]{2}\b/g)]
+        // A table entry that is still a literal hex may legitimately take a
+        // suffix; only var()-valued names are the hazard.
+        .filter((m) => !/P\.(crit|good|warn|bad)\b/.test(m[0]) || /var\(--/.test(m[0]));
+      expect(hits.map((h) => h[0]), `${f} concatenates an alpha onto a token`).toEqual([]);
+    }
+    expect(scanned, "scan sanity — the four shell surfaces should not read as empty").toBeGreaterThan(20000);
+  });
+});
+
+describe("the theme actually gets stamped", () => {
+  it("does not overrule the chosen palette with the dark table", () => {
+    // The one structural fact behind the whole feature: the inline stamp is a
+    // BRANCH now. `cssVars(active)` unconditionally is what made themes.css's
+    // light halves — generated and contrast-checked since the token layer
+    // landed — unreachable from the page for months.
+    expect(code).toContain("themeVars");
+    const wrapper = /<div\s+([^>]*\bdata-app=[^>]*)>/.exec(code);
+    expect(wrapper, "could not find the wrapper's opening tag").not.toBeNull();
+    expect(wrapper[1], "the wrapper must spread the RESOLVED variables").toMatch(/\{\s*\.\.\.vars\b/);
+    expect(wrapper[1], "data-theme must come from the resolved mode, not from the tool's fixed one").not.toContain("m.mode");
+    expect(wrapper[1]).toMatch(/data-theme=\{mode\}/);
+    expect(wrapper[1]).toMatch(/data-palette=\{palette\}/);
+  });
+
+  it("subscribes to prefers-color-scheme rather than sampling it once", () => {
+    // "System" that only reads the device at boot is "whatever your laptop was
+    // doing when this tab last loaded". An iOS standalone window can go weeks
+    // without a reload while the OS flips at sunset every day.
+    expect(code).toContain("watchSystemTheme");
+    const themePrefs = read("themePrefs.js");
+    expect(themePrefs).toMatch(/addEventListener\(["']change["']/);
+    expect(themePrefs, "Safari < 14 has only addListener, and iOS standalone is a protected target").toContain("addListener");
+  });
+
+  it("renders swatches from the generated table, never a hand-copied hex", () => {
+    const sys = read("System.jsx");
+    const theme = sys.slice(sys.indexOf("function Theme("), sys.indexOf("const TABS ="));
+    expect(theme.length, "scan sanity — the Theme panel was not found").toBeGreaterThan(400);
+    expect(theme).toContain("PALETTES");
+    expect(theme.match(/#[0-9a-fA-F]{3,8}\b/g), "a hex in the picker is a swatch that lies the next time themes are regenerated").toBeNull();
   });
 });
 

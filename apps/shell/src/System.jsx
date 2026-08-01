@@ -11,8 +11,11 @@
 // ═══════════════════════════════════════════════════════════════════════════
 import { useEffect, useMemo, useState } from "react";
 import { appMeta, APPS } from "@cc/design";
+import { PALETTES } from "@cc/design/palettes.js";
 import { visibleTabs, isHidden, canHide, toggleTab, moveTab, resetTabPrefs, DEFAULT_HIDDEN } from "./tabPrefs.js";
-import { AnimatedNumber, EmptyState, useIsMobile } from "@cc/ui";
+import { MATCH_TOOL, normalizeThemePrefs, resolveMode, resetThemePrefs } from "./themePrefs.js";
+import { powerFor, stopsSentence, stoppedSentence, keepsSentence } from "./toolPower.js";
+import { AnimatedNumber, EmptyState, useIsMobile, useToast } from "@cc/ui";
 import { auth, supabase } from "@cc/supabase";
 import Ops from "./Ops.jsx";
 // Minds was rendered at the bottom of this file WITHOUT being imported, so the
@@ -29,9 +32,23 @@ const USAGE_APPS = ["zts", "clarify", "looper"]; // Runway logs AI server-side; 
 const REGION_LABELS = { identity: "Identity", principle: "Principles", knowledge: "Knowledge", signal: "Signals", skill: "Skills", goal: "Goals" };
 
 // ─── neutral "platform" palette (its own identity, not any one tool's) ───────
+//
+// TOKENS, NOT HEXES — and the change is not tidiness. This screen is where the
+// theme is chosen, so it was the one surface that could ship a Light button
+// which visibly failed on the very page it was pressed from: seven hardcoded
+// midnight hexes cannot go light, whatever the setting says. Each name below
+// resolves to exactly the value it used to hold on the default dark path
+// (App.jsx's PLATFORM_VARS carries those seven verbatim, including --subtle for
+// what was `surface2`), so nothing moves until the operator asks it to; when
+// they do, themePrefs.js re-points the same names at the generated light half.
 const P = {
-  bg: "#0A0E15", surface: "#131A24", surface2: "#0F151E", line: "rgba(255,255,255,0.08)",
-  ink: "#E9EDF5", muted: "#93A1B5", faint: "#66748A",
+  bg: "var(--bg)", surface: "var(--surface)", surface2: "var(--subtle)", line: "var(--border)",
+  ink: "var(--ink)", muted: "var(--muted)", faint: "var(--faint)",
+  // The two semantics this screen speaks: an engine that is running, and one
+  // that is stopped. Kept apart from the accent on purpose — §4.4 gives the
+  // accent one job, saying which tool you are in, and the switches below sit
+  // next to eight different accents.
+  good: "var(--good)", warn: "var(--warn)", bad: "var(--bad)",
   // System stack: the Syne/DM Mono webfonts are retired (DESIGN.md §3) and
   // the <link> that loaded them is gone, so naming them here resolved to
   // nothing and mismeasured every heading and number on this screen.
@@ -296,7 +313,7 @@ function Usage({ isMobile }) {
                   <span style={{ color: P.faint, fontFamily: P.mono, fontSize: 10.5, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.model}</span>
                   <span style={{ color: P.muted, width: 90, textAlign: "right" }}>{fmtN((c.inputTokens || 0) + (c.outputTokens || 0))} tok</span>
                   <span style={{ color: P.muted, width: 60, textAlign: "right", fontFamily: P.mono }}>{fmt$(c.costEstimate)}</span>
-                  <span style={{ color: c.ok === false ? "#FF6F6F" : P.faint, width: 62, textAlign: "right", fontSize: 10.5 }}>{c.ok === false ? "failed" : `${c.latencyMs || 0}ms`}</span>
+                  <span style={{ color: c.ok === false ? P.bad : P.faint, width: 62, textAlign: "right", fontSize: 10.5 }}>{c.ok === false ? "failed" : `${c.latencyMs || 0}ms`}</span>
                   <span style={{ color: P.faint, width: 68, textAlign: "right", fontSize: 10.5 }}>{ago(c.ts)}</span>
                 </div>
               ))}
@@ -331,8 +348,8 @@ function statsFor(genome) {
 const ENGINE_DEFAULTS = { running: false, observeOnly: true, allowSonnet: false, pauseWhenIdle: true, cadenceSec: 20 };
 
 const Switch = ({ on }) => (
-  <span style={{ width: 40, height: 23, borderRadius: 99, background: on ? "#4FD694" : "rgba(255,255,255,0.14)", position: "relative", flexShrink: 0, transition: "background .2s cubic-bezier(0.16,1,0.3,1)" }}>
-    <span style={{ position: "absolute", top: 2.5, left: on ? 19.5 : 2.5, width: 18, height: 18, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.4)", transition: "left .2s cubic-bezier(0.16,1,0.3,1)" }} />
+  <span style={{ width: 40, height: 23, borderRadius: 99, background: on ? P.good : "color-mix(in srgb, var(--ink) 14%, transparent)", position: "relative", flexShrink: 0, transition: "background .2s cubic-bezier(0.16,1,0.3,1)" }}>
+    <span style={{ position: "absolute", top: 2.5, left: on ? 19.5 : 2.5, width: 18, height: 18, borderRadius: "50%", background: "var(--surface)", boxShadow: "0 1px 3px rgba(0,0,0,0.4)", transition: "left .2s cubic-bezier(0.16,1,0.3,1)" }} />
   </span>
 );
 const CtrlRow = ({ on, onClick, label, sub, tone }) => (
@@ -373,12 +390,12 @@ function Agents({ isMobile }) {
             <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 4 }}>
               <Dot app={app} size={10} />
               <span style={{ fontSize: 14, fontWeight: 800, color: P.ink, fontFamily: P.display }}>{appMeta(app).brand}</span>
-              <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: ctrl.running ? "#4FD694" : P.faint }}>{ctrl.running ? "● Running" : "Paused"}</span>
+              <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: ctrl.running ? P.good : P.faint }}>{ctrl.running ? "● Running" : "Paused"}</span>
             </div>
             <CtrlRow on={!!ctrl.running} onClick={() => patch(app, "engine_ctrl", { running: !ctrl.running })}
               label={ctrl.running ? "Engine running" : "Engine paused"}
               sub={`Free heartbeat every ${ctrl.cadenceSec ?? 20}s${ctrl.hourlyCostCap != null ? ` · cap ${fmt$(ctrl.hourlyCostCap)}/hr` : ""}`}
-              tone={ctrl.running ? "#4FD694" : P.ink} />
+              tone={ctrl.running ? P.good : P.ink} />
             <CtrlRow on={!!ctrl.observeOnly} onClick={() => patch(app, "engine_ctrl", { observeOnly: !ctrl.observeOnly })}
               label="Observe-only" sub="Heuristics only — never spends tokens" />
             <CtrlRow on={!!ctrl.allowSonnet} onClick={() => patch(app, "engine_ctrl", { allowSonnet: !ctrl.allowSonnet })}
@@ -439,14 +456,128 @@ const Header = ({ title, sub, right }) => (
 // the surface that matters most here — a phone, where a long-press drag fights
 // the page scroll — and it is unusable by keyboard. Two buttons are operable by
 // touch, mouse and keyboard with no library.
-function Tabs({ prefs, onChange, isMobile }) {
+// ─── the POWER half of a tab row ─────────────────────────────────────────────
+//
+// TWO SWITCHES, INCHES APART, WITH OPPOSITE KINDS OF MEANING. That is the whole
+// design problem, and the answer is not a better pill — it is that they must not
+// look like a pair of anything.
+//
+//   • The visibility switch sits on the tool's own LINE and wears the tool's
+//     ACCENT. It is about this bar.
+//   • Power sits on its OWN line under a hairline, wears green/amber rather than
+//     any accent, is the only one of the two that carries a WORD ("Running" /
+//     "Paused"), and is the only one with a sentence under it naming, by name,
+//     the scheduled jobs it stops. It is about a server.
+//
+// The row card deliberately does NOT dim when a tool is hidden — only its top
+// line does. Dimming the whole card would make "hidden" read as "off", which is
+// the exact confusion the two controls exist to keep apart.
+//
+// The sentence comes from the ENGINES THE SERVER REPORTED (toolPower.js rule 1),
+// never from a list written here, so it cannot promise to stop something that no
+// longer runs.
+function PowerRow({ app, label, entry, loading, error, busy, onToggle }) {
+  const engines = entry?.engines || [];
+  const paused = !!entry?.paused;
+  const mixed = !!entry?.mixed;
+  const state = error ? "unknown" : loading && engines.length === 0 ? "loading" : !engines.length ? "none" : paused ? "paused" : mixed ? "mixed" : "running";
+  const keeps = keepsSentence(entry);
+  const tone = { running: P.good, paused: P.warn, mixed: P.warn, none: P.faint, unknown: P.bad, loading: P.faint }[state];
+  const word = { running: "Running", paused: "Paused", mixed: "Partly paused", none: "Nothing scheduled", unknown: "Unknown", loading: "Reading…" }[state];
+
+  const copy = state === "unknown"
+    // A control whose state could not be READ must not offer to write. Naming
+    // the direction it failed in matters: this reads as "we do not know", never
+    // as "it is off".
+    ? `Couldn't read what ${label} runs in the background — ${error}. Nothing here has been changed.`
+    : state === "none"
+      // The contract's own wording. A switch here would write to no rows and
+      // then sit there looking as though it had done something.
+      ? "Nothing runs in the background for this tool — there is nothing to pause."
+      : state === "mixed"
+        ? `${stoppedSentence(entry)} The rest are still running; the switch stops all of them.`
+        : stopsSentence(entry) || "";
+
+  return (
+    <div style={{ borderTop: `1px solid ${P.line}`, marginTop: 10, paddingTop: 10, display: "flex", alignItems: "center", gap: 12 }}>
+      <span style={{ minWidth: 0, flex: 1 }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span className="t-label">Background engines</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: tone, fontFamily: P.display }}>{word}</span>
+        </span>
+        <span style={{ display: "block", fontSize: 11.5, color: P.faint, marginTop: 3, lineHeight: 1.55 }}>{copy}</span>
+        {/* The exception, printed rather than glossed over. Macro's alt sentinel
+            goes on taking its daily BTC-dominance sample while paused because
+            that series cannot be backfilled — so "pauses the alt sentinel" on
+            its own would be an over-promise, and an operator who later found a
+            row written on a paused day would rightly stop trusting the switch. */}
+        {keeps && state !== "unknown" && state !== "none" && (
+          <span style={{ display: "block", fontSize: 11.5, color: P.muted, marginTop: 3, lineHeight: 1.55 }}>{keeps}</span>
+        )}
+      </span>
+      {engines.length > 0 && (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={!paused}
+          aria-label={`${paused ? "Resume" : "Pause"} ${label}'s background engines`}
+          disabled={!!busy}
+          title={paused ? "Start these running again" : "Stop these until you turn them back on"}
+          onClick={() => onToggle(!paused)}
+          style={{
+            // A DIFFERENT SHAPE, not just a different colour. ZTS's accent is
+            // emerald, so on that row a green pill would sit directly under a
+            // green pill and the two most different controls on the screen would
+            // be the two that look most alike — and that is the ONE row where
+            // the mistake is most expensive, because ZTS runs the most. Square
+            // corners survive every accent, every palette and both modes; a
+            // colour choice survives none of them.
+            width: 46, height: 28, flex: "none", padding: 3, borderRadius: 8,
+            border: `1px solid ${paused ? P.warn : P.good}`,
+            background: `color-mix(in srgb, ${paused ? P.warn : P.good} 20%, transparent)`,
+            cursor: busy ? "progress" : "pointer",
+            opacity: busy ? 0.5 : 1,
+            display: "flex", justifyContent: paused ? "flex-start" : "flex-end", alignItems: "center",
+            transition: "background var(--dur-2, 240ms) ease, border-color var(--dur-2, 240ms) ease, justify-content var(--dur-2, 240ms) ease",
+          }}
+        >
+          <span aria-hidden="true" style={{
+            width: 20, height: 20, borderRadius: 5, display: "block",
+            background: paused ? P.warn : P.good,
+            transition: "background var(--dur-2, 240ms) ease",
+          }} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── Tabs — which tools are in the top toggle, and in what order ─────────────
+// Lives in System because it is chrome preference, not a tool's own setting:
+// putting it inside ZTS would mean opening one tool to control whether another
+// is visible.
+//
+// Reorder is up/down buttons rather than drag-and-drop. Dragging is worse on
+// the surface that matters most here — a phone, where a long-press drag fights
+// the page scroll — and it is unusable by keyboard. Two buttons are operable by
+// touch, mouse and keyboard with no library.
+function Tabs({ prefs, onChange, isMobile, toolPower }) {
   const shownCount = visibleTabs(prefs).length;
+  const toast = useToast();
   const rowBtn = (enabled) => ({
     width: 34, height: 34, flex: "none", display: "grid", placeItems: "center",
     background: "none", border: `1px solid ${P.line}`, borderRadius: 8,
     color: enabled ? P.muted : P.faint, cursor: enabled ? "pointer" : "default",
     opacity: enabled ? 1 : 0.35, fontSize: 13,
   });
+
+  // Optimistic, and the rollback lives in useToolPower — all this has to do is
+  // say what failed. A switch that flips back with no explanation is read as a
+  // bug in the switch rather than as a refused write.
+  const setPaused = async (app, next) => {
+    try { await toolPower.setPaused(app, next); }
+    catch (e) { toast.push(`Couldn't ${next ? "pause" : "resume"} ${appMeta(app).label} — ${String(e?.message || e)}`, { tone: "error" }); }
+  };
 
   return (
     <div className="pagefade">
@@ -457,10 +588,17 @@ function Tabs({ prefs, onChange, isMobile }) {
           style={{ background: "none", border: `1px solid ${P.line}`, color: P.muted, borderRadius: 8, padding: "6px 12px", fontSize: 11.5, cursor: "pointer", fontFamily: P.display, fontWeight: 600 }}
         >Reset to default</button>
       </div>
+      {/* The first sentence is the one that was already here and has to STAY
+          true — hiding really does stop nothing. The second is the new switch's,
+          put directly beside it because the two controls are what a reader is
+          trying to tell apart, and separating their explanations by half a
+          screen is how you guarantee they never do. */}
       <div style={{ fontSize: 12.5, color: P.muted, lineHeight: 1.6, marginBottom: 16, maxWidth: 620 }}>
         Choose which tools appear in the toggle and the order they sit in. Hiding a
         tool only removes it from this bar — nothing it runs on a schedule stops,
-        and its data is untouched. <span style={{ color: P.faint }}>⌥1–⌥{Math.min(shownCount, 6)} jump to the visible tools in this order.</span>
+        and its data is untouched. <strong style={{ color: P.ink, fontWeight: 700 }}>Power is the other switch:</strong>{" "}
+        it stops that tool's scheduled jobs on the server, and each one says which
+        jobs those are. <span style={{ color: P.faint }}>⌥1–⌥{Math.min(shownCount, 6)} jump to the visible tools in this order.</span>
       </div>
 
       <div className="stagger" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -474,16 +612,19 @@ function Tabs({ prefs, onChange, isMobile }) {
           const blockedLast = !hidden && !canHide(prefs, app);
           return (
             <div key={app} style={{
-              display: "flex", alignItems: "center", gap: isMobile ? 8 : 12,
               padding: isMobile ? "10px 12px" : "12px 14px",
               background: P.surface, border: `1px solid ${P.line}`, borderRadius: 12,
-              opacity: hidden ? 0.55 : 1,
             }}>
+              {/* Only this line dims when the tool is hidden. See PowerRow. */}
+              <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 12, opacity: hidden ? 0.55 : 1 }}>
               <span aria-hidden="true" style={{ width: 9, height: 9, borderRadius: "50%", flex: "none", background: m.accent, boxShadow: hidden ? "none" : `0 0 8px ${m.accent}` }} />
               <span style={{ minWidth: 0, flex: 1 }}>
                 <span style={{ display: "block", fontSize: 13.5, fontWeight: 700, fontFamily: P.display, color: P.ink }}>{m.label}</span>
                 <span style={{ display: "block", fontSize: 11.5, color: P.faint, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {hidden ? "Hidden" : m.brand}
+                  {/* "Hidden from the bar", not "Hidden" — with a power switch
+                      one line below, a bare "Hidden" invites the reading that
+                      the tool itself is off. */}
+                  {hidden ? "Hidden from the bar" : m.brand}
                 </span>
               </span>
 
@@ -498,7 +639,7 @@ function Tabs({ prefs, onChange, isMobile }) {
                 type="button"
                 role="switch"
                 aria-checked={!hidden}
-                aria-label={`${hidden ? "Show" : "Hide"} ${m.label}`}
+                aria-label={`${hidden ? "Show" : "Hide"} ${m.label} in the top bar`}
                 disabled={blockedLast}
                 title={blockedLast ? "At least one tool has to stay visible" : hidden ? "Show in the top bar" : "Hide from the top bar"}
                 onClick={() => !blockedLast && onChange(toggleTab(prefs, app))}
@@ -518,6 +659,17 @@ function Tabs({ prefs, onChange, isMobile }) {
                   transition: "background var(--dur-2, 240ms) ease",
                 }} />
               </button>
+              </div>
+
+              <PowerRow
+                app={app}
+                label={m.label}
+                entry={powerFor(toolPower?.power, app)}
+                loading={!!toolPower?.loading}
+                error={toolPower?.error || ""}
+                busy={toolPower?.busy === app}
+                onToggle={(next) => setPaused(app, next)}
+              />
             </div>
           );
         })}
@@ -526,6 +678,9 @@ function Tabs({ prefs, onChange, isMobile }) {
       <div style={{ fontSize: 11.5, color: P.faint, marginTop: 14, lineHeight: 1.6 }}>
         System is always reachable from the top bar, whatever is hidden.
         {" "}Default: {DEFAULT_HIDDEN.map((a) => appMeta(a).label).join(", ")} start hidden.
+        {" "}Pausing is stored on the server, not in this browser — it is the same
+        table the Ops console's global stop writes, which is why a scheduled job
+        with no tab open can see it.
       </div>
     </div>
   );
@@ -541,11 +696,121 @@ function Segment({ value, onChange, options }) {
   );
 }
 
+// ─── THEME — palette and mode, across the board ──────────────────────────────
+//
+// ITS OWN TAB, NOT A SECTION UNDER "Tabs". Two reasons, one of them the
+// operator's. Theirs: "change the theme across the board" is a global setting,
+// and Tabs is emphatically not global — it is a per-tool list, and it just grew
+// a second per-tool control. Mine: that list now carries two switches whose
+// difference is the hardest thing on this screen to communicate, and hanging a
+// nine-swatch grid off the bottom of it is how both settings end up half-read.
+//
+// EVERY SWATCH COMES FROM packages/design's GENERATED palettes.js, which exists
+// for exactly this ("Labels + swatches for any picker UI"). Not one colour is
+// typed here. That is not neatness: the table is regenerated by `npm run
+// themes`, so a hand-copied hex would be a picker that lies about the palette it
+// applies, and it would lie silently.
+//
+// The swatch shows the palette in the mode you are ACTUALLY IN — `day` when the
+// resolved ground is light, `night` when it is dark — because a preview of the
+// other room is a preview of something you will not get.
+function Theme({ prefs, onChange, systemPrefersDark, isMobile }) {
+  const cur = normalizeThemePrefs(prefs);
+  const mode = resolveMode(cur, systemPrefersDark);
+  const swatchOf = (p) => (mode === "light" ? p.day : p.night);
+
+  const card = (selected) => ({
+    display: "flex", alignItems: "center", gap: 11, width: "100%", textAlign: "left",
+    padding: "11px 12px", borderRadius: 12, cursor: "pointer",
+    background: selected ? P.surface : P.surface2,
+    // Border OR shadow, never both (§4.2). The selected card gets a brighter
+    // hairline, not a glow.
+    border: `1px solid ${selected ? P.ink : P.line}`,
+    fontFamily: P.display,
+  });
+
+  return (
+    <div className="pagefade">
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, fontFamily: P.display }}>Theme</div>
+        <button
+          onClick={() => onChange(resetThemePrefs())}
+          style={{ background: "none", border: `1px solid ${P.line}`, color: P.muted, borderRadius: 8, padding: "6px 12px", fontSize: 11.5, cursor: "pointer", fontFamily: P.display, fontWeight: 600 }}
+        >Reset to default</button>
+      </div>
+      <div style={{ fontSize: 12.5, color: P.muted, lineHeight: 1.6, marginBottom: 18, maxWidth: 620 }}>
+        Applies to every tool, the top bar and this screen — one setting, not one per tool.
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <div className="t-label" style={{ marginBottom: 6 }}>Mode</div>
+        <Segment value={cur.mode} onChange={(next) => onChange({ ...cur, mode: next })}
+          options={[["light", "Light"], ["dark", "Dark"], ["system", "System"]]} />
+        <div style={{ fontSize: 11.5, color: P.faint, marginTop: 8, lineHeight: 1.6, maxWidth: 620 }}>
+          {cur.mode === "system"
+            // Said out loud because "System" is the one option whose result is
+            // not visible in the option itself, and it changes under you.
+            ? `Following this device, which is currently ${systemPrefersDark ? "dark" : "light"}. It switches the moment the device does — no reload.`
+            : "Dark is the default. Choose System to follow the device instead."}
+        </div>
+      </div>
+
+      <div className="t-label" style={{ marginBottom: 8 }}>Palette</div>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 8 }}>
+        <button type="button" onClick={() => onChange({ ...cur, palette: MATCH_TOOL })}
+          aria-pressed={cur.palette === MATCH_TOOL} style={card(cur.palette === MATCH_TOOL)}>
+          {/* The eight accents in a row IS the preview: this option is the one
+              where the colour keeps changing. */}
+          <span aria-hidden="true" style={{ display: "flex", flex: "none" }}>
+            {PALETTES.map((p, i) => (
+              <span key={p.key} style={{ width: 9, height: 22, background: swatchOf(p).accent, marginLeft: i ? -1 : 0, borderRadius: i === 0 ? "5px 0 0 5px" : i === PALETTES.length - 1 ? "0 5px 5px 0" : 0 }} />
+            ))}
+          </span>
+          <span style={{ minWidth: 0 }}>
+            <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: P.ink }}>Match the tool</span>
+            <span style={{ display: "block", fontSize: 11, color: P.faint, marginTop: 2 }}>Default — the accent says which tool you are in</span>
+          </span>
+        </button>
+
+        {PALETTES.map((p) => {
+          const s = swatchOf(p);
+          const selected = cur.palette === p.key;
+          return (
+            <button key={p.key} type="button" onClick={() => onChange({ ...cur, palette: p.key })}
+              aria-pressed={selected} style={card(selected)}>
+              {/* A hairline round the trio, because the light halves all share
+                  one near-white ground and one near-white surface — without an
+                  edge, two thirds of every light swatch is invisible against the
+                  card it sits on and the preview reads as a single stripe. */}
+              <span aria-hidden="true" style={{ display: "flex", flex: "none", borderRadius: 6, overflow: "hidden", border: `1px solid ${P.line}` }}>
+                <span style={{ width: 14, height: 22, background: s.bg }} />
+                <span style={{ width: 14, height: 22, background: s.surface }} />
+                <span style={{ width: 14, height: 22, background: s.accent }} />
+              </span>
+              <span style={{ minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: P.ink }}>{p.label}</span>
+                <span style={{ display: "block", fontSize: 11, color: P.faint, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.blurb}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ fontSize: 11.5, color: P.faint, marginTop: 14, lineHeight: 1.6, maxWidth: 620 }}>
+        Picking one palette makes every tool wear it. That costs you the one signal
+        that still reads at an 8px dot — which tool you are standing in — so it is
+        offered, not assumed. Both settings are stored in this browser only; they
+        change nothing about what runs.
+      </div>
+    </div>
+  );
+}
+
 // Ops sits first after Overview: it is the containment console, and the one
 // tab whose contents you might need in a hurry.
-const TABS = [["overview", "Overview"], ["ops", "Ops"], ["usage", "Usage"], ["minds", "Minds"], ["agents", "Agents"], ["tabs", "Tabs"]];
+const TABS = [["overview", "Overview"], ["ops", "Ops"], ["usage", "Usage"], ["minds", "Minds"], ["agents", "Agents"], ["tabs", "Tabs"], ["theme", "Theme"]];
 
-export default function System({ onExit, onOpenTool, tabPrefs, onTabPrefs }) {
+export default function System({ onExit, onOpenTool, tabPrefs, onTabPrefs, themePrefs, onThemePrefs, systemPrefersDark, toolPower }) {
   // The Desk used to live here. It was dissolved into ZTS Mission and Clarify
   // Today instead of relocated: a queue you navigate to is a queue you miss,
   // and the work belongs on the screen for the tool that produced it.
@@ -598,7 +863,8 @@ export default function System({ onExit, onOpenTool, tabPrefs, onTabPrefs }) {
         {tab === "usage" && <Usage isMobile={isMobile} />}
         {tab === "minds" && <Minds isMobile={isMobile} />}
         {tab === "agents" && <Agents isMobile={isMobile} />}
-        {tab === "tabs" && tabPrefs && <Tabs prefs={tabPrefs} onChange={onTabPrefs} isMobile={isMobile} />}
+        {tab === "tabs" && tabPrefs && <Tabs prefs={tabPrefs} onChange={onTabPrefs} isMobile={isMobile} toolPower={toolPower} />}
+        {tab === "theme" && <Theme prefs={themePrefs} onChange={onThemePrefs} systemPrefersDark={!!systemPrefersDark} isMobile={isMobile} />}
       </div>
     </div>
   );

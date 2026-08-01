@@ -1,8 +1,9 @@
 /* ============ RUNWAY — on the Pentagon's shared design kit ============ */
 /* Runway rides the shared "midnight" canvas (same base as ZTS & Clarify) with a
    VIOLET accent to differentiate it. These values mirror @cc/design's
-   cssVars("runway"); the shell also stamps them on Runway's mount wrapper, so
-   embedded and standalone render identically.
+   cssVars("runway"); the shell stamps that same set on Runway's mount wrapper,
+   which is where they actually come from — see the note on `:where(:root)`
+   below for what the block in this file is and is not doing.
 
    WHAT CHANGED WHEN THIS MOVED ONTO THE KIT
    Runway's root now carries `data-kit` (see Root.jsx), and EVERY rule in
@@ -30,8 +31,29 @@
    Colours the kit reads that are NOT declared here (--ink, --sub, --line,
    --r-card, --shadow-card, --seg-bg, --on-accent, --ink-a*, --accent-a*) come
    from @cc/design's tokens + themes, which the shell loads once and selects
-   with data-palette="runway" data-theme="dark" on the mount wrapper. */
-:root {
+   with data-palette="runway" and the resolved data-theme on the mount wrapper.
+
+   ── WHY THE BLOCK BELOW IS `:where(:root)` AND NOT `:root` ─────────────────
+   Every name in it is one `cssVars("runway")` already stamps INLINE on that
+   wrapper — that is not a coincidence, packages/design/index.js says so in as
+   many words: "Names cover the canonical --accent* set AND the exact var names
+   Runway's app.css already reads, so Runway themes off this source unmodified."
+   So inside the Pentagon this whole block is shadowed for everything Runway
+   renders, and has been since the day the app moved in.
+
+   It was NOT shadowed on one element: `<html>`. `:root` is above the wrapper,
+   nothing overrides it there, and the `body` rule below reads `var(--bg)` — so
+   this block painted the entire document canvas midnight for as long as Runway
+   was mounted, and would have gone on painting it midnight behind a light
+   Pentagon. `:where()` drops the specificity to zero so tokens.css's own
+   `:root` / `[data-theme]` blocks (0,1,0) win at the document level, and the
+   `body` rule now reads the shell's --shell-canvas instead of guessing.
+
+   Runway has no standalone entry — no index.html, no dev script (see
+   apps/runway/package.json) — so nothing actually resolves against this block
+   today. It stays because it is the app's identity written down, and because a
+   sheet whose colours are all `var()` with nowhere to land is unreadable. */
+:where(:root) {
   --bg: #0B0F1A;
   --surface: #141B2C;
   --surface-2: #1B2438;
@@ -56,7 +78,7 @@
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
 /* the shared body face, not a private font list — @cc/design owns the stack */
-body { margin: 0; background: var(--bg); color: var(--text); font: 14.5px/1.55 var(--font-body, system-ui, sans-serif); -webkit-font-smoothing: antialiased; }
+body { margin: 0; background: var(--shell-canvas, #0B0F1A); color: var(--text); font: 14.5px/1.55 var(--font-body, system-ui, sans-serif); -webkit-font-smoothing: antialiased; }
 .mono { font-family: var(--font-mono, ui-monospace, monospace); }
 a { color: var(--info); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -65,7 +87,7 @@ a:hover { text-decoration: underline; }
 
 /* ---------- shell ---------- */
 .shell { display: grid; grid-template-columns: 218px 1fr; min-height: 100vh; }
-.rail { border-right: 1px solid var(--border); padding: 18px 12px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh; background: rgba(255,255,255,0.012); }
+.rail { border-right: 1px solid var(--border); padding: 18px 12px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh; background: var(--ink-a02); }
 .brand { display: flex; align-items: center; gap: 9px; padding: 4px 10px 16px; }
 .brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
 /* The tab group. Base (fallback) is the old vertical rail; the desktop
@@ -76,7 +98,7 @@ a:hover { text-decoration: underline; }
 .tab-ico { display: none; width: 21px; height: 21px; flex: none; }
 .tab-label { display: inline-flex; align-items: center; gap: 5px; }
 .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 9px; color: var(--dim); font-weight: 500; transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out); }
-.nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); text-decoration: none; }
+.nav-item:hover { background: var(--ink-a05); color: var(--text); text-decoration: none; }
 .nav-item.active { background: var(--accent-soft); color: var(--accent); }
 .nav-item .navcount { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 99px; background: var(--accent); color: var(--accent-ink); font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: 10px; padding: 10px; font-size: 12.5px; color: var(--faint); }
@@ -152,7 +174,11 @@ textarea { resize: vertical; min-height: 90px; }
    the active option; Runway has no measuring code for one, so the active
    option carries the thumb's own fill directly. Selection is therefore fill +
    weight + colour, never colour alone. */
-[data-kit] .seg .seg-opt.active { background: var(--seg-thumb); box-shadow: 0 1px 4px rgba(0,0,0,0.22), 0 3px 8px rgba(0,0,0,0.12); }
+/* The thumb was lifted by two layers of hand-mixed black, which is a dark-room
+   recipe: under a white card it draws a grey smudge round a white pill instead
+   of lifting it. --shadow-card is the system's answer to "a raised thing on a
+   surface" and tokens.css authors it per mode, so the lift survives the flip. */
+[data-kit] .seg .seg-opt.active { background: var(--seg-thumb); box-shadow: var(--shadow-card); }
 
 /* chips */
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -169,11 +195,11 @@ textarea { resize: vertical; min-height: 90px; }
 .badge.good { background: var(--good-soft); color: var(--good); }
 .badge.mid { background: var(--accent-soft); color: var(--accent); }
 .badge.bad { background: var(--bad-soft); color: var(--bad); }
-.badge.none { background: rgba(255,255,255,0.06); color: var(--faint); }
+.badge.none { background: var(--ink-a06); color: var(--faint); }
 
 /* ---------- kanban ---------- */
 .kanban { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(206px, 1fr); gap: 10px; overflow-x: auto; padding-bottom: 14px; align-items: start; }
-.kcol { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; min-height: 220px; display: flex; flex-direction: column; gap: 8px; transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out); }
+.kcol { background: var(--ink-a02); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; min-height: 220px; display: flex; flex-direction: column; gap: 8px; transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out); }
 .kcol.over { border-color: var(--accent); background: var(--accent-soft); }
 .kcol-head { display: flex; justify-content: space-between; align-items: center; color: var(--dim); padding: 2px 4px 6px; }
 .kcol-head .cnt { color: var(--faint); }
@@ -222,7 +248,7 @@ textarea { resize: vertical; min-height: 90px; }
 .bar-row.funnel-row { grid-template-columns: 130px 1fr 150px; }
 .bar-row.cal-row { grid-template-columns: 130px 1fr; }
 .chartwrap { overflow-x: auto; } /* min-width kicks in mobile-only (media block) */
-.bar { height: 7px; background: rgba(255,255,255,0.06); border-radius: 99px; overflow: hidden; }
+.bar { height: 7px; background: var(--ink-a06); border-radius: 99px; overflow: hidden; }
 .bar i { display: block; height: 100%; background: var(--accent); border-radius: 99px; transition: width var(--dur-3) var(--ease-out); }
 .bar.good i { background: var(--good); } .bar.bad i { background: var(--bad); }
 
@@ -243,7 +269,7 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
 /* ---------- states ---------- */
 /* .empty is the kit's; .empty-title / .empty-sub replaced .t / .h. Every empty
    state in this app says what to do next and ships the control that does it. */
-.errbox { background: var(--bad-soft); border: 1px solid rgba(255,111,111,0.35); border-radius: var(--radius); padding: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.errbox { background: var(--bad-soft); border: 1px solid color-mix(in srgb, var(--bad) 35%, transparent); border-radius: var(--radius); padding: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .errbox .m { color: var(--bad); font-size: 13.5px; }
 
 /* callout */
@@ -336,7 +362,7 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
   .shell { grid-template-columns: 1fr; }
   /* bottom nav: a real app bar — comfortable clearance above the home
      indicator (max() guarantees breathing room even where env() is 0) */
-  .rail { position: fixed; bottom: 0; top: auto; height: auto; width: 100%; flex-direction: row; align-items: center; border-top: 1px solid var(--border); border-right: none; background: rgba(11,15,26,0.92); backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%); z-index: 50; padding: 4px max(6px, env(safe-area-inset-right)) max(10px, calc(6px + var(--safe-bottom, 0px))) max(6px, env(safe-area-inset-left)); }
+  .rail { position: fixed; bottom: 0; top: auto; height: auto; width: 100%; flex-direction: row; align-items: center; border-top: 1px solid var(--border); border-right: none; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%); z-index: 50; padding: 4px max(6px, env(safe-area-inset-right)) max(10px, calc(6px + var(--safe-bottom, 0px))) max(6px, env(safe-area-inset-left)); }
   .rail-foot { display: none; } .brand { display: none; }
   /* the pill group opens up to fill the bar so its tabs spread edge-to-edge */
   .navgroup { flex-direction: row; flex: 1; gap: 0; padding: 0; background: none; border: none; }

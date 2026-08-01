@@ -4,9 +4,25 @@
 // returning a named error; add the key and the schedule just starts working.
 // Writes are pinned to the single allow-listed user; worst case for an
 // unauthenticated manual invocation is an extra scan of public feeds.
+//
+// PAUSABLE. Runway's power switch stops this pass, via `runway.scan`'s
+// ops_control row — see netlify/shared/toolPower.mjs for why the pause rides on
+// `paused_reason` and not on `enabled`. A paused pass fetches no board, writes
+// no posting and does not even look up the allow-listed user; the gate is the
+// first thing after the env check for exactly that reason.
+//
+// WHAT A PAUSE COSTS, stated because a scanner is the one engine here where a
+// pause loses something: a posting that appears and is taken down inside the
+// paused window is never seen, because the only record of it was the board's
+// live feed. Nothing already in seen_postings is affected, the round-robin
+// resumes where it left off, and the next unpaused weekday picks up everything
+// still listed.
 import { createClient } from '@supabase/supabase-js';
 import { json, errorResponse, env } from './lib/auth.mjs';
 import { scanBoards } from './lib/scan-core.mjs';
+import { enginePause } from '../shared/toolPower.mjs';
+
+const SUBSYSTEM = 'runway.scan';
 
 export const handler = async () => {
   try {
@@ -18,6 +34,17 @@ export const handler = async () => {
       return json(500, { error: `RUNWAY_ENV_MISSING: ${missing.join(', ')} — scheduled scans stay off until set` });
     }
 
+    // Before the user lookup and before any board fetch: a paused tool should
+    // cost nothing, not "cost slightly less". 200 rather than an error — a pass
+    // that correctly did nothing is a healthy pass, and a 500 here would make
+    // the Netlify function log read as broken every weekday morning.
+    const power = await enginePause(SUBSYSTEM);
+    if (power.paused) {
+      console.log(`[${SUBSYSTEM}] paused — ${power.reason}; no boards fetched`);
+      return json(200, { skipped: 'paused', reason: power.reason });
+    }
+    if (power.unknown) console.warn(`[${SUBSYSTEM}] pause state unreadable, scanning anyway: ${power.why}`);
+
     const admin = createClient(url, serviceKey, { auth: { persistSession: false }, db: { schema: 'runway' } });
     const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 10 });
     if (error) return json(500, { error: `user lookup failed: ${error.message}` });
@@ -26,7 +53,11 @@ export const handler = async () => {
 
     const summary = await scanBoards({ db: admin, userId: user.id });
     console.log('scan-cron summary', JSON.stringify(summary));
-    return json(200, summary);
+    // `pauseUnknown` rides on the body as well as the console line. The
+    // scheduler discards this body, but the operator hitting /api/scan-cron by
+    // hand is the person asking "I paused Runway, why did it just scan?" and
+    // this is the answer.
+    return json(200, power.unknown ? { ...summary, pauseUnknown: power.why } : summary);
   } catch (ex) {
     return errorResponse(ex);
   }

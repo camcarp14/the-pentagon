@@ -17,14 +17,34 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@cc/supabase";
 
+// NEUTRALS FROM TOKENS, SIGNALS FROM HERE — and the split is not a style
+// preference, it is what each half means.
+//
+// The neutrals used to be six midnight hexes, which made this screen unreadable
+// the moment a light theme existed: measured in Chromium at light mode before
+// this change, "Ops", "Autonomy state UNKNOWN" and the word inside the STOP
+// button all rendered #E9EDF5 on #EFF1F5 — invisible. This file's own header
+// says the STOP control is always reachable and never behind a disclosure; a
+// control you cannot see is behind the deepest disclosure there is. The names
+// below resolve to exactly the values they used to hold on the default dark
+// path (App.jsx's PLATFORM_VARS), so nothing moves until a theme is chosen.
+//
+// good / warn / crit stay literal because they are SIGNALS, not chrome. They
+// mean healthy, refused and failed, and all three are mid-tone enough to hold
+// contrast on either ground — a semantic colour that changed with the theme
+// would be a different claim about the system in each room.
 const P = {
-  bg: "#0A0E15", surface: "#131A24", surface2: "#0F151E", line: "rgba(255,255,255,0.08)",
-  ink: "#E9EDF5", muted: "#93A1B5", faint: "#66748A",
+  bg: "var(--bg)", surface: "var(--surface)", surface2: "var(--subtle)", line: "var(--border)",
+  ink: "var(--ink)", muted: "var(--muted)", faint: "var(--faint)",
   // System stack: the Syne/DM Mono webfonts are retired (DESIGN.md §3) and
   // the <link> that loaded them is gone, so naming them here resolved to
   // nothing and mismeasured every heading and number on this screen.
   display: "var(--font-display)", mono: "var(--font-mono)",
   good: "#12A594", warn: "#D4930B", crit: "#E11D48",
+  // The one signal that could NOT stay literal. #FF8DA6 is a pale pink chosen to
+  // carry over a dark crimson wash; over a white one it is barely there, and it
+  // is the colour every error on this screen is written in.
+  critInk: "var(--bad)",
 };
 
 // status → how it reads. `blocked` is amber and legible, not hidden: a refusal
@@ -125,7 +145,7 @@ export default function Ops({ isMobile }) {
       </div>
 
       {err && (
-        <div role="alert" style={{ background: "rgba(225,29,72,0.12)", border: `1px solid ${P.crit}55`, color: "#FF8DA6", borderRadius: 12, padding: "11px 13px", fontSize: 12.5, marginBottom: 14, lineHeight: 1.5 }}>
+        <div role="alert" style={{ background: "rgba(225,29,72,0.12)", border: `1px solid ${P.crit}55`, color: P.critInk, borderRadius: 12, padding: "11px 13px", fontSize: 12.5, marginBottom: 14, lineHeight: 1.5 }}>
           {err}
         </div>
       )}
@@ -162,7 +182,7 @@ export default function Ops({ isMobile }) {
             flex: "none", minHeight: 44, padding: "0 20px", borderRadius: 11, cursor: busy ? "default" : "pointer",
             border: `1px solid ${armed ? P.crit : P.line}`,
             background: armed ? "rgba(225,29,72,0.16)" : "transparent",
-            color: armed ? "#FF8DA6" : P.ink,
+            color: armed ? P.critInk : P.ink,
             fontSize: 13, fontWeight: 800, fontFamily: P.display, letterSpacing: "0.04em",
             opacity: busy ? 0.55 : 1,
           }}>
@@ -243,7 +263,7 @@ export default function Ops({ isMobile }) {
                     <div style={{ fontSize: 11.5, color: P.muted, marginTop: 3, lineHeight: 1.45 }}>{e.rationale}</div>
                   )}
                   {e.error && (
-                    <div style={{ fontSize: 11.5, color: "#FF8DA6", marginTop: 3, lineHeight: 1.45 }}>{e.error}</div>
+                    <div style={{ fontSize: 11.5, color: P.critInk, marginTop: 3, lineHeight: 1.45 }}>{e.error}</div>
                   )}
                   {(Number(e.cost_usd) > 0 || e.undo) && (
                     <div style={{ display: "flex", gap: 12, marginTop: 5, fontSize: 10.5, color: P.faint, fontFamily: P.mono }}>
@@ -275,12 +295,22 @@ const Label = ({ children }) => (
 const Empty = ({ children }) => (
   <div style={{ fontSize: 12, color: P.faint, lineHeight: 1.6 }}>{children}</div>
 );
-const Pill = ({ on, tone, onLabel, offLabel }) => (
-  <span style={{
-    flex: "none", fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 99,
-    fontFamily: P.display, letterSpacing: "0.04em", textTransform: "uppercase",
-    color: tone || (on ? P.good : P.faint),
-    border: `1px solid ${(tone || (on ? P.good : P.faint))}44`,
-    background: `${tone || (on ? P.good : P.faint)}14`,
-  }}>{on ? onLabel : offLabel}</span>
-);
+// The border and wash are color-mix over the pill's own colour rather than a
+// hex with `44`/`14` glued on the end. String concatenation only ever worked
+// because every one of these was a literal — the moment P.faint became
+// `var(--faint)`, `var(--faint)44` is not a colour, the whole declaration is
+// dropped, and a disabled subsystem loses its outline in the one console whose
+// job is telling you what is switched off. packages/design's token-alpha test
+// exists for exactly this class of concatenation.
+const Pill = ({ on, tone, onLabel, offLabel }) => {
+  const c = tone || (on ? P.good : P.faint);
+  return (
+    <span style={{
+      flex: "none", fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 99,
+      fontFamily: P.display, letterSpacing: "0.04em", textTransform: "uppercase",
+      color: c,
+      border: `1px solid color-mix(in srgb, ${c} 27%, transparent)`,
+      background: `color-mix(in srgb, ${c} 8%, transparent)`,
+    }}>{on ? onLabel : offLabel}</span>
+  );
+};

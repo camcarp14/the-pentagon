@@ -17,8 +17,28 @@
        SYNC's 71 tokens, declared on .sy-root below, hold inside SYNC and
        nowhere else.
 
-   The Quartz (light) room is gone: the Pentagon is one dark canvas and the
-   shell hardcodes data-theme="dark", so a second room would be unreachable.
+   The Quartz (light) room is gone, and it stays gone — but the sentence that
+   used to follow ("the Pentagon is one dark canvas and the shell hardcodes
+   data-theme='dark', so a second room would be unreachable") is no longer true.
+   The shell resolves data-theme from an operator preference now, so light IS
+   reachable. SYNC does not get there by resurrecting Quartz: a second private
+   room is the private system this file was written to stop being. It gets there
+   because the ADOPTING THE PENTAGON block at the foot of this file re-points
+   every colour at the shell's palette, and the shell's palette already has both
+   halves. Quartz would have been a third answer to a question with one.
+
+   ⚠ THIS FILE IS GENERATED, AND ITS GENERATOR NO LONGER PRODUCES IT. The
+   standalone app's tokens.css / components.css / styles.css are not in this
+   repo, and apps/sync/tools/scope-css.mjs is wired to no npm script — it was
+   the one-shot import that landed this sheet, and it still carries a filter
+   that DELETES every day-room selector it is handed. Re-running it against a
+   recovered source would drop the adoption block below and put the frozen
+   OBSIDIAN values back. Edit this file; if the generator is ever brought back,
+   it has to learn about the adoption block first.
+   (The literal selector that filter matches is deliberately not spelled here:
+   mount.test.js scans this sheet WITHOUT stripping comments, so writing it out
+   fails the guard that exists to keep it out of the sheet — a rule you cannot
+   document without tripping it, which is the trap DESIGN.md §6 already names.)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -63,8 +83,20 @@
 }
 
 /* ── OBSIDIAN — true black, elevated graphite, signal blue ────────────────── */
+/* Every declaration below is SUPERSEDED by the "ADOPTING THE PENTAGON" block at
+   the foot of this file, which re-declares the same names on the same element
+   from the shell's palette — later rule, same specificity, so it wins. What is
+   left here is the record of where SYNC came from, and the values a name lands
+   on if the adoption block ever stops covering it. Five names used to escape
+   that block — two colours and three shadows — plus one property that is not a
+   token at all; the notes beside them say what each cost. */
 .sy-root {
-  color-scheme: dark;
+  /* color-scheme is REMOVED, not re-pointed. It is an inherited property, and
+     the shell now sets it on <html> alongside data-theme (App.jsx). Declaring
+     `dark` here overrode that for SYNC's whole subtree, so under a light
+     Pentagon this tool alone would have drawn black form controls, a black
+     scrollbar and a black autofill highlight on paper — the parts of a light
+     mode a stylesheet cannot repaint, which is exactly why the property exists. */
   --bg: #000000;
   --surface: #131417;
   --surface-2: #1D1F24;
@@ -83,6 +115,12 @@
   --red: #F2615A;
   --amber: #E0A030;
   --blue: #6AA8FF;
+  /* --purple and --pink were the two the adoption block forgot. The other four
+     signals were re-pointed at the Pentagon's; these two kept SYNC's own, so
+     they were the only colours in the tool still frozen to a true-black room —
+     #A98BF5 measures 2.2:1 on the light page and #EE6FA8 2.4:1, i.e. neither is
+     legible as the label it is used for. They are captured and republished with
+     the rest now. */
   --purple: #A98BF5;
   --pink: #EE6FA8;
 
@@ -92,6 +130,10 @@
   --glass: rgba(10, 11, 13, 0.78);
   --glass-raised: rgba(24, 26, 30, 0.92);
 
+  /* The last three the adoption block forgot, and the loudest of the five. A
+     shadow is the one token with no light-room equivalent of its own value:
+     72% black under a modal is depth on true black and a dirty grey halo on
+     paper. Republished below. */
   --shadow-card: 0 1px 1px rgba(0, 0, 0, 0.32), 0 6px 24px rgba(0, 0, 0, 0.38);
   --shadow-float: 0 12px 40px rgba(0, 0, 0, 0.58);
   --shadow-deep: 0 24px 70px rgba(0, 0, 0, 0.72);
@@ -862,6 +904,18 @@
    Only the base stops are re-pointed. Every ladder above — --accent-a06 …
    --accent-a55, the --ink-a* set, --focus-ring — is already color-mix()'d off
    these, so the entire palette follows from twenty lines.
+
+   ── WHAT THIS BLOCK MISSED, AND WHY IT WAS INVISIBLE ───────────────────────
+   Adoption was written when the Pentagon was dark-only, so a name left out of
+   it landed on a value that happened to agree with the one it should have had.
+   Five did: --purple, --pink and the three shadows. Nothing looked wrong,
+   nothing could look wrong, and no test could see it — a mode that never renders
+   cannot render badly. The moment `data-theme="light"` reaches the wrapper they
+   are the only things in this tool still keyed to a true-black room, which is
+   the whole of the "hardcoded dark stylesheet" problem in five declarations.
+   The rule this block now follows: EVERY name the OBSIDIAN block above declares
+   is captured and republished here, or it is deliberately local and says so.
+   Only --orb-* is local, and it is derived from captured values anyway.
    ═══════════════════════════════════════════════════════════════════════════ */
 .sy-scope {
   --sy-p-accent: var(--accent);
@@ -880,6 +934,14 @@
   --sy-p-bad: var(--bad);
   --sy-p-warn: var(--warn);
   --sy-p-info: var(--info);
+  /* --purple / --pink have no cssVars() alias — they are tokens.css's own, and
+     tokens.css authors both halves on the [data-theme] blocks the wrapper also
+     matches, so they are read straight rather than through a shell alias. */
+  --sy-p-purple: var(--purple);
+  --sy-p-pink: var(--pink);
+  --sy-p-shadow-card: var(--shadow-card);
+  --sy-p-shadow-float: var(--shadow-float);
+  --sy-p-shadow-deep: var(--shadow-deep);
   --sy-p-font-body: var(--font-body);
   --sy-p-font-mono: var(--font-mono);
 }
@@ -905,6 +967,16 @@
   --red: var(--sy-p-bad);
   --amber: var(--sy-p-warn);
   --blue: var(--sy-p-info);
+  --purple: var(--sy-p-purple);
+  --pink: var(--sy-p-pink);
+
+  /* The three shadows. tokens.css authors a set per mode; taking them means a
+     card in this tool is lifted the same way a card in every other tool is,
+     which is the point of one design language, and it is the difference between
+     a light SYNC and a light SYNC with black smears under everything. */
+  --shadow-card: var(--sy-p-shadow-card);
+  --shadow-float: var(--sy-p-shadow-float);
+  --shadow-deep: var(--sy-p-shadow-deep);
 
   --font-body: var(--sy-p-font-body);
   --font-mono: var(--sy-p-font-mono);

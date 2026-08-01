@@ -41,7 +41,13 @@
          correct before the shell's effect runs. */
       :root { --safe-bottom: env(safe-area-inset-bottom, 0px); }
       html, body, #root { margin: 0; height: 100%; }
-      body { background: #0b0d12; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+      /* The page canvas BEHIND the shell — what shows in the overscroll gutter
+         and under a rubber-banding iOS window. It was a fixed near-black, which
+         is right for the dark Pentagon and is a black bar across the top of a
+         light one. The shell publishes --shell-canvas on <html> only once the
+         operator has chosen a theme (App.jsx), so the fallback is the exact
+         value that shipped and the default paint is unchanged. */
+      body { background: var(--shell-canvas, #0b0d12); font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
     </style>
   </head>
   <body>

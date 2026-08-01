@@ -24,24 +24,32 @@ export function unauthorized() {
 }
 
 /**
- * THE AUTH CHECK IS SHARED BY NINE HANDLERS AND ITS BLAST RADIUS BELONGS HERE.
+ * THE AUTH CHECK IS SHARED BY TEN HANDLERS AND ITS BLAST RADIUS BELONGS HERE.
  *
  * Every call site of checkAuth / authVerdict, so a change to this file is never
  * again a change whose reach is invisible from the file being changed. The list
  * is pinned by a test (`netlify/shared/__tests__/alts.test.mjs`) that greps the
- * functions directory and fails when it and reality disagree — adding a tenth
- * caller without naming it here is a red suite, not a surprise in production.
+ * functions directory and fails when it and reality disagree — adding a caller
+ * without naming it here is a red suite, not a surprise in production. It did
+ * exactly that for tool-power.mjs below.
  *
  *   journal.mjs · settings.mjs · position.mjs · candles.mjs · status.mjs
- *   watch-snapshot.mjs · alt-coin.mjs · alt-watchlist.mjs
+ *   watch-snapshot.mjs · alt-coin.mjs · alt-watchlist.mjs · tool-power.mjs
  *   + sourceHandler below, which fronts quote / btc / alt_scan / alt_coin
  *
  * Eight of those predate the Alts work and none of them had a test for this
  * behaviour. They do now.
+ *
+ * tool-power.mjs is the first caller outside Macro, and it leans on this gate
+ * harder than anything above it: it holds the SERVICE ROLE, so this check is the
+ * only thing between an anonymous request and stopping every background engine
+ * this account runs. It takes authVerdict rather than the boolean for the same
+ * asymmetry — an operator whose tool is paused and whose Supabase is having a
+ * moment needs a 503 they can retry, not a 401 telling them their login expired.
  */
 export const CHECKAUTH_CALLERS = Object.freeze([
   'alt-coin.mjs', 'alt-watchlist.mjs', 'candles.mjs', 'journal.mjs',
-  'position.mjs', 'settings.mjs', 'status.mjs', 'watch-snapshot.mjs',
+  'position.mjs', 'settings.mjs', 'status.mjs', 'tool-power.mjs', 'watch-snapshot.mjs',
 ])
 
 /**

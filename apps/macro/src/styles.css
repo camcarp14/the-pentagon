@@ -37,44 +37,110 @@
               with a 10.5px UPPERCASE label). The tiles are the kit's now; what
               is left here is the tone ladder the kit has no opinion about.
 
-   Domain colour stays literal: --mstr/--btc are the two series' fixed
-   identities and --up/--down are candle polarity. They are data, not theme,
-   and they do not resolve through the kit. */
+   Domain colour is DATA, and data gets two halves like everything else.
+   --mstr/--btc are the two series' fixed identities and --up/--down are candle
+   polarity; they do not resolve through the kit, because the kit has no opinion
+   about which of two tickers is which. What they DO have is a ground, and the
+   ground now moves: a teal that measures 6.2:1 on #0B0E14 measures 2.7:1 on
+   #EFF1F5, so a polarity pair frozen at one value is a chart nobody can read in
+   half the modes it renders in. Each carries a dark value and a light value,
+   both measured — see the block below.
 
-:root {
+   ── WHERE THE GROUND COMES FROM, AND WHY IT IS WRITTEN TWICE ──────────────
+   This sheet is loaded two ways, and they resolve differently:
+
+     · `npm --workspace @app/macro run dev` loads styles.css ALONE. No
+       tokens.css, no themes.css, no shell wrapper, nothing carrying
+       data-palette. Everything has to come from this file.
+     · Inside the Pentagon, Root.jsx injects this sheet into the SHARED head and
+       the app mounts inside the shell's `<div data-palette data-theme>`, which
+       already carries the whole resolved palette for the chosen mode.
+
+   So the ground is declared twice, at two precedences:
+
+     `:where(:root)`  the standalone fallback. ZERO specificity, deliberately —
+                      inside the Pentagon tokens.css's own `:root` and
+                      `[data-theme]` blocks are (0,1,0) and beat it outright, so
+                      this sheet can no longer win `--bg` on <html> and repaint
+                      the document behind a light Pentagon. Standalone, nothing
+                      competes and it applies.
+     `.macro-root`    the Pentagon mapping: Macro's private names re-pointed at
+                      the shared tokens. It is on the APP'S OWN ROOT and not on
+                      `:root` for the reason DESIGN.md §2 gives about the ink
+                      ladder — a custom property substitutes at computed-value
+                      time, so a derivation written on `:root` resolves against
+                      `:root`'s values and merely inherits, freezing at the
+                      neutral ground whatever palette is live. `.macro-root` is
+                      a DESCENDANT of the themed wrapper, so `var(--surface)`
+                      there is the palette's surface in the current mode.
+
+   Names the shell's wrapper already stamps (--bg, --ink, --accent, --border,
+   --good, --warn, the --dur/--ease set) are not repeated in `.macro-root`: the
+   wrapper is a nearer ancestor and already wins them. Only the names this sheet
+   invented — --card, --card-2, --bg-elev, --ink-2, --ink-3, the shadows — need
+   the mapping, because nothing above knows they exist. */
+
+/* ── THE STANDALONE FALLBACK ────────────────────────────────────────────────
+   Every value here is byte-for-byte what this file shipped with, plus the
+   ink-alpha ladder and the three ambient tokens the rules below now read. It is
+   a miniature stand-in for @cc/design, and that is the honest description of
+   what it always was. :where() so it can never out-specify the real one. */
+:where(:root) {
   /* surfaces — the shared Pentagon "midnight" canvas */
   --bg: #0B0F1A;
   --bg-elev: #0F1626;
   --card: #141B2C;
   --card-2: #1B2438;
+  --surface: #141B2C;
+  --surface-2: #1B2438;
+  --subtle: #0F1626;
   --border: rgba(255, 255, 255, 0.085);
   --border-strong: rgba(255, 255, 255, 0.16);
+  --line: rgba(255, 255, 255, 0.085);
+  --line-strong: rgba(255, 255, 255, 0.16);
 
   /* ink */
   --ink: #E9EDF5;
   --ink-2: #94A1B5;
   --ink-3: #66738A;
+  --sub: #94A1B5;
+  --faint: #66738A;
+
+  /* The ink wash ladder. Standalone these are the white alphas this sheet used
+     to write inline at ~25 call sites; inside the Pentagon every one of them is
+     re-derived from the live --ink by themes.css on the wrapper, which is what
+     turns "5% white" into "5% of whatever ink this mode uses" — the single
+     change that stops a meter track and a hover state disappearing on paper. */
+  --ink-a02: rgba(255, 255, 255, 0.02);
+  --ink-a03: rgba(255, 255, 255, 0.03);
+  --ink-a04: rgba(255, 255, 255, 0.04);
+  --ink-a05: rgba(255, 255, 255, 0.05);
+  --ink-a06: rgba(255, 255, 255, 0.06);
+  --ink-a08: rgba(255, 255, 255, 0.08);
+  --ink-a10: rgba(255, 255, 255, 0.10);
+  --ink-a12: rgba(255, 255, 255, 0.12);
+  --ink-a14: rgba(255, 255, 255, 0.14);
+  --ink-a16: rgba(255, 255, 255, 0.16);
+  --ink-a20: rgba(255, 255, 255, 0.20);
 
   /* accent — Macro's tab identity (amber); the shell also stamps these so the
      value stays in sync when embedded. Distinct from the chart-series colors. */
   --accent: #FFB224;
   --accent-ink: #1A1204;
+  --on-accent: #1A1204;
   --accent-soft: rgba(255, 178, 36, 0.14);
   --accent-line: rgba(255, 178, 36, 0.32);
 
-  /* series (categorical — fixed assignment, never cycled) */
-  --mstr: #3b72e8;
-  --btc: #d97706;
-
-  /* polarity (candles / pnl) */
-  --up: #0fa3a3;
-  --down: #d93a5f;
+  /* ambient: the bar glass, the modal scrim, the card shadow. Named after the
+     tokens.css ones so the rules below read one name in both worlds. */
+  --glass: rgba(11, 15, 26, 0.92);
+  --scrim: rgba(0, 0, 0, 0.62);
+  --shadow-card: 0 2px 10px rgba(0, 0, 0, 0.35);
+  --shadow-float: 0 12px 40px rgba(0, 0, 0, 0.5);
 
   /* status — reserved, icon+label always */
   --good: #12a594;
   --warn: #d4930b;
-  --serious: #c2410c;
-  --crit: #e11d48;
 
   /* type */
   --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -82,10 +148,8 @@
      gone, so naming it first just cost a failed lookup before the fallback. */
   --mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
 
-  /* radii, shadow */
+  /* radii */
   --r-sm: 8px; --r-md: 12px; --r-lg: 16px;
-  --shadow-1: 0 2px 10px rgba(0, 0, 0, 0.35);
-  --shadow-2: 0 12px 40px rgba(0, 0, 0, 0.5);
 
   /* motion — one physics for everything */
   --dur-1: 140ms; --dur-2: 240ms; --dur-3: 420ms;
@@ -97,13 +161,137 @@
   --maxw: 1180px;
 }
 
+/* ── INSIDE THE PENTAGON ────────────────────────────────────────────────────
+   Macro's private surface names, re-pointed at the shared tokens. The literal
+   in each var() fallback is this sheet's original value, so the standalone
+   entry lands on exactly what it rendered before — the fallback is not a guess,
+   it is the old file. */
+.macro-root {
+  /* .card was a fixed #141B2C, i.e. a navy card on whatever page it was given.
+     --surface is the palette's card in the live mode. --bg-elev is the RECESSED
+     well (segmented tracks, inputs, the chart housing, the command palette), so
+     it maps to --subtle, which the shell defines as halfway between the card
+     and the page — darker than the card in dark, lighter in light, which is
+     what "sunken" means in each room. */
+  --card: var(--surface, #141B2C);
+  --card-2: var(--surface-2, #1B2438);
+  --bg-elev: var(--subtle, #0F1626);
+
+  /* The two secondary inks. --ink-2 is the tool's "sub" (readable secondary
+     copy) and --ink-3 its "faint" (captions, table heads, units); the
+     generator's floors for those two are 4.6:1 and 3.05:1 against the page, in
+     BOTH modes, which is exactly the job these were doing by hand. */
+  --ink-2: var(--sub, #94A1B5);
+  --ink-3: var(--faint, #66738A);
+
+  /* A shadow is the one token that cannot survive a mode flip: the whole of a
+     dark-room shadow is opaque black, and 40px of black under a white card is
+     the loudest possible tell that nobody looked at light mode. */
+  --shadow-1: var(--shadow-card, 0 2px 10px rgba(0, 0, 0, 0.35));
+  --shadow-2: var(--shadow-float, 0 12px 40px rgba(0, 0, 0, 0.5));
+
+  /* ── DATA, IN TWO HALVES ──────────────────────────────────────────────────
+     These four are the chart, not the chrome, so they are authored rather than
+     derived — but authored TWICE, because "authored" never meant "frozen".
+     Below is the dark half, unchanged to the byte from what ships today; the
+     light half is in the [data-theme="light"] block that follows. Measured with
+     the dataviz six-checks validator against the ground each half actually
+     lands on (dark card #191D27, light page #EFF1F5):
+
+       dark   MSTR #3B72E8 · BTC #D97706   ΔE 30.2 protan / 34.8 normal — pass
+              up   #0FA3A3 · down #D93A5F  ΔE 10.0 deutan / 30.8 normal — pass
+       light  MSTR #2965E6 · BTC #A55A05   ΔE 30.5 protan / 32.6 normal — pass
+              up   #0B7979 · down #CF284F  ΔE  9.9 protan / 29.0 normal — pass
+
+     The status pair below is the leverage grade and the alarm state; --good and
+     --warn are deliberately absent, because the shell's wrapper already stamps
+     them and has since this app moved in.
+
+     ── A DEBT THE DARK HALF ALREADY HAD, MEASURED AND LEFT ALONE ────────────
+     Measuring both halves properly turned up something the light work did not
+     create. These are inked onto three grounds — the page, a card, and a well
+     — and for LIGHT text the hardest of the three is the LIGHTEST, which is the
+     well (--card-2, #1B2438). Against it the dark half measures:
+
+       --down 3.48:1 · --crit 3.30:1 · --serious 2.99:1
+
+     All three clear the 3:1 floor for a graphical mark, which is the bar the
+     six-checks note at the top of this file actually validated them at. None
+     clears 4.5:1, which is the bar they need as the 10.5-15.5px TEXT this sheet
+     also uses them for (.tc-val.tone-bad, .alt-band.b-extended, .c-score
+     .band-extended, .stattile-value.grade-rich). Lifting them to 4.5 on that
+     ground produces #E36C88 and #F2682F — crimson becomes pink and burnt orange
+     becomes tangerine, on the shipping trading screen, as a side effect of a
+     light-mode release. That is a product decision and it is not this change's
+     to make, so the values stand and the shortfall is REGISTERED instead:
+     packages/design/theme-check.mjs carries all three with their numbers and
+     fails if any of them stops reproducing, so it cannot quietly become
+     permanent. The light half below has no such debt — every value in it clears
+     4.5:1 on its own hardest ground. */
+  /* series (categorical — fixed assignment, never cycled) */
+  --mstr: #3b72e8;
+  --btc: #d97706;
+  /* polarity (candles / pnl) */
+  --up: #0fa3a3;
+  --down: #d93a5f;
+  /* status — reserved, icon+label always */
+  --serious: #c2410c;
+  --crit: #e11d48;
+
+  /* The raised nav pill on desktop. Three layers of black plus a white inset
+     highlight is a dark-room recipe; on paper the pill separates by being the
+     card colour on a tinted track, so the light half swaps the weights round. */
+  --shadow-pill: 0 1px 2px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* ── THE LIGHT HALF OF THE DATA ─────────────────────────────────────────────
+   Same hue and saturation, stepped down in lightness until each clears WCAG AA
+   4.5:1 against #EFF1F5 — the DARKEST of the three light grounds, which for
+   dark text is the hard one (a card at #FEFEFE gives every value ~0.55 more).
+   4.5 and not 3.0 because these are read as TEXT far more often than as marks:
+   the ticker's percentage, the stat tile value, the regime badge and the score
+   are all inked from this set, and only the meter fill and the sparkline stroke
+   are pure marks.
+
+   ONE CHECK IS RELAXED, ON PURPOSE AND IN WRITING. The dataviz chroma floor
+   (OKLab C ≥ 0.10, "reads gray") FAILS for the light --up at 0.087. It cannot
+   be satisfied: teal is intrinsically low-chroma once it is dark enough to be
+   body copy on paper — the whole 178-192° × 83-100% × L20-34 grid was searched
+   and no point clears both 4.5:1 and C 0.10. The floor exists so a categorical
+   FILL is not mistaken for a neutral, and identity here never rests on the fill:
+   the sign travels with the number, `.badge-regime` prints the word "uptrend"
+   beside the colour, and the pair still separates at ΔE 29.0 normal / 9.9
+   protan. Holding the text floor is what a reader feels; holding the chroma
+   floor would have cost a point of contrast on every number in the tape. */
+[data-theme="light"] .macro-root {
+  --mstr: #2965E6;   /* 4.53:1 on the page, 5.08:1 on a card */
+  --btc: #A55A05;    /* 4.57 / 5.12 */
+  --up: #0B7979;     /* 4.61 / 5.17 */
+  --down: #CF284F;   /* 4.56 / 5.12 */
+  --crit: #D61C44;   /* 4.52 / 5.07 */
+  /* --serious already measures 4.58:1 on #EFF1F5, so it is not restated: a
+     value that does not need to move is one fewer place for the two halves to
+     drift apart. */
+  --shadow-pill: 0 1px 2px rgba(20, 22, 28, 0.07), 0 2px 8px rgba(20, 22, 28, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
 * { box-sizing: border-box; }
 /* overflow-x: clip (NOT hidden) — hidden on body silently makes body its
    own scroll container in mobile Chrome, freezing window scroll entirely. */
 html { -webkit-text-size-adjust: 100%; overflow-x: clip; }
+/* THE DOCUMENT CANVAS IS THE SHELL'S, NOT MACRO'S.
+   `background: var(--bg)` was resolved against <html>, which is ABOVE the
+   shell's themed wrapper — so this one declaration painted the whole document
+   behind every tool in Macro's midnight for as long as Macro was mounted, and
+   would have gone on painting it there under a light Pentagon. --shell-canvas
+   is the shell's own name for that surface (apps/shell/index.html declares the
+   fallback; App.jsx publishes the resolved ground once a theme is chosen), so
+   reading it means the gutter follows the mode. The literal is Macro's own
+   midnight and is what the standalone entry, which publishes nothing, still
+   gets — identical to what it rendered before. */
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--shell-canvas, #0B0F1A);
   color: var(--ink);
   font-family: var(--font);
   font-size: 14.5px;
@@ -121,10 +309,16 @@ a { color: var(--accent); text-decoration: none; }
 .num, .big, td, .mono, .val { font-variant-numeric: tabular-nums; }
 .mono { font-family: var(--mono); }
 
-::selection { background: rgba(255, 178, 36, 0.35); }
-* { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transparent; }
+/* ::selection and the scrollbars are on `*`, so they resolve per ELEMENT: a
+   node inside the shell's wrapper sees the wrapper's --accent and --ink and one
+   outside sees the fallback ground. That is why these can be color-mix over a
+   token rather than a frozen amber and a frozen white — the same declaration is
+   correct in both rooms and for whichever tool's accent is live. A 14% white
+   scrollbar thumb on paper is an invisible scrollbar. */
+::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+* { scrollbar-width: thin; scrollbar-color: var(--ink-a20) transparent; }
 *::-webkit-scrollbar { width: 9px; height: 9px; }
-*::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 99px; }
+*::-webkit-scrollbar-thumb { background: var(--ink-a14); border-radius: 99px; }
 
 /* ---------------- shell ---------------- */
 .shell { max-width: var(--maxw); margin: 0 auto; padding: 14px 16px calc(var(--nav-h) + 24px + var(--safe-bottom, 0px)); }
@@ -147,7 +341,14 @@ a { color: var(--accent); text-decoration: none; }
 .nav {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
   display: flex; justify-content: space-around;
-  background: rgba(11, 15, 26, 0.92); backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%);
+  /* A BAR THAT NAMES ITS OWN GROUND IS A BAR THAT CANNOT CHANGE ROOMS. This was
+     the literal midnight `rgba(11,15,26,0.92)`, which under a light Pentagon is
+     a navy slab pinned across the bottom of a paper page — the "dark chrome
+     under light content" failure in one declaration. Mixed off --bg it is 92%
+     of whatever ground is live, so the blur still has something to be 8%
+     transparent OF. Standalone, --bg is the fallback midnight and the computed
+     colour is what it always was. */
+  background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%);
   /* Shadow removed: this bar already separates with a hairline, and the design
      language forbids a border and a shadow on the same element. */
   border-top: 1px solid var(--border);
@@ -175,23 +376,27 @@ a { color: var(--accent); text-decoration: none; }
    toggle above Macro's MOBILE bottom bar. */
 @media (min-width: 768px) {
   /* Desktop: a real sticky top bar, matching the ZTS and Clarify bars
-     value-for-value (52px, rgba(11,15,26,0.78) + blur, lineSoft hairline, the
+     value-for-value (52px, 78%-of-ground glass + blur, a 5.5%-ink hairline, the
      same two-part shadow, z-index 50) rather than a widget inside the content
-     column. */
+     column. Every colour here used to be a literal keyed to midnight — the
+     glass, the hairline and the pill track — so the whole bar stayed dark under
+     a light page while the content above and below it went white. They are
+     mixes off --bg and rungs of the ink ladder now, which is the same computed
+     value in the dark room and the right one in the light. */
   .navbar {
     position: sticky; top: calc(var(--shell-bar, 52px) + env(safe-area-inset-top, 0px)); z-index: 50;
     height: 52px; display: flex; align-items: center; padding: 0 24px;
-    background: rgba(11, 15, 26, 0.78);
+    background: color-mix(in srgb, var(--bg) 78%, transparent);
     backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%);
     /* Shadow removed: this bar already separates with a hairline, and the design
      language forbids a border and a shadow on the same element. */
-  border-bottom: 1px solid rgba(255,255,255,0.055);
+  border-bottom: 1px solid var(--ink-a05);
   }
   .nav {
     position: static; margin: 0; justify-content: flex-start;
     display: inline-flex; gap: 2px; padding: 3px; backdrop-filter: none; -webkit-backdrop-filter: none;
-    background: rgba(255, 255, 255, 0.045); border: 1px solid rgba(255, 255, 255, 0.055);
-    border-radius: 10px; box-shadow: none; border-top: 1px solid rgba(255, 255, 255, 0.055);
+    background: var(--ink-a04); border: 1px solid var(--ink-a05);
+    border-radius: 10px; box-shadow: none; border-top: 1px solid var(--ink-a05);
   }
   /* Label-only on desktop like every other tool. The face is the inherited body
      stack now, NOT Syne: the language allows no decorative display font (the
@@ -201,13 +406,19 @@ a { color: var(--accent); text-decoration: none; }
      the bar above them. */
   .nav button {
     flex: none; flex-direction: row; gap: 0; padding: 5px 14px; min-height: 32px;
-    border: none; border-radius: 7px; color: #525E74;
+    /* #525E74 and #F7F9FC below were MIDNIGHT's `ghost` and `inkDeep` copied out
+       of packages/design/index.js by hand — two hexes that only mean "resting"
+       and "selected" against a navy bar. On paper they are a mid-grey label and
+       a near-white one on a near-white pill: the resting tab is barely there and
+       the selected tab is invisible. --ink-3 and --ink are the same two roles
+       expressed as tokens, and the generator gives both a floor in each mode. */
+    border: none; border-radius: 7px; color: var(--ink-3);
     font-family: inherit; font-size: 11.5px; font-weight: 700;
     letter-spacing: 0.05em; text-transform: none;
     transition: color var(--dur-2) cubic-bezier(0.4, 0, 0.2, 1);
   }
   .nav button svg { display: none; }
-  .nav button.on { background: var(--card-2); color: #F7F9FC; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+  .nav button.on { background: var(--card-2); color: var(--ink); box-shadow: var(--shadow-pill); }
   /* the [data-kit] twin exists because the kit presses EVERY button
      (`[data-kit] button:active`) and out-specifies the bare selector; on
      desktop these are pills in a bar and the pill is not supposed to shrink */
@@ -257,21 +468,21 @@ a { color: var(--accent); text-decoration: none; }
 .chip {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 11px; font-weight: 600; padding: 2.5px 9px; border-radius: 99px;
-  border: 1px solid var(--border); color: var(--ink-2); background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border); color: var(--ink-2); background: var(--ink-a03);
   white-space: nowrap;
 }
 .chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); flex: none; }
 .chip.live .dot { background: var(--good); box-shadow: 0 0 6px var(--good); }
-.chip.stale { color: var(--warn); border-color: rgba(212, 147, 11, 0.4); } .chip.stale .dot { background: var(--warn); }
-.chip.dead { color: var(--crit); border-color: rgba(225, 29, 72, 0.4); } .chip.dead .dot { background: var(--crit); }
-.chip.grade-efficient { color: var(--good); border-color: rgba(18, 165, 148, 0.4); }
+.chip.stale { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); } .chip.stale .dot { background: var(--warn); }
+.chip.dead { color: var(--crit); border-color: color-mix(in srgb, var(--crit) 40%, transparent); } .chip.dead .dot { background: var(--crit); }
+.chip.grade-efficient { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
 .chip.grade-fair { color: var(--ink-2); }
-.chip.grade-rich { color: var(--serious); border-color: rgba(194, 65, 12, 0.45); }
+.chip.grade-rich { color: var(--serious); border-color: color-mix(in srgb, var(--serious) 45%, transparent); }
 
 .badge-regime { font-weight: 800; font-size: 12px; letter-spacing: 0.6px; padding: 3px 10px; border-radius: 7px; }
-.badge-regime.uptrend { color: var(--up); background: rgba(15, 163, 163, 0.12); }
-.badge-regime.downtrend { color: var(--down); background: rgba(217, 58, 95, 0.12); }
-.badge-regime.chop, .badge-regime.insufficient_data { color: var(--ink-2); background: rgba(255, 255, 255, 0.06); }
+.badge-regime.uptrend { color: var(--up); background: color-mix(in srgb, var(--up) 12%, transparent); }
+.badge-regime.downtrend { color: var(--down); background: color-mix(in srgb, var(--down) 12%, transparent); }
+.badge-regime.chop, .badge-regime.insufficient_data { color: var(--ink-2); background: var(--ink-a06); }
 
 /* ---------------- buttons ----------------
    `.btn` and its `.primary` / `.danger` / `.sm` modifiers are the kit's; the
@@ -290,8 +501,8 @@ a { color: var(--accent); text-decoration: none; }
 .btn:active:not(:disabled) { transform: scale(0.97); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn.primary { background: var(--accent); color: var(--accent-ink); }
-.btn.primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(255, 178, 36, 0.35); }
-.btn.danger { background: rgba(225, 29, 72, 0.12); color: var(--crit); }
+.btn.primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 22px color-mix(in srgb, var(--accent) 35%, transparent); }
+.btn.danger { background: color-mix(in srgb, var(--crit) 12%, transparent); color: var(--crit); }
 .btn.ghost { background: none; color: var(--ink-2); }
 .btn.sm { padding: 5px 11px; min-height: 32px; font-size: 12.5px; border-radius: 8px; }
 
@@ -323,7 +534,7 @@ input[type='number'], input[type='text'], input[type='date'], input[type='passwo
   border-radius: 10px; padding: 9px 12px; min-height: 40px; width: 100%;
   transition: border-color var(--dur-1) ease, box-shadow var(--dur-1) ease;
 }
-input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255, 178, 36, 0.28); }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); }
 .formrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 @media (max-width: 420px) { .formrow { grid-template-columns: 1fr; } }
 
@@ -335,7 +546,7 @@ table { border-collapse: collapse; width: 100%; font-size: 13px; }
    to .t-label alone, and a <th> cannot wear it without a class on all 17 of
    them, so the column heads read as heads by weight and colour instead. */
 th { text-align: left; font-size: 12px; letter-spacing: 0.02em; color: var(--ink-3); font-weight: 600; padding: 7px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-td { padding: 8px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); white-space: nowrap; }
+td { padding: 8px 10px; border-bottom: 1px solid var(--ink-a04); white-space: nowrap; }
 tr:last-child td { border-bottom: none; }
 
 /* ---------------- stat rows ----------------
@@ -363,14 +574,14 @@ tr:last-child td { border-bottom: none; }
 [data-kit] .tiny.t-cap { color: var(--ink-3); }
 
 /* meter (distance-to-stop etc.) */
-.meter { height: 6px; border-radius: 99px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.meter { height: 6px; border-radius: 99px; background: var(--ink-a08); overflow: hidden; }
 .meter > div { height: 100%; border-radius: 99px; background: var(--accent); transition: width var(--dur-3) var(--ease-out); }
 .meter.danger > div { background: var(--crit); }
 .meter.warn > div { background: var(--warn); }
 
 /* ---------------- skeletons ---------------- */
-.sk { position: relative; overflow: hidden; background: rgba(255, 255, 255, 0.055); border-radius: 8px; }
-.sk::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent); animation: shimmer 1.4s infinite; }
+.sk { position: relative; overflow: hidden; background: var(--ink-a06); border-radius: 8px; }
+.sk::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, var(--ink-a05), transparent); animation: shimmer 1.4s infinite; }
 /* `shimmer` is the kit's (packages/ui/components.css) and is REFERENCED, never
    redefined here: keyframe names are document-global, this sheet is injected
    into the shared head, and a second copy would shadow the kit's for every
@@ -413,7 +624,7 @@ tr:last-child td { border-bottom: none; }
 .toast.err .tdot { background: var(--crit); }
 
 /* ---------------- command palette ---------------- */
-.cmdk-wrap { position: fixed; inset: 0; z-index: 95; background: rgba(0, 0, 0, 0.62); backdrop-filter: blur(4px); display: grid; place-items: start center; padding: 12vh 16px 16px; animation: fadein var(--dur-2) ease both; }
+.cmdk-wrap { position: fixed; inset: 0; z-index: 95; background: var(--scrim); backdrop-filter: blur(4px); display: grid; place-items: start center; padding: 12vh 16px 16px; animation: fadein var(--dur-2) ease both; }
 /* no border: it sat on the same element as --shadow-2, and a floating panel
    separates by elevation, not by outline */
 .cmdk { width: 100%; max-width: 560px; background: var(--bg-elev); border: none; border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow-2); animation: rise var(--dur-2) var(--ease-spring) both; }
@@ -421,7 +632,7 @@ tr:last-child td { border-bottom: none; }
 .cmdk input:focus { outline: none; box-shadow: none; border-color: var(--border); }
 .cmdk .list { max-height: 320px; overflow-y: auto; padding: 6px; }
 .cmdk .item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 10px; cursor: pointer; font-size: 14.5px; opacity: 0.75; }
-.cmdk .item.on { background: rgba(255, 255, 255, 0.07); opacity: 1; }
+.cmdk .item.on { background: var(--ink-a08); opacity: 1; }
 kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px; opacity: 0.8; }
 
 /* ---------------- auth gate ---------------- */
@@ -441,9 +652,9 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .radar-list li { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; font-size: 13px; }
 .radar-list li .mark { flex: none; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; margin-top: 1px; }
 .radar-list li.pass { color: var(--ink); }
-.radar-list li.pass .mark { background: rgba(18, 165, 148, 0.15); color: var(--good); }
+.radar-list li.pass .mark { background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good); }
 .radar-list li.fail { color: var(--ink-2); }
-.radar-list li.fail .mark { background: rgba(255, 255, 255, 0.06); color: var(--ink-3); }
+.radar-list li.fail .mark { background: var(--ink-a06); color: var(--ink-3); }
 .radar-list .dist { color: var(--warn); font-weight: 700; font-size: 12px; }
 .radar-list .note { display: block; }
 .ladder { margin: 0; padding-left: 20px; }
@@ -459,7 +670,7 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .empty .glyph { font-size: 26px; margin-bottom: 6px; }
 .empty-title { font-size: 15px; font-weight: 600; color: var(--ink); }
 .empty-sub { font-size: 12.5px; line-height: 1.55; color: var(--ink-2); max-width: 300px; }
-.error-row { display: flex; align-items: center; gap: 10px; justify-content: space-between; background: rgba(225, 29, 72, 0.07); border: 1px solid rgba(225, 29, 72, 0.25); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+.error-row { display: flex; align-items: center; gap: 10px; justify-content: space-between; background: color-mix(in srgb, var(--crit) 7%, transparent); border: 1px solid color-mix(in srgb, var(--crit) 25%, transparent); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
 
 /* mobile ergonomics — EVERY tap target ≥ 44px, including .sm variants
    (.btn.sm outspecifies .btn, so it needs its own rule here) */
@@ -538,7 +749,7 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .tc-head.band-building .tc-num { color: var(--ink-2); }
 
 .tc-pips { display: flex; gap: 3px; margin: 12px 0 2px; }
-.tc-pips > span { flex: 1; height: 5px; border-radius: 99px; background: rgba(255, 255, 255, 0.08); }
+.tc-pips > span { flex: 1; height: 5px; border-radius: 99px; background: var(--ink-a08); }
 .tc-pips > span.on { background: var(--ink-2); }
 .tc-pips.band-building > span.on { background: var(--ink-2); }
 .tc-pips.band-armed > span.on { background: var(--warn); }
@@ -597,7 +808,7 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .smeter-name { font-size: 11px; font-weight: 800; letter-spacing: 0.6px; color: var(--ink); }
 .smeter-state { font-size: 10.5px; color: var(--ink-3); text-transform: capitalize; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .smeter-score { margin-left: auto; font-family: var(--mono); font-size: 14px; font-weight: 500; }
-.smeter-track { height: 5px; border-radius: 99px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.smeter-track { height: 5px; border-radius: 99px; background: var(--ink-a08); overflow: hidden; }
 .smeter-track > div { height: 100%; border-radius: 99px; background: var(--ink-3); transition: width var(--dur-3) var(--ease-out); }
 .smeter.uptrend .smeter-track > div { background: var(--up); }
 .smeter.uptrend .smeter-score { color: var(--up); }
@@ -620,7 +831,7 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .stattile-value.neg, [data-kit] .stattile-value.neg { color: var(--down); }
 .est {
   display: inline-block; margin-left: 5px; padding: 0 4px; border-radius: 4px;
-  background: rgba(212, 147, 11, 0.16); color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn);
   /* was 8.5px — two points under the hard floor, on the one badge that warns
      you the mNAV underneath it rests on estimates */
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.2px; vertical-align: 1px;
@@ -687,7 +898,7 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 /* count as pips: six gates, six marks — legible at a glance, no big numeral */
 .rd-pips { display: flex; gap: 4px; margin-bottom: 10px; }
 .rd-pips > span {
-  flex: 1; height: 5px; border-radius: 99px; background: rgba(255, 255, 255, 0.09);
+  flex: 1; height: 5px; border-radius: 99px; background: var(--ink-a10);
   transition: background var(--dur-2) var(--ease-out);
 }
 .rd-pips > span.on { background: var(--ink-2); }
@@ -723,9 +934,9 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .rd-tag {
   display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 0;
   padding: 6px 4px; border-radius: 99px; font-size: 11px; font-weight: 600; white-space: nowrap;
-  background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); color: var(--ink-3);
+  background: var(--ink-a04); border: 1px solid var(--border); color: var(--ink-3);
 }
-.rd-tag.on { color: var(--good); border-color: rgba(18, 165, 148, 0.4); background: rgba(18, 165, 148, 0.08); }
+.rd-tag.on { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); background: color-mix(in srgb, var(--good) 8%, transparent); }
 
 /* the paths strip reuses .ticket, plus a caption line under each value */
 .rd-ticket { margin-top: 0; }
@@ -887,7 +1098,7 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
   gap: 3px 8px; align-items: center;
   transition: background var(--dur-1) ease;
 }
-.alt-row-main:hover { background: rgba(255, 255, 255, 0.03); }
+.alt-row-main:hover { background: var(--ink-a03); }
 .alt-c { min-width: 0; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .c-rank { grid-area: rank; color: var(--ink-3); font-size: 11px; }
 .c-coin { grid-area: coin; display: flex; align-items: baseline; gap: 6px; min-width: 0; }
@@ -940,20 +1151,20 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .alt-band {
   display: inline-block; padding: 2px 8px; border-radius: 99px;
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.01em; text-transform: capitalize;
-  background: rgba(255, 255, 255, 0.05); color: var(--ink-3); white-space: nowrap;
+  background: var(--ink-a05); color: var(--ink-3); white-space: nowrap;
 }
 .alt-band.b-basing { color: var(--ink-2); }
-.alt-band.b-waking { color: var(--ink); background: rgba(255, 255, 255, 0.09); }
-.alt-band.b-igniting { color: var(--good); background: rgba(18, 165, 148, 0.14); }
-.alt-band.b-running { color: var(--warn); background: rgba(212, 147, 11, 0.14); }
-.alt-band.b-extended { color: var(--serious); background: rgba(194, 65, 12, 0.16); }
+.alt-band.b-waking { color: var(--ink); background: var(--ink-a10); }
+.alt-band.b-igniting { color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
+.alt-band.b-running { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.alt-band.b-extended { color: var(--serious); background: color-mix(in srgb, var(--serious) 16%, transparent); }
 
 /* The two flags that decide whether a row is tradeable at all, marked on the
    board rather than waiting for the detail — they are the reason a top-of-board
    score is not an invitation. */
-.alt-flag { font-size: 10.5px; font-weight: 700; padding: 1px 5px; border-radius: 5px; background: rgba(255, 255, 255, 0.06); color: var(--ink-3); }
-.alt-flag.warn { color: var(--warn); background: rgba(212, 147, 11, 0.14); }
-.alt-flag.bad { color: var(--crit); background: rgba(225, 29, 72, 0.13); }
+.alt-flag { font-size: 10.5px; font-weight: 700; padding: 1px 5px; border-radius: 5px; background: var(--ink-a06); color: var(--ink-3); }
+.alt-flag.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.alt-flag.bad { color: var(--crit); background: color-mix(in srgb, var(--crit) 13%, transparent); }
 
 /* …and what those two three-letter marks MEAN, printed under the board rather
    than hidden in a `title`. A title attribute does not exist on touch, and the

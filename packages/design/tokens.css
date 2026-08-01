@@ -31,7 +31,10 @@
    (--brass*, ladders, washes) are kept as aliases so any surface not yet
    migrated still renders coherently on the new palette.
    Data palette validated (six-checks, adjacency order green→blue→red→purple→
-   amber→pink) against #FFFFFF and #1C1C1E on 2026-07-15.
+   amber→pink) against #FFFFFF and #1C1C1E on 2026-07-15, and re-validated
+   2026-07-31 against the grounds the Pentagon actually paints — themes.css's
+   #EFF1F5 light page and #0B0E14 dark page, not a pure white and a graphite
+   card. The light half moved as a result; see the note beside it.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* Inter — the house typeface. A tidy, professional grotesque; self-hosted
@@ -78,12 +81,38 @@
   --accent-deep: #6E541A;
   --on-accent: #FFFFFF;
 
-  --green: #278A4C;
-  --red: #C93B32;
-  --amber: #B36514;
+  /* THE SEMANTIC SIX, RE-TUNED FOR A LIGHT GROUND — and the reason is that
+     "already contrast-checked" was true of the GENERATED halves and not of
+     these. DESIGN.md §2 says the light halves are generated and checked;
+     gen-themes.mjs says in its own header that the semantic colours are "NOT
+     per-palette … They stay on the day/night definitions in tokens.css", so
+     they are the one part of the light room nothing ever measured. The line
+     above still says they were validated against #FFFFFF — a pure white card.
+     The Pentagon's light page is not white: themes.css puts every palette's
+     --bg at #EFF1F5, and against THAT green measured 3.85:1, amber 3.88 and
+     pink 4.07. All three are body copy in at least one surface (Runway's
+     .err-text, Macro's guardrails, every kit .badge), so they were under AA on
+     the ground they actually land on, in the mode this release exists to ship.
+     Green/amber/pink are stepped down until each clears 4.5:1 against the
+     DARKEST light ground (#EFF1F5 — for dark text the darkest ground is the
+     hard one); blue and purple already cleared it and are untouched, so the
+     smallest possible number of values moved. Hue and saturation are held, so
+     nothing changes identity — only value. Re-validated with the dataviz
+     six-checks in the documented adjacency order green→blue→red→purple→amber→
+     pink against #EFF1F5: all five checks pass, worst adjacent pair
+     pink↔amber ΔE 10.3 deutan / 16.3 normal.
+     THE DARK HALF BELOW IS DELIBERATELY UNTOUCHED. It is what ships today and
+     what every screenshot in this repo was taken against; light mode has never
+     rendered, so re-tuning it costs nothing and re-tuning dark would be a
+     visual change nobody asked for. packages/design/__tests__/theme.test.js
+     now measures both halves so this claim cannot rot the way the one above
+     it did. */
+  --green: #237C44;
+  --red: #C73A31;
+  --amber: #A35C12;
   --blue: #3568D4;
   --purple: #6B41C4;
-  --pink: #C7447E;
+  --pink: #C03975;
 
   --seg-bg: rgba(29, 28, 24, 0.055);
   --seg-thumb: #FFFFFF;
