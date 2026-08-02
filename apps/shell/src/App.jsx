@@ -263,10 +263,10 @@ const SideRail = forwardRef(function SideRail({ active, onPick, apps, paused, sy
         background: "color-mix(in srgb, var(--bg) 55%, var(--surface))",
         zIndex: 101,
       }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "2px 14px 12px", flexShrink: 0 }}>
-        <PentagonLogo size={20} />
+      <button type="button" onClick={onSystem} title="Open Settings" aria-label="Open Settings" style={{ display: "flex", alignItems: "center", gap: 9, padding: "2px 14px 12px", flexShrink: 0, background: "none", border: "none", color: "inherit", font: "inherit", cursor: "pointer", textAlign: "left" }}>
+        <PentagonLogo size={22} />
         <span className="t-head" style={{ color: "var(--ink)", whiteSpace: "nowrap" }}>The Pentagon</span>
-      </div>
+      </button>
 
       <nav aria-label="Switch tool" style={{ display: "flex", flexDirection: "column", gap: 1, padding: "0 8px", overflowY: "auto", flex: "1 1 auto", minHeight: 0 }}>
         {apps.map((a) => {
@@ -716,6 +716,14 @@ export default function Shell() {
     setSystemOpen(false);
   }, []);
 
+  // The mark is the stable way into the shell itself. Opening Settings always
+  // begins on Usage; explicit deep links (such as the rail's Theme shortcut)
+  // remain free to choose their own destination.
+  const openSystemTab = useCallback((tab = "usage") => {
+    setSystemTab(tab);
+    setSystemOpen(true);
+  }, []);
+
   // ── the bar's height, measured rather than assumed ──────────────────────────
   //
   // Ten call sites across six tools hardcoded `calc(100vh - 52px)` or
@@ -922,7 +930,7 @@ export default function Shell() {
       {rail && (
         <SideRail
           ref={railRef} active={active} onPick={pick} apps={tabs} paused={paused}
-          systemOpen={systemOpen} onSystem={() => setSystemOpen((o) => !o)} onSignOut={() => auth.signOut()}
+          systemOpen={systemOpen} onSystem={openSystemTab} onSignOut={() => auth.signOut()}
           email={session?.user?.email}
           mode={mode}
           onOpenTheme={() => { setSystemTab("theme"); setSystemOpen(true); }}
@@ -992,9 +1000,9 @@ export default function Shell() {
         display: "flex", alignItems: "center", gap: isMobile ? 2 : 8,
       }}>
         {isMobile && (
-          <span role="img" aria-label="The Pentagon" style={{ width: 28, minHeight: 44, display: "grid", placeItems: "center", flex: "none" }}>
-            <PentagonLogo size={22} />
-          </span>
+          <button type="button" onClick={openSystemTab} title="Open Settings" aria-label="Open Settings" style={{ width: 32, minHeight: 44, display: "grid", placeItems: "center", flex: "none", background: "none", border: "none", padding: 0, cursor: "pointer" }}>
+            <PentagonLogo size={24} />
+          </button>
         )}
         <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0, flex: "1 1 auto" }}>
           {/* On desktop the mark and the tools BOTH live in the rail, so the top
@@ -1017,7 +1025,7 @@ export default function Shell() {
           {/* Icon-only on mobile: it shares the same compact row as the tools.
               With the rail up both controls live at the bottom of it. */}
           {!rail && <>
-          <button onClick={() => setSystemOpen((o) => !o)} type="button"
+          <button onClick={openSystemTab} type="button"
             title="System — ops, tools, usage, intelligence and theme"
             aria-label="System — ops, tools, usage, intelligence and theme"
             aria-pressed={systemOpen}
