@@ -41,6 +41,10 @@ export default function AltLeaders({
     )
   }
 
+  // This is a shortlist, not a second board. The complete universe remains in
+  // the board below; two live groups are enough to answer where to begin.
+  const visibleGroups = groups.filter((g) => g.rows.length > 0).slice(0, 2)
+
   return (
     <section className="card pad-md alt-leaders" data-testid="alt-leaders">
       <div className="alt-since-top">
@@ -50,7 +54,7 @@ export default function AltLeaders({
         </span>
       </div>
 
-      {groups.map((g) => (
+      {visibleGroups.map((g) => (
         <div className="alt-lead-grp" key={g.band}>
           <div className="alt-lead-head">
             <span className={`alt-band b-${g.band}`}>{g.band}</span>
@@ -63,7 +67,7 @@ export default function AltLeaders({
             <p className="sub t-foot alt-lead-none">Nothing is {g.band} in this scan.</p>
           ) : (
             <ul className="alt-leadlist">
-              {g.rows.map((r) => (
+              {g.rows.slice(0, 3).map((r) => (
                 <li key={r.id ?? r.symbol}>
                   <button
                     type="button" className="alt-leadrow"
@@ -94,10 +98,7 @@ export default function AltLeaders({
 
       {/* The instruction the pane used to be. One line, at the bottom, where it
           is still findable and no longer the whole surface. */}
-      <p className="sub t-foot alt-lead-foot">
-        Any row here or on the board opens that coin&apos;s directive, what happened the last time this setup
-        appeared in its own history, the early-signal checklist and a size the liquidity can support.
-      </p>
+      <p className="sub t-foot alt-lead-foot">The board below keeps every ranked coin; each row opens that coin&apos;s directive.</p>
     </section>
   )
 }
