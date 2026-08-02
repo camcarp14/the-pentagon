@@ -18,7 +18,7 @@
 // from "the engine produced nothing", which would poison the one signal this
 // screen exists to give.
 // ═══════════════════════════════════════════════════════════════════════════
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import DOMPurify from "dompurify";
 import { supabase } from "./supabaseClient";
 // `syne` is gone from this file: every piece of type here is a kit class now,
@@ -86,8 +86,7 @@ export default function EnginePanel({ isMobile }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(null);
   const [note, setNote] = useState("");
-  const [open, setOpen] = useState(() => resolveOpen(loadEnginePanelPrefs(), null));
-  const forced = useRef(false);
+  const [open, setOpen] = useState(() => resolveOpen(loadEnginePanelPrefs()));
 
   const load = useCallback(async () => {
     if (!supabase) { setErr("Supabase isn't configured."); setLoaded(true); return; }
@@ -129,14 +128,6 @@ export default function EnginePanel({ isMobile }) {
     loaded, err, controlRead: control !== null, phase,
     stopReason: global?.paused_reason || null, lastPassMs: phase.sinceLastRunMs,
   });
-
-  // Attention only gets to overrule a stored preference once. A successful
-  // refresh after the operator has opened the panel must never close it again.
-  useEffect(() => {
-    if (forced.current || read.attention === null) return;
-    forced.current = true;
-    if (read.attention) setOpen(true);
-  }, [read.attention]);
 
   const toggle = () => {
     const next = !open;
