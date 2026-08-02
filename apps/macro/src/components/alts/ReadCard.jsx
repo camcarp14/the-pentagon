@@ -35,6 +35,10 @@ export default function ReadCard({
   read, fresh = null, sourceDetail = null, cached = false, cacheAgeSec = null, onReload,
 }) {
   const [work, setWork] = useState(false)
+  // The answer is the score and its plain-language read. The evidence stays
+  // immediately available, but starts folded on a phone so it does not consume
+  // the entire first screen before the operator can reach the board.
+  const [rowsOpen, setRowsOpen] = useState(() => !(typeof window !== 'undefined' && window.matchMedia?.('(max-width: 767.98px)').matches))
   if (!read) return null
 
   const scoreless = read.score == null
@@ -74,17 +78,24 @@ export default function ReadCard({
 
       {/* ── the four answers, or the reason there are none ─────────────────── */}
       {read.rows.length > 0 ? (
-        <dl className="tc-rows" data-testid="alt-read-rows">
-          {read.rows.map((r) => (
-            <div className="tc-row" key={r.key}>
-              <dt className="tc-k t-label">{r.k}</dt>
-              <dd className="tc-v">
-                <span className={`tc-val tone-${r.tone}`}>{r.v}</span>
-                {r.note && <span className="tc-note">{r.note}</span>}
-              </dd>
-            </div>
-          ))}
-        </dl>
+        <>
+          <button className="btn ghost sm altread-rows-toggle" onClick={() => setRowsOpen((open) => !open)} aria-expanded={rowsOpen}>
+            {rowsOpen ? 'hide read details' : `show ${read.rows.length} read details`}
+          </button>
+          <Expand open={rowsOpen}>
+            <dl className="tc-rows" data-testid="alt-read-rows">
+              {read.rows.map((r) => (
+                <div className="tc-row" key={r.key}>
+                  <dt className="tc-k t-label">{r.k}</dt>
+                  <dd className="tc-v">
+                    <span className={`tc-val tone-${r.tone}`}>{r.v}</span>
+                    {r.note && <span className="tc-note">{r.note}</span>}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </Expand>
+        </>
       ) : (
         // Not a blank card. A refused scan is a state with a cause and a next
         // step, and the button is the next step (DESIGN.md §4.7).
