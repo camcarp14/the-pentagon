@@ -3,13 +3,12 @@
 //
 // One site, one login, one toggle. The shell owns exactly four things:
 //   • auth (a single login gates all three tools)
-//   • the top-of-screen app toggle, plus ⌥1-N. WHICH tools it shows and in what
-//     order is a preference (tabPrefs.js), edited in System → Tabs — so the
-//     toggle renders the visible list, never the full APPS list, and the
-//     shortcuts index that same list so ⌥2 is always the second thing on screen
+//   • the desktop rail and phone tool dock, plus ⌥1-N. The desktop list and
+//     shortcuts follow System → Tools; the phone dock intentionally keeps every
+//     tool one tap away, even one hidden from the desktop rail.
 //   • per-tool theming (it stamps @cc/design's CSS vars on a wrapper, so
 //     switching tools re-accents the whole page over the shared dark canvas)
-//   • the cross-tool System hub (ops · usage · minds · agents · tabs)
+//   • the cross-tool System hub (ops · tools · usage · intelligence · theme)
 // Each tool keeps its own internal nav — and its own ⌘K palette — directly
 // beneath (two clear layers), and is lazy-loaded so opening one never
 // downloads the others.
@@ -39,7 +38,7 @@ const TOOLS = {
   ideas: lazy(() => import("@app/ideas")),
 };
 
-// The shell-owned cross-tool management surface (Usage / Minds / Agents).
+// The shell-owned cross-tool management surface (Ops / Tools / Usage / Intelligence / Theme).
 const System = lazy(() => import("./System.jsx"));
 
 // Neutral "platform" theme for the top bar while System is open, so the chrome
@@ -180,8 +179,8 @@ function LoginScreen() {
 // of the content column; nesting those into the rail would be a different
 // information architecture than the one this was asked to match.
 //
-// Mobile never sees this. The phone bar was measured and fixed in the commit
-// before last (five tools on one line, eight wrapping 5+3) and is not in scope.
+// Mobile never sees this. Its compact icon dock holds all eight tools in one
+// line, including tools hidden from this desktop rail.
 // Line-art marks, one per tool, 18px on a 1.6 stroke. Board Room's rail reads as
 // a product because each row has a SHAPE before it has a word — you learn the
 // position by glyph and stop reading the label after a day. A coloured dot
@@ -335,7 +334,7 @@ const SideRail = forwardRef(function SideRail({ active, onPick, apps, paused, sy
           filled button down here read as a form control in a nav. */}
       <div style={{ padding: "8px 8px 0", marginTop: 6, borderTop: "1px solid var(--line)", flexShrink: 0 }}>
         <button onClick={onSystem} type="button" aria-pressed={systemOpen} {...hoverProps("__system")}
-          title="System — ops, usage, minds, agents, tabs and theme"
+          title="System — ops, tools, usage, intelligence and theme"
           style={{
             display: "flex", alignItems: "center", gap: 10, width: "100%",
             padding: "0 10px", minHeight: 34, border: "none", borderRadius: 8, cursor: "pointer", textAlign: "left",
@@ -395,7 +394,7 @@ const SideRail = forwardRef(function SideRail({ active, onPick, apps, paused, sy
 });
 
 // ─── the app toggle ───────────────────────────────────────────────────────────
-function AppToggle({ active, onPick, compact, apps, paused }) {
+function AppToggle({ active, onPick, compact, apps, paused, hiddenApps }) {
   const refs = useRef({});
   // The sliding indicator pill and everything it needed — a layout-effect
   // measuring the active button, a resize listener because segments were
@@ -426,10 +425,11 @@ function AppToggle({ active, onPick, compact, apps, paused }) {
         // scroller. A scrolled tool is an invisible tool, and half the point of
         // the bar is seeing at a glance what is there.
         //
-        // auto-fit rather than a fixed column count, so this holds for however
-        // many tools are visible — hide three in System and it reflows to one
-        // row on its own. The bar's height is measured and published as
-        // --shell-bar (see the header), so nothing downstream assumes 52px.
+        // On a phone this is a compact, fixed eight-icon dock. Hidden means
+        // hidden from the desktop rail, not unavailable: an icon is less
+        // expensive than a label and keeps the whole Pentagon one tap away.
+        // The bar's height is measured and published as --shell-bar (see the
+        // header), so nothing downstream assumes 52px.
         // ── AND THE TWO BRANCHES ARE NOT THE SAME LAYOUT ────────────────────
         //
         // They used to be: one `width: 100%` auto-fit grid for both. On a phone
@@ -460,13 +460,7 @@ function AppToggle({ active, onPick, compact, apps, paused }) {
         // label intact, where a single-row grid clipped all eight to ellipsis.
         // A truncated tool is the same invisible tool the scroller was.
         ...(compact
-          // 70px is the widest cell that still fits FIVE columns on a 393px
-          // phone — "Business" is the long one, ~46px of label plus the dot and
-          // its gap. Five rather than four matters: at four, the default set of
-          // five tools stranded one tool alone on a second row with three empty
-          // cells beside it. At five they sit on one line and the full eight go
-          // 5 + 3.
-          ? { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(70px, 1fr))", width: "100%" }
+          ? { display: "grid", gridTemplateColumns: "repeat(8, minmax(0, 1fr))", width: "100%" }
           : { display: "flex", flexWrap: "wrap", width: "auto", maxWidth: "100%" }),
         gap: 2, padding: compact ? 2 : 3, borderRadius: compact ? 12 : 11,
         minWidth: 0,
@@ -477,23 +471,28 @@ function AppToggle({ active, onPick, compact, apps, paused }) {
       {apps.map((a) => {
         const m = appMeta(a);
         const on = a === active;
-        // PAUSED IS NOT HIDDEN, AND THE BAR HAS TO SHOW THE DIFFERENCE.
-        // A hidden tool is not here at all; a paused tool is here, still opens,
-        // still shows everything it has ever collected — its scheduled work is
-        // what stopped. So it is dimmed and its dot goes hollow rather than
-        // being dropped or disabled. Hollow, not merely a different colour:
+        const hidden = !!hiddenApps?.has?.(a);
+        // PAUSED IS NOT HIDDEN, AND THE DOCK HAS TO SHOW THE DIFFERENCE.
+        // Desktop receives only its visible tools; phones receive all eight,
+        // with the desktop-hidden state named in the icon's accessible label.
+        // A paused tool still opens and still shows everything it collected —
+        // only its scheduled work stopped. So it is dimmed and its dot goes
+        // hollow rather than being dropped or disabled. Hollow, not merely a
+        // different colour:
         // §4.7 and the toggle's own aria-current comment both refuse
         // colour-only state, and eight accents means a "muted" dot is somebody
         // else's normal one.
         const off = paused?.has(a);
+        const title = [m.brand, hidden ? "hidden from desktop rail" : "", off ? "paused" : ""].filter(Boolean).join(" — ");
+        const name = `${m.label}${hidden ? ", hidden from the desktop rail" : ""}${off ? ", background jobs paused" : ""}`;
         return (
           <button key={a} ref={(el) => { refs.current[a] = el; }} onClick={() => onPick(a)} type="button"
-            // No aria-label: it would override the visible label, so voice
-            // control ("tap ZTS") would fail against an accessible name of
-            // "Zero To Secure" (WCAG 2.5.3). The visible text IS the name; the
-            // brand stays as the hover title only.
-            title={off ? `${m.brand} — paused` : m.brand} aria-current={on ? "true" : undefined}
+            // Desktop retains its visible label; the icon-only phone dock gets
+            // the same tool name through aria-label, plus its hidden/paused
+            // state when relevant.
+            title={title} aria-label={compact ? name : undefined} aria-current={on ? "true" : undefined}
             data-paused={off ? "true" : undefined}
+            data-hidden={hidden ? "true" : undefined}
             style={{
               position: "relative", zIndex: 1,
               display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
@@ -502,9 +501,9 @@ function AppToggle({ active, onPick, compact, apps, paused }) {
               // already stretched to 92px, and on a content-sized button it
               // reads as text jammed against the edge. `flex: 0 1 auto` lets a
               // narrow window shrink them before the row wraps.
-              ...(compact ? { padding: "0 6px" } : { flex: "0 1 auto", padding: "0 12px" }),
+              ...(compact ? { padding: 0 } : { flex: "0 1 auto", padding: "0 12px" }),
               minWidth: 0,
-              minHeight: compact ? 36 : 32,
+              minHeight: compact ? 44 : 32,
               border: "none", borderRadius: compact ? 9 : 8, cursor: "pointer",
               // The active cell is drawn, not slid. A sliding thumb has to be
               // measured against one row of segments; across a wrapping grid it
@@ -520,22 +519,20 @@ function AppToggle({ active, onPick, compact, apps, paused }) {
               opacity: off ? 0.6 : 1,
               transition: `color ${M.durBase} ${M.easeStd}, background ${M.durBase} ${M.easeStd}, opacity ${M.durBase} ${M.easeStd}`,
             }}>
-            {/* FIRST child, deliberately. scripts/toolrow-check.mjs measures the
-                button's LAST element for truncation, and the label has to stay
-                that element or the harness starts measuring this instead. It
-                also keeps the visible text inside the accessible name, which is
-                what voice control matches on (WCAG 2.5.3). */}
-            {off && <span style={SR_ONLY}>Paused: </span>}
-            <span aria-hidden style={{
-              width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
-              background: off ? "transparent" : m.accent,
-              border: off ? `1.5px solid ${m.accent}` : "none",
-              boxShadow: on && !off ? `0 0 8px ${m.accent}` : "none",
-            }} />
-            {/* The label gets its own block so it can ellipsise if a tool is
-                ever named something very long — text-overflow does nothing on a
-                flex container. At the current names nothing truncates. */}
-            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>{m.label}</span>
+            {compact ? (
+              <ToolGlyph app={a} color={off ? "var(--faint)" : on ? m.accent : "var(--muted)"} />
+            ) : (
+              <>
+                {off && <span style={SR_ONLY}>Paused: </span>}
+                <span aria-hidden style={{
+                  width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+                  background: off ? "transparent" : m.accent,
+                  border: off ? `1.5px solid ${m.accent}` : "none",
+                  boxShadow: on && !off ? `0 0 8px ${m.accent}` : "none",
+                }} />
+                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>{m.label}</span>
+              </>
+            )}
           </button>
         );
       })}
@@ -800,9 +797,9 @@ export default function Shell() {
     const ro = new ResizeObserver(publish);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [isMobile, tabs, systemOpen]);
+  }, [isMobile, tabs, tabPrefs.order, tabPrefs.hidden, systemOpen]);
 
-  // Preference changes come from System → Tabs, which is rendered by this same
+  // Preference changes come from System → Tools, which is rendered by this same
   // component, so they arrive through here rather than through storage events.
   const applyTabPrefs = useCallback((next) => {
     const saved = saveTabPrefs(next);
@@ -1026,7 +1023,8 @@ export default function Shell() {
               <span className="t-head" style={{ color: "var(--ink)", whiteSpace: "nowrap" }}>The Pentagon</span>
             </span>
           )}
-          {!rail && <AppToggle active={active} onPick={pick} compact={isMobile} apps={tabs} paused={paused} />}
+          {!rail && <AppToggle active={active} onPick={pick} compact={isMobile}
+            apps={isMobile ? tabPrefs.order : tabs} paused={paused} hiddenApps={isMobile ? new Set(tabPrefs.hidden) : undefined} />}
         </div>
         <div style={{
           display: "flex", alignItems: "center", gap: 8, flexShrink: 0,
@@ -1047,8 +1045,8 @@ export default function Shell() {
               controls twice on one screen. */}
           {!rail && <>
           <button onClick={() => setSystemOpen((o) => !o)} type="button"
-            title="System — usage, minds & agents across every tool"
-            aria-label="System — usage, minds & agents across every tool"
+            title="System — ops, tools, usage, intelligence and theme"
+            aria-label="System — ops, tools, usage, intelligence and theme"
             aria-pressed={systemOpen}
             className={systemOpen ? "btn sm tinted" : "btn sm quiet"}
             style={{
@@ -1086,7 +1084,7 @@ export default function Shell() {
       <ToolBoundary key={systemOpen ? "system" : active}>
         <Suspense fallback={<div style={{ padding: 24 }}><SkeletonBoard /></div>}>
           {systemOpen
-            ? <System onExit={() => setSystemOpen(false)} onOpenTool={pick} initialTab={systemTab} onTabConsumed={() => setSystemTab(null)} tabPrefs={tabPrefs} onTabPrefs={applyTabPrefs}
+            ? <System onExit={() => setSystemOpen(false)} initialTab={systemTab} onTabConsumed={() => setSystemTab(null)} tabPrefs={tabPrefs} onTabPrefs={applyTabPrefs}
                 themePrefs={themePrefs} onThemePrefs={applyThemePrefs} systemPrefersDark={sysDark} toolPower={toolPower} />
             : Tool ? <Tool key={active} /> : <ComingSoon app={active} />}
         </Suspense>

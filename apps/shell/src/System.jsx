@@ -10,7 +10,7 @@
 // server usage are the fast-follow.
 // ═══════════════════════════════════════════════════════════════════════════
 import { useEffect, useMemo, useState } from "react";
-import { appMeta, APPS } from "@cc/design";
+import { appMeta } from "@cc/design";
 import { PALETTES } from "@cc/design/palettes.js";
 import { visibleTabs, isHidden, canHide, toggleTab, moveTab, resetTabPrefs, DEFAULT_HIDDEN } from "./tabPrefs.js";
 import { MATCH_TOOL, normalizeThemePrefs, resolveMode, resetThemePrefs } from "./themePrefs.js";
@@ -29,7 +29,6 @@ import Minds from "./Minds.jsx";
 // Which localStorage prefix each tool writes under (they run on one domain now).
 const LS = { zts: "zts_", clarify: "sm_", looper: "lp_" };
 const USAGE_APPS = ["zts", "clarify", "looper"]; // Runway logs AI server-side; not yet unified
-const REGION_LABELS = { identity: "Identity", principle: "Principles", knowledge: "Knowledge", signal: "Signals", skill: "Skills", goal: "Goals" };
 
 // ─── neutral "platform" palette (its own identity, not any one tool's) ───────
 //
@@ -131,86 +130,6 @@ const Stat = ({ label, children, sub }) => (
     {sub && <span className="stattile-label" style={{ color: P.faint, whiteSpace: "normal" }}>{sub}</span>}
   </div>
 );
-
-// ─── OVERVIEW (cross-tool digest) ────────────────────────────────────────────
-// The top line: total AI spend, tokens, and calls across every tool, plus a
-// per-tool breakdown. ZTS, Clarify and Looper log every call to localStorage;
-// Runway runs its AI server-side and Macro is keyless market data, so those two
-// read honestly as "not logged here" rather than a fake $0. Looper matters most
-// here — it is the only tool that spends unattended, so its running total needs
-// to sit next to the others rather than only inside Looper's own log.
-function Overview({ isMobile }) {
-  const ideas = useIdeasSpend(0); // Overview is all-time; Usage does the windowing
-  const per = APPS.map((app) => {
-    if (app === "ideas") {
-      return ideas.error
-        ? { app, tracked: false }
-        : { app, tracked: true, cost: ideas.cost, tok: ideas.inTok + ideas.outTok, calls: ideas.calls, server: true };
-    }
-    if (!USAGE_APPS.includes(app)) return { app, tracked: false };
-    const log = readJSON(`${LS[app]}obs_log`, []);
-    let cost = 0, tok = 0, calls = 0;
-    if (Array.isArray(log)) for (const e of log) { cost += e.costEstimate || 0; tok += (e.inputTokens || 0) + (e.outputTokens || 0); calls += 1; }
-    return { app, tracked: true, cost, tok, calls };
-  });
-  const totals = per.reduce((t, p) => (p.tracked ? { cost: t.cost + p.cost, tok: t.tok + p.tok, calls: t.calls + p.calls } : t), { cost: 0, tok: 0, calls: 0 });
-  const maxCost = Math.max(0.0001, ...per.filter((p) => p.tracked).map((p) => p.cost));
-
-  return (
-    <div>
-      <Header title="Overview" sub="Token spend and usage across every Pentagon tool, at a glance" />
-      {/* Three equal columns, not flex-wrap: three tiles fit a 393px phone at
-          the kit's size, and an even grid never leaves one stranded on its own
-          row. */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 14 }}>
-        <Stat label="Total spend"><AnimatedNumber value={totals.cost} format={fmt$} /></Stat>
-        <Stat label="Tokens"><AnimatedNumber value={totals.tok} format={fmtN} /></Stat>
-        <Stat label="AI calls"><AnimatedNumber value={totals.calls} format={fmtN} /></Stat>
-      </div>
-      <Card>
-        <SectionLabel>By tool</SectionLabel>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? 10 : 14 }}>
-          {per.map((p) => (
-            <div key={p.app} style={{ background: P.surface2, border: `1px solid ${P.line}`, borderRadius: 12, padding: 14 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                <Dot app={p.app} size={9} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: P.ink, fontFamily: P.display }}>{appMeta(p.app).brand}</span>
-                {p.tracked && <span style={{ marginLeft: "auto", fontSize: 15, fontWeight: 800, color: P.ink, fontFamily: P.mono }}>{fmt$(p.cost)}</span>}
-              </div>
-              {p.tracked ? (
-                <>
-                  <div style={{ height: 6, borderRadius: 99, background: P.bg, overflow: "hidden", marginBottom: 8 }}>
-                    <div style={{ height: "100%", width: `${(p.cost / maxCost) * 100}%`, background: appMeta(p.app).accent, borderRadius: 99, transition: "width .4s cubic-bezier(0.16,1,0.3,1)" }} />
-                  </div>
-                  <div style={{ fontSize: 11.5, color: P.muted, display: "flex", gap: 14, flexWrap: "wrap" }}>
-                    <span>{fmtN(p.tok)} tokens</span><span>{fmtN(p.calls)} calls</span>
-                    {/* Worth saying out loud: every other figure on this card
-                        came from this browser's own localStorage, so it is per
-                        device. This one didn't. */}
-                    {p.server && <span style={{ color: P.faint }}>server-logged</span>}
-                  </div>
-                </>
-              ) : (
-                <div style={{ fontSize: 11.5, color: P.faint, lineHeight: 1.5 }}>
-                  {p.app === "runway"
-                    ? "Runs its AI server-side — unified logging is the next step."
-                    : p.app === "ideas"
-                      ? "Run log unreachable — spend is recorded in Postgres, not this browser."
-                      : "Keyless market data — no Claude spend to log here."}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </Card>
-      {totals.calls === 0 && (
-        <div style={{ fontSize: 11.5, color: P.faint, marginTop: 12, lineHeight: 1.5 }}>
-          No AI calls logged yet in ZTS, Clarify or Looper — generate a Short, draft outreach, or start a Looper run and spend shows up here. See <strong style={{ color: P.muted }}>Usage</strong> for the call-by-call log.
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── USAGE ─────────────────────────────────────────────────────────────────────
 function Usage({ isMobile }) {
@@ -325,23 +244,11 @@ function Usage({ isMobile }) {
   );
 }
 
-// ─── MINDS (DNA) ────────────────────────────────────────────────────────────
-function statsFor(genome) {
-  if (!genome || !Array.isArray(genome.nodes)) return null;
-  const byRegion = {};
-  Object.keys(REGION_LABELS).forEach((r) => (byRegion[r] = 0));
-  for (const n of genome.nodes) byRegion[n.region] = (byRegion[n.region] || 0) + 1;
-  return { nodes: genome.nodes.length, edges: Array.isArray(genome.edges) ? genome.edges.length : 0, byRegion };
-}
-
-// The Minds panel used to be a read-out: node and edge counts for ZTS and
-// Clarify, a link into each tool's own DNA tab, and no SYNC at all. It is the
-// editor now — one screen for every mind, in the place a mind belongs, which is
-// settings. See Minds.jsx for why it edits three fields and no others.
-
-// ─── AGENTS ────────────────────────────────────────────────────────────────────
-// The engine controls for every tool live here now (removed from the tools'
-// own tabs to centralize the levers). Both tools share one engine_ctrl shape
+// ─── BROWSER ASSISTANTS ─────────────────────────────────────────────────────
+// These controls affect browser-resident assistants only. Production scheduled
+// jobs are deliberately elsewhere: their source of truth is Ops / Tools on the
+// server, not the localStorage document this panel uses.
+// Both tools share one engine_ctrl shape
 // { running, observeOnly, allowSonnet, pauseWhenIdle, cadenceSec, ... } written
 // as plain JSON under their prefix; each tool's headless engine re-reads it on
 // every heartbeat and on remount, so toggling here drives it directly.
@@ -362,7 +269,7 @@ const CtrlRow = ({ on, onClick, label, sub, tone }) => (
   </button>
 );
 
-function Agents({ isMobile }) {
+function BrowserAssistants({ isMobile }) {
   const [, force] = useState(0);
   const patch = (app, key, p) => {
     const cur = readJSON(`${LS[app]}${key}`, {});
@@ -383,7 +290,6 @@ function Agents({ isMobile }) {
 
   return (
     <div>
-      <Header title="Agents" sub="Drive every tool's headless engine from one place — play/pause, token limits, and the DNA worker" />
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 14 }}>
         {tools.map(({ app, ctrl, worker }) => (
           <Card key={app}>
@@ -431,6 +337,22 @@ function Agents({ isMobile }) {
   );
 }
 
+function Intelligence({ isMobile }) {
+  const [section, setSection] = useState("minds");
+  return (
+    <div className="pagefade">
+      <Header
+        title="Intelligence"
+        sub={section === "minds"
+          ? "Tune the beliefs each tool carries into its prompts."
+          : "Browser-only assistant controls. Scheduled production jobs live in Ops and Tools."}
+        right={<Segment value={section} onChange={setSection} options={[["minds", "Minds"], ["agents", "Browser assistants"]]} />}
+      />
+      {section === "minds" ? <Minds isMobile={isMobile} /> : <BrowserAssistants isMobile={isMobile} />}
+    </div>
+  );
+}
+
 // ─── chrome ────────────────────────────────────────────────────────────────────
 // The kit's .t-label is the ONE place uppercase survives (DESIGN.md §4.3), so
 // this keeps the caps but drops to the kit's 0.05em tracking from 0.1em, which
@@ -447,7 +369,7 @@ const Header = ({ title, sub, right }) => (
     {right}
   </div>
 );
-// ─── Tabs — which tools are in the top toggle, and in what order ─────────────
+// ─── Tools — desktop rail order and scheduled-job power ──────────────────────
 // Lives in System because it is chrome preference, not a tool's own setting:
 // putting it inside ZTS would mean opening one tool to control whether another
 // is visible.
@@ -573,7 +495,7 @@ function PowerRow({ app, label, entry, loading, error, busy, onToggle }) {
   );
 }
 
-// ─── Tabs — which tools are in the top toggle, and in what order ─────────────
+// ─── Tools — desktop rail order and scheduled-job power ──────────────────────
 // Lives in System because it is chrome preference, not a tool's own setting:
 // putting it inside ZTS would mean opening one tool to control whether another
 // is visible.
@@ -582,7 +504,7 @@ function PowerRow({ app, label, entry, loading, error, busy, onToggle }) {
 // the surface that matters most here — a phone, where a long-press drag fights
 // the page scroll — and it is unusable by keyboard. Two buttons are operable by
 // touch, mouse and keyboard with no library.
-function Tabs({ prefs, onChange, isMobile, toolPower }) {
+function Tools({ prefs, onChange, isMobile, toolPower }) {
   const shownCount = visibleTabs(prefs).length;
   const toast = useToast();
   const rowBtn = (enabled) => ({
@@ -603,7 +525,7 @@ function Tabs({ prefs, onChange, isMobile, toolPower }) {
   return (
     <div className="pagefade">
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
-        <div style={{ fontSize: 15, fontWeight: 800, fontFamily: P.display }}>Top bar</div>
+        <div style={{ fontSize: 15, fontWeight: 800, fontFamily: P.display }}>Tool access</div>
         <button
           onClick={() => onChange(resetTabPrefs())}
           style={{ background: "none", border: `1px solid ${P.line}`, color: P.muted, borderRadius: 8, padding: "6px 12px", fontSize: 11.5, cursor: "pointer", fontFamily: P.display, fontWeight: 600 }}
@@ -615,9 +537,9 @@ function Tabs({ prefs, onChange, isMobile, toolPower }) {
           trying to tell apart, and separating their explanations by half a
           screen is how you guarantee they never do. */}
       <div style={{ fontSize: 12.5, color: P.muted, lineHeight: 1.6, marginBottom: 16, maxWidth: 620 }}>
-        Choose which tools appear in the toggle and the order they sit in. Hiding a
-        tool only removes it from this bar — nothing it runs on a schedule stops,
-        and its data is untouched. <strong style={{ color: P.ink, fontWeight: 700 }}>Power is the other switch:</strong>{" "}
+        Arrange the desktop rail and keyboard shortcuts. On phones, every tool is
+        always one icon away, including tools hidden from the rail. Hiding a tool
+        never stops it or changes its data. <strong style={{ color: P.ink, fontWeight: 700 }}>Power is the other switch:</strong>{" "}
         it stops that tool's scheduled jobs on the server, and each one says which
         jobs those are. <span style={{ color: P.faint }}>⌥1–⌥{Math.min(shownCount, 6)} jump to the visible tools in this order.</span>
       </div>
@@ -645,7 +567,7 @@ function Tabs({ prefs, onChange, isMobile, toolPower }) {
                   {/* "Hidden from the bar", not "Hidden" — with a power switch
                       one line below, a bare "Hidden" invites the reading that
                       the tool itself is off. */}
-                  {hidden ? "Hidden from the bar" : m.brand}
+                  {hidden ? "Hidden from the desktop rail" : m.brand}
                 </span>
               </span>
 
@@ -660,9 +582,9 @@ function Tabs({ prefs, onChange, isMobile, toolPower }) {
                 type="button"
                 role="switch"
                 aria-checked={!hidden}
-                aria-label={`${hidden ? "Show" : "Hide"} ${m.label} in the top bar`}
+                aria-label={`${hidden ? "Show" : "Hide"} ${m.label} in the desktop rail`}
                 disabled={blockedLast}
-                title={blockedLast ? "At least one tool has to stay visible" : hidden ? "Show in the top bar" : "Hide from the top bar"}
+                title={blockedLast ? "At least one tool has to stay visible" : hidden ? "Show in the desktop rail" : "Hide from the desktop rail"}
                 onClick={() => !blockedLast && onChange(toggleTab(prefs, app))}
                 style={{
                   width: 46, height: 28, flex: "none", padding: 3, borderRadius: 999,
@@ -697,7 +619,8 @@ function Tabs({ prefs, onChange, isMobile, toolPower }) {
       </div>
 
       <div style={{ fontSize: 11.5, color: P.faint, marginTop: 14, lineHeight: 1.6 }}>
-        System is always reachable from the top bar, whatever is hidden.
+        System is always reachable, whatever is hidden. Every phone dock keeps all
+        tools available; this preference only changes the desktop rail and ⌥ shortcuts.
         {" "}Default: {DEFAULT_HIDDEN.map((a) => appMeta(a).label).join(", ")} start hidden.
         {" "}Pausing is stored on the server, not in this browser — it is the same
         table the Ops console's global stop writes, which is why a scheduled job
@@ -719,9 +642,9 @@ function Segment({ value, onChange, options }) {
 
 // ─── THEME — palette and mode, across the board ──────────────────────────────
 //
-// ITS OWN TAB, NOT A SECTION UNDER "Tabs". Two reasons, one of them the
+// ITS OWN TAB, NOT A SECTION UNDER "Tools". Two reasons, one of them the
 // operator's. Theirs: "change the theme across the board" is a global setting,
-// and Tabs is emphatically not global — it is a per-tool list, and it just grew
+// and Tools is emphatically not global — it is a per-tool list, and it just grew
 // a second per-tool control. Mine: that list now carries two switches whose
 // difference is the hardest thing on this screen to communicate, and hanging a
 // nine-swatch grid off the bottom of it is how both settings end up half-read.
@@ -827,11 +750,13 @@ function Theme({ prefs, onChange, systemPrefersDark, isMobile }) {
   );
 }
 
-// Ops sits first after Overview: it is the containment console, and the one
-// tab whose contents you might need in a hurry.
-const TABS = [["overview", "Overview"], ["ops", "Ops"], ["usage", "Usage"], ["minds", "Minds"], ["agents", "Agents"], ["tabs", "Tabs"], ["theme", "Theme"]];
+// The System hub has five distinct jobs. Usage absorbed the former all-time
+// overview; Minds and browser assistants share Intelligence; and the old Tabs
+// label became Tools because it contains access and server-power controls, not
+// merely a row of tabs.
+const TABS = [["ops", "Ops"], ["tools", "Tools"], ["usage", "Usage"], ["intelligence", "Intelligence"], ["theme", "Theme"]];
 
-export default function System({ onExit, onOpenTool, tabPrefs, onTabPrefs, themePrefs, onThemePrefs, systemPrefersDark, toolPower, initialTab, onTabConsumed }) {
+export default function System({ onExit, tabPrefs, onTabPrefs, themePrefs, onThemePrefs, systemPrefersDark, toolPower, initialTab, onTabConsumed }) {
   // The Desk used to live here. It was dissolved into ZTS Mission and Clarify
   // Today instead of relocated: a queue you navigate to is a queue you miss,
   // and the work belongs on the screen for the tool that produced it.
@@ -841,7 +766,7 @@ export default function System({ onExit, onOpenTool, tabPrefs, onTabPrefs, theme
   // direction — the component stays mounted, so a second deep link from the
   // rail would be ignored. Consumed on arrival, then cleared by the caller so
   // it cannot re-fire on an unrelated re-render.
-  const [tab, setTab] = useState(() => (initialTab && TABS.some(([k]) => k === initialTab) ? initialTab : "overview"));
+  const [tab, setTab] = useState(() => (initialTab && TABS.some(([k]) => k === initialTab) ? initialTab : "ops"));
   useEffect(() => {
     if (!initialTab) return;
     if (TABS.some(([k]) => k === initialTab)) setTab(initialTab);
@@ -890,12 +815,10 @@ export default function System({ onExit, onOpenTool, tabPrefs, onTabPrefs, theme
             >{label}</button>
           ))}
         </div>
-        {tab === "overview" && <Overview isMobile={isMobile} />}
         {tab === "ops" && <Ops isMobile={isMobile} />}
+        {tab === "tools" && tabPrefs && <Tools prefs={tabPrefs} onChange={onTabPrefs} isMobile={isMobile} toolPower={toolPower} />}
         {tab === "usage" && <Usage isMobile={isMobile} />}
-        {tab === "minds" && <Minds isMobile={isMobile} />}
-        {tab === "agents" && <Agents isMobile={isMobile} />}
-        {tab === "tabs" && tabPrefs && <Tabs prefs={tabPrefs} onChange={onTabPrefs} isMobile={isMobile} toolPower={toolPower} />}
+        {tab === "intelligence" && <Intelligence isMobile={isMobile} />}
         {tab === "theme" && <Theme prefs={themePrefs} onChange={onThemePrefs} systemPrefersDark={!!systemPrefersDark} isMobile={isMobile} />}
       </div>
     </div>
