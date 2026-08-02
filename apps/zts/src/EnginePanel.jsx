@@ -18,7 +18,7 @@
 // from "the engine produced nothing", which would poison the one signal this
 // screen exists to give.
 // ═══════════════════════════════════════════════════════════════════════════
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DOMPurify from "dompurify";
 import { supabase } from "./supabaseClient";
 // `syne` is gone from this file: every piece of type here is a kit class now,
@@ -29,8 +29,10 @@ import { armWrites, subsystemWrites, armState } from "@cc/ops/arm.js";
 import { cadenceFor } from "@cc/ops/cadence.js";
 import { resolveDirection, ENGINE, DIRECTION_KEY, HARD_MAX } from "@cc/ops/direction.js";
 import { buildQueue, KIND } from "@cc/ops/queue.js";
+import { loadEnginePanelPrefs, saveEnginePanelPrefs, resolveOpen } from "./enginePanelPrefs.js";
 
 const SUBSYSTEM = "zts.content";
+const BODY_ID = "zts-engine-body";
 const pub = () => supabase.schema("public");
 
 const TONE = { go: T.green, warn: T.amber, prompt: T.blue, neutral: T.sub };
@@ -41,6 +43,36 @@ const PILL = {
   stopped: { c: T.red, t: "Stopped" },
   unknown: { c: T.red, t: "Unknown" },
 };
+
+const SUMMARY_TONE = { bad: "var(--bad)", warn: "var(--warn)", quiet: "var(--muted)" };
+
+// The closed row has one job: report the writer's actual state without making
+// the operator reopen a 700px card to discover a failure. A queue waiting for
+// review is successful work, not an alarm, so it does not defeat the fold.
+export function collapsedRead({ loaded, err, controlRead, phase, stopReason, lastPassMs }) {
+  if (!loaded) return { attention: null, tone: "quiet", line: "Reading state…" };
+  if (!controlRead) return { attention: true, tone: "bad", line: "State unreadable — the control table did not load" };
+
+  const bits = [];
+  if (err) bits.push("some of this did not load");
+  bits.push(phase.headline);
+  if (stopReason) bits.push(stopReason);
+  else if (phase.phase === PHASE.BLOCKED) bits.push(phase.detail);
+  if (Number.isFinite(lastPassMs)) bits.push(`last pass ${humanGap(lastPassMs)} ago`);
+
+  const attention = Boolean(err) || !phase.ok;
+  const tone = err || phase.phase === PHASE.DISARMED || phase.phase === PHASE.BLOCKED
+    ? "bad" : !phase.ok ? "warn" : "quiet";
+  return { attention, tone, line: bits.slice(0, 3).join(" · ") };
+}
+
+function Fold({ open, children }) {
+  return (
+    <div id={BODY_ID} className={`expand${open ? " open" : ""}`} aria-hidden={!open} inert={open ? undefined : ""}>
+      <div>{children}</div>
+    </div>
+  );
+}
 
 export default function EnginePanel({ isMobile }) {
   const [dir, setDir] = useState(null);
@@ -54,6 +86,8 @@ export default function EnginePanel({ isMobile }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(null);
   const [note, setNote] = useState("");
+  const [open, setOpen] = useState(() => resolveOpen(loadEnginePanelPrefs(), null));
+  const forced = useRef(false);
 
   const load = useCallback(async () => {
     if (!supabase) { setErr("Supabase isn't configured."); setLoaded(true); return; }
@@ -91,6 +125,24 @@ export default function EnginePanel({ isMobile }) {
   const plays = enginePlays({ phase, extras: [] });
   const state = loaded ? armState({ global, subsystems: mine ? [mine] : [] }) : { state: "unknown" };
   const pill = PILL[state.state] || PILL.unknown;
+  const read = collapsedRead({
+    loaded, err, controlRead: control !== null, phase,
+    stopReason: global?.paused_reason || null, lastPassMs: phase.sinceLastRunMs,
+  });
+
+  // Attention only gets to overrule a stored preference once. A successful
+  // refresh after the operator has opened the panel must never close it again.
+  useEffect(() => {
+    if (forced.current || read.attention === null) return;
+    forced.current = true;
+    if (read.attention) setOpen(true);
+  }, [read.attention]);
+
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    saveEnginePanelPrefs({ open: next });
+  };
 
   const act = (id, fn) => async () => {
     setBusy(id); setErr(""); setNote("");
@@ -171,23 +223,29 @@ export default function EnginePanel({ isMobile }) {
     // The kit's card: one material, a shadow, no outline. This drew a 1px line
     // AND T.cardShadow — the pair the language forbids.
     <div className="card pad-lg" style={{ padding: isMobile ? 16 : 20, marginBottom: 16 }}>
-      {/* header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-        <span className="t-head">The writer</span>
-        {/* The kit's .pill, tinted by state. Armed / Rehearsing / Off / Stopped
-            is written out beside the dot, so the state never rests on the hue. */}
-        <span className="pill" style={{ background: `${pill.c}1F`, height: 26, padding: "0 11px" }}>
-          <span className="dotstatus" style={{ background: pill.c }} />
-          <span className="t-label" style={{ color: pill.c }}>{pill.t}</span>
-        </span>
-        {phase.sinceLastRunMs != null && (
-          <span className="t-cap" style={{ marginLeft: "auto" }}>last pass {humanGap(phase.sinceLastRunMs)} ago</span>
-        )}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button type="button" onClick={toggle} aria-expanded={open} aria-controls={BODY_ID}
+          className="cell tappable" style={{ flex: 1, minWidth: 0, padding: 0, gap: 10, cursor: "pointer" }}>
+          <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span className="t-head">The writer</span>
+              <span className="pill" style={{ background: `${pill.c}1F`, height: 26, padding: "0 11px" }}>
+                <span className="dotstatus" style={{ background: pill.c }} />
+                <span className="t-label" style={{ color: pill.c }}>{pill.t}</span>
+              </span>
+              {open && phase.sinceLastRunMs != null && (
+                <span className="t-cap">last pass {humanGap(phase.sinceLastRunMs)} ago</span>
+              )}
+            </span>
+            {!open && <span className="t-foot" style={{ color: SUMMARY_TONE[read.tone], lineHeight: 1.4, whiteSpace: "normal" }}>{read.line}</span>}
+          </span>
+          <span aria-hidden style={{ flex: "none", color: "var(--faint)", fontSize: 15, lineHeight: 1, transition: "transform var(--dur-2) var(--ease-out)", transform: open ? "rotate(180deg)" : "none" }}>▾</span>
+        </button>
         {/* The off switch. Always visible once a control row exists, so the
             engine can never be in a state you cannot reverse from this screen. */}
         {loaded && mine && (
           <button type="button" className="btn sm quiet" onClick={toggleMine} disabled={!!busy}
-            style={{ marginLeft: phase.sinceLastRunMs != null ? 10 : "auto", flex: "none" }}>
+            style={{ flex: "none" }}>
             {busy === "toggle" ? "…" : mine.enabled === true ? "Turn off" : "Turn on"}
           </button>
         )}
@@ -196,6 +254,9 @@ export default function EnginePanel({ isMobile }) {
       {/* An error that a reload might clear gets a retry sitting on it. */}
       {err && <Msg tone={T.red} onRetry={load} busy={!!busy}>{err}</Msg>}
       {note && <Msg tone={T.green}>{note}</Msg>}
+
+      <Fold open={open}>
+      <div style={{ paddingTop: 14 }}>
 
       {/* the one true headline */}
       <div style={{ marginBottom: plays.length ? 14 : 0 }}>
@@ -278,6 +339,8 @@ export default function EnginePanel({ isMobile }) {
           Change what it writes about ›
         </button>
       )}
+      </div>
+      </Fold>
     </div>
   );
 }

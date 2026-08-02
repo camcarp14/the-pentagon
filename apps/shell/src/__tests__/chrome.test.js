@@ -69,19 +69,16 @@ describe("the chrome obeys the language", () => {
     expect(sizes.filter((n) => n < 10.5), "below the 10.5px floor").toEqual([]);
   });
 
-  it("shows every tool at once and never scrolls", () => {
-    // This used to assert the OPPOSITE — a scrolling pill row — on the reasoning
-    // that eight labels cannot divide a phone row at a legible size. That much
-    // is true horizontally (measured: ~345px of label against ~288px of row at
-    // 393px). The wrong conclusion was to scroll: a scrolled tool is an
-    // invisible tool, and seeing what is there is half the point of the bar.
-    // It wraps to a second row now.
+  it("keeps the desktop rail readable and the mobile dock complete", () => {
+    // Eight full labels cannot fit in one phone row at a usable size. The dock
+    // uses the same shaped glyphs as the desktop rail instead, so every tool
+    // remains reachable without turning the header into two rows or a scroller.
     const toggle = code.slice(code.indexOf("function AppToggle"), code.indexOf("function ", code.indexOf("function AppToggle") + 10));
     expect(toggle, "a scroller hides tools").not.toContain("overflowX");
     expect(toggle, "a scroller hides tools").not.toContain("scrollSnap");
-    expect(toggle, "wraps rather than scrolling or dividing").toContain("auto-fit");
-    // auto-fit, not a fixed column count — hiding or adding a tool must reflow.
-    expect(toggle).not.toMatch(/gridTemplateColumns:\s*`?repeat\(\s*\d/);
+    expect(toggle, "the phone dock has one position per tool").toContain('gridTemplateColumns: "repeat(8, minmax(0, 1fr))"');
+    expect(toggle, "the phone dock uses the shared tool glyphs").toContain("<ToolGlyph app={a}");
+    expect(toggle, "a hidden desktop tool remains a phone destination").toContain("hiddenApps");
 
     // ── AND THE PART THIS TEST COULD NOT SEE ────────────────────────────────
     //
@@ -107,13 +104,13 @@ describe("the chrome obeys the language", () => {
     ).toBe(1);
   });
 
-  it("shows each tool's whole name, never an abbreviation or a bare dot", () => {
+  it("keeps full names on desktop and an accessible name on mobile", () => {
     const toggle = code.slice(code.indexOf("function AppToggle"), code.indexOf("function ", code.indexOf("function AppToggle") + 10));
-    // m.short is the abbreviated form ("Biz"); the row must render m.label.
-    expect(toggle, "the full label, not the short form").toContain("m.label");
+    // m.short is the abbreviated form ("Biz"); neither the desktop label nor
+    // the icon-only button's accessible name may use it.
+    expect(toggle, "the full label and accessible name").toContain("m.label");
     expect(toggle).not.toContain("m.short");
-    // A label rendered only when there is room is a label that disappears.
-    expect(toggle).not.toMatch(/\{\s*!?compact\s*&&[^}]*m\.label/);
+    expect(toggle, "icon-only buttons still announce their tool").toContain("aria-label={compact ? name : undefined}");
   });
 
   it("does not put uppercase or tracking on the tool labels", () => {
@@ -125,11 +122,12 @@ describe("the chrome obeys the language", () => {
   });
 
   it("never signals the active tool by colour alone", () => {
-    // The dot was dropped on mobile to buy label width back. A scrolling row
-    // has the room, and colour-only state is a thing this language forbids.
+    // The phone dock trades labels for shaped glyphs, but the selected button
+    // still carries aria-current and a drawn active cell instead of colour-only
+    // state.
     const toggle = code.slice(code.indexOf("function AppToggle"), code.indexOf("function ", code.indexOf("function AppToggle") + 10));
     expect(toggle).toContain("aria-current");
-    expect(toggle).not.toContain("{!compact && (");   // the dot is unconditional now
+    expect(toggle).toContain('background: on ? "var(--surface-2, var(--surface))"');
   });
 
   it("keeps uppercase out of the wordmark", () => {

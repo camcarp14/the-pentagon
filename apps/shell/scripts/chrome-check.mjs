@@ -239,7 +239,7 @@ for (const [label, hash] of [["a tool", "#/zts"], ["System", "#/system"]]) {
   // reachable and never behind a disclosure. A control you cannot see is behind
   // the deepest disclosure there is. Measured: separation 4 out of 255.
   const { page } = await open({ theme: { palette: "match", mode: "light" } }, { hash: "#/system" });
-  for (const tab of ["Overview", "Ops", "Usage", "Minds", "Agents", "Tabs", "Theme"]) {
+  for (const tab of ["Ops", "Tools", "Usage", "Intelligence", "Theme"]) {
   // A missing tab is a FAILED CHECK, not a crashed harness. The first version
   // threw here against the pre-change build (which has no Theme tab) and took
   // the remaining twelve checks with it, which is the same disease as a suite
@@ -384,7 +384,7 @@ for (const [label, hash] of [["a tool", "#/zts"], ["System", "#/system"]]) {
 // call site at all, and does a refusal leave the control telling the truth?
 {
   const { page, puts } = await open({}, { hash: "#/system" });
-  await page.click('[role="tab"]:has-text("Tabs")');
+  await page.click('[role="tab"]:has-text("Tools")');
   await page.waitForTimeout(400);
   const sel = '[role="switch"][aria-label*="background engines"]';
   const labels = await page.$$eval(sel, (els) => els.map((e) => e.getAttribute("aria-label")));
@@ -395,10 +395,10 @@ for (const [label, hash] of [["a tool", "#/zts"], ["System", "#/system"]]) {
   const missing = [
     "Pauses the content engine and store ingest.",
     "Nothing runs in the background for this tool",
-    "nothing it runs on a schedule stops",
+    "Hiding a tool never stops it",
     "Still records the daily BTC-dominance sample",
   ].filter((want) => !copy.includes(want));
-  if (missing.length) fail(`Tabs is missing the copy: ${missing.map((s) => `"${s}"`).join(", ")}`);
+  if (missing.length) fail(`Tools is missing the copy: ${missing.map((s) => `"${s}"`).join(", ")}`);
   else ok("both switches' copy is present, including what a pause does NOT stop");
 
   const zts = await page.$(`${sel}[aria-label*="ZTS"]`);
@@ -428,7 +428,7 @@ for (const [label, hash] of [["a tool", "#/zts"], ["System", "#/system"]]) {
 }
 {
   const { page, puts } = await open({}, { hash: "#/system", powerStatus: 500 });
-  await page.click('[role="tab"]:has-text("Tabs")');
+  await page.click('[role="tab"]:has-text("Tools")');
   await page.waitForTimeout(400);
   const sel = '[role="switch"][aria-label*="background engines"][aria-label*="ZTS"]';
   if (!(await page.$(sel))) fail("there is no power switch to fail");

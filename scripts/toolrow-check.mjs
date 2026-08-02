@@ -32,8 +32,10 @@ const session = {
   user: { id: "00000000-0000-0000-0000-000000000001", aud: "authenticated", role: "authenticated", email: "stub@example.com", app_metadata: {}, user_metadata: {}, created_at: new Date(0).toISOString() },
 };
 
-// Every tool visible, which is both the default and the worst case for width.
+// Desktop may hide these three, but the mobile icon dock must still render all
+// eight in their saved order.
 const ORDER = (process.env.TOOLS || "zts,clarify,runway,macro,looper,business,sync,ideas").split(",");
+const HIDDEN = ["macro", "looper", "business"];
 
 // MOBILE ONLY, NOW. The wrapping tool row was the desktop layout when this
 // harness was written; the tools have since moved to a left rail above 768px,
@@ -41,18 +43,18 @@ const ORDER = (process.env.TOOLS || "zts,clarify,runway,macro,looper,business,sy
 // renders, so "no .toolrow on desktop" is asserted there rather than being
 // silently unowned by both files.
 //
-// The row itself is unchanged on a phone, which is the platform it was built
-// for and the one the 5+3 wrap was measured against. Everything below still
-// applies there, so this is a narrowing of scope, not a retreat from it.
+// Phones use one compact row of the eight shared tool glyphs. A hidden desktop
+// rail item still belongs here: hiding changes desktop access and shortcuts,
+// never the phone dock.
 const DESKTOP = [];
 const MOBILE = [360, 393, 414];
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-await page.addInitScript(([s, order]) => {
+await page.addInitScript(([s, order, hidden]) => {
   for (const k of ["sb-stub-auth-token", "sb-localhost-auth-token"]) { try { localStorage.setItem(k, JSON.stringify(s)); } catch {} }
-  try { localStorage.setItem("cc_tab_prefs", JSON.stringify({ order, hidden: [] })); } catch {}
-}, [session, ORDER]);
+  try { localStorage.setItem("cc_tab_prefs", JSON.stringify({ order, hidden })); } catch {}
+}, [session, ORDER, HIDDEN]);
 await page.route("**/*", (r) => {
   const u = r.request().url();
   if (u.startsWith(BASE)) return r.continue();
@@ -88,6 +90,9 @@ const measure = () => page.evaluate(() => {
     shellBar: getComputedStyle(document.documentElement).getPropertyValue("--shell-bar").trim(),
     overflow: document.documentElement.scrollWidth - window.innerWidth,
     smallest: Math.min(...btns.map((b) => Math.round(b.getBoundingClientRect().height))),
+    narrowest: Math.min(...btns.map((b) => Math.round(b.getBoundingClientRect().width))),
+    icons: btns.filter((b) => b.querySelector("svg")).length,
+    hidden: btns.filter((b) => b.getAttribute("data-hidden") === "true").length,
   };
 });
 
@@ -108,7 +113,7 @@ for (const width of [...DESKTOP, ...MOBILE]) {
   // THE REGRESSION. On a desktop the whole point of the bar is one glance, and
   // the shipped bug put every tool on its own line. Two lines is the honest
   // answer for eight tools in a narrow window; five is a collapse.
-  const maxLines = mobile ? 3 : 2;
+  const maxLines = mobile ? 1 : 2;
   if (m.lines > maxLines) fail(`${label}: tools wrapped onto ${m.lines} lines (max ${maxLines}) — ${detail}`);
   else ok(`${label}: ${m.lines} line${m.lines > 1 ? "s" : ""} — ${detail}`);
 
@@ -117,13 +122,14 @@ for (const width of [...DESKTOP, ...MOBILE]) {
   // room: --shell-bar exists so the height CAN change, and a test that pins it
   // exactly would fail on every legitimate tweak while catching nothing extra.
   //   desktop  51 correct · 90 ceiling  · 177 was the bug
-  //   mobile  142 correct (identity row + 8 tools at 5+3, measured at 360/393/
-  //           414) · 190 ceiling · a collapse here is ~340
-  const maxBar = mobile ? 190 : 90;
+  //   mobile  102 correct (identity row + one 44px icon dock) · 130 ceiling
+  const maxBar = mobile ? 130 : 90;
   if (m.barH != null && m.barH > maxBar) fail(`${label}: bar is ${m.barH}px tall (max ${maxBar}) — the row is stacking`);
 
-  // A tool nobody can read is the invisible tool the scroller used to make.
-  if (m.clipped > 0) fail(`${label}: ${m.clipped} tool label(s) truncated to ellipsis`);
+  // Labels belong to desktop; the phone dock owes one glyph per tool instead.
+  if (!mobile && m.clipped > 0) fail(`${label}: ${m.clipped} tool label(s) truncated to ellipsis`);
+  if (mobile && m.icons !== ORDER.length) fail(`${label}: ${m.icons} tool glyph(s) rendered, expected ${ORDER.length}`);
+  if (mobile && m.hidden !== HIDDEN.length) fail(`${label}: ${m.hidden} desktop-hidden tool glyph(s) rendered, expected ${HIDDEN.length}`);
 
   // No tool may be pushed off the side of the page.
   if (m.overflow > 0) fail(`${label}: page scrolls sideways by ${m.overflow}px`);
@@ -133,6 +139,7 @@ for (const width of [...DESKTOP, ...MOBILE]) {
 
   // Touch targets on the platform where they are touched.
   if (mobile && m.smallest < 36) fail(`${label}: smallest tool button is ${m.smallest}px tall`);
+  if (mobile && m.narrowest < 36) fail(`${label}: narrowest tool button is ${m.narrowest}px wide`);
 
   // --shell-bar has to track the real height or ten call sites across six tools
   // that read `calc(100vh - var(--shell-bar))` are wrong by the difference.
