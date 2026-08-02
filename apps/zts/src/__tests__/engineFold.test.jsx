@@ -8,10 +8,10 @@ const stopped = { phase: PHASE.DISARMED, ok: false, headline: "Stopped", detail:
 const base = { loaded: true, err: "", controlRead: true, lastPassMs: null };
 
 describe("the ZTS writer fold", () => {
-  it("starts closed for a healthy writer and opens for a problem", () => {
-    expect(resolveOpen({ open: null }, false)).toBe(false);
-    expect(resolveOpen({ open: false }, true)).toBe(true);
-    expect(resolveOpen({ open: true }, null)).toBe(true);
+  it("starts closed by default, including when the writer is stopped", () => {
+    expect(resolveOpen({ open: null })).toBe(false);
+    expect(resolveOpen({ open: false })).toBe(false);
+    expect(resolveOpen({ open: true })).toBe(true);
   });
 
   it("never calls an unread control row healthy", () => {
