@@ -68,7 +68,7 @@ describe("every tool has a palette", () => {
     // accent, Clarify's day accent and every night background in palettes.js,
     // and all nine tests still passed. "Appears somewhere" is not sync; it is a
     // spell-check. Each swatch is now read out of its own palette's own block.
-    expect(PALETTES.map((p) => p.key).sort()).toEqual([...APPS].sort());
+    expect(PALETTES.map((p) => p.key).sort()).toEqual([...APPS, "session"].sort());
 
     const blockOf = (key, mode) => {
       const head = `[data-palette="${key}"][data-theme="${mode}"] {`;
