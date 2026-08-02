@@ -353,7 +353,7 @@ export default function EnginePanel({ onNavigate }) {
   };
 
   return (
-    <div className="card" style={{ borderRadius: 18, padding: isMobile ? 16 : 20, marginBottom: 16 }}>
+    <div className="card" style={{ borderRadius: 18, padding: isMobile ? 14 : 16, marginBottom: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {/* THE WHOLE TITLE ROW IS THE CONTROL — .cell tappable, which is the
             kit's full-width 46px row with its own press and hover physics. A
@@ -363,7 +363,7 @@ export default function EnginePanel({ onNavigate }) {
         <button onClick={toggle} type="button" aria-expanded={open} aria-controls={BODY_ID}
           className="cell tappable"
           style={{ flex: 1, minWidth: 0, padding: 0, gap: 10, cursor: "pointer" }}>
-          <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ flex: 1, minWidth: 0, display: "block" }}>
             <span style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <span className="t-head">Outbound engine</span>
               {/* The state word is spelled out next to the dot, so armed/off is
@@ -372,21 +372,19 @@ export default function EnginePanel({ onNavigate }) {
                 <span className="dotstatus" style={{ background: pill.c }} />
                 <span className="t-label" style={{ color: pill.c }}>{pill.t}</span>
               </span>
-              {/* Open only. Closed, it is the last clause of the state line
-                  instead — as a third element up here it wrapped the title row
-                  onto three lines on a 393px phone to say the same thing. */}
+              {/* The closed read lives in this same metadata line. Keeping it
+                  inline removes the former full-width subtitle row on desktop;
+                  overflow trims it on narrow screens rather than making the
+                  compact default card taller than the dashboard below it. */}
               {open && phase.sinceLastRunMs != null && (
                 <span className="t-cap" style={{ color: "var(--faint)" }}>last pass {humanGap(phase.sinceLastRunMs)} ago</span>
               )}
+              {!open && (
+                <span className="t-foot" style={{ color: SUMMARY_TONE[read.tone], lineHeight: 1.4, minWidth: 0, flex: "1 1 180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {read.line}
+                </span>
+              )}
             </span>
-            {/* Live state, not a description of the card. Closed only: open, the
-                headline and detail below say it at full length, and printing it
-                twice would be the card talking over itself. */}
-            {!open && (
-              <span className="t-foot" style={{ color: SUMMARY_TONE[read.tone], lineHeight: 1.4, whiteSpace: "normal" }}>
-                {read.line}
-              </span>
-            )}
           </span>
           <span aria-hidden style={{ flex: "none", color: "var(--faint)", fontSize: 15, lineHeight: 1, transition: "transform var(--dur-2) var(--ease-out)", transform: open ? "rotate(180deg)" : "none" }}>▾</span>
         </button>
