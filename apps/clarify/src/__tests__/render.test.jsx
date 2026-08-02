@@ -953,9 +953,9 @@ describe("Clarify obeys the language", () => {
 
   it("preserves every iOS / safe-area / keyboard workaround verbatim", () => {
     const app = read("App.jsx");
-    // The bottom bar's own explicit viewport anchor and safe-area inset.
-    expect(app).toContain('className="co-bottombar" aria-label="Clarify sections" style={{ position: "fixed"');
-    expect(app).toContain('padding: "4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))"');
+    // The bottom bar keeps its viewport anchor while sharing the product dock.
+    expect(app).toContain('className="co-bottombar pentagon-dock" aria-label="Clarify sections" style={{ position: "fixed"');
+    expect(app).toContain('className="pentagon-dock-row"');
     // The 16px input rule that stops iOS Safari zooming the viewport on focus —
     // this is why the kit's 15px .field is overridden on phones, not adopted.
     expect(app).toContain("Every input gets a real 16px+ so iOS Safari doesn't zoom the page on focus");
