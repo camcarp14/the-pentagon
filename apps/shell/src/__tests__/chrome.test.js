@@ -69,16 +69,18 @@ describe("the chrome obeys the language", () => {
     expect(sizes.filter((n) => n < 10.5), "below the 10.5px floor").toEqual([]);
   });
 
-  it("keeps the desktop rail readable and the mobile dock complete", () => {
-    // Eight full labels cannot fit in one phone row at a usable size. The dock
-    // uses the same shaped glyphs as the desktop rail instead, so every tool
-    // remains reachable without turning the header into two rows or a scroller.
+  it("keeps the desktop rail readable and the mobile dock compact", () => {
+    // Full labels cannot fit in one phone row at a usable size. The dock uses
+    // the same shaped glyphs as the desktop rail and follows visibility choices
+    // on both surfaces, without becoming a scroller or a second header row.
     const toggle = code.slice(code.indexOf("function AppToggle"), code.indexOf("function ", code.indexOf("function AppToggle") + 10));
     expect(toggle, "a scroller hides tools").not.toContain("overflowX");
     expect(toggle, "a scroller hides tools").not.toContain("scrollSnap");
-    expect(toggle, "the phone dock has one position per tool").toContain('gridTemplateColumns: "repeat(8, minmax(0, 1fr))"');
+    expect(toggle, "the phone dock has one position per visible tool").toContain("gridTemplateColumns: `repeat(${Math.max(apps.length, 1)}, minmax(0, 1fr))`");
     expect(toggle, "the phone dock uses the shared tool glyphs").toContain("<ToolGlyph app={a}");
-    expect(toggle, "a hidden desktop tool remains a phone destination").toContain("hiddenApps");
+    expect(toggle, "visibility is not silently ignored on phones").not.toContain("hiddenApps");
+    expect(code, "the shell supplies the visible tool list to the phone dock").toContain("compact={isMobile} apps={tabs} paused={paused}");
+    expect(code, "the mark, tools and System share a mobile row").not.toContain('flexDirection: isMobile ? "column"');
 
     // ── AND THE PART THIS TEST COULD NOT SEE ────────────────────────────────
     //
