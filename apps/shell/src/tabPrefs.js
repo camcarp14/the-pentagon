@@ -37,9 +37,8 @@ export const TAB_PREFS_KEY = "cc_tab_prefs";
  * Hidden on a fresh install: Macro, Looper and Business.
  *
  * Not a judgement about the tools — it is the honest default for how this
- * account uses them today, and it is the difference between a six-segment
- * toggle that ellipsises on a phone and a three-segment one that reads. Every
- * one is one tap away in System → Tabs.
+ * account uses them today, and it keeps the phone dock focused. Every one can
+ * be restored from System → Tools.
  */
 export const DEFAULT_HIDDEN = Object.freeze(["macro", "looper", "business"]);
 

@@ -159,7 +159,7 @@ describe("the closed row answers 'is it on, and is anything wrong'", () => {
   });
 });
 
-describe("the open/closed choice survives a reload, and never outranks a stop", () => {
+describe("the open/closed choice survives a reload", () => {
   it("normalises anything storage can hold into { open: true|false|null }", () => {
     for (const raw of [null, undefined, 0, "", "open", [], ["open"], { open: "yes" }, { open: 1 }, {}]) {
       expect(normalizeEnginePanelPrefs(raw)).toEqual({ open: null });
@@ -190,24 +190,16 @@ describe("the open/closed choice survives a reload, and never outranks a stop", 
     store = {};
   });
 
-  it("defaults CLOSED when nothing is wrong and nothing was chosen", () => {
-    // The reason the change exists: three cards were below the fold on a phone.
-    expect(resolveOpen({ open: null }, false)).toBe(false);
-    expect(resolveOpen({ open: true }, false)).toBe(true);
-    expect(resolveOpen({ open: false }, false)).toBe(false);
+  it("defaults CLOSED, including when the engine needs attention", () => {
+    // The closed state line reports the stop; the card itself does not consume
+    // the Mission view until the operator chooses to open it.
+    expect(resolveOpen({ open: null })).toBe(false);
+    expect(resolveOpen({ open: true })).toBe(true);
+    expect(resolveOpen({ open: false })).toBe(false);
   });
 
-  it("opens for attention whatever is stored — a hidden stop is the tool lying", () => {
-    expect(resolveOpen({ open: false }, true)).toBe(true);
-    expect(resolveOpen({ open: null }, true)).toBe(true);
-  });
-
-  it("honours the stored answer while attention is still unknown", () => {
-    // Not-known-yet must not read as not-wrong, and must not force an open
-    // that then snaps shut a beat later.
-    expect(resolveOpen({ open: false }, null)).toBe(false);
-    expect(resolveOpen({ open: true }, null)).toBe(true);
-    expect(resolveOpen(null, null)).toBe(false);
+  it("accepts the absence of a preference as closed", () => {
+    expect(resolveOpen(null)).toBe(false);
   });
 
   it("uses a key of its own, and DESIGN.md §7 pins it at every site", () => {
@@ -266,12 +258,11 @@ describe("the disclosure is the whole title row, on the kit's motion", () => {
   it("seeds the open state from storage on the FIRST render", () => {
     // Reading it in an effect instead would paint the card open and then shut
     // it, which is the flash the preference exists to prevent.
-    expect(src).toMatch(/useState\(\(\) => resolveOpen\(loadEnginePanelPrefs\(\), null\)\)/);
+    expect(src).toMatch(/useState\(\(\) => resolveOpen\(loadEnginePanelPrefs\(\)\)\)/);
   });
 
-  it("applies the attention default once, not on every refresh", () => {
-    // MissionControl re-fetches every 30s. Re-deciding on each pass would slam
-    // the card shut under the operator's hand the moment they cleared a stop.
-    expect(src).toMatch(/if \(forced\.current \|\| read\.attention === null\) return;/);
+  it("does not let a stopped engine reopen the card after state loads", () => {
+    expect(src).not.toContain("forced.current");
+    expect(src).not.toContain("if (read.attention) setOpen(true)");
   });
 });

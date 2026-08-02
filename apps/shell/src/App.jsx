@@ -3,9 +3,8 @@
 //
 // One site, one login, one toggle. The shell owns exactly four things:
 //   • auth (a single login gates all three tools)
-//   • the desktop rail and phone tool dock, plus ⌥1-N. The desktop list and
-//     shortcuts follow System → Tools; the phone dock intentionally keeps every
-//     tool one tap away, even one hidden from the desktop rail.
+//   • the desktop rail and phone tool dock, plus ⌥1-N. System → Tools controls
+//     both navigation views and the shortcuts; System itself stays reachable.
 //   • per-tool theming (it stamps @cc/design's CSS vars on a wrapper, so
 //     switching tools re-accents the whole page over the shared dark canvas)
 //   • the cross-tool System hub (ops · tools · usage · intelligence · theme)
@@ -394,7 +393,7 @@ const SideRail = forwardRef(function SideRail({ active, onPick, apps, paused, sy
 });
 
 // ─── the app toggle ───────────────────────────────────────────────────────────
-function AppToggle({ active, onPick, compact, apps, paused, hiddenApps }) {
+function AppToggle({ active, onPick, compact, apps, paused }) {
   const refs = useRef({});
   // The sliding indicator pill and everything it needed — a layout-effect
   // measuring the active button, a resize listener because segments were
@@ -414,7 +413,7 @@ function AppToggle({ active, onPick, compact, apps, paused, hiddenApps }) {
       aria-label="Switch tool"
       className="toolrow"
       style={{
-        // ── EVERY TOOL VISIBLE, NO SCROLL ───────────────────────────────────
+        // ── VISIBLE TOOL ROW, NO SCROLL ─────────────────────────────────────
         //
         // This was a horizontally scrolling pill row, on the reasoning that a
         // segmented control is for four or fewer and eight will not fit a phone
@@ -425,9 +424,9 @@ function AppToggle({ active, onPick, compact, apps, paused, hiddenApps }) {
         // scroller. A scrolled tool is an invisible tool, and half the point of
         // the bar is seeing at a glance what is there.
         //
-        // On a phone this is a compact, fixed eight-icon dock. Hidden means
-        // hidden from the desktop rail, not unavailable: an icon is less
-        // expensive than a label and keeps the whole Pentagon one tap away.
+        // On a phone this is a compact icon dock. It renders the tools the
+        // operator chose in System, so a visibility switch has the same result
+        // on desktop and phone.
         // The bar's height is measured and published as --shell-bar (see the
         // header), so nothing downstream assumes 52px.
         // ── AND THE TWO BRANCHES ARE NOT THE SAME LAYOUT ────────────────────
@@ -460,7 +459,7 @@ function AppToggle({ active, onPick, compact, apps, paused, hiddenApps }) {
         // label intact, where a single-row grid clipped all eight to ellipsis.
         // A truncated tool is the same invisible tool the scroller was.
         ...(compact
-          ? { display: "grid", gridTemplateColumns: "repeat(8, minmax(0, 1fr))", width: "100%" }
+          ? { display: "grid", gridTemplateColumns: `repeat(${Math.max(apps.length, 1)}, minmax(0, 1fr))`, width: "100%" }
           : { display: "flex", flexWrap: "wrap", width: "auto", maxWidth: "100%" }),
         gap: 2, padding: compact ? 2 : 3, borderRadius: compact ? 12 : 11,
         minWidth: 0,
@@ -471,10 +470,9 @@ function AppToggle({ active, onPick, compact, apps, paused, hiddenApps }) {
       {apps.map((a) => {
         const m = appMeta(a);
         const on = a === active;
-        const hidden = !!hiddenApps?.has?.(a);
         // PAUSED IS NOT HIDDEN, AND THE DOCK HAS TO SHOW THE DIFFERENCE.
-        // Desktop receives only its visible tools; phones receive all eight,
-        // with the desktop-hidden state named in the icon's accessible label.
+        // Both views receive only visible tools; a paused one still opens and
+        // shows everything it collected.
         // A paused tool still opens and still shows everything it collected —
         // only its scheduled work stopped. So it is dimmed and its dot goes
         // hollow rather than being dropped or disabled. Hollow, not merely a
@@ -483,16 +481,14 @@ function AppToggle({ active, onPick, compact, apps, paused, hiddenApps }) {
         // colour-only state, and eight accents means a "muted" dot is somebody
         // else's normal one.
         const off = paused?.has(a);
-        const title = [m.brand, hidden ? "hidden from desktop rail" : "", off ? "paused" : ""].filter(Boolean).join(" — ");
-        const name = `${m.label}${hidden ? ", hidden from the desktop rail" : ""}${off ? ", background jobs paused" : ""}`;
+        const title = [m.brand, off ? "paused" : ""].filter(Boolean).join(" — ");
+        const name = `${m.label}${off ? ", background jobs paused" : ""}`;
         return (
           <button key={a} ref={(el) => { refs.current[a] = el; }} onClick={() => onPick(a)} type="button"
             // Desktop retains its visible label; the icon-only phone dock gets
-            // the same tool name through aria-label, plus its hidden/paused
-            // state when relevant.
+            // the same tool name through aria-label, plus its paused state.
             title={title} aria-label={compact ? name : undefined} aria-current={on ? "true" : undefined}
             data-paused={off ? "true" : undefined}
-            data-hidden={hidden ? "true" : undefined}
             style={{
               position: "relative", zIndex: 1,
               display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
@@ -995,25 +991,25 @@ export default function Shell() {
         borderBottom: "1px solid var(--line)",
         background: "color-mix(in srgb, var(--bg) 82%, transparent)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)",
       }}>
-      {/* TWO ROWS ON A PHONE, ONE ON A DESKTOP, NEVER A SCROLLER.
-          The bar used to be locked at exactly 51px + 1px border, because ten
+      {/* One compact mobile row: brand mark, tools, and System. The bar used to
+          be locked at exactly 51px + 1px border, because ten
           call sites across six tools hardcode `calc(100vh - 52px)` or
           `top: 52px`. That constant is now MEASURED and published as
           --shell-bar (see the ref below), so the bar can be whatever height its
           contents need and every one of those call sites follows it. */}
       <div ref={barRef} style={{
-        minHeight: 51, paddingLeft: isMobile ? 10 : 20, paddingRight: isMobile ? 10 : 20,
-        paddingTop: isMobile ? 6 : 0, paddingBottom: isMobile ? 6 : 0,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        // On a phone the tool grid needs the full width to wrap into, so identity
-        // and System take their own line above it. On a desktop the whole thing
-        // still fits one line and splitting it there would just be noise.
-        flexDirection: isMobile ? "column" : "row", gap: isMobile ? 6 : 0,
+        minHeight: 51, paddingLeft: isMobile ? 6 : 20, paddingRight: isMobile ? 6 : 20,
+        paddingTop: isMobile ? 3 : 0, paddingBottom: isMobile ? 3 : 0,
+        display: "flex", alignItems: "center", gap: isMobile ? 2 : 8,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, minWidth: 0, width: isMobile ? "100%" : undefined, flex: isMobile ? "none" : "0 1 auto", order: isMobile ? 2 : 0 }}>
+        {isMobile && (
+          <span role="img" aria-label="The Pentagon" style={{ width: 28, minHeight: 44, display: "grid", placeItems: "center", flex: "none" }}>
+            <PentagonLogo size={22} />
+          </span>
+        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0, flex: "1 1 auto" }}>
           {/* On desktop the mark and the tools BOTH live in the rail, so the top
-              bar keeps only what is about the current tool. On a phone there is
-              no rail and this is the identity line, unchanged. */}
+              bar keeps only what is about the current tool. */}
           {!isMobile && !rail && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
               <PentagonLogo size={23} />
@@ -1023,26 +1019,14 @@ export default function Shell() {
               <span className="t-head" style={{ color: "var(--ink)", whiteSpace: "nowrap" }}>The Pentagon</span>
             </span>
           )}
-          {!rail && <AppToggle active={active} onPick={pick} compact={isMobile}
-            apps={isMobile ? tabPrefs.order : tabs} paused={paused} hiddenApps={isMobile ? new Set(tabPrefs.hidden) : undefined} />}
+          {!rail && <AppToggle active={active} onPick={pick} compact={isMobile} apps={tabs} paused={paused} />}
         </div>
         <div style={{
-          display: "flex", alignItems: "center", gap: 8, flexShrink: 0,
-          // On a phone this is the identity line: mark on the left, System on
-          // the right, with the tool grid on its own full-width row beneath.
-          width: isMobile ? "100%" : undefined, marginLeft: isMobile ? 0 : 8,
-          justifyContent: isMobile ? "space-between" : undefined, order: isMobile ? 1 : 0,
+          display: "flex", alignItems: "center", gap: 8, flex: "none",
+          marginLeft: isMobile ? 0 : 8,
         }}>
-          {isMobile && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-              <PentagonLogo size={21} />
-              <span className="t-head" style={{ color: "var(--ink)", whiteSpace: "nowrap" }}>The Pentagon</span>
-            </span>
-          )}
-          {/* Icon-only on mobile: it keeps a 44px target without spending width
-              the tool grid below needs. With the rail up both of these live at
-              the bottom of it, so rendering them here too would be the same two
-              controls twice on one screen. */}
+          {/* Icon-only on mobile: it shares the same compact row as the tools.
+              With the rail up both controls live at the bottom of it. */}
           {!rail && <>
           <button onClick={() => setSystemOpen((o) => !o)} type="button"
             title="System — ops, tools, usage, intelligence and theme"
@@ -1053,10 +1037,10 @@ export default function Shell() {
               // The kit owns colour, radius, weight, press physics and the focus
               // ring. Only the mobile target floor is local, because that is a
               // fact about this bar rather than about buttons.
-              minHeight: isMobile ? 44 : undefined, minWidth: isMobile ? 44 : undefined,
-              padding: isMobile ? "0 11px" : undefined,
+              minHeight: isMobile ? 44 : undefined, minWidth: isMobile ? 32 : undefined,
+              padding: isMobile ? 0 : undefined,
             }}>
-            <span aria-hidden style={{ width: isMobile ? 8 : 6, height: isMobile ? 8 : 6, borderRadius: "50%", background: systemOpen ? "var(--accent)" : "var(--faint)", flex: "none" }} />{!isMobile && "System"}
+            {isMobile ? <GearIcon /> : <><span aria-hidden style={{ width: 6, height: 6, borderRadius: "50%", background: systemOpen ? "var(--accent)" : "var(--faint)", flex: "none" }} />System</>}
           </button>
           {!isMobile && (
             // Was 10px — under this language's 10.5px floor, which is stated as

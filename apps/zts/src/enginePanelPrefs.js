@@ -1,10 +1,8 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // ZTS WRITER PANEL PREFERENCE.
 //
-// The writer is a dense operational panel. Keeping a healthy one folded lets
-// Studio start above the fold, but a stopped, failed, or unreadable writer must
-// still surface itself. `null` deliberately means "no preference yet" so the
-// fetched state, rather than malformed storage, decides that first paint.
+// The writer is a dense operational panel. It starts folded; the closed header
+// still reports a stopped or failed state without consuming the Mission view.
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const ENGINE_PANEL_PREFS_KEY = "cc_zts_engine_panel";
@@ -30,7 +28,6 @@ export function saveEnginePanelPrefs(prefs) {
   return next;
 }
 
-export function resolveOpen(prefs, attention) {
-  if (attention === true) return true;
+export function resolveOpen(prefs) {
   return normalizeEnginePanelPrefs(prefs).open === true;
 }
