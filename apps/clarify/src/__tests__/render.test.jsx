@@ -321,8 +321,8 @@ const asyncNoop = async () => {};
 // in here — the button walk above already fails when one of those goes missing.
 const KIT_TOKEN = /^(card|field|cell|tappable|pressable|seg|seg-opt|empty|pad-sm|t-[\w-]+|stattile[\w-]*|sk[\w-]*)$/;
 
-// The ten hash routes App.jsx will accept (ROUTABLE_VIEWS).
-const VIEWS = ["mission", "analytics", "inbound", "outreach", "queue", "sequences", "analyst", "clients", "calendar", "settings"];
+// The nine hash routes App.jsx will accept (ROUTABLE_VIEWS).
+const VIEWS = ["mission", "analytics", "inbound", "outreach", "queue", "sequences", "analyst", "clients", "calendar"];
 
 const warnings = [];
 let realWarn, realErr;
@@ -355,7 +355,7 @@ describe("Clarify renders on the kit", () => {
     expect(() => renderToStaticMarkup(createElement(ClarifyRoot))).not.toThrow();
   });
 
-  it("renders every one of the eleven routable views cold", () => {
+  it("renders every routable view cold", () => {
     for (const v of VIEWS) {
       expect(() => view(v), `#/${v} threw`).not.toThrow();
       expect(view(v).length, `#/${v} rendered almost nothing`).toBeGreaterThan(4000);
@@ -453,7 +453,6 @@ describe("Clarify renders on the kit", () => {
       // Booking link card, the "Ready to book" / "Upcoming" headers. NOT
       // stattile-label — see the MonthCalendar test below for why.
       { at: "#/calendar", paint: () => view("calendar"), files: { "features/calendar/CalendarView.jsx": ["card", "t-label", "t-foot"] } },
-      { at: "#/settings", paint: () => view("settings"), files: { "features/system/SettingsView.jsx": ["card", "field", "t-call", "t-cap", "t-foot", "t-label"] } },
       // ── surfaces fed the rows a cold paint never has ──────────────────────
       {
         at: "the sign-in root", paint: () => paint(createElement(LoginScreen, { onLogin: noop })),
@@ -602,7 +601,7 @@ describe("Clarify renders on the kit", () => {
     // this test went red. Deleting one silently would undo that, so the counts
     // are asserted too.
     // The centralized master Mind replaced Clarify's dedicated DNA surface.
-    expect(OWN.length, "the surface table lost entries").toBe(19);
+    expect(OWN.length, "the surface table lost entries").toBe(18);
     // 105 before the repeated page headings came out. Six of those pairs were
     // a .t-title1/.t-title2 on a heading that said what the lit pill above it
     // already said; the elements are gone, so the pairs are too. Every pair
@@ -611,8 +610,9 @@ describe("Clarify renders on the kit", () => {
     // .cell/.tappable onto the cold #/mission paint, which is two pairs that
     // were UNREACHED and are now guarded.
     // 101 before the assistant panel went: its three (field, t-call, t-foot)
-    // named a file that no longer exists.
-    expect(pairs, "the (surface, file, class) table lost entries").toBe(97);
+    // named a file that no longer exists. Clarify's retired settings surface
+    // removes its six kit markers from the live navigation model.
+    expect(pairs, "the (surface, file, class) table lost entries").toBe(91);
     expect(scannedAttrs, "the className scan read almost nothing across the table — it is broken").toBeGreaterThan(400);
 
     // …and the half that makes stripping a file's kit classes WHOLESALE go red.
@@ -629,7 +629,7 @@ describe("Clarify renders on the kit", () => {
     // them". Nineteen until features/system/GlobalAgent.jsx left with the
     // "Ask Clarify" assistant.
     const JSX = FILES.map(([n]) => n).filter((n) => n.endsWith(".jsx"));
-    expect(JSX.length, "the FILES table lost one of the migrated files").toBe(18);
+    expect(JSX.length, "the FILES table lost one of the migrated files").toBe(17);
     for (const file of JSX) {
       const authoredKit = [...classTokens(strip(read(...file.split("/"))))].filter((t) => KIT_TOKEN.test(t)).sort();
       const accounted = [...new Set([...(guarded[file] || []), ...(UNREACHED[file] || [])])].sort();
@@ -736,7 +736,7 @@ const FILES = [
   ["Root.jsx", "Root.jsx"],
   ["components/LeadJourney.jsx", "components/LeadJourney.jsx"],
   ...["auth/LoginScreen", "outreach/OutreachCard", "outreach/OutreachBoard", "inbound/InboundView",
-      "analyst/AnalystView", "clients/ClientsView", "system/SettingsView",
+      "analyst/AnalystView", "clients/ClientsView",
       "system/AgentsView", "mission/MissionControl", "mission/EnginePanel", "calendar/CalendarView",
       "queue/QueueView", "sequences/SequencesView", "analytics/AnalyticsView", "dna/DnaView"]
     .map((p) => [`features/${p}.jsx`, `features/${p}.jsx`]),
@@ -1010,7 +1010,7 @@ describe("Clarify obeys the language", () => {
       ["App.jsx", '"clarify_token"', 4],                                  // useState seed, persistSession, session-miss clear, signOut
       ["App.jsx", '"clarify_refresh"', 3],                                // persistSession, session-miss clear, signOut
       ["App.jsx", '"outreach_focus"', 3],                                 // consume, delete, and the palette's set
-      ["App.jsx", 'const ROUTABLE_VIEWS = ["mission", "analytics", "inbound", "outreach", "queue", "sequences", "analyst", "clients", "calendar", "settings"]', 1],
+      ["App.jsx", 'const ROUTABLE_VIEWS = ["mission", "analytics", "inbound", "outreach", "queue", "sequences", "analyst", "clients", "calendar"]', 1],
       ["features/mission/EnginePanel.jsx", 'supabase.from("app_settings")', 3],
       ["features/mission/EnginePanel.jsx", '"/.netlify/functions/queue-execute"', 1],
       ["features/inbound/InboundView.jsx", "/inbound_leads?order=created_at.desc&limit=200", 1],
