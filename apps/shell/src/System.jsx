@@ -18,13 +18,6 @@ import { powerFor, stopsSentence, stoppedSentence, keepsSentence } from "./toolP
 import { AnimatedNumber, EmptyState, useIsMobile, useToast } from "@cc/ui";
 import { auth, supabase } from "@cc/supabase";
 import Ops from "./Ops.jsx";
-// Minds was rendered at the bottom of this file WITHOUT being imported, so the
-// Minds tab threw "Minds is not defined" and the shell's error boundary ate the
-// whole System panel — from the day the consolidated mind screen landed. A free
-// variable is legal JavaScript, so the build was green, and no test mounted the
-// tab, so the suite was green. Third instance of this exact class (nodeR, data,
-// Minds); the browser smoke test now walks every tab for that reason.
-import Minds from "./Minds.jsx";
 
 // Which localStorage prefix each tool writes under (they run on one domain now).
 const LS = { zts: "zts_", clarify: "sm_", looper: "lp_" };
@@ -338,17 +331,14 @@ function BrowserAssistants({ isMobile }) {
 }
 
 function Intelligence({ isMobile }) {
-  const [section, setSection] = useState("minds");
   return (
     <div className="pagefade">
       <Header
         title="Intelligence"
-        sub={section === "minds"
-          ? "Tune the beliefs each tool carries into its prompts."
-          : "Browser-only assistant controls. Scheduled production jobs live in Ops and Tools."}
-        right={<Segment value={section} onChange={setSection} options={[["minds", "Minds"], ["agents", "Browser assistants"]]} />}
+        sub="Browser-only assistant controls. The shared belief graph lives in SYNC Mind."
+        right={<button className="btn sm quiet" type="button" onClick={() => { window.location.hash = "/sync/mind"; }}>Open master Mind</button>}
       />
-      {section === "minds" ? <Minds isMobile={isMobile} /> : <BrowserAssistants isMobile={isMobile} />}
+      <BrowserAssistants isMobile={isMobile} />
     </div>
   );
 }
@@ -735,9 +725,9 @@ function Theme({ prefs, onChange, systemPrefersDark, isMobile }) {
 }
 
 // The System hub has five distinct jobs. Usage absorbed the former all-time
-// overview; Minds and browser assistants share Intelligence; and the old Tabs
-// label became Tools because it contains access and server-power controls, not
-// merely a row of tabs.
+// overview; Intelligence owns browser assistants and points to the one shared
+// Mind in SYNC; and the old Tabs label became Tools because it contains access
+// and server-power controls, not merely a row of tabs.
 const TABS = [["ops", "Ops"], ["tools", "Tools"], ["usage", "Usage"], ["intelligence", "Intelligence"], ["theme", "Theme"]];
 
 export default function System({ onExit, tabPrefs, onTabPrefs, themePrefs, onThemePrefs, systemPrefersDark, toolPower, initialTab, onTabConsumed }) {
@@ -764,40 +754,36 @@ export default function System({ onExit, tabPrefs, onTabPrefs, themePrefs, onThe
     // the token now; it used to name 'Inter', a webfont that no longer loads.
     <div data-kit style={{ minHeight: "calc(100vh - var(--shell-bar, 52px))", background: P.bg, color: P.ink, fontFamily: "var(--font-body)" }}>
       <div style={{ maxWidth: 1080, margin: "0 auto", padding: isMobile ? "14px 12px 80px" : "22px 24px 60px" }}>
-        {/* The row used to be tabs + buttons on ONE line with flex-wrap and
-            `marginLeft: auto`, which on a phone pushed Sign out / Back onto a
-            second line, right-aligned, with a 20px gap under them — and the six
-            tabs, uppercase and 0.04em-tracked, overflowed a container that could
-            scroll but gave no hint of it, so "Tabs" was simply cut in half at
-            the screen edge. Now: tabs get their own full-width scroll-snap row
-            (the same pattern as the shell's tool row), and the two buttons sit
-            in a quiet line above them. Sentence case, per §4.3 — uppercase is
-            reserved for .t-label. */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 10 }}>
-          <button className="btn sm quiet" onClick={() => auth.signOut()}>Sign out</button>
-          <button className="btn sm quiet" onClick={onExit}>{isMobile ? "← Back" : "Back to tools →"}</button>
-        </div>
-        <div
-          role="tablist"
-          style={{
-            display: "flex", gap: 2, padding: 3, borderRadius: 11, marginBottom: 16,
-            background: P.surface2, border: `1px solid ${P.line}`,
-            overflowX: "auto", scrollSnapType: "x proximity", scrollbarWidth: "none", WebkitOverflowScrolling: "touch",
-          }}
-        >
-          {TABS.map(([k, label]) => (
-            <button
-              key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
-              style={{
-                flex: isMobile ? "none" : 1, scrollSnapAlign: isMobile ? "center" : undefined,
-                minHeight: isMobile ? 40 : 34, padding: isMobile ? "0 15px" : "0 16px",
-                border: "none", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap",
-                background: tab === k ? P.surface : "transparent",
-                color: tab === k ? P.ink : P.faint,
-                fontSize: 13, fontWeight: tab === k ? 600 : 500, fontFamily: P.display,
-              }}
-            >{label}</button>
-          ))}
+        {/* Segments and global actions share one compact row. The segments keep
+            their horizontal scroll on phones; the actions never claim an empty
+            row of their own. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+          <div
+            role="tablist"
+            style={{
+              flex: "1 1 auto", minWidth: 0, display: "flex", gap: 2, padding: 3, borderRadius: 11,
+              background: P.surface2, border: `1px solid ${P.line}`,
+              overflowX: "auto", scrollSnapType: "x proximity", scrollbarWidth: "none", WebkitOverflowScrolling: "touch",
+            }}
+          >
+            {TABS.map(([k, label]) => (
+              <button
+                key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+                style={{
+                  flex: isMobile ? "none" : 1, scrollSnapAlign: isMobile ? "center" : undefined,
+                  minHeight: isMobile ? 40 : 34, padding: isMobile ? "0 15px" : "0 16px",
+                  border: "none", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap",
+                  background: tab === k ? P.surface : "transparent",
+                  color: tab === k ? P.ink : P.faint,
+                  fontSize: 13, fontWeight: tab === k ? 600 : 500, fontFamily: P.display,
+                }}
+              >{label}</button>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 6, flex: "none" }}>
+            <button className="btn sm quiet" type="button" onClick={() => auth.signOut()} title="Sign out" aria-label="Sign out">{isMobile ? "↪" : "Sign out"}</button>
+            <button className="btn sm quiet" type="button" onClick={onExit} title="Back to tools" aria-label="Back to tools">{isMobile ? "←" : "Back to tools →"}</button>
+          </div>
         </div>
         {tab === "ops" && <Ops isMobile={isMobile} />}
         {tab === "tools" && tabPrefs && <Tools prefs={tabPrefs} onChange={onTabPrefs} isMobile={isMobile} toolPower={toolPower} />}
