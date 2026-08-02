@@ -136,6 +136,63 @@
 [data-kit] .dock-icon { display: inline-flex; transition: transform var(--dur-1) var(--ease-out); }
 [data-kit] .dock-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em; line-height: 1; white-space: nowrap; max-width: 100%; overflow: hidden; }
 [data-kit] .lbx .dock-tab { padding: 8px 0; } /* letterboxed standalone — OS already cleared the indicator */
+/* Tools keep ownership of where their mobile dock is positioned, but the dock
+   itself is one product primitive: one height, material, safe-area formula and
+   icon/label rhythm. `!important` is deliberate here; these apps predate the
+   kit and several carry equal-or-later local navigation rules. */
+@media (max-width: 767.98px) {
+  [data-kit] .pentagon-dock {
+    display: flex !important;
+    align-items: stretch !important;
+    min-height: calc(60px + var(--safe-bottom, 0px));
+    padding: 4px 6px max(10px, calc(6px + var(--safe-bottom, 0px))) !important;
+    background: var(--glass-raised) !important;
+    border: none !important;
+    border-top: 0.5px solid var(--line) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: blur(20px) saturate(1.8) !important;
+    backdrop-filter: blur(20px) saturate(1.8) !important;
+  }
+  [data-kit] .pentagon-dock > .pentagon-dock-row,
+  [data-kit] .pentagon-dock > .navgroup {
+    display: flex !important;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  [data-kit] .pentagon-dock button,
+  [data-kit] .pentagon-dock a.nav-item {
+    flex: 1 1 0 !important;
+    min-width: 0;
+    min-height: 46px !important;
+    padding: 8px 2px 7px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 3px !important;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    color: var(--faint) !important;
+    font-size: 10.5px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.01em !important;
+    line-height: 1 !important;
+    text-decoration: none;
+  }
+  [data-kit] .pentagon-dock button.active,
+  [data-kit] .pentagon-dock button.on,
+  [data-kit] .pentagon-dock a.nav-item.active {
+    color: var(--accent) !important;
+    font-weight: 600 !important;
+  }
+  [data-kit] .pentagon-dock svg { width: 21px !important; height: 21px !important; }
+  [data-kit] .pentagon-dock button:active,
+  [data-kit] .pentagon-dock a.nav-item:active { transform: none !important; }
+  [data-kit] .pentagon-dock button:active svg,
+  [data-kit] .pentagon-dock a.nav-item:active svg { transform: scale(0.88); }
+}
 /* ═══ CHROME — sidebar (tablet / desktop) ════════════════════════════════════ *//* A 236px rail, not 300: four destinations in a flat list (no section headers —
    see nav.js) don't need the width, and the surplus was dead canvas next to
    every page. Padding and row height came down with it. */

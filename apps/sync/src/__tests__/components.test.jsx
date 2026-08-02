@@ -334,7 +334,7 @@ const CASES = {
   },
   "chrome/Shell.jsx#Dock": {
     el: () => inApp(h(DockC, { page: "console", setPage: () => {} })),
-    must: ['class="dock"', 'class="dock-tab active"', 'class="dock-icon"', 'class="dock-label"'],
+    must: ['class="dock pentagon-dock"', 'class="dock-tab active"', 'class="dock-icon"', 'class="dock-label"'],
   },
 
   /* ── voice ─────────────────────────────────────────────────────────────── */
@@ -557,7 +557,7 @@ describe("the app still composes the surfaces it mounts", () => {
 
     phone(true);
     const mobile = render(h(AppC));
-    expect(mobile, "the tab bar is the phone navigation — deleting <Dock> lands here").toContain('class="dock"');
+    expect(mobile, "the tab bar is the phone navigation — deleting <Dock> lands here").toContain('class="dock pentagon-dock"');
     expect(mobile).toContain('class="dock-tab active"');
     // Every destination in nav.js reaches the bar. A tab silently dropped is a
     // page that becomes unreachable on the device this app is mostly used on.

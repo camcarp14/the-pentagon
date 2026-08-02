@@ -139,8 +139,8 @@ function BottomBar({ activeTab, onTab, inboundNew }) {
     // The fixed geometry is local because this app's responsive sheet controls
     // visibility. It must not be replaced by a shared rule with a different
     // breakpoint or it becomes an in-flow row.
-    <nav className="co-bottombar" aria-label="Clarify sections" style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 400, display: "none", background: "var(--glass-raised)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: "1px solid var(--line)", padding: "4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))" }}>
-      <div style={{ display: "flex" }}>
+    <nav className="co-bottombar pentagon-dock" aria-label="Clarify sections" style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 400, display: "none" }}>
+      <div className="pentagon-dock-row">
         {NAV_TABS.map(t => {
           const on = activeTab === t.key;
           return (
@@ -347,7 +347,7 @@ export default function App({ embedded = false }) {
         .co-grid5 { grid-template-columns: repeat(3, 1fr) !important; }
       }
 
-      @media (max-width: 860px) {
+      @media (max-width: 767.98px) {
         /* Header: logo + actions only; navigation moves to the bottom bar */
         .co-nav { padding: 0 16px !important; height: 50px !important; }
         .co-nav-tabs { display: none !important; }

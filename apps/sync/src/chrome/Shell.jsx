@@ -155,7 +155,7 @@ export function Dock({ page, setPage }) {
   const s = useStore();
   const badges = navBadges(s);
   return (
-    <nav className="dock" aria-label="Main">
+    <nav className="dock pentagon-dock" aria-label="Main">
       {NAV.map(({ key, Icon }) => (
         <button
           key={key}

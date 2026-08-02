@@ -351,7 +351,7 @@ function SubNav({ tab, onTab, savedCount, onRefresh, refreshing }) {
 
 function IdeasDock({ tab, onTab, savedCount }) {
   return (
-    <nav aria-label="Ideas sections" style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", background: "var(--glass-raised)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: "1px solid var(--line)", padding: "4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))" }}>
+    <nav className="pentagon-dock" aria-label="Ideas sections" style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex" }}>
       {TABS.map((t) => {
         const active = tab === t;
         const label = `${tabLabel(t)}${t === "saved" && savedCount > 0 ? ` ${savedCount}` : ""}`;

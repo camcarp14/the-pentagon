@@ -352,7 +352,7 @@ export default function LooperApp() {
     // holds every tool.
     <div className="lp-root" data-kit>
       <div className="lp-navbar">
-        <nav className="lp-nav" aria-label="Looper">
+        <nav className="lp-nav pentagon-dock" aria-label="Looper">
           {TABS.map((t) => (
             <button type="button" key={t.id} className={tab === t.id ? "on" : ""} onClick={() => setTab(t.id)} aria-current={tab === t.id ? "page" : undefined}>
               <Ico d={t.icon} />

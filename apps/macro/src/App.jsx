@@ -274,7 +274,7 @@ export default function App({ embedded = false }) {
           On mobile .navbar is `display: contents`, so .nav keeps its original
           fixed bottom-bar behaviour untouched. */}
       <div className="navbar">
-        <nav className="nav" aria-label="Main">
+        <nav className="nav pentagon-dock" aria-label="Main">
           {TABS.map((t) => (
             <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)} aria-label={t.label} aria-current={tab === t.id ? 'page' : undefined}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={t.icon} /></svg>

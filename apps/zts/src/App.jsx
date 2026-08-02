@@ -334,7 +334,7 @@ export function BottomNav({ view, setView, tabs }) {
     // This owns its fixed geometry because the shell and each app can apply
     // different breakpoint rules. A generic dock override made this in-flow on
     // phones, so the viewport anchor stays explicit here.
-    <nav aria-label="ZTS sections" style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", background: "var(--glass-raised)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: "1px solid var(--line)", padding: "4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))" }}>
+    <nav className="pentagon-dock" aria-label="ZTS sections" style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex" }}>
       {tabs.map(t => {
         const active = view === t;
         const color = active ? "var(--accent)" : "var(--faint)";
