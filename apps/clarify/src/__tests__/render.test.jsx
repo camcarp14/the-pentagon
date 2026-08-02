@@ -955,7 +955,7 @@ describe("Clarify obeys the language", () => {
     const app = read("App.jsx");
     // The bottom bar's own inset, and the note that says why it may not move.
     expect(app).toContain("Canonical bottom-bar geometry — must stay identical to ZTS, Runway and");
-    expect(app).toContain('padding: "4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))"');
+    expect(app).toContain('className="co-bottombar dock app-dock"');
     // The 16px input rule that stops iOS Safari zooming the viewport on focus —
     // this is why the kit's 15px .field is overridden on phones, not adopted.
     expect(app).toContain("Every input gets a real 16px+ so iOS Safari doesn't zoom the page on focus");
