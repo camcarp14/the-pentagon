@@ -1,7 +1,7 @@
 // ─── Config ─────────────────────────────────────────────────────────────────
-export const SUPABASE_URL = "https://nrzpinvyxxorxufadvyc.supabase.co";
+export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
 
-export const SUPABASE_ANON_KEY = "sb_publishable_zDV3HpSChf0bZJ5nY09s3w_rNI3sZ1m";
+export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
 // Local-dev-only keys. On the deployed site every third-party call rides a
 // Netlify function with server-side env vars, so nothing sensitive is compiled

@@ -38,6 +38,15 @@ import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 
 const BASE = process.env.BASE || "http://127.0.0.1:4178";
+const storageKey = () => {
+  if (process.env.SUPABASE_STORAGE_KEY) return process.env.SUPABASE_STORAGE_KEY;
+  try {
+    const host = new URL(process.env.VITE_SUPABASE_URL || "http://localhost:54321").hostname;
+    return `sb-${host.split(".")[0]}-auth-token`;
+  } catch {
+    return "sb-localhost-auth-token";
+  }
+};
 
 const reachable = async () => {
   try { await fetch(BASE, { signal: AbortSignal.timeout(1500) }); return true; } catch { return false; }
@@ -50,7 +59,7 @@ if (!(await reachable())) {
   // detached, and killed as a GROUP: `npx` spawns vite as a child, so killing
   // the npx pid leaves the actual server orphaned and holding the port — which
   // it did, and the next run then silently reused the stale build.
-  server = spawn("npx", ["vite", "preview", "--port", port, "--strictPort"], { cwd: shell, stdio: "ignore", detached: true });
+  server = spawn("npx", ["vite", "preview", "--host", "127.0.0.1", "--port", port, "--strictPort"], { cwd: shell, stdio: "ignore", detached: true });
   for (let i = 0; i < 40 && !(await reachable()); i++) await new Promise((r) => setTimeout(r, 500));
   if (!(await reachable())) {
     console.error(`could not serve apps/shell/dist on ${BASE} — run "npm run build" first`);
@@ -85,9 +94,10 @@ const session = {
     email: "stub@example.com", app_metadata: {}, user_metadata: {}, created_at: new Date(0).toISOString(),
   },
 };
+const authStorageKeys = ["sb-stub-auth-token", "sb-localhost-auth-token", storageKey()];
 
 const browser = await chromium.launch({
-  executablePath: process.env.CHROMIUM || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+  executablePath: process.env.CHROMIUM || chromium.executablePath(),
 });
 
 const failures = [];
@@ -100,11 +110,11 @@ const SURFACES = [...TOOLS.map((t) => ({ tool: t, signedIn: true })), { tool: "s
 for (const { tool, signedIn } of SURFACES) {
   const page = await browser.newPage();
   if (signedIn) {
-    await page.addInitScript(([s]) => {
-      for (const k of ["sb-stub-auth-token", "sb-localhost-auth-token"]) {
+    await page.addInitScript(([s, keys]) => {
+      for (const k of keys) {
         try { localStorage.setItem(k, JSON.stringify(s)); } catch {}
       }
-    }, [session]);
+    }, [session, authStorageKeys]);
   }
 
   // DESIGN.md §3: no webfonts, system stack only. index.html is outside the

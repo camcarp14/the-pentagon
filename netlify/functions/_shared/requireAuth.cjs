@@ -19,36 +19,39 @@
 // caller holds a session on this Supabase project — it does not prove they are
 // the operator. Sign-up on the project is one setting away from open, and these
 // handlers send mail as Cameron and spend the Anthropic/Places/Hunter/Firecrawl
-// budget, so a second signed-up account would inherit all of it. ALLOWED_EMAIL
-// is already a documented, required deploy variable (docs/DEPLOY.md; env-check
-// flags it missing) and netlify/functions/lib/auth.mjs has always pinned to it.
-// This brings the other half of the function surface onto the same rule.
-//
-// Enforced only WHEN SET, on purpose: a deploy that has not configured the
-// variable yet keeps today's behaviour rather than locking its own operator out
-// of every tool at once. env-check is the surface that reports it missing.
-const { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } = require("./supabaseRest.cjs");
+// budget, so a second signed-up account must never inherit all of it. Pinning
+// both email and immutable user ID keeps a renamed/recycled email from becoming
+// an authorization bypass. A missing pin is a deployment fault (503), never an
+// invitation to run this privileged route open.
+const { supabaseConfig } = require("./supabaseRest.cjs");
 
 async function requireAuth(event) {
   const header = (event.headers && (event.headers.authorization || event.headers.Authorization)) || "";
   const token = header.replace(/^Bearer\s+/i, "").trim();
   if (!token) return { ok: false, status: 401, error: "Sign in required — no session token on this request." };
 
+  const allowedEmail = String(process.env.ALLOWED_EMAIL || "").trim();
+  const allowedUserId = String(process.env.ALLOWED_USER_ID || "").trim();
+  if (!allowedEmail || !allowedUserId) {
+    return { ok: false, status: 503, error: "Operator authorization is not configured. Set ALLOWED_EMAIL and ALLOWED_USER_ID, then redeploy." };
+  }
+
   try {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers: { apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${token}` },
+    const { url, key } = supabaseConfig();
+    const res = await fetch(`${url}/auth/v1/user`, {
+      headers: { apikey: key, Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return { ok: false, status: 401, error: "Session expired or invalid — sign in again." };
     const user = await res.json();
 
-    const allowed = process.env.ALLOWED_EMAIL;
-    if (allowed && String(user?.email || "").toLowerCase() !== String(allowed).toLowerCase()) {
+    if (String(user?.id || "") !== allowedUserId || String(user?.email || "").toLowerCase() !== allowedEmail.toLowerCase()) {
       // 403, not 401: the session is fine, the account is not the operator's.
       // Re-signing in would not change the answer, so do not invite it.
       return { ok: false, status: 403, error: "This account is not the allow-listed operator." };
     }
     return { ok: true, user };
-  } catch {
+  } catch (err) {
+    if (err?.statusCode === 503) return { ok: false, status: 503, error: err.message };
     return { ok: false, status: 401, error: "Couldn't verify session — try again." };
   }
 }

@@ -1,18 +1,27 @@
 // ─── Minimal PostgREST client for Netlify functions ─────────────────────────
-// Uses the project's PUBLIC url + publishable key — the same values shipped in
-// the client bundle, so this adds no secret surface (AD-1 in PLAN.md: this
-// build introduces zero new env vars). What these functions may touch is
-// governed entirely by RLS: email_events is anon INSERT-only, tracked_links is
-// anon SELECT by unguessable uuid, inbound_leads/audit_requests anon INSERT.
-const SUPABASE_URL = "https://nrzpinvyxxorxufadvyc.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_zDV3HpSChf0bZJ5nY09s3w_rNI3sZ1m";
+// Uses the project's public URL + publishable key. They are deliberately read
+// from the deployment environment instead of duplicated in server source: that
+// keeps a key rotation from leaving a stale second copy behind and lets Netlify
+// secret scanning stay enabled.
+function supabaseConfig() {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
+  const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
+  const missing = [!url && "VITE_SUPABASE_URL", !key && "VITE_SUPABASE_ANON_KEY"].filter(Boolean);
+  if (missing.length) {
+    const err = new Error(`SUPABASE_ENV_MISSING: ${missing.join(", ")}`);
+    err.statusCode = 503;
+    throw err;
+  }
+  return { url, key };
+}
 
 async function sbRest(path, { method = "GET", body, prefer } = {}) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
+  const { url, key } = supabaseConfig();
+  const res = await fetch(`${url}/rest/v1${path}`, {
     method,
     headers: {
-      apikey: SUPABASE_PUBLISHABLE_KEY,
-      Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+      apikey: key,
+      Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
       Prefer: prefer || "return=representation",
     },
@@ -25,4 +34,4 @@ async function sbRest(path, { method = "GET", body, prefer } = {}) {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-module.exports = { sbRest, UUID_RE, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY };
+module.exports = { sbRest, supabaseConfig, UUID_RE };

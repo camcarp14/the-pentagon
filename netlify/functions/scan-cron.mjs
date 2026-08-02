@@ -28,9 +28,9 @@ export const handler = async () => {
   try {
     const [url] = env('VITE_SUPABASE_URL');
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const allowed = process.env.ALLOWED_EMAIL;
-    if (!serviceKey || !allowed) {
-      const missing = [!serviceKey && 'SUPABASE_SERVICE_ROLE_KEY', !allowed && 'ALLOWED_EMAIL'].filter(Boolean);
+    const allowedUserId = process.env.ALLOWED_USER_ID;
+    if (!serviceKey || !allowedUserId) {
+      const missing = [!serviceKey && 'SUPABASE_SERVICE_ROLE_KEY', !allowedUserId && 'ALLOWED_USER_ID'].filter(Boolean);
       return json(500, { error: `RUNWAY_ENV_MISSING: ${missing.join(', ')} — scheduled scans stay off until set` });
     }
 
@@ -46,12 +46,7 @@ export const handler = async () => {
     if (power.unknown) console.warn(`[${SUBSYSTEM}] pause state unreadable, scanning anyway: ${power.why}`);
 
     const admin = createClient(url, serviceKey, { auth: { persistSession: false }, db: { schema: 'runway' } });
-    const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 10 });
-    if (error) return json(500, { error: `user lookup failed: ${error.message}` });
-    const user = (data?.users || []).find((u) => String(u.email).toLowerCase() === allowed.toLowerCase());
-    if (!user) return json(500, { error: 'allow-listed user not found' });
-
-    const summary = await scanBoards({ db: admin, userId: user.id });
+    const summary = await scanBoards({ db: admin, userId: allowedUserId });
     console.log('scan-cron summary', JSON.stringify(summary));
     // `pauseUnknown` rides on the body as well as the console line. The
     // scheduler discards this body, but the operator hitting /api/scan-cron by

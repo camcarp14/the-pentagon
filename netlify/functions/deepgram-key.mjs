@@ -26,8 +26,14 @@
 //
 // Same auth pattern and same inlining rationale as claude-stream.mjs — see the
 // comment there. If it changes in one, change it in the other.
-const SUPABASE_URL = "https://nrzpinvyxxorxufadvyc.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_zDV3HpSChf0bZJ5nY09s3w_rNI3sZ1m";
+function operatorConfig() {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
+  const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
+  const email = String(process.env.ALLOWED_EMAIL || "").trim();
+  const userId = String(process.env.ALLOWED_USER_ID || "").trim();
+  const missing = [!url && "VITE_SUPABASE_URL", !key && "VITE_SUPABASE_ANON_KEY", !email && "ALLOWED_EMAIL", !userId && "ALLOWED_USER_ID"].filter(Boolean);
+  return missing.length ? { ok: false, error: `Operator authorization is not configured: ${missing.join(", ")}.` } : { ok: true, url, key, email, userId };
+}
 
 const GRANT_URL = "https://api.deepgram.com/v1/auth/grant";
 
@@ -52,15 +58,17 @@ async function checkSession(req) {
   const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
   if (!token) return { ok: false, status: 401, error: "Sign in required — no session token on this request." };
 
+  const config = operatorConfig();
+  if (!config.ok) return { ok: false, status: 503, error: config.error };
+
   try {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers: { apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${token}` },
+    const res = await fetch(`${config.url}/auth/v1/user`, {
+      headers: { apikey: config.key, Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return { ok: false, status: 401, error: "Session expired or invalid — sign in again." };
     const user = await res.json();
 
-    const allowed = process.env.ALLOWED_EMAIL;
-    if (allowed && String(user?.email || "").toLowerCase() !== String(allowed).toLowerCase()) {
+    if (String(user?.id || "") !== config.userId || String(user?.email || "").toLowerCase() !== config.email.toLowerCase()) {
       return { ok: false, status: 403, error: "This account is not the allow-listed operator." };
     }
     return { ok: true, email: user?.email || "unknown" };

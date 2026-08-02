@@ -774,19 +774,26 @@ describe('fetchFeed / fetchAltNews', () => {
 
 describe('/api/alt-news', () => {
   const realFetch = globalThis.fetch;
+  const TEST_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
+  const useTestOperator = () => {
+    process.env.VITE_SUPABASE_URL = 'https://stub.supabase.co';
+    process.env.VITE_SUPABASE_ANON_KEY = 'stub-anon-key';
+    process.env.ALLOWED_EMAIL = 'op@pentagon.test';
+    process.env.ALLOWED_USER_ID = TEST_OPERATOR_ID;
+  };
   let allowed;
   const authedReq = () => new Request('https://pentagon.test/api/alt-news', { headers: { authorization: 'Bearer test-token' } });
 
   const feedFetch = (feedBody) => vi.fn(async (url) => {
     // The Supabase session check shares this stub with the feeds.
-    if (String(url).includes('supabase')) return { ok: true, status: 200, json: async () => ({ email: 'op@pentagon.test' }) };
+    if (String(url).includes('supabase')) return { ok: true, status: 200, json: async () => ({ id: TEST_OPERATOR_ID, email: 'op@pentagon.test' }) };
     return { ok: true, status: 200, headers: { get: () => null }, text: async () => feedBody };
   });
 
   beforeEach(() => {
     BLOBS.clear();
     allowed = process.env.ALLOWED_EMAIL;
-    delete process.env.ALLOWED_EMAIL;
+    useTestOperator();
     globalThis.fetch = feedFetch(rssFeed([
       rssItem({ title: 'Solana Rallies as SOL ETF Filing Advances', link: 'https://www.coindesk.com/a' }),
       rssItem({ title: 'A New Custody Solution for Consoles', link: 'https://www.coindesk.com/b' }),
@@ -876,7 +883,7 @@ describe('/api/alt-news', () => {
     });
     BLOBS.set('alt_watchlist', { ids: [{ id: 'solana', symbol: 'SOL', name: 'Solana' }], updatedAt: Date.now() });
     globalThis.fetch = vi.fn(async (url) => (String(url).includes('supabase')
-      ? { ok: true, status: 200, json: async () => ({ email: 'op@pentagon.test' }) }
+      ? { ok: true, status: 200, json: async () => ({ id: TEST_OPERATOR_ID, email: 'op@pentagon.test' }) }
       : { ok: false, status: 429, headers: { get: () => null }, text: async () => '' }));
 
     const res = await altNewsHandler(authedReq(), {});
@@ -896,7 +903,7 @@ describe('/api/alt-news', () => {
 
   it('502s with the reason when both publishers fail and there is no cache', async () => {
     globalThis.fetch = vi.fn(async (url) => (String(url).includes('supabase')
-      ? { ok: true, status: 200, json: async () => ({ email: 'op@pentagon.test' }) }
+      ? { ok: true, status: 200, json: async () => ({ id: TEST_OPERATOR_ID, email: 'op@pentagon.test' }) }
       : { ok: false, status: 500, headers: { get: () => null }, text: async () => '' }));
     const res = await altNewsHandler(authedReq(), {});
     expect(res.status).toBe(502);

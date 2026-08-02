@@ -21,14 +21,14 @@
     "@anthropic-ai/sdk": "^0.110.0",
     "@netlify/blobs": "^8.1.0",
     "@supabase/supabase-js": "^2.45.0",
-    "@vitejs/plugin-react": "^4.3.1",
-    "dompurify": "^3.4.11",
+    "dompurify": "^3.4.12",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "vite": "^5.4.10"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.0",
     "playwright-core": "^1.62.1",
-    "vitest": "^2.1.9"
+    "vite": "^8.0.0",
+    "vitest": "^4.0.0"
   }
 }

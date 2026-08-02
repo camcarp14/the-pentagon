@@ -63,6 +63,15 @@ import altCoinHandler, { coinCacheKey } from '../../functions/alt-coin.mjs';
 import altScanHandler from '../../functions/alt-scan.mjs';
 import journalHandler from '../../functions/journal.mjs';
 
+const TEST_OPERATOR_ID = '00000000-0000-0000-0000-000000000001';
+const useTestOperator = () => {
+  process.env.VITE_SUPABASE_URL = 'https://stub.supabase.co';
+  process.env.VITE_SUPABASE_ANON_KEY = 'stub-anon-key';
+  process.env.ALLOWED_EMAIL = 'op@pentagon.test';
+  process.env.ALLOWED_USER_ID = TEST_OPERATOR_ID;
+};
+useTestOperator();
+
 /* ---------------- fixtures, written from the documented shapes ---------------- */
 
 const sparkline = (n = 168, base = 0.000007) =>
@@ -1006,7 +1015,7 @@ describe('altWatchGate cannot starve the cron', () => {
   });
 
   it('lets a signed-in operator through as an operator, not as the schedule', async () => {
-    globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ email: 'op@pentagon.test' }) }));
+    globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ id: TEST_OPERATOR_ID, email: 'op@pentagon.test' }) }));
     const authed = new Request('https://pentagon.test/api/alt-watch', { headers: { authorization: 'Bearer t' } });
     expect(await altWatchGate(authed, mkStore(), slotTop))
       .toMatchObject({ allowed: true, authed: true, scheduled: false });
@@ -1095,9 +1104,9 @@ describe('sourceHandler and the degraded serve', () => {
 
   beforeEach(() => {
     allowed = process.env.ALLOWED_EMAIL;
-    delete process.env.ALLOWED_EMAIL;
+    useTestOperator();
     // The Supabase session check, stubbed. No network in this suite.
-    globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ email: 'op@pentagon.test' }) }));
+    globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ id: TEST_OPERATOR_ID, email: 'op@pentagon.test' }) }));
   });
   afterEach(() => {
     globalThis.fetch = realFetch;
@@ -1334,7 +1343,7 @@ function upstreams({ authMs = 20, authStatus = 200, cgMarketsMs = 200, cgMarkets
     calls.push(u);
     if (u.includes('supabase.co')) {
       await wait(authMs, opts.signal);
-      return { ok: authStatus >= 200 && authStatus < 300, status: authStatus, json: async () => ({ email: 'op@pentagon.test' }) };
+      return { ok: authStatus >= 200 && authStatus < 300, status: authStatus, json: async () => ({ id: TEST_OPERATOR_ID, email: 'op@pentagon.test' }) };
     }
     if (u.includes('coins/markets')) {
       await wait(cgMarketsHangs ? 60_000 : cgMarketsMs, opts.signal);
@@ -1396,7 +1405,7 @@ describe('alt-scan gets a budget derived from its own chain', () => {
   beforeEach(() => {
     BLOBS.clear();
     allowed = process.env.ALLOWED_EMAIL;
-    delete process.env.ALLOWED_EMAIL;
+    useTestOperator();
   });
   afterEach(() => {
     globalThis.fetch = realFetch;
@@ -1487,7 +1496,7 @@ describe('alt-coin publishes WHY derivs is null', () => {
   beforeEach(() => {
     BLOBS.clear();
     allowed = process.env.ALLOWED_EMAIL;
-    delete process.env.ALLOWED_EMAIL;
+    useTestOperator();
   });
   afterEach(() => {
     globalThis.fetch = realFetch;
@@ -1577,7 +1586,7 @@ describe('checkAuth: a refusal and an outage are different answers', () => {
   beforeEach(() => {
     BLOBS.clear();
     allowed = process.env.ALLOWED_EMAIL;
-    delete process.env.ALLOWED_EMAIL;
+    useTestOperator();
   });
   afterEach(() => {
     globalThis.fetch = realFetch;
@@ -1629,7 +1638,7 @@ describe('checkAuth: a refusal and an outage are different answers', () => {
       ok: true,
       status: 200,
       json: () => new Promise((resolve, reject) => {
-        const t = setTimeout(() => resolve({ email: 'op@pentagon.test' }), 60_000);
+        const t = setTimeout(() => resolve({ id: TEST_OPERATOR_ID, email: 'op@pentagon.test' }), 60_000);
         opts.signal?.addEventListener('abort', () => { clearTimeout(t); reject(opts.signal.reason); });
       }),
     }));
@@ -1639,7 +1648,7 @@ describe('checkAuth: a refusal and an outage are different answers', () => {
   });
 
   it('memoises a verdict it actually reached, so the double check costs one round-trip', async () => {
-    globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ email: 'op@pentagon.test' }) }));
+    globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ id: TEST_OPERATOR_ID, email: 'op@pentagon.test' }) }));
     const req = withToken();
     expect(await checkAuth(req)).toBe(true);
     expect(await checkAuth(req)).toBe(true);
@@ -1664,7 +1673,7 @@ describe('checkAuth: a refusal and an outage are different answers', () => {
       n += 1;
       return n === 1
         ? { ok: false, status: 500, json: async () => ({}) }
-        : { ok: true, status: 200, json: async () => ({ email: 'op@pentagon.test' }) };
+        : { ok: true, status: 200, json: async () => ({ id: TEST_OPERATOR_ID, email: 'op@pentagon.test' }) };
     });
     const req = withToken();
     expect(await checkAuth(req)).toBe(false);
@@ -1673,7 +1682,7 @@ describe('checkAuth: a refusal and an outage are different answers', () => {
   });
 
   it('still collapses concurrent checks on one request to a single round-trip', async () => {
-    globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ email: 'op@pentagon.test' }) }));
+    globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ id: TEST_OPERATOR_ID, email: 'op@pentagon.test' }) }));
     const req = withToken();
     expect(await Promise.all([checkAuth(req), checkAuth(req), checkAuth(req), checkAuth(req)]))
       .toEqual([true, true, true, true]);
@@ -1681,7 +1690,7 @@ describe('checkAuth: a refusal and an outage are different answers', () => {
   });
 
   it('does not carry a verdict across requests', async () => {
-    globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ email: 'op@pentagon.test' }) }));
+    globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ id: TEST_OPERATOR_ID, email: 'op@pentagon.test' }) }));
     expect(await checkAuth(withToken())).toBe(true);
     expect(await checkAuth(withToken())).toBe(true);
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
@@ -1705,7 +1714,7 @@ describe('every checkAuth caller refuses an unauthenticated request first', () =
   beforeEach(() => {
     BLOBS.clear();
     allowed = process.env.ALLOWED_EMAIL;
-    delete process.env.ALLOWED_EMAIL;
+    useTestOperator();
     globalThis.fetch = vi.fn(async () => ({ ok: false, status: 401, json: async () => ({}) }));
   });
   afterEach(() => {
@@ -1775,7 +1784,7 @@ describe('sourceHandler separates "we refused you" from "we could not ask"', () 
   beforeEach(() => {
     BLOBS.clear();
     allowed = process.env.ALLOWED_EMAIL;
-    delete process.env.ALLOWED_EMAIL;
+    useTestOperator();
   });
   afterEach(() => {
     globalThis.fetch = realFetch;
@@ -1813,8 +1822,8 @@ describe('SOURCE_CACHED', () => {
   beforeEach(() => {
     BLOBS.clear();
     allowed = process.env.ALLOWED_EMAIL;
-    delete process.env.ALLOWED_EMAIL;
-    globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ email: 'op@pentagon.test' }) }));
+    useTestOperator();
+    globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ id: TEST_OPERATOR_ID, email: 'op@pentagon.test' }) }));
   });
   afterEach(() => {
     globalThis.fetch = realFetch;
@@ -1860,7 +1869,7 @@ describe('the pre-symbol alt_coin cache entries', () => {
   beforeEach(() => {
     BLOBS.clear();
     allowed = process.env.ALLOWED_EMAIL;
-    delete process.env.ALLOWED_EMAIL;
+    useTestOperator();
   });
   afterEach(() => {
     globalThis.fetch = realFetch;
