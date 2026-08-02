@@ -135,7 +135,8 @@
  [data-kit] .dock-tab:active .dock-icon { transform: scale(0.88); }
 [data-kit] .dock-icon { display: inline-flex; transition: transform var(--dur-1) var(--ease-out); }
 [data-kit] .dock-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em; line-height: 1; white-space: nowrap; max-width: 100%; overflow: hidden; }
-[data-kit] .lbx .dock-tab { padding: 8px 0; } /* letterboxed standalone — OS already cleared the indicator *//* ═══ CHROME — sidebar (tablet / desktop) ════════════════════════════════════ *//* A 236px rail, not 300: four destinations in a flat list (no section headers —
+[data-kit] .lbx .dock-tab { padding: 8px 0; } /* letterboxed standalone — OS already cleared the indicator */
+/* ═══ CHROME — sidebar (tablet / desktop) ════════════════════════════════════ *//* A 236px rail, not 300: four destinations in a flat list (no section headers —
    see nav.js) don't need the width, and the surplus was dead canvas next to
    every page. Padding and row height came down with it. */
  [data-kit] .sidebar {
