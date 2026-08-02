@@ -537,9 +537,9 @@ function Tools({ prefs, onChange, isMobile, toolPower }) {
           trying to tell apart, and separating their explanations by half a
           screen is how you guarantee they never do. */}
       <div style={{ fontSize: 12.5, color: P.muted, lineHeight: 1.6, marginBottom: 16, maxWidth: 620 }}>
-        Arrange the desktop rail and keyboard shortcuts. On phones, every tool is
-        always one icon away, including tools hidden from the rail. Hiding a tool
-        never stops it or changes its data. <strong style={{ color: P.ink, fontWeight: 700 }}>Power is the other switch:</strong>{" "}
+        Choose the tools shown in navigation and the keyboard shortcuts. Hiding a
+        tool removes it from the desktop rail and phone dock, but never stops it
+        or changes its data. <strong style={{ color: P.ink, fontWeight: 700 }}>Power is the other switch:</strong>{" "}
         it stops that tool's scheduled jobs on the server, and each one says which
         jobs those are. <span style={{ color: P.faint }}>⌥1–⌥{Math.min(shownCount, 6)} jump to the visible tools in this order.</span>
       </div>
@@ -564,10 +564,10 @@ function Tools({ prefs, onChange, isMobile, toolPower }) {
               <span style={{ minWidth: 0, flex: 1 }}>
                 <span style={{ display: "block", fontSize: 13.5, fontWeight: 700, fontFamily: P.display, color: P.ink }}>{m.label}</span>
                 <span style={{ display: "block", fontSize: 11.5, color: P.faint, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {/* "Hidden from the bar", not "Hidden" — with a power switch
+                  {/* "Hidden from navigation", not "Hidden" — with a power switch
                       one line below, a bare "Hidden" invites the reading that
                       the tool itself is off. */}
-                  {hidden ? "Hidden from the desktop rail" : m.brand}
+                  {hidden ? "Hidden from navigation" : m.brand}
                 </span>
               </span>
 
@@ -582,9 +582,9 @@ function Tools({ prefs, onChange, isMobile, toolPower }) {
                 type="button"
                 role="switch"
                 aria-checked={!hidden}
-                aria-label={`${hidden ? "Show" : "Hide"} ${m.label} in the desktop rail`}
+                aria-label={`${hidden ? "Show" : "Hide"} ${m.label} in tool navigation`}
                 disabled={blockedLast}
-                title={blockedLast ? "At least one tool has to stay visible" : hidden ? "Show in the desktop rail" : "Hide from the desktop rail"}
+                title={blockedLast ? "At least one tool has to stay visible" : hidden ? "Show in tool navigation" : "Hide from tool navigation"}
                 onClick={() => !blockedLast && onChange(toggleTab(prefs, app))}
                 style={{
                   width: 46, height: 28, flex: "none", padding: 3, borderRadius: 999,
@@ -619,8 +619,8 @@ function Tools({ prefs, onChange, isMobile, toolPower }) {
       </div>
 
       <div style={{ fontSize: 11.5, color: P.faint, marginTop: 14, lineHeight: 1.6 }}>
-        System is always reachable, whatever is hidden. Every phone dock keeps all
-        tools available; this preference only changes the desktop rail and ⌥ shortcuts.
+        System is always reachable, whatever is hidden. This preference changes
+        the desktop rail, phone dock, and ⌥ shortcuts.
         {" "}Default: {DEFAULT_HIDDEN.map((a) => appMeta(a).label).join(", ")} start hidden.
         {" "}Pausing is stored on the server, not in this browser — it is the same
         table the Ops console's global stop writes, which is why a scheduled job
