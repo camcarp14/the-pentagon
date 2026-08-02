@@ -85,7 +85,7 @@ function Rail({ onCommand }) {
   }, [location.pathname, queued]);
 
   return (
-    <nav className="rail app-dock" aria-label="Runway">
+    <nav className="rail" aria-label="Runway">
       <div className="brand"><span className="dot" /><span className="t-head">Runway</span></div>
       <div className="navgroup seg" ref={groupRef}>
         {thumb.ready && <span className="seg-thumb" aria-hidden="true" style={{ left: `${thumb.left}px`, width: `${thumb.width}px` }} />}

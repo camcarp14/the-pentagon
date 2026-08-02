@@ -106,7 +106,7 @@ function IdeaTabIcon({ tab }) {
     saved: <path d="M6 3.5h12v17l-6-3.7-6 3.7v-17Z" />,
     skills: <><path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3Z" /><path d="m19 16 .7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z" /></>,
   };
-  return <svg className="ideas-dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[tab]}</svg>;
+  return <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[tab]}</svg>;
 }
 
 const SORTS = ["recommended", "popping", "newest", "stars"];
@@ -270,7 +270,7 @@ export function selectVisible(rows, { tab, sort, range, saved, query = "", categ
  * tokens.css so the fallback can only ever fire in a document with no token
  * layer at all, and what it would paint there is a midnight bar under light
  * content. */
-function SubNav({ tab, onTab, savedCount, onRefresh, refreshing, isMobile }) {
+function SubNav({ tab, onTab, savedCount, onRefresh, refreshing }) {
   const refs = useRef({});
   const [thumb, setThumb] = useState({ left: 0, width: 0, ready: false });
 
@@ -283,7 +283,7 @@ function SubNav({ tab, onTab, savedCount, onRefresh, refreshing, isMobile }) {
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
-  }, [tab, isMobile, savedCount]);
+  }, [tab, savedCount]);
 
   return (
     <div
@@ -302,10 +302,10 @@ function SubNav({ tab, onTab, savedCount, onRefresh, refreshing, isMobile }) {
           they sit above reads as two pages stacked. */}
       <div style={{
         height: "100%", maxWidth: BODY_MAX, margin: "0 auto",
-        padding: isMobile ? "0 14px" : "0 24px",
+        padding: "0 24px",
         display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
       }}>
-        <div className="seg" role="tablist" aria-label="Ideas sections" style={{ minWidth: 0, flex: isMobile ? "1 1 auto" : "0 0 auto" }}>
+        <div className="seg" role="tablist" aria-label="Ideas sections" style={{ minWidth: 0, flex: "0 0 auto" }}>
           {thumb.ready && <div className="seg-thumb" style={{ left: `${thumb.left}px`, width: `${thumb.width}px`, zIndex: 0 }} />}
           {TABS.map((t) => (
             <button
@@ -316,14 +316,8 @@ function SubNav({ tab, onTab, savedCount, onRefresh, refreshing, isMobile }) {
               ref={(el) => { refs.current[t] = el; }}
               onClick={() => onTab(t)}
               className={tab === t ? "seg-opt active" : "seg-opt"}
-              // 44 on a phone, and it fits: the bar is 52 and .seg adds 2px of
-              // padding either side, so a 44px pill is a 48px control inside it.
-              // The kit's .seg-opt floor is 32 and this was overriding it to 36
-              // — a hair over the kit and a full 8px under the touch floor, on
-              // the three targets this tool is navigated by.
-              style={{ padding: "0 12px", minHeight: isMobile ? 44 : 36, whiteSpace: "nowrap", flex: "1 1 auto" }}
+              style={{ padding: "0 12px", minHeight: 36, whiteSpace: "nowrap", flex: "1 1 auto" }}
             >
-              <IdeaTabIcon tab={t} />
               <span>{tabLabel(t)}</span>
               {/* The saved count moves ONTO the pill it describes — the stat tile
                   that used to carry it was a third of a phone screen spent on
@@ -341,7 +335,7 @@ function SubNav({ tab, onTab, savedCount, onRefresh, refreshing, isMobile }) {
             with 4px to spare on the surface where the floor applies. */}
         <button
           type="button"
-          className={`${isMobile ? "btn md quiet" : "btn sm quiet"} ideas-refresh`}
+          className="btn sm quiet"
           onClick={onRefresh}
           disabled={refreshing}
           title="Re-read the scanner's tables"
@@ -352,6 +346,23 @@ function SubNav({ tab, onTab, savedCount, onRefresh, refreshing, isMobile }) {
         </button>
       </div>
     </div>
+  );
+}
+
+function IdeasDock({ tab, onTab, savedCount }) {
+  return (
+    <nav aria-label="Ideas sections" style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", background: "var(--glass-raised)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: "1px solid var(--line)", padding: "4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))" }}>
+      {TABS.map((t) => {
+        const active = tab === t;
+        const label = `${tabLabel(t)}${t === "saved" && savedCount > 0 ? ` ${savedCount}` : ""}`;
+        return (
+          <button key={t} type="button" onClick={() => onTab(t)} aria-current={active ? "page" : undefined} aria-label={label} className={active ? "dock-tab active" : "dock-tab"} style={{ flex: 1, minHeight: 46, padding: "8px 2px 7px", background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px", color: active ? "var(--accent)" : "var(--faint)" }}>
+            <span className="dock-icon"><IdeaTabIcon tab={t} /></span>
+            <span className="dock-label">{label}</span>
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -1027,14 +1038,17 @@ export default function IdeasRoot() {
     // than the deleted <h1>Ideas</h1> ever said, since it read "Ideas" on all
     // three. The shell's rail already says Ideas; so does the first pill.
     <div data-kit role="region" aria-label={tabLabel(tab)}>
-      <SubNav
-        tab={tab}
-        onTab={setTab}
-        savedCount={saved.size}
-        onRefresh={() => setNonce((v) => v + 1)}
-        refreshing={loading}
-        isMobile={isMobile}
-      />
+      {isMobile ? (
+        <IdeasDock tab={tab} onTab={setTab} savedCount={saved.size} />
+      ) : (
+        <SubNav
+          tab={tab}
+          onTab={setTab}
+          savedCount={saved.size}
+          onRefresh={() => setNonce((v) => v + 1)}
+          refreshing={loading}
+        />
+      )}
 
       <div style={{ padding: `${pad}px ${pad}px ${isMobile ? "calc(82px + var(--safe-bottom))" : "64px"}`, maxWidth: BODY_MAX, margin: "0 auto" }}>
         {/* The one line the nav does not carry: where these come from and what

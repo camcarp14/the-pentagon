@@ -12,11 +12,13 @@
 // feed to measure. Everything below is the half that is statically decidable.
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import Ideas from "../Root.jsx";
 
 const warnings = [];
+const source = readFileSync(new URL("../Root.jsx", import.meta.url), "utf8");
 let realWarn, realErr;
 beforeAll(() => {
   realWarn = console.warn; realErr = console.error;
@@ -125,6 +127,13 @@ describe("the sub-nav is the ZTS/Clarify row, not a segmented bar in the body", 
     // then 7d/30d/90d/All, each spanning the whole content width. Sort and
     // window are filters and are <select>s now, beside the list they filter.
     expect([...out.matchAll(/class="seg"/g)]).toHaveLength(1);
+  });
+
+  it("uses a dedicated fixed dock instead of top tabs on a phone", () => {
+    expect(source).toContain("function IdeasDock");
+    expect(source).toContain('<nav aria-label="Ideas sections" style={{ position: "fixed"');
+    expect(source).toContain("{isMobile ? (");
+    expect(source).toContain("<IdeasDock tab={tab} onTab={setTab} savedCount={saved.size} />");
   });
 
   it("labels the pills from the hoisted map, never from a raw id", () => {
@@ -238,7 +247,7 @@ describe("every surface colour is a token with a light half", () => {
     // wins. A name outside this set is a name that may only exist in the dark
     // inline stamp.
     const ALLOWED = new Set([
-      "--ink", "--sub", "--faint", "--line", "--surface", "--bg", "--glass",
+      "--ink", "--sub", "--faint", "--line", "--surface", "--bg", "--glass", "--glass-raised",
       "--accent", "--accent-a10", "--ink-a05", "--good", "--bad", "--warn",
       "--font-mono", "--font-body", "--shell-bar", "--safe-bottom",
     ]);
@@ -389,8 +398,9 @@ describe("Ideas is a review queue", () => {
     for (const id of ["ideas-q", "ideas-sort", "ideas-cat", "ideas-age"]) expect(src).toContain(id);
   });
 
-  it("puts nothing under the touch floor into the sticky bar on a phone", () => {
-    // .btn sm is 34px. Fine for a pointer, under the floor for a thumb.
-    expect(src).toMatch(/isMobile \? "btn md quiet" : "btn sm quiet"/);
+  it("uses a 46px dock target instead of desktop tabs on a phone", () => {
+    expect(src).toMatch(/function IdeasDock/);
+    expect(src).toMatch(/minHeight: 46/);
+    expect(src).toMatch(/isMobile \? \(\s*<IdeasDock/);
   });
 });

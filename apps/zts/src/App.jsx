@@ -331,22 +331,15 @@ export function BottomNav({ view, setView, tabs }) {
     //     which is why the canonical line above now reads 10.5.
     //   · the drop shadow is gone. The bar already separates with a hairline,
     //     and a border plus a shadow on one element is not allowed.
-    // The bar keeps its own geometry rather than the kit's .dock, because .dock
-    // pads with env(safe-area-inset-bottom) and this bar's safe-area formula is
-    // the canonical one above, shared with three other tools.
-    <nav className="dock app-dock" aria-label="ZTS sections">
+    // This owns its fixed geometry because the shell and each app can apply
+    // different breakpoint rules. A generic dock override made this in-flow on
+    // phones, so the viewport anchor stays explicit here.
+    <nav aria-label="ZTS sections" style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", background: "var(--glass-raised)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: "1px solid var(--line)", padding: "4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))" }}>
       {tabs.map(t => {
         const active = view === t;
         const color = active ? "var(--accent)" : "var(--faint)";
         return (
-          // The kit's .dock-tab / .dock-icon / .dock-label — the same three
-          // classes Clarify's bar takes, which is what "must match exactly"
-          // means now that a kit exists. The inline padding STAYS and wins the
-          // cascade: .dock-tab adds env(safe-area-inset-bottom) of its own and
-          // the wrapper above already pays that inset, so taking the kit's
-          // padding would double it. .dock-tab also buys the press grammar —
-          // the tab does not scale, the icon nudges.
-          <button key={t} type="button" onClick={() => setView(t)} aria-current={active ? "page" : undefined} className={active ? "dock-tab active" : "dock-tab"}>
+          <button key={t} type="button" onClick={() => setView(t)} aria-current={active ? "page" : undefined} className={active ? "dock-tab active" : "dock-tab"} style={{ flex: 1, minHeight: 46, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px", padding: "8px 2px 7px", background: "none", border: "none", cursor: "pointer" }}>
             <span className="dock-icon"><TabIcon tab={t} color={color} /></span>
             {/* .dock-label IS 10.5px / 600 / 0.01em — the canonical numbers, now
                 read off the kit rather than restated here. Only what is ZTS's

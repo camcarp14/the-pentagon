@@ -136,20 +136,15 @@ function SubNav({ tab, currentView, onNavigate }) {
 // Mobile bottom tab bar — icon-only, hidden on desktop via CSS.
 function BottomBar({ activeTab, onTab, inboundNew }) {
   return (
-    // Canonical bottom-bar geometry — must stay identical to ZTS, Runway and
-    // Macro (see the note on ZTS's BottomNav) or the bar changes height when you
-    // switch tools.
-    <nav className="co-bottombar dock app-dock" aria-label="Clarify sections" style={{ display: "none" }}>
+    // The fixed geometry is local because this app's responsive sheet controls
+    // visibility. It must not be replaced by a shared rule with a different
+    // breakpoint or it becomes an in-flow row.
+    <nav className="co-bottombar" aria-label="Clarify sections" style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 400, display: "none", background: "var(--glass-raised)", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: "1px solid var(--line)", padding: "4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))" }}>
       <div style={{ display: "flex" }}>
         {NAV_TABS.map(t => {
           const on = activeTab === t.key;
           return (
-            // The kit's .dock-tab for the grammar (and its press behaviour — the
-            // icon nudges, the tab does not scale). The inline padding STAYS and
-            // wins the cascade: .dock-tab adds env(safe-area-inset-bottom) of its
-            // own, and this bar's wrapper already pays that inset above, so
-            // taking the kit's padding would double it.
-            <button key={t.key} type="button" onClick={() => onTab(t)} title={t.label} aria-label={t.label} className={on ? "dock-tab active" : "dock-tab"} style={{ position: "relative" }}>
+            <button key={t.key} type="button" onClick={() => onTab(t)} title={t.label} aria-label={t.label} className={on ? "dock-tab active" : "dock-tab"} style={{ flex: 1, minHeight: 46, padding: "8px 2px 7px", background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px", position: "relative" }}>
               <span className="dock-icon" style={{ fontSize: "21px", lineHeight: 1, color: on ? "var(--accent)" : "var(--faint)" }}>{t.icon}</span>
               {/* The kit's .dock-label: 10.5px, sentence case. It was 9px
                   uppercase — under the floor, and uppercase outside .t-label. */}
