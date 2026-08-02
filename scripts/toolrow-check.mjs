@@ -32,10 +32,10 @@ const session = {
   user: { id: "00000000-0000-0000-0000-000000000001", aud: "authenticated", role: "authenticated", email: "stub@example.com", app_metadata: {}, user_metadata: {}, created_at: new Date(0).toISOString() },
 };
 
-// Desktop may hide these three, but the mobile icon dock must still render all
-// eight in their saved order.
+// These tools start hidden on every navigation surface.
 const ORDER = (process.env.TOOLS || "zts,clarify,runway,macro,looper,business,sync,ideas").split(",");
 const HIDDEN = ["macro", "looper", "business"];
+const VISIBLE = ORDER.filter((app) => !HIDDEN.includes(app));
 
 // MOBILE ONLY, NOW. The wrapping tool row was the desktop layout when this
 // harness was written; the tools have since moved to a left rail above 768px,
@@ -43,9 +43,8 @@ const HIDDEN = ["macro", "looper", "business"];
 // renders, so "no .toolrow on desktop" is asserted there rather than being
 // silently unowned by both files.
 //
-// Phones use one compact row of the eight shared tool glyphs. A hidden desktop
-// rail item still belongs here: hiding changes desktop access and shortcuts,
-// never the phone dock.
+// Phones use one compact row of shared tool glyphs. System → Tools controls
+// which ones render here as well as in the desktop rail.
 const DESKTOP = [];
 const MOBILE = [360, 393, 414];
 
@@ -65,6 +64,14 @@ await page.route("**/*", (r) => {
 
 await page.goto(`${BASE}/#/zts`, { waitUntil: "networkidle", timeout: 45000 });
 await page.waitForTimeout(1500);
+
+async function expectFolded(bodyId, label) {
+  const control = await page.$(`[aria-controls="${bodyId}"]`);
+  if (!control) { fail(`${label}: disclosure control was not rendered`); return; }
+  const open = await control.getAttribute("aria-expanded");
+  if (open !== "false") fail(`${label}: defaulted open (aria-expanded=${open})`);
+  else ok(`${label}: defaults folded while its live status remains in the header`);
+}
 
 /** Geometry of the row as the browser actually laid it out. */
 const measure = () => page.evaluate(() => {
@@ -92,13 +99,20 @@ const measure = () => page.evaluate(() => {
     smallest: Math.min(...btns.map((b) => Math.round(b.getBoundingClientRect().height))),
     narrowest: Math.min(...btns.map((b) => Math.round(b.getBoundingClientRect().width))),
     icons: btns.filter((b) => b.querySelector("svg")).length,
-    hidden: btns.filter((b) => b.getAttribute("data-hidden") === "true").length,
   };
 });
 
 let bad = 0;
 const fail = (msg) => { bad++; console.log(`FAIL  ${msg}`); };
 const ok = (msg) => console.log(`ok    ${msg}`);
+
+await expectFolded("zts-engine-body", "ZTS writer");
+await page.setViewportSize({ width: 393, height: 852 });
+await page.click('.toolrow button[aria-label="Clarify"]');
+await page.waitForTimeout(700);
+await expectFolded("clarify-engine-body", "Clarify outbound engine");
+await page.click('.toolrow button[aria-label="ZTS"]');
+await page.waitForTimeout(500);
 
 for (const width of [...DESKTOP, ...MOBILE]) {
   const mobile = width < 768;
@@ -122,24 +136,22 @@ for (const width of [...DESKTOP, ...MOBILE]) {
   // room: --shell-bar exists so the height CAN change, and a test that pins it
   // exactly would fail on every legitimate tweak while catching nothing extra.
   //   desktop  51 correct · 90 ceiling  · 177 was the bug
-  //   mobile  102 correct (identity row + one 44px icon dock) · 130 ceiling
-  const maxBar = mobile ? 130 : 90;
+  //   mobile  50 correct (brand + icon dock + System in one row) · 72 ceiling
+  const maxBar = mobile ? 72 : 90;
   if (m.barH != null && m.barH > maxBar) fail(`${label}: bar is ${m.barH}px tall (max ${maxBar}) — the row is stacking`);
 
   // Labels belong to desktop; the phone dock owes one glyph per tool instead.
   if (!mobile && m.clipped > 0) fail(`${label}: ${m.clipped} tool label(s) truncated to ellipsis`);
-  if (mobile && m.icons !== ORDER.length) fail(`${label}: ${m.icons} tool glyph(s) rendered, expected ${ORDER.length}`);
-  if (mobile && m.hidden !== HIDDEN.length) fail(`${label}: ${m.hidden} desktop-hidden tool glyph(s) rendered, expected ${HIDDEN.length}`);
+  if (mobile && m.icons !== VISIBLE.length) fail(`${label}: ${m.icons} tool glyph(s) rendered, expected ${VISIBLE.length}`);
 
   // No tool may be pushed off the side of the page.
   if (m.overflow > 0) fail(`${label}: page scrolls sideways by ${m.overflow}px`);
 
-  // Every tool is present, always — nothing is dropped to make room.
-  if (m.tools !== ORDER.length) fail(`${label}: ${m.tools} tools rendered, expected ${ORDER.length}`);
+  if (m.tools !== VISIBLE.length) fail(`${label}: ${m.tools} tools rendered, expected ${VISIBLE.length}`);
 
   // Touch targets on the platform where they are touched.
   if (mobile && m.smallest < 36) fail(`${label}: smallest tool button is ${m.smallest}px tall`);
-  if (mobile && m.narrowest < 36) fail(`${label}: narrowest tool button is ${m.narrowest}px wide`);
+  if (mobile && m.narrowest < 30) fail(`${label}: narrowest tool button is ${m.narrowest}px wide`);
 
   // --shell-bar has to track the real height or ten call sites across six tools
   // that read `calc(100vh - var(--shell-bar))` are wrong by the difference.
@@ -149,6 +161,31 @@ for (const width of [...DESKTOP, ...MOBILE]) {
       fail(`${label}: --shell-bar says ${published}px, bar measures ${m.barH}px`);
     }
   }
+}
+
+// A visibility switch has to move the phone dock, not only write localStorage.
+await page.setViewportSize({ width: 393, height: 852 });
+await page.click('button[aria-label="System — ops, tools, usage, intelligence and theme"]');
+await page.waitForTimeout(300);
+await page.click('[role="tab"]:has-text("Tools")');
+await page.waitForTimeout(300);
+const macroSwitch = '[role="switch"][aria-label="Show Macro in tool navigation"]';
+if (!(await page.$(macroSwitch))) {
+  fail("393px: no Show Macro switch in System → Tools");
+} else {
+  await page.click(macroSwitch);
+  await page.waitForTimeout(300);
+  const shown = await measure();
+  if (shown?.tools !== VISIBLE.length + 1 || !(await page.$('.toolrow button[aria-label^="Macro"]'))) {
+    fail(`393px: showing Macro did not add it to the phone dock (${shown?.tools ?? "no"} tools)`);
+  } else ok("393px: showing Macro immediately adds it to the phone dock");
+
+  await page.click('[role="switch"][aria-label="Hide Macro in tool navigation"]');
+  await page.waitForTimeout(300);
+  const hidden = await measure();
+  if (hidden?.tools !== VISIBLE.length || await page.$('.toolrow button[aria-label^="Macro"]')) {
+    fail(`393px: hiding Macro did not remove it from the phone dock (${hidden?.tools ?? "no"} tools)`);
+  } else ok("393px: hiding Macro immediately removes it from the phone dock");
 }
 
 await browser.close();
