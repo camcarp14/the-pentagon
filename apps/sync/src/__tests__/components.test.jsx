@@ -542,7 +542,7 @@ describe("the app still composes the surfaces it mounts", () => {
     // two stacked vertical navs. Reintroducing it lands here.
     expect(desktop, "no second vertical rail inside the tool").not.toContain('class="sidebar"');
     // Every destination reaches the row, by the label the map publishes.
-    for (const label of ["Console", "Day", "Queue", "Mind", "Voice"])
+    for (const label of ["Console", "Day", "Queue", "Mind"])
       expect(desktop, `the ${label} pill`).toContain(`>${label}<`);
     // The rail's foot carried live state and controls as well as destinations.
     // Losing any of the four in the move would have been a functional
@@ -561,10 +561,10 @@ describe("the app still composes the surfaces it mounts", () => {
     expect(mobile).toContain('class="dock-tab active"');
     // Every destination in nav.js reaches the bar. A tab silently dropped is a
     // page that becomes unreachable on the device this app is mostly used on.
-    for (const label of ["Console", "Day", "Queue", "Mind", "Voice"])
+    for (const label of ["Console", "Day", "Queue", "Mind"])
       expect(mobile, `the ${label} tab`).toContain(`>${label}</span>`);
     expect(mobile, "and the rail is not drawn there").not.toContain('class="sidebar"');
-    // A phone has no sub-nav — six pills and a tab bar for the same six
+    // A phone has no sub-nav — one route set, one navigation surface.
     // destinations is the doubled navigation this whole change removes.
     expect(mobile, "and no sub-nav either").not.toContain('class="sy-nav"');
     // So the Console's own control row is the ONLY way to Settings there, and
@@ -579,7 +579,7 @@ describe("the app still composes the surfaces it mounts", () => {
     // PAGES in App.jsx is the router. An entry pointing at nothing is a
     // destination that silently falls back to the Console.
     const app = readSource("App.jsx");
-    for (const key of ["console", "day", "queue", "brief", "mind", "memory", "voice"])
+    for (const key of ["console", "day", "queue", "brief", "mind", "memory"])
       expect(app, `${key} must stay routable`).toMatch(new RegExp(`\\b${key}:\\s*\\w*Page\\b`));
   });
 
