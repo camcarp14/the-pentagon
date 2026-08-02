@@ -11,12 +11,10 @@
 //     `justify-content: center` takes over and the onboarding Start button goes
 //     back under the top edge of a phone (the bug styles.css:701 documents as
 //     fixed);
-//   · delete `.sy-root[data-kit] .dock-tab`'s safe-bottom padding → the kit pads
-//     with raw env(safe-area-inset-bottom);
+//   · remove the shared .pentagon-dock safe-bottom padding → the kit pads every
+//     tab with raw env(safe-area-inset-bottom);
 //   · delete `.sy-root[data-kit] .sheet`'s max-height and padding-bottom → same;
 //   · delete `min-height: 0` from .entrance → the kit's `min-height: 100dvh`;
-//   · take `[data-kit]` off the dock-tab override → it ties with the kit at
-//     (0,2,0) and the winner becomes whichever sheet the browser parsed last;
 //   · `.sy-root .card { border }` next to `[data-kit] .card { box-shadow }` →
 //     the §4.2 anti-pattern, assembled one declaration per sheet.
 //
@@ -278,6 +276,13 @@ describe("the iOS safe-area overrides are each individually pinned", () => {
       expect(expected.test(won.value), `${cls} { ${prop} } resolves to "${won.value}" — ${where(won)}`).toBe(true);
     });
   }
+
+  it("keeps shared dock safe-area padding on the bar, not on every tab", () => {
+    const dock = resolve(S, el(".pentagon-dock"), "padding-bottom", "@media (max-width: 767.98px)");
+    expect(dock, "nothing clears the shared dock from the home indicator").not.toBeNull();
+    expect(dock.sheet, where(dock)).toBe("kit");
+    expect(/var\(--safe-bottom/.test(dock.value), where(dock)).toBe(true);
+  });
 
   it("measures the desktop sheet against the window, not the screen", () => {
     // The other half of the same iOS lie: 100vh on an installed app reports the
