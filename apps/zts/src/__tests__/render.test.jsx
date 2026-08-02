@@ -772,10 +772,8 @@ describe("ZTS keeps its iOS and safe-area workarounds verbatim", () => {
   });
 
   it("keeps the bottom bar's safe-area padding formula", () => {
-    const kit = readFileSync(join(here, "../../../../packages/ui/components.css"), "utf8");
-    expect(app).toContain('className="dock app-dock"');
-    expect(kit).toContain("[data-kit] .app-dock .dock-tab");
-    expect(kit).toContain("calc(8px + var(--safe-bottom))");
+    expect(app).toContain('<nav aria-label="ZTS sections" style={{ position: "fixed"');
+    expect(app).toContain('padding: "4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))"');
     expect(app).toContain('paddingBottom: isMobile ? "calc(60px + var(--safe-bottom))" : 0');
   });
 
