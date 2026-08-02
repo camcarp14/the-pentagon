@@ -34,7 +34,7 @@
 // `collapsedRead` below derives both from fetched rows only, and every branch
 // that cannot answer says so instead of picking the comfortable default.
 // ═══════════════════════════════════════════════════════════════════════════
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@cc/supabase";
 import { T } from "../../theme";
 import { enginePhase, enginePlays, humanGap, PHASE } from "@cc/ops/plays.js";
@@ -179,11 +179,9 @@ export default function EnginePanel({ onNavigate }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(null);
   const [note, setNote] = useState("");
-  // Seeded from storage on the FIRST render, before anything is fetched, so a
-  // remembered "closed" never flashes open. `attention` is unknown at this
-  // point (null), which resolveOpen reads as "honour what is stored".
-  const [open, setOpen] = useState(() => resolveOpen(loadEnginePanelPrefs(), null));
-  const forced = useRef(false);
+  // Seeded from storage on the FIRST render, so the folded default does not
+  // flash open while the live engine state is loading.
+  const [open, setOpen] = useState(() => resolveOpen(loadEnginePanelPrefs()));
 
   const load = useCallback(async () => {
     if (!supabase) { setErr("Supabase isn't configured."); setLoaded(true); return; }
@@ -273,16 +271,6 @@ export default function EnginePanel({ onNavigate }) {
     loaded, err, controlRead: control !== null, phase, watching, replies: replies.length,
     stopReason: global?.paused_reason || null, lastPassMs: phase.sinceLastRunMs,
   });
-
-  // Attention outranks the stored preference, ONCE, on the first fetch that can
-  // answer the question. Once applied it never fires again, so clearing a stop
-  // does not slam the card shut under the operator's hand, and neither does the
-  // 30s refresh above it.
-  useEffect(() => {
-    if (forced.current || read.attention === null) return;
-    forced.current = true;
-    if (read.attention) setOpen(true);
-  }, [read.attention]);
 
   const toggle = () => {
     const next = !open;
