@@ -16,7 +16,6 @@ import MindPage from "./pages/MindPage.jsx";
 // facts, notes and action ledger it holds are the operator's data and stay one
 // tap away from the Mind page rather than being orphaned.
 import MemoryPage from "./pages/MemoryPage.jsx";
-import VoicePage from "./pages/VoicePage.jsx";
 
 const PAGES = {
   console: ConsolePage,
@@ -25,11 +24,16 @@ const PAGES = {
   brief: BriefPage,
   mind: MindPage,
   memory: MemoryPage,
-  voice: VoicePage,
+};
+
+const isLegacyVoiceHash = () => {
+  const segments = (window.location.hash || "").replace(/^#\/?/, "").split("/");
+  return segments[0] === "sync" && segments[1] === "voice";
 };
 
 const pageFromHash = () => {
   const segments = (window.location.hash || "").replace(/^#\/?/, "").split("/");
+  if (segments[0] === "sync" && segments[1] === "voice") return "console";
   return segments[0] === "sync" && PAGES[segments[1]] ? segments[1] : "console";
 };
 
@@ -68,7 +72,7 @@ function useKeyboardOpen() {
 function Workspace() {
   const [page, setPage] = useState(pageFromHash);
   const [palette, setPalette] = useState(false);
-  const [settings, setSettingsOpen] = useState(false);
+  const [settings, setSettingsOpen] = useState(isLegacyVoiceHash);
   const voice = useVoice();
   const phone = useIsPhone();
   const keyboardOpen = useKeyboardOpen();
@@ -81,7 +85,16 @@ function Workspace() {
   }, []);
 
   useEffect(() => {
-    const onHash = () => setPage(pageFromHash());
+    const onHash = () => {
+      if (isLegacyVoiceHash()) {
+        setPage("console");
+        setSettingsOpen(true);
+        window.location.hash = "/sync/console";
+        return;
+      }
+      setPage(pageFromHash());
+    };
+    onHash();
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -150,7 +163,7 @@ function Workspace() {
         {/* Keying on `page` restarts the entrance animation, so a destination
             develops instead of snapping into place.
             The region name comes from TAB_LABELS, the same map the sub-nav pill
-            and the tab bar render from. Queue, Brief and Voice dropped their
+            and the tab bar render from. Queue and Brief dropped their
             <h1> — it was the word already lit beside them — and a page with no
             heading is a page a screen reader cannot name; this is where the
             name went. `memory` is routable but not a NAV destination, so it

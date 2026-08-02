@@ -13,7 +13,7 @@
 // the markup — including the data-kit opt-in — so that is what gets rendered.
 //
 // Macro keeps all four tab panels mounted (drafts survive tab switches), so a
-// cold render contains the Chart, Journal and Settings surfaces in full. The
+// cold render contains the Chart and Settings surfaces in full. The
 // Cockpit is the one panel that is skeletons at t=0, because its own loading
 // gate fires before any data arrives — the trade card and the stat tiles are
 // therefore checked against the source, and the reason is noted at each.
@@ -101,7 +101,7 @@ describe("Macro renders on the kit", () => {
     // itself is read off the source below.
     expect(out.indexOf('data-testid="alts-panel"')).toBeLessThan(out.indexOf('data-testid="replay-toggle"'));
     const panels = [...stripComments(read("App.jsx")).matchAll(/<TabPanel active=\{tab === '(\w+)'\}/g)].map((m) => m[1]);
-    expect(panels).toEqual(["alts", "cockpit", "chart", "journal", "settings"]);
+    expect(panels).toEqual(["alts", "cockpit", "chart", "settings"]);
   });
 
   it("LANDS on Alts, and takes the landing tab from the nav's own order", () => {
@@ -1058,7 +1058,7 @@ describe("Macro obeys the language", () => {
     // surfaces that exist today must all still be in it.
     expect(files.length).toBeGreaterThanOrEqual(14);
     for (const f of ["App.jsx", "Root.jsx", "main.jsx", "components/Cockpit.jsx",
-      "components/TradeCard.jsx", "components/Journal.jsx", "components/Settings.jsx",
+      "components/TradeCard.jsx", "components/Settings.jsx",
       "components/RunPlan.jsx", "components/ChartPanel.jsx", "components/primitives.jsx",
       "components/alts/AltsPanel.jsx", "components/alts/SeasonCard.jsx",
       "components/alts/AltBoard.jsx", "components/alts/CoinDetail.jsx",
@@ -1534,7 +1534,7 @@ describe("Macro obeys the language", () => {
     // A restyle that renames a key is a data loss bug wearing a stylesheet.
     expect(jsx).toContain("sessionStorage.getItem('torque_token')");
     expect(jsx).toContain("sessionStorage.setItem('torque_token'");
-    for (const path of ["'settings'", "'position'", "'journal'", "'status'", "'quote'", "'btc'"]) {
+    for (const path of ["'settings'", "'position'", "'status'", "'quote'", "'btc'"]) {
       expect(jsx, `endpoint ${path} must survive`).toContain(path);
     }
     expect(jsx).toContain("'candles?symbol=MSTR&tf=1d'");

@@ -1050,6 +1050,10 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .altread.band-armed,
 [data-kit] .card.altread.band-armed { box-shadow: var(--shadow-card, var(--shadow-1)), inset 5px 0 0 var(--warn); }
 .altread-empty { margin-top: 12px; }
+.altread .tc-head { padding: 2px 0 4px; }
+.altread .tc-plain { max-width: 58ch; }
+.altread-rows-toggle { margin-top: 12px; }
+.altread .disclose { margin-top: 4px; }
 
 /* ---- season card ---- */
 .alt-season-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -1209,11 +1213,12 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .alt-group-sub { flex: 1 1 auto; min-width: 0; font-size: 11.5px; color: var(--ink-3); line-height: 1.45; text-wrap: pretty; }
 
 /* ---- the shortlist that replaced "Pick a coin" ---- */
-.alt-lead-grp { margin-top: 14px; }
+.alt-leaders { align-self: start; }
+.alt-lead-grp { margin-top: 12px; }
 .alt-lead-grp:first-of-type { margin-top: 4px; }
 .alt-lead-head { display: flex; align-items: baseline; gap: 8px; }
 .alt-lead-n { margin-left: auto; font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink-2); }
-.alt-lead-why { margin: 5px 0 8px; line-height: 1.45; text-wrap: pretty; }
+.alt-lead-why { margin: 4px 0 7px; line-height: 1.4; text-wrap: pretty; }
 .alt-lead-none { margin: 0; line-height: 1.45; }
 .alt-leadlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; background: var(--border); border-radius: var(--r-md); overflow: hidden; }
 .alt-leadrow {
@@ -1236,7 +1241,7 @@ kbd { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--borde
 .alt-leadrow-k { color: var(--ink-3); font-size: 10.5px; margin-right: 4px; }
 .alt-leadrow-spark { grid-area: spark; display: flex; justify-content: flex-end; }
 .alt-leadrow-spark .alt-spark { width: 34px; height: 16px; }
-.alt-lead-foot { margin: 14px 0 0; line-height: 1.5; text-wrap: pretty; }
+.alt-lead-foot { margin: 12px 0 0; line-height: 1.45; text-wrap: pretty; }
 
 /* ---- board controls ----
    Four fields now (search, sort, group, show). On a phone they are two columns
@@ -1710,7 +1715,13 @@ a.alt-newsitem-t:hover { color: var(--ink); text-decoration-color: var(--accent)
      a reading pane, so the 57px this moves left is worth more there. Measured in
      the 1180px shell column: board 670, detail 466 — the detail is still well
      clear of its 330px floor and its cards are already 2-up below. */
-  .alt-panes { grid-template-columns: minmax(0, 1.18fr) minmax(330px, 0.82fr); }
+  .alt-panes { grid-template-columns: minmax(0, 1.28fr) minmax(300px, 0.72fr); gap: 16px; }
+  .alt-pane-board { gap: 10px; }
+  .altread { padding: 18px 20px; }
+  .altread .alt-season-top { margin-bottom: 8px; }
+  .altread .tc-pips { margin-top: 10px; }
+  .altread-rows-toggle { margin-top: 10px; }
+  .alt-season, .alt-since, .alt-shape { padding: 14px 16px; }
   .alt-pane-detail, .alt-panes.picked .alt-pane-detail { display: block; }
   .alt-panes.picked .alt-pane-board { display: grid; }
   .alt-pane-detail {
@@ -1755,8 +1766,10 @@ a.alt-newsitem-t:hover { color: var(--ink); text-decoration-color: var(--accent)
   .altread .tc-rows { margin-top: 10px; }
   .altread .tc-row { grid-template-columns: 78px minmax(0, 1fr); gap: 8px; padding: 9px 10px; }
   .altread .tc-val { font-size: 15px; }
-  .altread .altread-rows-toggle { width: 100%; min-height: 44px; justify-content: center; margin-top: 10px; }
-  .altread .disclose { width: 100%; justify-content: center; }
+  .altread { padding: 16px; }
+  .altread .altread-rows-toggle { width: 100%; min-height: 42px; justify-content: center; margin-top: 10px; }
+  .altread .disclose { width: 100%; min-height: 40px; justify-content: center; }
+  .alt-season, .alt-since, .alt-shape { padding: 13px 14px; }
   /* Keep filtering in scan order. Search keeps the full row, while the three
      selects are balanced two-up rather than growing a third narrow column. */
   .alt-controls { gap: 8px; }

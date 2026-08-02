@@ -16,7 +16,6 @@ import { KanbanColumn, ChainGroup, BulkActionsBar, UndoToast, ShortcutHelp, Dail
 import { InboundView } from "./features/inbound/InboundView.jsx";
 import { AnalystView } from "./features/analyst/AnalystView.jsx";
 import { ClientsView } from "./features/clients/ClientsView.jsx";
-import { SettingsView } from "./features/system/SettingsView.jsx";
 import { MissionControl } from "./features/mission/MissionControl.jsx";
 import { CalendarView } from "./features/calendar/CalendarView.jsx";
 import { QueueView } from "./features/queue/QueueView.jsx";
@@ -26,7 +25,7 @@ import { useSequenceEngine } from "./lib/engineLoop.js";
 import { seqDb } from "./lib/sequenceDb.js";
 import { classifyReplyAI } from "./lib/classify.js";
 
-const ROUTABLE_VIEWS = ["mission", "analytics", "inbound", "outreach", "queue", "sequences", "analyst", "clients", "calendar", "settings"];
+const ROUTABLE_VIEWS = ["mission", "analytics", "inbound", "outreach", "queue", "sequences", "analyst", "clients", "calendar"];
 // THE SHELL OWNS SEGMENT 0. Clarify runs inside The Pentagon, whose shell reads
 // the first hash segment to decide which TOOL is open. Clarify used to write its
 // view there too (`#/analytics`), so switching to Analytics made the shell read a
@@ -40,9 +39,12 @@ const parseHash = () => {
   const raw = (window.location.hash || "").replace(/^#\/?/, "").split("/");
   const scoped = raw[0] === CLARIFY_SEG;
   const seg = scoped ? raw.slice(1) : raw;
-  if (seg[0] === "dna") return { view: "mission", sub: null, redirectToMasterMind: true };
-  if (!scoped && !ROUTABLE_VIEWS.includes(seg[0])) return { view: "mission", sub: null, redirectToMasterMind: false };
-  return { view: ROUTABLE_VIEWS.includes(seg[0]) ? seg[0] : "mission", sub: seg[1] ? decodeURIComponent(seg[1]) : null, redirectToMasterMind: false };
+  if (seg[0] === "dna") return { view: "mission", sub: null, redirectToMasterMind: true, redirectToSystem: false };
+  // Clarify used to own a Settings destination. Keep old bookmarks useful, but
+  // route them into the Pentagon-wide control center instead of duplicate tools.
+  if (seg[0] === "settings") return { view: "mission", sub: null, redirectToMasterMind: false, redirectToSystem: true };
+  if (!scoped && !ROUTABLE_VIEWS.includes(seg[0])) return { view: "mission", sub: null, redirectToMasterMind: false, redirectToSystem: false };
+  return { view: ROUTABLE_VIEWS.includes(seg[0]) ? seg[0] : "mission", sub: seg[1] ? decodeURIComponent(seg[1]) : null, redirectToMasterMind: false, redirectToSystem: false };
 };
 const ownsClarifyHash = () => {
   const first = (window.location.hash || "").replace(/^#\/?/, "").split("/")[0];
@@ -50,14 +52,13 @@ const ownsClarifyHash = () => {
 };
 
 // ─── Navigation model ─────────────────────────────────────────────────────────
-// Five top-level tabs. Legacy views stay hash-routable (#/analyst still works);
+// Four top-level tabs. Legacy views stay hash-routable (#/analyst still works);
 // they just light up their parent tab and render under its sub-nav.
 const NAV_TABS = [
   { key: "mission", label: "Today", icon: "◉", views: ["mission", "analytics"] },
   { key: "outreach", label: "Outreach", icon: "⇢", views: ["outreach", "queue", "sequences", "calendar"] },
   { key: "inbound", label: "Inbound", icon: "✦", views: ["inbound"] },
   { key: "clients", label: "Clients", icon: "▣", views: ["clients", "analyst"] },
-  { key: "system", label: "Settings", icon: "⚙", views: ["settings"] },
 ];
 const SUB_NAVS = {
   mission: [{ view: "mission", label: "Today" }, { view: "analytics", label: "Analytics" }],
@@ -174,6 +175,7 @@ export default function App({ embedded = false }) {
     const onHash = () => {
       const h = parseHash();
       if (h.redirectToMasterMind) { window.location.hash = MASTER_MIND_HASH; return; }
+      if (h.redirectToSystem) { window.location.hash = "/system"; return; }
       setCurrentView(h.view);
       setRouteSub(h.sub);
     };
@@ -973,7 +975,7 @@ export default function App({ embedded = false }) {
           name comes from viewLabel() — the same string the pill renders — so the
           two cannot drift. */}
       <div className="co-viewwrap" role="region" aria-label={viewLabel(currentView)}>
-      {currentView === "inbound" ? <InboundView cards={cards} onNavigate={setCurrentView} onCardsChange={loadData} toneMemory={toneMemory} /> : currentView === "analyst" ? <AnalystView /> : currentView === "clients" ? <ClientsView deepClientId={routeSub} onNavigate={setCurrentView} /> : currentView === "mission" ? <MissionControl cards={cards} onNavigate={setCurrentView} inboundNew={inboundNew} /> : currentView === "calendar" ? <CalendarView cards={cards} onStatusChange={handleStatusChange} onDataChange={loadData} /> : currentView === "queue" ? <QueueView onNavigate={setCurrentView} /> : currentView === "sequences" ? <SequencesView /> : currentView === "analytics" ? <AnalyticsView cards={cards} /> : currentView === "settings" ? <SettingsView /> : null}
+      {currentView === "inbound" ? <InboundView cards={cards} onNavigate={setCurrentView} onCardsChange={loadData} toneMemory={toneMemory} /> : currentView === "analyst" ? <AnalystView /> : currentView === "clients" ? <ClientsView deepClientId={routeSub} onNavigate={setCurrentView} /> : currentView === "mission" ? <MissionControl cards={cards} onNavigate={setCurrentView} inboundNew={inboundNew} /> : currentView === "calendar" ? <CalendarView cards={cards} onStatusChange={handleStatusChange} onDataChange={loadData} /> : currentView === "queue" ? <QueueView onNavigate={setCurrentView} /> : currentView === "sequences" ? <SequencesView /> : currentView === "analytics" ? <AnalyticsView cards={cards} /> : null}
       </div>
       {currentView === "outreach" && <div className="co-viewwrap" style={{ display: "flex", minHeight: "calc(100vh - var(--shell-bar, 52px))" }}>
         <div style={{ flex: 1, padding: "24px 28px", overflow: "auto" }}>

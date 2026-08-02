@@ -22,7 +22,6 @@ import { ToastProvider, CommandK, FreshChip, Num } from './components/primitives
 import Cockpit from './components/Cockpit.jsx'
 import AltsPanel from './components/alts/AltsPanel.jsx'
 import ChartPanel from './components/ChartPanel.jsx'
-import Journal from './components/Journal.jsx'
 import Settings from './components/Settings.jsx'
 
 /** Poll a source; expose {data, error, fetchedAt, loading} + reload().
@@ -75,7 +74,6 @@ const TABS = [
   { id: 'alts', label: 'Alts', icon: 'M12 3 3 7.5 12 12l9-4.5L12 3M3 16.5 12 21l9-4.5M3 12l9 4.5 9-4.5' },
   { id: 'cockpit', label: 'Cockpit', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
   { id: 'chart', label: 'Chart', icon: 'M3 3v18h18M7 14l4-4 3 3 5-6' },
-  { id: 'journal', label: 'Journal', icon: 'M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z' },
   { id: 'settings', label: 'Settings', icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h0a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51h0a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v0a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z' },
 ]
 
@@ -96,7 +94,6 @@ const TAB_KEYWORDS = {
   alts: ['alt', 'coins', 'season', 'board', 'crypto', 'home', 'dash'],
   cockpit: ['mstr', 'position', 'stop'],
   chart: ['candles', 'price'],
-  journal: ['trades', 'log'],
   settings: ['risk', 'config'],
 }
 
@@ -127,7 +124,6 @@ export default function App({ embedded = false }) {
   const btc1d = useSource('candles?symbol=BTC&tf=1d', 300_000, onAuthFail)
   const settingsSrc = useSource('settings', 0, onAuthFail)
   const positionSrc = useSource('position', 0, onAuthFail)
-  const journalSrc = useSource('journal', 0, onAuthFail)
   // 90s matches alt-scan's own Blobs TTL, so a poll that misses the cache is the
   // exception rather than the rule — CoinGecko's keyless tier is ~10-30 calls a
   // minute and this endpoint is shared by every open tab and the phone.
@@ -254,7 +250,7 @@ export default function App({ embedded = false }) {
     )
   }
 
-  const sources = { quote, btc, mstr1d, btc1d, settingsSrc, positionSrc, journalSrc }
+  const sources = { quote, btc, mstr1d, btc1d, settingsSrc, positionSrc }
   const reloadAll = () => { quote.reload(); btc.reload(); mstr1d.reload(); btc1d.reload(); settingsSrc.reload(); positionSrc.reload() }
 
   return (
@@ -301,7 +297,6 @@ export default function App({ embedded = false }) {
           <TabPanel active={tab === 'alts'}><AltsPanel scan={altScan} watchlistSrc={altWatch} newsSrc={altNews} settings={settings} now={now} /></TabPanel>
           <TabPanel active={tab === 'cockpit'}><Cockpit derived={derived} settings={settings} position={position} sources={sources} onReload={reloadAll} /></TabPanel>
           <TabPanel active={tab === 'chart'}><ChartPanel derived={derived} settings={settings} position={position} /></TabPanel>
-          <TabPanel active={tab === 'journal'}><Journal journalSrc={journalSrc} /></TabPanel>
           <TabPanel active={tab === 'settings'}><Settings settingsSrc={settingsSrc} positionSrc={positionSrc} derived={derived} /></TabPanel>
         </main>
         <CommandK items={[

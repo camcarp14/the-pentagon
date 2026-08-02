@@ -35,10 +35,9 @@ export default function ReadCard({
   read, fresh = null, sourceDetail = null, cached = false, cacheAgeSec = null, onReload,
 }) {
   const [work, setWork] = useState(false)
-  // The answer is the score and its plain-language read. The evidence stays
-  // immediately available, but starts folded on a phone so it does not consume
-  // the entire first screen before the operator can reach the board.
-  const [rowsOpen, setRowsOpen] = useState(() => !(typeof window !== 'undefined' && window.matchMedia?.('(max-width: 767.98px)').matches))
+  // The answer is the score and its plain-language read. Evidence opens on
+  // demand at every width, so desktop gets a concise decision surface too.
+  const [rowsOpen, setRowsOpen] = useState(false)
   if (!read) return null
 
   const scoreless = read.score == null
@@ -80,7 +79,7 @@ export default function ReadCard({
       {read.rows.length > 0 ? (
         <>
           <button className="btn ghost sm altread-rows-toggle" onClick={() => setRowsOpen((open) => !open)} aria-expanded={rowsOpen}>
-            {rowsOpen ? 'hide read details' : `show ${read.rows.length} read details`}
+            {rowsOpen ? 'Hide read details' : `Read ${read.rows.length} signals`}
           </button>
           <Expand open={rowsOpen}>
             <dl className="tc-rows" data-testid="alt-read-rows">
@@ -119,9 +118,9 @@ export default function ReadCard({
               on the same tab is a reader wondering which one they already
               opened. */}
           <button className="btn ghost sm disclose" onClick={() => setWork((w) => !w)} aria-expanded={work}>
-            {work ? 'hide the working' : hiddenRisks.length > 0
-              ? `show the working · +${hiddenRisks.length} more thin input${hiddenRisks.length > 1 ? 's' : ''}`
-              : 'show the working'}
+            {work ? 'Hide method notes' : hiddenRisks.length > 0
+              ? `Method notes · ${hiddenRisks.length} watch item${hiddenRisks.length > 1 ? 's' : ''}`
+              : 'Method notes'}
           </button>
           <Expand open={work}>
             {/* The fragilities the "Wrong if" row could not fit. Guardrail rows

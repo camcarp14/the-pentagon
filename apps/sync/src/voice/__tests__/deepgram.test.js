@@ -568,13 +568,16 @@ describe("conversation mode", () => {
     expect(adv.slice(0, 900)).toMatch(/playbackRate/);
   });
 
-  it("gives voice its own destination, wired end to end", () => {
+  it("consolidates voice controls into the Console settings sheet", () => {
     const nav = readFileSync(join(here, "..", "..", "nav.js"), "utf8");
     const app = readFileSync(join(here, "..", "..", "App.jsx"), "utf8");
-    expect(nav).toMatch(/key: "voice"/);
-    // A destination with no badge entry renders NaN in the pip logic.
-    expect(nav).toMatch(/voice: 0,/);
-    expect(app).toMatch(/voice: VoicePage,/);
+    const settings = readFileSync(join(here, "..", "..", "chrome", "SettingsSheet.jsx"), "utf8");
+    expect(nav).not.toMatch(/key: "voice"/);
+    expect(app).not.toMatch(/voice: VoicePage,/);
+    expect(app).toMatch(/isLegacyVoiceHash/);
+    expect(settings).toMatch(/Conversation voice/);
+    expect(settings).toMatch(/Reply detail/);
+    expect(settings).toMatch(/Interrupting/);
   });
 
   it("never resumes a conversation on its own after a reload", () => {

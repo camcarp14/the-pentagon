@@ -14,6 +14,19 @@ import { listVoices, onVoicesReady } from "../voice/speaker.js";
 import { fmt24, parseTime } from "../lib/time.js";
 import PentagonPanel from "./PentagonPanel.jsx";
 
+const AURA_VOICES = [
+  { id: "aura-2-thalia-en", name: "Thalia" },
+  { id: "aura-2-andromeda-en", name: "Andromeda" },
+  { id: "aura-2-helena-en", name: "Helena" },
+  { id: "aura-2-apollo-en", name: "Apollo" },
+  { id: "aura-2-arcas-en", name: "Arcas" },
+  { id: "aura-2-aries-en", name: "Aries" },
+  { id: "aura-asteria-en", name: "Asteria" },
+  { id: "aura-orion-en", name: "Orion" },
+  { id: "aura-luna-en", name: "Luna" },
+  { id: "aura-stella-en", name: "Stella" },
+];
+
 export default function SettingsSheet({ onClose }) {
   const s = useStore();
   const cloud = useCloud();
@@ -231,6 +244,48 @@ export default function SettingsSheet({ onClose }) {
                 style={{ width: "100%", accentColor: "var(--accent)" }}
                 aria-label="Speaking pace"
               />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 0.8fr)", gap: 10, marginTop: 14 }}>
+              <div>
+                <div className="t-label" style={{ marginBottom: 6 }}>Conversation voice</div>
+                <select className="field" value={s.settings.auraVoice} onChange={(e) => setSettings({ auraVoice: e.target.value })} style={{ width: "100%", appearance: "none" }} aria-label="Conversation voice">
+                  {AURA_VOICES.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <div className="t-label" style={{ marginBottom: 6 }}>Conversation pace · {Number(s.settings.speakRate).toFixed(2)}×</div>
+                <input type="range" min="0.8" max="1.4" step="0.05" value={s.settings.speakRate} onChange={(e) => setSettings({ speakRate: Number(e.target.value) })} style={{ width: "100%", accentColor: "var(--accent)", minHeight: 42 }} aria-label="Conversation speaking pace" />
+              </div>
+            </div>
+
+            <div style={{ marginTop: 14 }}>
+              <div className="t-label" style={{ marginBottom: 6 }}>Reply detail</div>
+              <Segmented value={s.settings.replyLength} onChange={(replyLength) => setSettings({ replyLength })} options={[{ key: "brief", label: "Brief" }, { key: "normal", label: "Normal" }, { key: "full", label: "Full" }]} />
+            </div>
+
+            <div style={{ marginTop: 14 }}>
+              <div className="t-label" style={{ marginBottom: 6 }}>Interrupting</div>
+              <Segmented value={s.settings.bargeSensitivity} onChange={(bargeSensitivity) => setSettings({ bargeSensitivity })} options={[{ key: "eager", label: "Eager" }, { key: "normal", label: "Normal" }, { key: "patient", label: "Patient" }]} />
+            </div>
+
+            <CellGroup style={{ marginTop: 12 }}>
+              <SwitchRow title="Reveal text as it's spoken" sub="Keeps the transcript in step with spoken replies" on={!!s.settings.syncReveal} onToggle={() => setSettings({ syncReveal: !s.settings.syncReveal })} />
+            </CellGroup>
+
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 10, marginTop: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div className="t-label" style={{ marginBottom: 6 }}>End conversation after silence</div>
+                <select className="field" value={String(s.settings.idleMinutes)} onChange={(e) => setSettings({ idleMinutes: Number(e.target.value) })} style={{ width: "100%", appearance: "none" }} aria-label="End conversation after silence">
+                  <option value="2">2 minutes</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="30">30 minutes</option><option value="0">Never</option>
+                </select>
+              </div>
+              <Button kind="quiet" size="md" style={{ flex: "none" }} onClick={() => voice.speak("Standing by. Tell me what you want to work on.")}>
+                <IcSpeaker size={16} /> Preview
+              </Button>
+            </div>
+            <div className="t-foot" style={{ marginTop: 10 }}>
+              Conversation audio is sent to Deepgram only while you deliberately start a conversation. It never resumes on its own after a reload.
             </div>
           </section>
 
