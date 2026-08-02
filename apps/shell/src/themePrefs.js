@@ -42,10 +42,9 @@
 //
 // ── TWO DEFAULTS, BOTH DELIBERATE ──────────────────────────────────────────
 //
-//   • palette "match" (Match the tool). DESIGN.md §4.4: the accent says WHICH
-//     TOOL YOU ARE IN, and that is its whole job. Overriding it spends the one
-//     signal that still reads at an 8px dot, so it is a choice the operator
-//     makes, never one they inherit from an upgrade.
+//   • palette "session". The Board Room-derived Graphite/Porcelain material is
+//     the default across every tool, so moving between workspaces retains one
+//     product identity. The old "match" preference is migrated on read.
 //   • mode "dark", not "system". The Pentagon ships dark. Defaulting to
 //     "system" would repaint the entire product for anyone whose laptop is in
 //     light mode, on a release where they asked for a setting and not for a new
@@ -56,7 +55,7 @@
 // matchMedia ones, so every rule above is testable without a DOM.
 // ═══════════════════════════════════════════════════════════════════════════
 import { cssVars } from "@cc/design";
-import { PALETTES } from "@cc/design/palettes.js";
+import { DEFAULT_PALETTE, PALETTES } from "@cc/design/palettes.js";
 
 export const THEME_PREFS_KEY = "cc_theme_prefs";
 
@@ -64,7 +63,7 @@ export const THEME_PREFS_KEY = "cc_theme_prefs";
 export const MATCH_TOOL = "match";
 
 export const MODES = Object.freeze(["light", "dark", "system"]);
-export const DEFAULT_THEME_PREFS = Object.freeze({ palette: MATCH_TOOL, mode: "dark" });
+export const DEFAULT_THEME_PREFS = Object.freeze({ palette: DEFAULT_PALETTE, mode: "dark" });
 
 // Derived from the GENERATED list rather than restated. palettes.js is rewritten
 // by `npm run themes`; a hardcoded copy here would be the second source of truth
@@ -82,8 +81,11 @@ const known = (key) => PALETTE_KEYS.includes(key);
  */
 export function normalizeThemePrefs(raw) {
   const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  // Before Session, the default was the special "match" value. Migrate that
+  // stored preference so existing operators receive the unified product too.
+  const palette = src.palette === MATCH_TOOL ? DEFAULT_PALETTE : src.palette;
   return {
-    palette: typeof src.palette === "string" && known(src.palette) ? src.palette : DEFAULT_THEME_PREFS.palette,
+    palette: typeof palette === "string" && known(palette) ? palette : DEFAULT_THEME_PREFS.palette,
     mode: MODES.includes(src.mode) ? src.mode : DEFAULT_THEME_PREFS.mode,
   };
 }
@@ -116,29 +118,20 @@ export function resolveMode(prefs, systemPrefersDark) {
 /**
  * The value for `data-palette`.
  *
- * `fallback` is what "Match the tool" means at this moment — the open tool, or
- * "sync" while System is open, which is what the shell has always stamped there.
+ * `fallback` protects callers still passing an old tool key while malformed or
+ * legacy stored values are normalized to the shared Session palette.
  */
 export function resolvePalette(prefs, fallback) {
   const { palette } = normalizeThemePrefs(prefs);
-  if (palette !== MATCH_TOOL) return palette;
-  return known(fallback) ? fallback : PALETTE_KEYS[0];
+  return known(palette) ? palette : (known(fallback) ? fallback : DEFAULT_PALETTE);
 }
 
 /**
- * Is the resolved answer exactly what the shell rendered before this file
- * existed — the tool's own accent over MIDNIGHT?
- *
- * This is the switch between the two variable strategies below, and it is
- * deliberately computed from the RESOLVED result rather than from the stored
- * preference: "system" on a dark laptop and "dark" are the same picture, and the
- * one that has been in production for months is the one that should render it.
- * The default path therefore stays byte-identical to what shipped, and only an
- * operator who actually asked for something else pays for the change.
+ * Kept for callers on the earlier theme API. Session always needs the generated,
+ * mode-aware variable set, including in its default dark mode.
  */
 export function isDefaultTheme(prefs, systemPrefersDark) {
-  const p = normalizeThemePrefs(prefs);
-  return p.palette === MATCH_TOOL && resolveMode(p, systemPrefersDark) === "dark";
+  return false;
 }
 
 // ─── the wiring ───────────────────────────────────────────────────────────────
