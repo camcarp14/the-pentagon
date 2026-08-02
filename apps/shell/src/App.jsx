@@ -208,13 +208,6 @@ const MoonIcon = () => (
     <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
   </svg>
 );
-const GearIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-    <circle cx="12" cy="12" r="3" />
-    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.08a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V11a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
-  </svg>
-);
-
 // ─── the desktop rail ─────────────────────────────────────────────────────────
 //
 // The tools were a horizontal row in the top bar, which spends a desktop's
@@ -317,27 +310,6 @@ const SideRail = forwardRef(function SideRail({ active, onPick, apps, paused, sy
         })}
       </nav>
 
-      {/* System is chrome, not a tool, so it sits under a hairline rather than
-          inside the list — but it is the same row shape, because a full-width
-          filled button down here read as a form control in a nav. */}
-      <div style={{ padding: "8px 8px 0", marginTop: 6, borderTop: "1px solid var(--line)", flexShrink: 0 }}>
-        <button onClick={onSystem} type="button" aria-pressed={systemOpen} {...hoverProps("__system")}
-          title="System — ops, tools, usage, intelligence and theme"
-          style={{
-            display: "flex", alignItems: "center", gap: 10, width: "100%",
-            padding: "0 10px", minHeight: 34, border: "none", borderRadius: 8, cursor: "pointer", textAlign: "left",
-            background: systemOpen
-              ? "color-mix(in srgb, var(--accent) 13%, transparent)"
-              : hot === "__system" ? "color-mix(in srgb, var(--ink) 6%, transparent)" : "transparent",
-            boxShadow: systemOpen ? "inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent)" : "none",
-            color: systemOpen || hot === "__system" ? "var(--ink)" : "var(--muted)",
-            fontSize: 13, fontWeight: systemOpen ? 600 : 500,
-            transition: `color ${M.durBase} ${M.easeStd}, background ${M.durBase} ${M.easeStd}, box-shadow ${M.durBase} ${M.easeStd}`,
-          }}>
-          <span style={{ color: systemOpen ? "var(--accent)" : "var(--faint)", display: "flex" }}><GearIcon /></span>
-          System
-        </button>
-      </div>
 
       {/* The account row, Board Room's shape: who you are, and the one control
           that changes the whole page, on the same line. */}
@@ -1018,34 +990,11 @@ export default function Shell() {
           )}
           {!rail && <AppToggle active={active} onPick={pick} compact={isMobile} apps={tabs} paused={paused} />}
         </div>
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8, flex: "none",
-          marginLeft: isMobile ? 0 : 8,
-        }}>
-          {/* Icon-only on mobile: it shares the same compact row as the tools.
-              With the rail up both controls live at the bottom of it. */}
-          {!rail && <>
-          <button onClick={openSystemTab} type="button"
-            title="System — ops, tools, usage, intelligence and theme"
-            aria-label="System — ops, tools, usage, intelligence and theme"
-            aria-pressed={systemOpen}
-            className={systemOpen ? "btn sm tinted" : "btn sm quiet"}
-            style={{
-              // The kit owns colour, radius, weight, press physics and the focus
-              // ring. Only the mobile target floor is local, because that is a
-              // fact about this bar rather than about buttons.
-              minHeight: isMobile ? 44 : undefined, minWidth: isMobile ? 32 : undefined,
-              padding: isMobile ? 0 : undefined,
-            }}>
-            {isMobile ? <GearIcon /> : <><span aria-hidden style={{ width: 6, height: 6, borderRadius: "50%", background: systemOpen ? "var(--accent)" : "var(--faint)", flex: "none" }} />System</>}
-          </button>
-          {!isMobile && (
-            // Was 10px — under this language's 10.5px floor, which is stated as
-            // absolute. The kit's .btn.sm sits at the floor.
+        {!rail && !isMobile && (
+          <div style={{ display: "flex", alignItems: "center", flex: "none", marginLeft: 8 }}>
             <button className="btn sm quiet" onClick={() => auth.signOut()}>Sign out</button>
-          )}
-          </>}
-        </div>
+          </div>
+        )}
       </div>
       </div>}
 

@@ -1141,6 +1141,14 @@
    never reaches SYNC's in-flow tabs at a wider shell size. */
 .sy-root[data-kit] .dock-tab { padding: 8px 2px calc(7px + var(--safe-bottom, 0px)); }
 .sy-root .composer { padding-bottom: 12px; }
+@media (max-width: 760px) {
+  /* Once there is a transcript, the orb still carries its accessible Talk
+     control and the conversation switch stays visible. The duplicate caption is
+     the expendable part, so the stream gets a meaningful extra line count. */
+  .sy-root .console-active .utterance { display: none; }
+  .sy-root .console .stage { gap: 7px; padding: 6px 16px 4px; }
+  .sy-root .console .console-bar { min-height: 32px; }
+}
 /* Four declarations, and every one of them is a kit override rather than a
    restatement — see the ONBOARDING block above for the whole argument.
 

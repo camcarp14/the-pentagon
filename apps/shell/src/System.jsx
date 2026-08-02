@@ -116,8 +116,8 @@ const Dot = ({ app, size = 8 }) => (
 // `flex: 1; min-width: 150` and flex-wrap — which on a phone fitted two per row
 // and dropped the third onto a line of its own, so "AI calls" rendered as a
 // near-empty full-width slab. That is what "the spacing is huge" was.
-const Stat = ({ label, children, sub }) => (
-  <div className="stattile on-canvas">
+const Stat = ({ label, children, sub, style }) => (
+  <div className="stattile on-canvas" style={style}>
     <span className="stattile-value">{children}</span>
     <span className="stattile-label">{label}</span>
     {sub && <span className="stattile-label" style={{ color: P.faint, whiteSpace: "normal" }}>{sub}</span>}
@@ -165,6 +165,7 @@ function Usage({ isMobile }) {
   const totalCalls = agg.calls + (ideas.error ? 0 : ideas.calls);
   const spendApps = [...USAGE_APPS, ...(byApp.ideas ? ["ideas"] : [])];
   const maxApp = Math.max(0.0001, ...Object.values(byApp));
+  const models = Object.entries(agg.byModel).sort((a, b) => b[1].cost - a[1].cost);
 
   return (
     <div>
@@ -176,18 +177,18 @@ function Usage({ isMobile }) {
           sub="Generate a Short, draft outreach, or tailor a résumé and spend shows up here across all tools." />
       ) : (
         <>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(4, minmax(0, 1fr))", gap: isMobile ? 8 : 12, marginBottom: 14 }}>
             <Stat label="Total spend"><AnimatedNumber value={totalCost} format={fmt$} /></Stat>
-            <Stat label="Tokens" sub={`${fmtN(totalIn)} in · ${fmtN(totalOut)} out`}><AnimatedNumber value={totalIn + totalOut} format={fmtN} /></Stat>
             <Stat label="Calls"><AnimatedNumber value={totalCalls} format={fmtN} /></Stat>
-            <Stat label="Avg latency" sub="per call">{agg.calls ? Math.round(agg.lat / agg.calls) : 0}<span style={{ fontSize: 14, color: P.muted }}>ms</span></Stat>
+            <Stat label="Tokens" sub={`${fmtN(totalIn)} in · ${fmtN(totalOut)} out`} style={isMobile ? { gridColumn: "1 / -1" } : undefined}><AnimatedNumber value={totalIn + totalOut} format={fmtN} /></Stat>
+            <Stat label="Avg latency" sub="per call" style={isMobile ? { gridColumn: "1 / -1" } : undefined}>{agg.calls ? Math.round(agg.lat / agg.calls) : 0}<span style={{ fontSize: 14, color: P.muted }}>ms</span></Stat>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1.3fr", gap: 12, marginBottom: 14 }}>
-            <Card>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile || models.length === 0 ? "1fr" : "1fr 1.3fr", gap: 12, marginBottom: 14 }}>
+            <Card style={isMobile ? { padding: 14 } : undefined}>
               <SectionLabel>Spend by tool</SectionLabel>
               {spendApps.map((app) => (
-                <div key={app} style={{ marginBottom: 12 }}>
+                <div key={app} style={{ marginBottom: isMobile ? 9 : 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 5 }}>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 7, color: P.ink }}><Dot app={app} />{appMeta(app).brand}</span>
                     <span style={{ color: P.muted, fontFamily: P.mono }}>{fmt$(byApp[app] || 0)}</span>
@@ -200,10 +201,11 @@ function Usage({ isMobile }) {
               <div style={{ fontSize: 11, color: P.faint, marginTop: 4, lineHeight: 1.5 }}>Runway runs its AI server-side — unified logging for it is the next step.</div>
             </Card>
 
+            {models.length > 0 && (
             <Card>
               <SectionLabel>By model</SectionLabel>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {Object.entries(agg.byModel).sort((a, b) => b[1].cost - a[1].cost).map(([model, m]) => (
+                {models.map(([model, m]) => (
                   <div key={model} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5 }}>
                     <span style={{ color: P.ink, fontFamily: P.mono, fontSize: 11.5 }}>{model}</span>
                     <span style={{ color: P.muted, display: "flex", gap: 14 }}>
@@ -213,6 +215,7 @@ function Usage({ isMobile }) {
                 ))}
               </div>
             </Card>
+            )}
           </div>
 
           <Card>

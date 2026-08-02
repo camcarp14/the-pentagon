@@ -116,6 +116,15 @@ export function MonthCalendar({ onNavigate, hideOpenLink, cards = [] }) {
 // and what-needs-you-now. Pulls live from Supabase + sessionMemory + obs log.
 export function MissionControl({ cards, onNavigate, inboundNew = 0 }) {
   const [counts, setCounts] = useState(null);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.matchMedia?.("(max-width: 760px)").matches);
+
+  useEffect(() => {
+    const media = window.matchMedia?.("(max-width: 760px)");
+    if (!media) return undefined;
+    const update = (event) => setIsMobile(event.matches);
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
 
@@ -195,10 +204,10 @@ export function MissionControl({ cards, onNavigate, inboundNew = 0 }) {
   // Both of these are the kit's, not local re-implementations: .card (which is
   // where the border-plus-shadow violation lived) and .t-label.
   const Card = ({ children, span, pad }) => (
-    <div className="card" style={{ padding: pad || "18px 20px", gridColumn: span ? `span ${span}` : undefined }}>{children}</div>
+    <div className="card" style={{ padding: pad || (isMobile ? "14px" : "14px 16px"), gridColumn: span ? `span ${span}` : undefined }}>{children}</div>
   );
   const SectionLabel = ({ children, action }) => (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", marginBottom: "9px" }}>
       <span className="t-label">{children}</span>
       {action}
     </div>
@@ -206,9 +215,9 @@ export function MissionControl({ cards, onNavigate, inboundNew = 0 }) {
   const jump = (tab) => tab && onNavigate && onNavigate(tab);
 
   return (
-    <div style={{ minHeight: "calc(100vh - 48px)", background: "transparent", padding: "24px 28px" }}>
+    <div style={{ minHeight: "calc(100vh - 48px)", background: "transparent", padding: isMobile ? "14px" : "18px 22px" }}>
       {inboundNew > 0 && (
-        <div onClick={() => onNavigate("inbound")} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px", marginBottom: "16px", padding: "12px 16px", borderRadius: "12px", border: "1px solid rgba(244,114,182,0.3)", background: "rgba(244,114,182,0.08)", cursor: "pointer" }}>
+        <div onClick={() => onNavigate("inbound")} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px", marginBottom: "12px", padding: "10px 14px", borderRadius: "12px", border: "1px solid rgba(244,114,182,0.3)", background: "rgba(244,114,182,0.08)", cursor: "pointer" }}>
           <span style={{ fontSize: "13px", fontWeight: 600, color: T.pink }}>✦ {inboundNew} new inbound {inboundNew === 1 ? "lead" : "leads"} waiting — warm, prioritize these.</span>
           <span style={{ fontSize: "12px", fontWeight: 700, color: T.pink, whiteSpace: "nowrap" }}>Open Inbound →</span>
         </div>
@@ -222,8 +231,8 @@ export function MissionControl({ cards, onNavigate, inboundNew = 0 }) {
           sub-nav does not carry — so the row survives and only the title
           leaves. The view's accessible name now comes from the region in
           App.jsx, wired to the same label the pill renders. */}
-      <div style={{ marginBottom: "20px", display: "flex", justifyContent: "flex-end", alignItems: "flex-end", flexWrap: "wrap", gap: "10px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+      <div style={{ marginBottom: "12px", display: "flex", justifyContent: "flex-end", alignItems: "flex-end", flexWrap: "wrap", gap: "8px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", justifyContent: "flex-end" }}>
           {(() => {
             const sentToday = trend(pipeline.sent, "sent") || 0;
             const repliedToday = trend(pipeline.replied, "replied") || 0;
@@ -247,7 +256,7 @@ export function MissionControl({ cards, onNavigate, inboundNew = 0 }) {
       </div>
 
       {/* Top stat row */}
-      <div className="co-grid3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "14px", marginBottom: "16px" }}>
+      <div className="co-grid3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", marginBottom: "12px" }}>
         <Card>
           <SectionLabel>Outreach Pipeline</SectionLabel>
           <div style={{ display: "flex", justifyContent: "space-between" }}>

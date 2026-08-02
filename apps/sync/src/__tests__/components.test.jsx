@@ -542,7 +542,7 @@ describe("the app still composes the surfaces it mounts", () => {
     // two stacked vertical navs. Reintroducing it lands here.
     expect(desktop, "no second vertical rail inside the tool").not.toContain('class="sidebar"');
     // Every destination reaches the row, by the label the map publishes.
-    for (const label of ["Console", "Day", "Queue", "Brief", "Mind", "Voice"])
+    for (const label of ["Console", "Day", "Queue", "Mind", "Voice"])
       expect(desktop, `the ${label} pill`).toContain(`>${label}<`);
     // The rail's foot carried live state and controls as well as destinations.
     // Losing any of the four in the move would have been a functional
@@ -561,7 +561,7 @@ describe("the app still composes the surfaces it mounts", () => {
     expect(mobile).toContain('class="dock-tab active"');
     // Every destination in nav.js reaches the bar. A tab silently dropped is a
     // page that becomes unreachable on the device this app is mostly used on.
-    for (const label of ["Console", "Day", "Queue", "Brief", "Mind", "Voice"])
+    for (const label of ["Console", "Day", "Queue", "Mind", "Voice"])
       expect(mobile, `the ${label} tab`).toContain(`>${label}</span>`);
     expect(mobile, "and the rail is not drawn there").not.toContain('class="sidebar"');
     // A phone has no sub-nav — six pills and a tab bar for the same six

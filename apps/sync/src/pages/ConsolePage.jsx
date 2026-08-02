@@ -106,7 +106,7 @@ export default function ConsolePage({ onSettings }) {
   // A canvas needs real pixels, so the breakpoint has to reach JS. On a phone
   // the orb was eating a third of the screen before the first line of content.
   const phone = useMedia("(max-width: 760px)");
-  const orbSize = phone ? 116 : 148;
+  const orbSize = phone ? 100 : 148;
   const [text, setText] = useState("");
   const streamRef = useRef(null);
   const taRef = useRef(null);
@@ -190,7 +190,7 @@ export default function ConsolePage({ onSettings }) {
     s.settings.ambient ? `Say "${s.settings.wakeWord}" — or tap` : "Tap to talk";
 
   return (
-    <div className="console">
+    <div className={phone && turns.length > 0 ? "console console-active" : "console"}>
       {/* ── the stage ─────────────────────────────────────────────────── */}
       <div className="stage">
         {/* PHONE ONLY, and that is the whole change here.

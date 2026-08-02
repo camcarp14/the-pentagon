@@ -309,6 +309,19 @@ const ENGINES_BY_TOOL = Object.keys(ENGINE_LABELS).reduce((acc, key) => {
   return acc;
 }, {});
 
+// The direct fallback must make the same narrowly-scoped edit as the endpoint:
+// `enabled` is autonomy, not pause. In particular, resuming a paused guard must
+// never arm it just because the endpoint was unavailable.
+export function directControlWrites(tool, paused, now = Date.now()) {
+  const at = new Date(now).toISOString();
+  return (ENGINES_BY_TOOL[tool] || []).map((key) => ({
+    key,
+    paused_reason: paused ? "paused from the tool switch" : null,
+    paused_at: paused ? at : null,
+    updated_at: at,
+  }));
+}
+
 function toolsFromControlRows(rows) {
   const byKey = new Map((rows || []).map((r) => [r.key, r]));
   const tools = {};
@@ -324,6 +337,7 @@ function toolsFromControlRows(rows) {
           // first pass. Absent means not yet registered, and the honest read of
           // that is paused.
           enabled: row ? !!row.enabled : false,
+          paused: !row || (typeof row.paused_reason === "string" && row.paused_reason.trim().length > 0),
           pausedReason: row?.paused_reason ?? null,
           pausedAt: row?.paused_at ?? null,
         };
@@ -344,16 +358,16 @@ async function directPut(tool, paused) {
   if (!supabase) throw new Error("no Supabase client in this build");
   const keys = ENGINES_BY_TOOL[tool] || [];
   if (!keys.length) throw new Error(`${tool} has no background engines`);
-  // Same shape Ops.jsx writes for the global stop: an explicit pause is
-  // RECORDED, not merely `enabled: false`, so a later reader can tell a
-  // deliberate stop from a subsystem that was never switched on.
-  const { error } = await supabase.from("ops_control").update({
-    enabled: !paused,
-    paused_reason: paused ? "paused from System → Tabs" : null,
-    paused_at: paused ? new Date().toISOString() : null,
-    updated_at: new Date().toISOString(),
-  }).in("key", keys);
+  // Upsert rather than update: a monitor can be paused before its first cron
+  // creates the row. PostgREST reports a zero-row update as success, which is
+  // the exact failure a power switch cannot quietly absorb.
+  const { data, error } = await supabase.from("ops_control")
+    .upsert(directControlWrites(tool, paused), { onConflict: "key" })
+    .select("key, enabled, paused_reason, paused_at");
   if (error) throw new Error(error.message || "this session is not allowed to change it");
+  const wrote = new Set((data || []).map((row) => row.key));
+  const missed = keys.filter((key) => !wrote.has(key));
+  if (missed.length) throw new Error(`${paused ? "pause" : "resume"} did not take on ${missed.join(", ")}`);
   return directFetch();
 }
 

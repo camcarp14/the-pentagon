@@ -10,7 +10,7 @@ import { describe, it, expect } from "vitest";
 import { APPS } from "@cc/design";
 import {
   normalizeToolPower, powerFor, pausedTools, hasEngines, withPaused, mergeToolPower,
-  stopsSentence, stoppedSentence, keepsSentence, joinPhrase, engineLabel, ENGINE_LABELS,
+  stopsSentence, stoppedSentence, keepsSentence, joinPhrase, engineLabel, ENGINE_LABELS, directControlWrites,
 } from "../toolPower.js";
 
 // Shaped exactly like netlify/shared/toolPower.mjs's summariseAll — including
@@ -183,6 +183,13 @@ describe("the copy is built from the answer, not from a list beside the switch",
 });
 
 describe("the optimistic edit, and the set the tool row dims", () => {
+  it("creates missing engine controls without changing autonomy", () => {
+    const writes = directControlWrites("macro", true, Date.UTC(2026, 7, 1));
+    expect(writes.map((row) => row.key)).toEqual(["macro.watch", "macro.alts"]);
+    expect(writes.every((row) => row.paused_reason === "paused from the tool switch")).toBe(true);
+    expect(writes.every((row) => !("enabled" in row))).toBe(true);
+  });
+
   it("flips every engine of one tool and touches no other", () => {
     const p = normalizeToolPower(payload());
     const next = withPaused(p, "zts", true);

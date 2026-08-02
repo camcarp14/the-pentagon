@@ -1746,10 +1746,8 @@ a.alt-newsitem-t:hover { color: var(--ink); text-decoration-color: var(--accent)
   /* Not .alt-row-main: it is already 60px tall in its two-row shape, and naming
      it here would have SHRUNK it to 44 on the one platform this rule exists to
      protect. */
-  /* The scan answer stays a scan on a phone: score, call and the four reasons
-     fit in one deliberate card before the evidence disclosures and board. The
-     narrower key track pays the value column enough room to keep its actionable
-     sentence readable instead of wrapping every answer into a tall paragraph. */
+  /* The score and call remain above the fold; the four supporting reasons are
+     behind a full-width disclosure so the board arrives on the first screen. */
   .altread .alt-season-top { gap: 6px; margin-bottom: 10px; }
   .altread .tc-head { align-items: flex-start; gap: 10px; }
   .altread .tc-score { min-width: 86px; }
@@ -1757,6 +1755,7 @@ a.alt-newsitem-t:hover { color: var(--ink); text-decoration-color: var(--accent)
   .altread .tc-rows { margin-top: 10px; }
   .altread .tc-row { grid-template-columns: 78px minmax(0, 1fr); gap: 8px; padding: 9px 10px; }
   .altread .tc-val { font-size: 15px; }
+  .altread .altread-rows-toggle { width: 100%; min-height: 44px; justify-content: center; margin-top: 10px; }
   .altread .disclose { width: 100%; justify-content: center; }
   /* Keep filtering in scan order. Search keeps the full row, while the three
      selects are balanced two-up rather than growing a third narrow column. */
