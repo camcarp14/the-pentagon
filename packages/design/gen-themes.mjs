@@ -70,6 +70,16 @@ function tune(make, against, target, start, dir) {
 //          and not just its temperature.
 // Tuned so no two adjacent entries in the picker read as the same idea.
 const THEMES = [
+  // SESSION is the Pentagon's house theme: the same Porcelain / Graphite rooms
+  // and restrained brass accent as Board Room. It is the default identity, not
+  // another tool skin.
+  { key: "session", label: "Session", blurb: "Board Room — unified brass", fixed: {
+    // Faint is deliberately lifted from Board Room's decorative annotation
+    // tone: Pentagon uses it for real controls and metadata, which need the
+    // generator's 4.5:1 floor on both its card and canvas.
+    day: { bg: "#F2F1EB", surface: "#FFFFFF", "surface-2": "#F6F5F0", ink: "#1D1C18", sub: "#6F6C62", faint: "#6F6C62", accent: "#87681B", "accent-hi": "#A5822A", "accent-deep": "#6E541A", "on-accent": "#FFFFFF" },
+    night: { bg: "#000000", surface: "#1C1C1E", "surface-2": "#2A2A2D", ink: "#F3F2EE", sub: "#A8A69F", faint: "#87857E", accent: "#D9B45C", "accent-hi": "#EACC80", "accent-deep": "#B08F3E", "on-accent": "#1A1403" },
+  } },
   // ─── The Pentagon's eight tools, as palettes ───────────────────────────────
   // SIX NUMBERS each, and only two of them vary: the accent hue and its
   // saturation. Every tool shares the same midnight neutral (nH/nS/nL tuned to
@@ -106,9 +116,9 @@ const THEMES = [
   // value against the floors either way, so this cannot quietly make text
   // unreadable — it fails the build instead.
   //
-  // "Match the tool" is untouched and remains the default: it renders the
-  // shared midnight canvas so switching tools does not strobe the page. The
-  // tinted grounds are what you get when you deliberately CHOOSE a palette.
+  // Session is the default: it keeps the Board Room Graphite material stable
+  // while operators move between tools. The tinted grounds remain available as
+  // deliberate product-wide palette choices.
   { key: "zts",      label: "ZTS",      blurb: "Emerald — Zero To Secure",          nH: 158, nS: 16, aH: 153, aS: 60, dL: 95, nL: 6 },
   { key: "clarify",  label: "Clarify",  blurb: "Brass — outreach and pipeline",     nH: 38,  nS: 16, aH: 41,  aS: 51, dL: 95, nL: 6 },
   { key: "runway",   label: "Runway",   blurb: "Violet — the job search",           nH: 250, nS: 16, aH: 247, aS: 72, dL: 95, nL: 6 },
@@ -142,6 +152,7 @@ const THEMES = [
 const FLOOR = { ink: 8, sub: 4.6, faint: 4.5, accent: 4.6, onAccent: 4.6 };
 
 function build(t, mode) {
+  if (t.fixed?.[mode]) return t.fixed[mode];
   const dark = mode === "night";
   const { nH, nS, aH, aS, dL, nL } = t;
   // Backgrounds and surfaces: authored, not tuned — these ARE the theme's look.
@@ -342,7 +353,7 @@ ${LADDER}
       night: { bg: "${p.night.bg}", surface: "${p.night.surface}", accent: "${p.night.accent}", ink: "${p.night.ink}" } },`).join("\n")}
   ];
 
-  export const DEFAULT_PALETTE = "zts";
+  export const DEFAULT_PALETTE = "session";
   export const paletteByKey = (key) => PALETTES.find(p => p.key === key) || PALETTES[0];
   `;
   writeFileSync(new URL("./palettes.js", import.meta.url), js);
