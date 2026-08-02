@@ -131,7 +131,7 @@ describe("the sub-nav is the ZTS/Clarify row, not a segmented bar in the body", 
 
   it("uses a dedicated fixed dock instead of top tabs on a phone", () => {
     expect(source).toContain("function IdeasDock");
-    expect(source).toContain('<nav aria-label="Ideas sections" style={{ position: "fixed"');
+    expect(source).toContain('<nav className="pentagon-dock" aria-label="Ideas sections" style={{ position: "fixed"');
     expect(source).toContain("{isMobile ? (");
     expect(source).toContain("<IdeasDock tab={tab} onTab={setTab} savedCount={saved.size} />");
   });
