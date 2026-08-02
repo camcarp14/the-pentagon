@@ -77,6 +77,12 @@ describe("the canvas renders", () => {
     expect((html.match(/data-dna-node/g) || []).length).toBe(GENOME.nodes.length);
   });
 
+  it("exposes host layout hooks without changing the canvas structure", () => {
+    const html = render({ className: "sync-mind-canvas", hudClassName: "sync-mind-canvas-controls" });
+    expect(html).toContain('class="sync-mind-canvas"');
+    expect(html).toContain('class="sync-mind-canvas-controls"');
+  });
+
   it("never emits NaN into an attribute", () => {
     // A NaN coordinate is discarded silently by SVG: the graph vanishes with
     // nothing in the console. Cheap to assert, invisible otherwise.
