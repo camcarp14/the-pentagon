@@ -27,11 +27,14 @@
 // beats either. Behaviour is identical to both — if it changes there, change it
 // here.
 //
-// These two values are public by design: they are the same URL + publishable key
-// already baked into the client bundle. Verifying against them proves the caller
-// holds a session on this Supabase project; it costs no new secret.
-const SUPABASE_URL = "https://nrzpinvyxxorxufadvyc.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_zDV3HpSChf0bZJ5nY09s3w_rNI3sZ1m";
+function operatorConfig() {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
+  const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
+  const email = String(process.env.ALLOWED_EMAIL || "").trim();
+  const userId = String(process.env.ALLOWED_USER_ID || "").trim();
+  const missing = [!url && "VITE_SUPABASE_URL", !key && "VITE_SUPABASE_ANON_KEY", !email && "ALLOWED_EMAIL", !userId && "ALLOWED_USER_ID"].filter(Boolean);
+  return missing.length ? { ok: false, error: `Operator authorization is not configured: ${missing.join(", ")}.` } : { ok: true, url, key, email, userId };
+}
 
 // Two vendors, one endpoint. The name still says `claude-stream` because eight
 // call sites and a test assert that path, and the wire format the client parses
@@ -62,23 +65,24 @@ const json = (status, message, extra = {}) =>
 
 // AUTHENTICATED IS NOT AUTHORISED. A valid token proves the caller signed in on
 // this project, not that they are the operator, and this route spends the
-// Anthropic budget. ALLOWED_EMAIL is enforced only when set, matching every
-// other function here: an unconfigured deploy keeps working rather than locking
-// its own operator out.
+// Anthropic budget. Both the email and immutable user ID are required; a
+// missing allow-list is a deployment error, never permission to run open.
 async function checkSession(req) {
   const header = req.headers.get("authorization") || "";
   const token = header.replace(/^Bearer\s+/i, "").trim();
   if (!token) return { ok: false, status: 401, error: "Sign in required — no session token on this request." };
 
+  const config = operatorConfig();
+  if (!config.ok) return { ok: false, status: 503, error: config.error };
+
   try {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers: { apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${token}` },
+    const res = await fetch(`${config.url}/auth/v1/user`, {
+      headers: { apikey: config.key, Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return { ok: false, status: 401, error: "Session expired or invalid — sign in again." };
     const user = await res.json();
 
-    const allowed = process.env.ALLOWED_EMAIL;
-    if (allowed && String(user?.email || "").toLowerCase() !== String(allowed).toLowerCase()) {
+    if (String(user?.id || "") !== config.userId || String(user?.email || "").toLowerCase() !== config.email.toLowerCase()) {
       // 403, not 401: the session is fine, the account is not the operator's.
       // Re-signing in would not change the answer, so do not invite it.
       return { ok: false, status: 403, error: "This account is not the allow-listed operator." };

@@ -160,8 +160,10 @@ beforeEach(() => {
   H.altUniverse = vi.fn(async () => ({ universe: [] }));
   H.scanBoards = vi.fn(async () => ({ boards_scanned: 1, queued: 0 }));
   process.env.VITE_SUPABASE_URL = 'https://stub.supabase.co';
+  process.env.VITE_SUPABASE_ANON_KEY = 'stub-anon-key';
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-key';
   process.env.ALLOWED_EMAIL = 'op@example.com';
+  process.env.ALLOWED_USER_ID = '00000000-0000-0000-0000-000000000001';
   delete process.env.TELEGRAM_BOT_TOKEN;
   delete process.env.TELEGRAM_CHAT_ID;
 });
@@ -380,7 +382,6 @@ describe('scan-cron obeys runway.scan', () => {
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toMatchObject({ skipped: 'paused', reason: PAUSE_REASON });
     expect(H.scanBoards).not.toHaveBeenCalled();
-    expect(DB.auth.admin.listUsers).not.toHaveBeenCalled();
   });
 
   // Preserved, not incidentally: the env guard has to stay AHEAD of the pause
@@ -506,10 +507,9 @@ describe('/api/tool-power', () => {
   });
 
   beforeEach(() => {
-    // ALLOWED_EMAIL unset so verifySession stops at "Supabase accepted the
-    // token" — the operator pin is util.mjs's behaviour and has its own tests.
-    delete process.env.ALLOWED_EMAIL;
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ email: 'op@example.com' }), { status: 200 })));
+    process.env.ALLOWED_EMAIL = 'op@example.com';
+    process.env.ALLOWED_USER_ID = '00000000-0000-0000-0000-000000000001';
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ id: process.env.ALLOWED_USER_ID, email: 'op@example.com' }), { status: 200 })));
   });
 
   it('refuses an unauthenticated caller before reading anything', async () => {

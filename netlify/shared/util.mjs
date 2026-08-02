@@ -6,11 +6,17 @@
 import { getStore } from '@netlify/blobs'
 
 // Auth: Macro rides The Pentagon's single Supabase login. We verify the caller's
-// session token by calling Supabase's /auth/v1/user with the PUBLIC anon key
-// (already in the client bundle) — no new secret. Mirrors the other Pentagon
-// functions' netlify/functions/_shared/requireAuth.cjs.
-const SUPABASE_URL = 'https://nrzpinvyxxorxufadvyc.supabase.co'
-const SUPABASE_ANON = 'sb_publishable_zDV3HpSChf0bZJ5nY09s3w_rNI3sZ1m'
+// session token by calling Supabase's /auth/v1/user with the public anon key
+// (already in the client bundle) — no new secret. Deployment configuration is
+// resolved here, not duplicated in source, so key rotation stays single-source.
+function operatorConfig() {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
+  const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ''
+  const email = String(process.env.ALLOWED_EMAIL || '').trim()
+  const userId = String(process.env.ALLOWED_USER_ID || '').trim()
+  const missing = [!url && 'VITE_SUPABASE_URL', !key && 'VITE_SUPABASE_ANON_KEY', !email && 'ALLOWED_EMAIL', !userId && 'ALLOWED_USER_ID'].filter(Boolean)
+  return missing.length ? { ok: false, missing } : { ok: true, url, key, email, userId }
+}
 
 // Strong consistency, not the default eventual: journal/settings/position do
 // read-modify-write, and an eventually-consistent read can silently drop a
@@ -105,10 +111,8 @@ const ALLOWED = Object.freeze({ ok: true, reason: null, indeterminate: false })
  *
  * A valid session proves the caller signed in somewhere on this project; it does
  * not prove they are the operator. These handlers read and REWRITE the trade
- * journal, the position and the risk settings, so the same ALLOWED_EMAIL pin
- * that netlify/functions/lib/auth.mjs applies is applied here. Enforced only
- * when the variable is set, so an unconfigured deploy keeps working — see the
- * matching note in netlify/functions/_shared/requireAuth.cjs.
+ * journal, the position and the risk settings, so the same email and immutable
+ * user-ID pins that netlify/functions/lib/auth.mjs applies are required here.
  */
 export async function authVerdict(req, { timeoutMs = AUTH_TIMEOUT_MS } = {}) {
   if (!req || typeof req !== 'object' || typeof req.headers?.get !== 'function') {
@@ -155,6 +159,9 @@ async function verifySession(req, timeoutMs) {
   const token = header.replace(/^Bearer\s+/i, '').trim()
   if (!token) return refused('no bearer token on the request')
 
+  const config = operatorConfig()
+  if (!config.ok) return unreached(`operator auth configuration missing: ${config.missing.join(', ')}`)
+
   // ONE CONTROLLER FOR THE HANDSHAKE AND THE BODY. fetchWithTimeout clears its
   // timer the moment the headers land, so the `res.json()` below used to run
   // completely unbounded — a stalled response stream held the function past the
@@ -163,8 +170,8 @@ async function verifySession(req, timeoutMs) {
   const ctl = new AbortController()
   const t = setTimeout(() => ctl.abort(new Error(`supabase did not answer within ${timeoutMs}ms`)), timeoutMs)
   try {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${token}` },
+    const res = await fetch(`${config.url}/auth/v1/user`, {
+      headers: { apikey: config.key, Authorization: `Bearer ${token}` },
       signal: ctl.signal,
     })
     // 401/403 is Supabase ANSWERING: this token is not a session. Definitive.
@@ -173,8 +180,6 @@ async function verifySession(req, timeoutMs) {
     if (res.status === 401 || res.status === 403) return refused('supabase rejected the session token')
     if (!res.ok) return unreached(`supabase session check: HTTP ${res.status}`)
 
-    const allowed = process.env.ALLOWED_EMAIL
-    if (!allowed) return ALLOWED
     let user
     try {
       user = await res.json()
@@ -182,11 +187,8 @@ async function verifySession(req, timeoutMs) {
       return unreached(`supabase session check: unreadable body (${String(e?.message || e)})`)
     }
     const email = String(user?.email || '').toLowerCase()
-    // No email is a definitive refusal, not an outage: ALLOWED_EMAIL pins on
-    // one, so a session without an email can never satisfy the pin and telling
-    // the caller to retry would be a lie that never resolves.
-    if (!email) return refused('the session carries no email, and ALLOWED_EMAIL pins access to one')
-    return email === String(allowed).toLowerCase()
+    if (!email || !user?.id) return refused('the session carries no email or user ID required by the operator pin')
+    return user.id === config.userId && email === config.email.toLowerCase()
       ? ALLOWED
       : refused('this session is not the pinned operator')
   } catch (e) {

@@ -9,16 +9,19 @@
   NODE_VERSION = "20"
   # Also make Netlify's own dependency-install step include dev deps.
   NPM_FLAGS = "--include=dev"
-  # The only env-var value Vite bakes into the client bundle is the Supabase anon
-  # key/URL — public by design (anon tier; RLS protects the data, not the key).
-  # Netlify's secrets scanner was failing the build on it, so disable the scan
-  # for this site (also set as a real site env var so it applies regardless of
-  # how [build.environment] is honored).
-  SECRETS_SCAN_ENABLED = "false"
 
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://nrzpinvyxxorxufadvyc.supabase.co wss://nrzpinvyxxorxufadvyc.supabase.co https://qufvlvtoffrgifdkpypg.supabase.co wss://qufvlvtoffrgifdkpypg.supabase.co https://api.deepgram.com wss://api.deepgram.com; media-src 'self' blob:; worker-src 'self' blob:; upgrade-insecure-requests"
+    Permissions-Policy = "camera=(), geolocation=(), payment=(), usb=()"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
 
 # Runway: weekday-morning board scan (12:00 UTC ≈ 7am ET); inert until
 # SUPABASE_SERVICE_ROLE_KEY is set — see netlify/functions/scan-cron.mjs

@@ -3,6 +3,7 @@
 // material. `commit` answers "which build is actually live?" directly
 // (stamped at build time by scripts/stamp-build.mjs).
 import buildInfo from './lib/build-info.json';
+import { errorResponse, requireUser } from './lib/auth.mjs';
 
 const host = (u) => { try { return new URL(u).host; } catch { return null; } };
 const jwtRole = (k) => {
@@ -25,7 +26,9 @@ const keyKind = (k) => {
   return 'unknown'; // unrecognised shape: refuse to call it safe
 };
 
-export const handler = async () => {
+export const handler = async (event) => {
+  try {
+    await requireUser(event);
   const SUPA_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
   const SUPA_ANON = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
   // The AI Business tab talks to a SEPARATE Supabase project. Its isolation is
@@ -50,6 +53,7 @@ export const handler = async () => {
     // build shows as present while the running function has never seen it.
     openai_key_present: !!process.env.OPENAI_API_KEY,
     allowed_email_present: !!process.env.ALLOWED_EMAIL,
+    allowed_user_id_present: !!process.env.ALLOWED_USER_ID,
     // SYNC's microphone. Worth a field of its own because this one has a
     // failure mode the dashboard hides: a function-scoped variable is resolved
     // at deploy time, so setting it after the last build leaves the value
@@ -80,6 +84,7 @@ export const handler = async () => {
       !AGENT_KEY && 'VITE_AGENT_SUPABASE_ANON_KEY',
       !process.env.ANTHROPIC_API_KEY && 'ANTHROPIC_API_KEY',
       !process.env.ALLOWED_EMAIL && 'ALLOWED_EMAIL',
+      !process.env.ALLOWED_USER_ID && 'ALLOWED_USER_ID',
       // Listed here even though it is not fatal — SYNC still takes typing
       // without it. It earns the slot because its absence is invisible from
       // the app: the mic just refuses, and on iOS there is no fallback engine
@@ -88,4 +93,7 @@ export const handler = async () => {
     ].filter(Boolean),
   };
   return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(out, null, 2) };
+  } catch (ex) {
+    return errorResponse(ex);
+  }
 };

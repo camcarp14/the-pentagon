@@ -10,13 +10,17 @@
 // per-IP rate limiting via the no-PII rate_events ledger, and the whole run
 // fits a synchronous function budget (~8s worst case).
 const crypto = require("crypto");
+const dns = require("node:dns/promises");
+const { isIP } = require("node:net");
 const { sbRest } = require("./_shared/supabaseRest.cjs");
 const { json, error, methodGuard } = require("./_shared/response.cjs");
 
 const RATE_LIMIT_PER_HOUR = 4;
 const FETCH_TIMEOUT_MS = 6000;
+const MAX_FETCH_BYTES = 400_000;
+const MAX_REDIRECTS = 3;
 
-const ipHash = (ip) => crypto.createHash("sha256").update("clarify-audit|" + (ip || "unknown")).digest("hex").slice(0, 32);
+const ipHash = (ip, salt) => crypto.createHmac("sha256", salt).update(ip || "unknown").digest("hex").slice(0, 32);
 
 function normalizeUrl(raw) {
   let u = String(raw || "").trim();
@@ -26,8 +30,6 @@ function normalizeUrl(raw) {
     const parsed = new URL(u);
     if (!/^https?:$/.test(parsed.protocol)) return null;
     if (!parsed.hostname.includes(".")) return null;
-    // Refuse obvious internal targets — this function fetches the URL server-side.
-    if (/^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|0\.|169\.254\.|\[)/.test(parsed.hostname)) return null;
     parsed.hash = "";
     return parsed.toString();
   } catch {
@@ -35,18 +37,79 @@ function normalizeUrl(raw) {
   }
 }
 
-async function fetchSite(url) {
+function isPrivateAddress(address) {
+  const normalized = String(address || "").toLowerCase().replace(/^\[|\]$/g, "");
+  const version = isIP(normalized);
+  if (version === 4) {
+    const [a, b] = normalized.split(".").map(Number);
+    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && (b === 0 || b === 168)) || (a === 198 && (b === 18 || b === 19)) || a >= 224;
+  }
+  if (version === 6) {
+    const embeddedV4 = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    return normalized === "::" || normalized === "::1" || normalized.startsWith("fc") ||
+      normalized.startsWith("fd") || /^fe[89ab]/.test(normalized) || !!(embeddedV4 && isPrivateAddress(embeddedV4[1]));
+  }
+  return true;
+}
+
+async function assertPublicTarget(rawUrl) {
+  const url = rawUrl instanceof URL ? rawUrl : new URL(rawUrl);
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  if (!host || host === "localhost" || isPrivateAddress(host)) throw new Error("unsafe target host");
+  const addresses = await dns.lookup(host, { all: true, verbatim: true });
+  if (!addresses.length || addresses.some(({ address }) => isPrivateAddress(address))) throw new Error("unsafe target address");
+  return url;
+}
+
+async function readTextLimited(res, maxBytes) {
+  if (!res.body || typeof res.body.getReader !== "function") return (await res.text()).slice(0, maxBytes);
+  const reader = res.body.getReader();
+  const chunks = [];
+  let size = 0;
+  try {
+    while (size < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = value.slice(0, maxBytes - size);
+      chunks.push(chunk);
+      size += chunk.byteLength;
+      if (chunk.byteLength !== value.byteLength) break;
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+  const out = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(out);
+}
+
+async function fetchSite(rawUrl) {
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   const started = Date.now();
   try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      redirect: "follow",
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; ClarifyAuditBot/1.0; +https://the-pentagon.netlify.app/audit)" },
-    });
-    const html = (await res.text()).slice(0, 400_000);
-    return { ok: res.ok, status: res.status, finalUrl: res.url, html, ttfbMs: Date.now() - started, bytes: html.length };
+    let url = await assertPublicTarget(rawUrl);
+    for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
+      const res = await fetch(url, {
+        signal: controller.signal,
+        redirect: "manual",
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; ClarifyAuditBot/1.0; +https://the-pentagon.netlify.app/audit)" },
+      });
+      if (res.status >= 300 && res.status < 400 && res.headers.get("location")) {
+        if (redirects === MAX_REDIRECTS) throw new Error("too many redirects");
+        url = await assertPublicTarget(new URL(res.headers.get("location"), url));
+        continue;
+      }
+      const html = await readTextLimited(res, MAX_FETCH_BYTES);
+      return { ok: res.ok, status: res.status, finalUrl: url.toString(), html, ttfbMs: Date.now() - started, bytes: Buffer.byteLength(html) };
+    }
+    throw new Error("too many redirects");
   } catch (err) {
     return { ok: false, status: 0, error: err.name === "AbortError" ? "timeout" : err.message, ttfbMs: Date.now() - started, html: "" };
   } finally {
@@ -153,18 +216,20 @@ exports.handler = async (event) => {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return error(400, "Enter a real email address — the report is tied to it.");
   if (!url) return error(400, "Enter a valid website address (like yourbusiness.com).");
 
-  // Per-IP rate limit via the no-PII ledger.
+  // Per-IP rate limit via an atomic database claim. A missing salt or unavailable
+  // limiter must reject the request rather than leave an AI-billed endpoint open.
+  const rateSalt = String(process.env.AUDIT_RATE_LIMIT_SALT || "").trim();
+  if (!rateSalt) return error(503, "The audit rate limiter is not configured. Please try again later.");
   const ip = (event.headers && (event.headers["x-nf-client-connection-ip"] || (event.headers["x-forwarded-for"] || "").split(",")[0])) || "";
-  const hash = ipHash(ip);
+  const hash = ipHash(ip, rateSalt);
   try {
-    const hourAgo = new Date(Date.now() - 3600_000).toISOString();
-    const recent = await sbRest(`/rate_events?kind=eq.audit&ip_hash=eq.${hash}&created_at=gte.${hourAgo}&select=id`);
-    if ((recent || []).length >= RATE_LIMIT_PER_HOUR) {
+    const claimed = await sbRest("/rpc/claim_audit_rate", { method: "POST", body: { p_ip_hash: hash, p_limit: RATE_LIMIT_PER_HOUR } });
+    if (claimed !== true) {
       return error(429, "That's a few audits in a row — give it an hour and try again.");
     }
-    await sbRest(`/rate_events`, { method: "POST", prefer: "return=minimal", body: { ip_hash: hash, kind: "audit" } });
-  } catch {
-    // Rate table unavailable must not take the tool down.
+  } catch (err) {
+    console.error("audit rate limiter failed:", err.message);
+    return error(503, "The audit rate limiter is temporarily unavailable. Please try again later.");
   }
 
   const site = await fetchSite(url);

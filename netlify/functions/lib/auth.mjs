@@ -26,11 +26,12 @@ export function env(...names) {
   return vals;
 }
 
-// Verifies the caller's JWT and pins it to the allow-listed email. Returns a
+// Verifies the caller's JWT and pins it to the allow-listed email and immutable
+// user ID. Returns a
 // user-scoped Supabase client (RLS applies) — functions never hold a service
 // role key by design.
 export async function requireUser(event) {
-  const [url, anon, allowed] = env('VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'ALLOWED_EMAIL');
+  const [url, anon, allowedEmail, allowedUserId] = env('VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'ALLOWED_EMAIL', 'ALLOWED_USER_ID');
   const auth = event.headers.authorization || event.headers.Authorization || '';
   if (!auth.startsWith('Bearer ')) {
     const err = new Error('Missing Authorization bearer token');
@@ -45,7 +46,7 @@ export async function requireUser(event) {
     err.statusCode = 401;
     throw err;
   }
-  if (String(data.user.email).toLowerCase() !== String(allowed).toLowerCase()) {
+  if (String(data.user.id) !== String(allowedUserId) || String(data.user.email).toLowerCase() !== String(allowedEmail).toLowerCase()) {
     const err = new Error('Caller is not the allow-listed user');
     err.statusCode = 403;
     throw err;
