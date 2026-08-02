@@ -240,7 +240,7 @@ describe("every surface colour is a token with a light half", () => {
     const ALLOWED = new Set([
       "--ink", "--sub", "--faint", "--line", "--surface", "--bg", "--glass",
       "--accent", "--accent-a10", "--ink-a05", "--good", "--bad", "--warn",
-      "--font-mono", "--font-body", "--shell-bar",
+      "--font-mono", "--font-body", "--shell-bar", "--safe-bottom",
     ]);
     const stray = [...used].filter((v) => !ALLOWED.has(v));
     expect(stray, `token(s) with no light half checked: ${stray.join(", ")}`).toEqual([]);

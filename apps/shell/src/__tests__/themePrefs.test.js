@@ -11,17 +11,15 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { cssVars } from "@cc/design";
-import { PALETTES } from "@cc/design/palettes.js";
+import { DEFAULT_PALETTE, PALETTES } from "@cc/design/palettes.js";
 import {
   normalizeThemePrefs, resolveMode, resolvePalette, isDefaultTheme, themeVars,
   resetThemePrefs, MATCH_TOOL, MODES, DEFAULT_THEME_PREFS,
 } from "../themePrefs.js";
 
 describe("defaults", () => {
-  it("is Match-the-tool over dark — today's rendering, unchanged", () => {
-    // Anything else is a release that repaints the whole product for an
-    // operator who asked for a setting, not for a new colour scheme.
-    expect(normalizeThemePrefs(null)).toEqual({ palette: MATCH_TOOL, mode: "dark" });
+  it("is Session over dark", () => {
+    expect(normalizeThemePrefs(null)).toEqual({ palette: DEFAULT_PALETTE, mode: "dark" });
     expect(resetThemePrefs()).toEqual({ ...DEFAULT_THEME_PREFS });
   });
 
@@ -36,12 +34,12 @@ describe("normalizeThemePrefs — it is fed whatever is in localStorage", () => 
       expect(() => normalizeThemePrefs(bad)).not.toThrow();
       const p = normalizeThemePrefs(bad);
       expect(MODES).toContain(p.mode);
-      expect(p.palette === MATCH_TOOL || PALETTES.some((x) => x.key === p.palette)).toBe(true);
+      expect(PALETTES.some((x) => x.key === p.palette)).toBe(true);
     }
   });
 
   it("drops a palette that is no longer one — a retired tool must not brick the picker", () => {
-    expect(normalizeThemePrefs({ palette: "atlantis", mode: "light" }).palette).toBe(MATCH_TOOL);
+    expect(normalizeThemePrefs({ palette: "atlantis", mode: "light" }).palette).toBe(DEFAULT_PALETTE);
   });
 
   it("a bad mode does not also throw away a good palette", () => {
@@ -49,7 +47,7 @@ describe("normalizeThemePrefs — it is fed whatever is in localStorage", () => 
     // losing all of it: the operator sees one of their two choices survive and
     // has no way to tell whether the other was rejected or forgotten.
     expect(normalizeThemePrefs({ palette: "runway", mode: "nite" })).toEqual({ palette: "runway", mode: "dark" });
-    expect(normalizeThemePrefs({ palette: "nope", mode: "light" })).toEqual({ palette: MATCH_TOOL, mode: "light" });
+    expect(normalizeThemePrefs({ palette: "nope", mode: "light" })).toEqual({ palette: DEFAULT_PALETTE, mode: "light" });
   });
 
   it("accepts every palette the generator publishes", () => {
@@ -66,9 +64,9 @@ describe("resolve — the two attributes the shell stamps", () => {
     expect(resolveMode({ mode: "dark" }, false)).toBe("dark");
   });
 
-  it("Match the tool means the open tool, and a chosen palette overrules it", () => {
-    expect(resolvePalette({ palette: MATCH_TOOL }, "macro")).toBe("macro");
-    expect(resolvePalette({ palette: MATCH_TOOL }, "sync")).toBe("sync");
+  it("Session is the default, and a chosen palette overrules it", () => {
+    expect(resolvePalette({ palette: MATCH_TOOL }, "macro")).toBe(DEFAULT_PALETTE);
+    expect(resolvePalette({ palette: MATCH_TOOL }, "sync")).toBe(DEFAULT_PALETTE);
     expect(resolvePalette({ palette: "runway" }, "macro")).toBe("runway");
   });
 
@@ -80,13 +78,9 @@ describe("resolve — the two attributes the shell stamps", () => {
     expect(PALETTES.map((p) => p.key)).toContain(resolvePalette(null, undefined));
   });
 
-  it("'system' on a dark device is the SAME PICTURE as 'dark', and is treated as one", () => {
-    // isDefaultTheme keys the whole variable strategy below, so it has to be
-    // computed from the resolved result rather than the stored word — otherwise
-    // choosing "System" on a dark laptop silently switches the shell onto the
-    // new code path for no visible reason.
-    expect(isDefaultTheme({ palette: MATCH_TOOL, mode: "system" }, true)).toBe(true);
-    expect(isDefaultTheme({ palette: MATCH_TOOL, mode: "dark" }, true)).toBe(true);
+  it("always uses the mode-aware Session variable path", () => {
+    expect(isDefaultTheme({ palette: MATCH_TOOL, mode: "system" }, true)).toBe(false);
+    expect(isDefaultTheme({ palette: MATCH_TOOL, mode: "dark" }, true)).toBe(false);
     expect(isDefaultTheme({ palette: MATCH_TOOL, mode: "system" }, false)).toBe(false);
     expect(isDefaultTheme({ palette: "zts", mode: "dark" }, true)).toBe(false);
   });

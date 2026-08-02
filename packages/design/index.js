@@ -36,17 +36,17 @@ export const fonts = {
   fontMono: 'var(--font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace)',
 };
 
-export const radii = { rSm: "8px", rMd: "10px", rLg: "14px", rPill: "999px" };
+export const radii = { rSm: "10px", rMd: "12px", rLg: "18px", rPill: "999px" };
 
 // Motion vocabulary — identical curves across every tool so they feel like one
 // product. Exposed both as JS (M) and CSS vars (--ease-*, --dur-*).
 export const M = {
-  easeOut: "cubic-bezier(0.16, 1, 0.3, 1)",
-  easeSpring: "cubic-bezier(0.34, 1.56, 0.64, 1)",
-  easeStd: "cubic-bezier(0.4, 0, 0.2, 1)",
-  durFast: "0.12s",
-  durBase: "0.2s",
-  durSlow: "0.32s",
+  easeOut: "cubic-bezier(0.22, 1, 0.36, 1)",
+  easeSpring: "cubic-bezier(0.34, 1.4, 0.44, 1)",
+  easeStd: "cubic-bezier(0.65, 0, 0.35, 1)",
+  durFast: "140ms",
+  durBase: "240ms",
+  durSlow: "420ms",
 };
 
 // ─── Per-tool palettes ───────────────────────────────────────────────────────
@@ -117,11 +117,12 @@ const aliasFor = (a, ramp) => {
   return {};
 };
 
-// MIDNIGHT — the one shared canvas for every tool (Clarify's original
-// "brass on midnight" navy). Only the accent ramp differs per tool now.
+// GRAPHITE — the one shared material for every tool. This matches Board Room's
+// OLED canvas and neutral card stack; tool-specific information remains in the
+// semantic palette and never in the surfaces themselves.
 const MIDNIGHT = {
   mode: "dark",
-  bg: "#0B0F1A", surface: "#141B2C", surface2: "#1B2438", subtle: "#0F1626", raised: "#1B2438",
+  bg: "#000000", surface: "#1C1C1E", surface2: "#2A2A2D", subtle: "#121214", raised: "#2A2A2D",
   // faint was #66738A, which is 3.59:1 on this table's own card and 3.99:1 on
   // its bg — under AA for body copy on the surface it is most often read
   // against. 3:1 is the WCAG floor for LARGE text and for component
@@ -139,14 +140,14 @@ const MIDNIGHT = {
   // #7C8AA3 is the smallest step that clears the floor on BOTH grounds
   // (4.92:1 on card, 5.49:1 on bg) — chosen to move the least ink possible
   // while still being honest, rather than the lightest value that would pass.
-  ink: "#E9EDF5", inkDeep: "#F7F9FC", muted: "#94A1B5", faint: "#7C8AA3",
-  ghost: "#525E74", placeholder: "#5A6780",
-  line: "rgba(255,255,255,0.085)", lineSoft: "rgba(255,255,255,0.055)", lineStrong: "rgba(255,255,255,0.16)", lineInk: "rgba(255,255,255,0.07)",
-  good: "#3ECF8E", goodHi: "#5EE0A8", info: "#6EA8FE", warn: "#F5B84D", warnHi: "#FFC96B", bad: "#F87171", pink: "#F472B6",
-  shadowCard: "0 1px 2px rgba(0,0,0,0.5), 0 8px 30px rgba(0,0,0,0.4)",
-  shadowTab: "0 1px 2px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.45)",
-  shadowPopover: "0 10px 30px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.45)",
-  shadowModal: "0 24px 70px rgba(0,0,0,0.65), 0 8px 24px rgba(0,0,0,0.5)",
+  ink: "#F3F2EE", inkDeep: "#F3F2EE", muted: "#A8A69F", faint: "#87857E",
+  ghost: "#6E6C66", placeholder: "#6E6C66",
+  line: "rgba(243,242,238,0.09)", lineSoft: "rgba(243,242,238,0.06)", lineStrong: "rgba(243,242,238,0.18)", lineInk: "rgba(243,242,238,0.09)",
+  good: "#34A56E", goodHi: "#5BC487", info: "#4C82E8", warn: "#BC7F24", warnHi: "#D09A46", bad: "#E05548", pink: "#D95C93",
+  shadowCard: "0 1px 1px rgba(0,0,0,0.3), 0 6px 24px rgba(0,0,0,0.35)",
+  shadowTab: "0 1px 1px rgba(0,0,0,0.3), 0 6px 24px rgba(0,0,0,0.35)",
+  shadowPopover: "0 12px 40px rgba(0,0,0,0.55)",
+  shadowModal: "0 24px 70px rgba(0,0,0,0.7)",
 };
 
 // Orchid — SYNC, the voice layer that runs the day. Picked by elimination, and
@@ -180,6 +181,7 @@ const LIME = {
 };
 
 const APP_DEF = {
+  session: { base: MIDNIGHT, ramp: BRASS, label: "Session", brand: "The Pentagon" },
   zts: { base: MIDNIGHT, ramp: EMERALD, label: "ZTS", brand: "Zero To Secure" },
   clarify: { base: MIDNIGHT, ramp: BRASS, label: "Clarify", brand: "Clarify Outreach" },
   runway: { base: MIDNIGHT, ramp: VIOLET, label: "Runway", brand: "Runway" },

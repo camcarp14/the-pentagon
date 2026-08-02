@@ -2,7 +2,7 @@
      Run `node packages/design/gen-themes.mjs` after changing the table in that file;
      `npm run verify` fails if this file and palettes.js drift out of sync.
 
-     8 palettes × light/dark. Each authors only the ten tokens the
+     9 palettes × light/dark. Each authors only the ten tokens the
      rest of the system derives from — the --ink-a* / --accent-a* ladders, --line,
      --glass and --focus-ring in tokens.css are all color-mix over these, so they
      follow automatically. Semantic data colours and shadows stay in tokens.css:
@@ -59,6 +59,34 @@
     --scrim: color-mix(in srgb, #000000 62%, transparent);
   }
   
+/* Session · light — Board Room — unified brass */
+[data-palette="session"][data-theme="light"] {
+  --bg: #F2F1EB;
+  --surface: #FFFFFF;
+  --surface-2: #F6F5F0;
+  --ink: #1D1C18;
+  --sub: #6F6C62;
+  --faint: #6F6C62;
+  --accent: #87681B;
+  --accent-hi: #A5822A;
+  --accent-deep: #6E541A;
+  --on-accent: #FFFFFF;
+}
+
+/* Session · dark — Board Room — unified brass */
+[data-palette="session"][data-theme="dark"] {
+  --bg: #000000;
+  --surface: #1C1C1E;
+  --surface-2: #2A2A2D;
+  --ink: #F3F2EE;
+  --sub: #A8A69F;
+  --faint: #87857E;
+  --accent: #D9B45C;
+  --accent-hi: #EACC80;
+  --accent-deep: #B08F3E;
+  --on-accent: #1A1403;
+}
+
 /* ZTS · light — Emerald — Zero To Secure */
 [data-palette="zts"][data-theme="light"] {
   --bg: #F0F4F3;

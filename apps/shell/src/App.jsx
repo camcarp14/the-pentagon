@@ -5,20 +5,20 @@
 //   • auth (a single login gates all three tools)
 //   • the desktop rail and phone tool dock, plus ⌥1-N. System → Tools controls
 //     both navigation views and the shortcuts; System itself stays reachable.
-//   • per-tool theming (it stamps @cc/design's CSS vars on a wrapper, so
-//     switching tools re-accents the whole page over the shared dark canvas)
+//   • product-wide theming (it stamps @cc/design's mode-aware CSS variables on
+//     a wrapper; Session is the shared Board Room-derived default)
 //   • the cross-tool System hub (ops · tools · usage · intelligence · theme)
 // Each tool keeps its own internal nav — and its own ⌘K palette — directly
 // beneath (two clear layers), and is lazy-loaded so opening one never
 // downloads the others.
 // ═══════════════════════════════════════════════════════════════════════════
 import { Component, forwardRef, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { appMeta, cssVars } from "@cc/design";
+import { appMeta } from "@cc/design";
 import { SkeletonBoard, EmptyIcon, M, useIsMobile } from "@cc/ui";
 import { auth, isConfigured } from "@cc/supabase";
 import { loadTabPrefs, saveTabPrefs, visibleTabs, resolveActive, TAB_PREFS_KEY } from "./tabPrefs.js";
 import {
-  loadThemePrefs, saveThemePrefs, resolveMode, resolvePalette, isDefaultTheme,
+  loadThemePrefs, saveThemePrefs, resolveMode, resolvePalette,
   themeVars, prefersDark, watchSystemTheme, THEME_PREFS_KEY,
 } from "./themePrefs.js";
 import { useToolPower, pausedTools, powerFor, stoppedSentence, keepsSentence } from "./toolPower.js";
@@ -53,14 +53,7 @@ const System = lazy(() => import("./System.jsx"));
 // default rendering of that screen is unchanged to the pixel; the point of the
 // move is that the same names are re-pointed at light-capable tokens the moment
 // a theme is chosen (themePrefs.js's themeVars).
-const PLATFORM_VARS = {
-  "--bg": "#0A0E15", "--surface": "#131A24", "--surface-2": "#1B2438", "--subtle": "#0F151E", "--ink": "#E9EDF5", "--muted": "#93A1B5",
-  "--faint": "#66748A", "--border": "rgba(255,255,255,0.08)", "--accent": "#AAB6C6",
-  "--accent-soft": "rgba(170,182,198,0.14)", "--accent-line": "rgba(170,182,198,0.32)",
-  "--good": "#4FD694", "--warn": "#F5B84D", "--bad": "#FF6F6F",
-  "--shadow-tab": "0 1px 2px rgba(0,0,0,0.5)",
-  "--font-display": "var(--font-body)", "--font-body": "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif", "--font-mono": "ui-monospace, 'SF Mono', Menlo, monospace",
-};
+const PLATFORM_VARS = themeVars("session");
 
 // Off-screen but not hidden. `display: none` and `visibility: hidden` are both
 // removed from the accessibility tree, which is the opposite of what a
@@ -313,13 +306,9 @@ const SideRail = forwardRef(function SideRail({ active, onPick, apps, paused, sy
                   as a set rather than as a legend with a colour key. On hover it
                   previews its own accent, so the colour answers "which tool is
                   this" before the click rather than after it. */}
-              {/* Under a CHOSEN palette the glyph follows the theme, not the
-                  tool. Picking one palette is the operator saying "I want this
-                  product to be one colour", and a rail that answers with eight
-                  is arguing with the setting — the ring around the active row
-                  already reads var(--accent), so leaving the glyph on the tool's
-                  own hue put two different colours on one row. On the default
-                  ("Match the tool") nothing changes: the accent IS the tool. */}
+              {/* The glyph follows the product palette instead of reintroducing
+                  a second accent in the rail. Tool identity is carried by the
+                  label and route, while active state stays in one clear colour. */}
               <ToolGlyph app={a} color={off ? "var(--faint)" : on || hov ? (themed ? "var(--accent)" : m.accent) : "var(--faint)"} />
               <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: off ? 0.6 : 1 }}>{m.label}</span>
               {off && <span className="t-cap" style={{ marginLeft: "auto", color: "var(--faint)", flexShrink: 0 }}>off</span>}
@@ -889,8 +878,8 @@ export default function Shell() {
 
   // ── the resolved theme ──────────────────────────────────────────────────────
   //
-  // "Match the tool" keeps the attribute the shell has always stamped — the open
-  // tool, or "sync" while System is open. A chosen palette replaces it, on both.
+  // Session is the default palette. The fallback preserves compatibility with
+  // callers that still pass the active tool while legacy preferences migrate.
   const palette = resolvePalette(themePrefs, systemOpen ? "sync" : active);
   const mode = resolveMode(themePrefs, sysDark);
   // `themed` decides WHICH SET OF INLINE VARIABLES gets stamped, and that is the
@@ -900,11 +889,11 @@ export default function Shell() {
   // beats a stylesheet one (main.jsx says so). Flipping data-theme alone would
   // have shipped a Light button that changed an attribute and nothing else.
   //
-  // False here means the resolved answer is exactly what production already
-  // renders — the tool's accent over midnight — so that path stays literally the
-  // old expression and cannot drift.
-  const themed = !isDefaultTheme(themePrefs, sysDark);
-  const vars = themed ? themeVars(palette) : systemOpen ? PLATFORM_VARS : cssVars(active);
+  // Session is the shared default. A chosen palette remains available in
+  // System, but the wrapper always takes its mode-aware variables from one
+  // complete palette instead of reviving per-tool inline colours.
+  const themed = true;
+  const vars = systemOpen ? PLATFORM_VARS : themeVars(palette);
 
   // The shell paints from <div data-app> down; the DOCUMENT behind it is painted
   // by index.html's `body` rule and by the browser's own color-scheme (form

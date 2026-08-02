@@ -410,7 +410,7 @@ describe("SYNC is on the shared kit", () => {
     expect(out, "--accent-ink must reach the portal").toMatch(/--accent-ink:\s*#/);
     // …and it must be SYNC's own ground, not the :root default a portal would
     // otherwise inherit — which is Porcelain, the LIGHT room.
-    expect(out).toContain("--bg:#0B0F1A");
+    expect(out).toContain("--bg:#000000");
     expect(out, "Porcelain's paper must never reach a SYNC surface").not.toContain("#F2F1EB");
     // SYNC's accent and no other tool's — every tool shares the midnight
     // ground, so the ground alone would not catch cssVars("zts") here.

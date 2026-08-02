@@ -139,7 +139,7 @@ function BottomBar({ activeTab, onTab, inboundNew }) {
     // Canonical bottom-bar geometry — must stay identical to ZTS, Runway and
     // Macro (see the note on ZTS's BottomNav) or the bar changes height when you
     // switch tools.
-    <div className="co-bottombar" style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 400, display: "none", background: "var(--glass-raised, rgba(11,15,26,0.92))", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", borderTop: `1px solid ${T.line}`, padding: "4px 6px max(10px, calc(6px + var(--safe-bottom, 0px)))" }}>
+    <nav className="co-bottombar dock app-dock" aria-label="Clarify sections" style={{ display: "none" }}>
       <div style={{ display: "flex" }}>
         {NAV_TABS.map(t => {
           const on = activeTab === t.key;
@@ -149,17 +149,17 @@ function BottomBar({ activeTab, onTab, inboundNew }) {
             // wins the cascade: .dock-tab adds env(safe-area-inset-bottom) of its
             // own, and this bar's wrapper already pays that inset above, so
             // taking the kit's padding would double it.
-            <button key={t.key} type="button" onClick={() => onTab(t)} title={t.label} aria-label={t.label} className={on ? "dock-tab active" : "dock-tab"} style={{ flex: 1, minHeight: 46, padding: "8px 2px 7px", background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px", position: "relative" }}>
-              <span className="dock-icon" style={{ fontSize: "21px", lineHeight: 1, color: on ? T.gold : T.faint }}>{t.icon}</span>
+            <button key={t.key} type="button" onClick={() => onTab(t)} title={t.label} aria-label={t.label} className={on ? "dock-tab active" : "dock-tab"} style={{ position: "relative" }}>
+              <span className="dock-icon" style={{ fontSize: "21px", lineHeight: 1, color: on ? "var(--accent)" : "var(--faint)" }}>{t.icon}</span>
               {/* The kit's .dock-label: 10.5px, sentence case. It was 9px
                   uppercase — under the floor, and uppercase outside .t-label. */}
-              <span className="dock-label" style={{ color: on ? T.gold : T.faint }}>{t.label}</span>
+              <span className="dock-label" style={{ color: on ? "var(--accent)" : "var(--faint)" }}>{t.label}</span>
               {t.key === "inbound" && inboundNew > 0 && <span style={{ position: "absolute", top: "4px", right: "50%", marginRight: "-18px", fontSize: "10.5px", fontWeight: 800, color: "#1A0A12", background: T.pink, borderRadius: T.rPill, padding: "1px 5px" }}>{inboundNew}</span>}
             </button>
           );
         })}
       </div>
-    </div>
+    </nav>
   );
 }
 
@@ -1169,4 +1169,3 @@ export default function App({ embedded = false }) {
 
   );
 }
-

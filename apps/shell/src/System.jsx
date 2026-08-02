@@ -13,7 +13,7 @@ import { useEffect, useMemo, useState } from "react";
 import { appMeta } from "@cc/design";
 import { PALETTES } from "@cc/design/palettes.js";
 import { visibleTabs, isHidden, canHide, toggleTab, moveTab, resetTabPrefs, DEFAULT_HIDDEN } from "./tabPrefs.js";
-import { MATCH_TOOL, normalizeThemePrefs, resolveMode, resetThemePrefs } from "./themePrefs.js";
+import { normalizeThemePrefs, resolveMode, resetThemePrefs } from "./themePrefs.js";
 import { powerFor, stopsSentence, stoppedSentence, keepsSentence } from "./toolPower.js";
 import { AnimatedNumber, EmptyState, useIsMobile, useToast } from "@cc/ui";
 import { auth, supabase } from "@cc/supabase";
@@ -701,21 +701,6 @@ function Theme({ prefs, onChange, systemPrefersDark, isMobile }) {
 
       <div className="t-label" style={{ marginBottom: 8 }}>Palette</div>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 8 }}>
-        <button type="button" onClick={() => onChange({ ...cur, palette: MATCH_TOOL })}
-          aria-pressed={cur.palette === MATCH_TOOL} style={card(cur.palette === MATCH_TOOL)}>
-          {/* The eight accents in a row IS the preview: this option is the one
-              where the colour keeps changing. */}
-          <span aria-hidden="true" style={{ display: "flex", flex: "none" }}>
-            {PALETTES.map((p, i) => (
-              <span key={p.key} style={{ width: 9, height: 22, background: swatchOf(p).accent, marginLeft: i ? -1 : 0, borderRadius: i === 0 ? "5px 0 0 5px" : i === PALETTES.length - 1 ? "0 5px 5px 0" : 0 }} />
-            ))}
-          </span>
-          <span style={{ minWidth: 0 }}>
-            <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: P.ink }}>Match the tool</span>
-            <span style={{ display: "block", fontSize: 11, color: P.faint, marginTop: 2 }}>Default — the accent says which tool you are in</span>
-          </span>
-        </button>
-
         {PALETTES.map((p) => {
           const s = swatchOf(p);
           const selected = cur.palette === p.key;
@@ -741,10 +726,9 @@ function Theme({ prefs, onChange, systemPrefersDark, isMobile }) {
       </div>
 
       <div style={{ fontSize: 11.5, color: P.faint, marginTop: 14, lineHeight: 1.6, maxWidth: 620 }}>
-        Picking one palette makes every tool wear it. That costs you the one signal
-        that still reads at an 8px dot — which tool you are standing in — so it is
-        offered, not assumed. Both settings are stored in this browser only; they
-        change nothing about what runs.
+        Session is the shared Board Room language used across every tool. The
+        other palettes are optional product-wide overrides; neither setting
+        changes what runs.
       </div>
     </div>
   );
