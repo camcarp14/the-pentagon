@@ -292,14 +292,13 @@ export default function App({ embedded = false }) {
       /* The platform's stack, not a face of our own — --font-body is set by the
          shell and falls back to the system stack in @cc/design's tokens. */
       html, body { margin: 0; font-family: var(--font-body); }
-      /* Midnight canvas — deep blue-black with the brand's dual "desk lamp"
-         radial glow: brass top-left, cool blue top-right. The dark cut of the
-         same signature the light era had. */
+      /* The shared slate room is deliberately calm; a trace of the current
+         accent gives orientation without turning an entire tool into a skin. */
       body {
-        background-color: var(--shell-canvas, #0B0F1A);
+        background-color: var(--bg, #1F2329);
         background-image:
-          radial-gradient(1200px 600px at 12% -8%, rgba(201,165,87,0.07), transparent 60%),
-          radial-gradient(1000px 700px at 100% 0%, rgba(110,168,254,0.05), transparent 55%);
+          radial-gradient(1200px 600px at 12% -8%, var(--accent-a08), transparent 60%),
+          radial-gradient(1000px 700px at 100% 0%, var(--ink-a03), transparent 55%);
         background-attachment: fixed;
         color-scheme: dark;
       }
@@ -308,14 +307,14 @@ export default function App({ embedded = false }) {
       ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
       ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); background-clip: padding-box; }
       textarea, input, select, button { font-family: var(--font-body); }
-      ::selection { background: rgba(201,165,87,0.32); color: #F7F9FC; }
+      ::selection { background: var(--accent-a30); color: var(--ink); }
       /* Global micro-interactions — everything interactive eases */
       button, a, [role="button"], input, select, textarea { transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, transform 0.12s ease, opacity 0.16s ease; }
       button:not(:disabled):active { transform: translateY(0.5px); }
       /* Refined focus rings — accessible but elegant */
-      button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(201,165,87,0.45); }
-      input::placeholder, textarea::placeholder { color: #5A6780; }
-      select, option { background-color: #0F1626; color: #E9EDF5; }
+      button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+      input::placeholder, textarea::placeholder { color: var(--faint); }
+      select, option { background-color: var(--surface-2); color: var(--ink); }
       /* pulse, fadein and shimmer are the KIT's (packages/ui/components.css) and
          are referenced, never redefined here. Keyframe names are
          document-global — no attribute, class or scope can contain them — and
@@ -380,6 +379,13 @@ export default function App({ embedded = false }) {
         .co-inbound-grid { grid-template-columns: 1fr !important; }
         .co-grid5 { grid-template-columns: repeat(2, 1fr) !important; }
         .co-funnel { display: grid !important; grid-template-columns: repeat(2, 1fr) !important; }
+
+        /* The month view is a scan, not a touch-heavy scheduler. Keep it short
+           on phones so Today remains a dashboard rather than a calendar wall. */
+        .co-calendar-head { align-items: flex-start !important; }
+        .co-calendar-head > div { flex-wrap: wrap; justify-content: flex-end; }
+        .co-calendar-grid .card { padding: 9px 10px !important; }
+        .co-calendar-grid [title] { height: 34px !important; }
 
         /* A consistent, slightly more generous gap across every collapsed grid */
         .co-grid2, .co-grid4, .co-grid5, .co-grid-side, .co-inbound-grid, .co-funnel, .co-portfolio-bar { gap: 12px !important; }

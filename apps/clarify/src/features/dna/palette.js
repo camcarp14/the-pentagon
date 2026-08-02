@@ -14,9 +14,8 @@ import { T } from "../../theme.js";
 export const CLARIFY_MIND_PALETTE = Object.freeze({
   bg: T.bg,
   surface: T.surface,
-  // Its old copy built the HUD panel from the page colour, not a slate
-  // token: rgba(T.bg, 0.8) where bg is #0B0F1A.
-  glass: "rgba(11,15,26,0.8)",
+  // The HUD sits over the shared slate canvas, not the retired blue-black room.
+  glass: "rgba(31,35,41,0.82)",
   glassBorder: T.lineSoft,
   ink: T.ink,
   sub: T.muted,
@@ -31,7 +30,7 @@ export const CLARIFY_MIND_PALETTE = Object.freeze({
   select: T.gold,
   selectHi: T.goldHi,
   selectLine: T.goldLine,
-  focusRing: "rgba(201,165,87,0.34)",
+  focusRing: "rgba(135,180,227,0.34)",
 
   inhibit: T.red,
 

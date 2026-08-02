@@ -1,40 +1,35 @@
-// ─── Clarify design tokens — "Brass on midnight" ─────────────────────────────
-// The dark rebuild keeps every token NAME and its meaning (ink = primary text,
-// surface = card, line = hairline) and flips the VALUES, so call sites already
-// on T.* converted for free. Direction: a night trading-desk — deep blue-black
-// canvas, the brand's brass re-cut brighter for dark contrast, signal colors
-// at 400-series so they read without glare. The brass identity and the dual
-// "desk lamp" radial glow are the signature carried over from the light era.
-//
-// Contrast floor (AA, verified): ink ≈14:1 on surface · muted ≈6:1 · gold ≈7:1
-// · signal badges ≥4.5:1 · textOnBrand ≈8:1 on the CTA gradient.
+// ─── Clarify design tokens — Board Room slate ─────────────────────────────────
+// Clarify retains its token names so its operational UI stays stable, but the
+// material now matches the Pentagon's shared Board Room room: cool slate canvas,
+// quiet lifted cards, and blue reserved for direction and action. Signal colors
+// remain semantic, deliberately softer than the old neon set.
 export const T = {
-  // brand — brass
-  gold: "#C9A557",
-  goldHi: "#E3C27E",
-  goldDeep: "#8F7434",
-  goldGrad: "linear-gradient(135deg, #E3C27E 0%, #A9853C 100%)",
-  goldSoft: "rgba(201,165,87,0.10)",
-  goldLine: "rgba(201,165,87,0.30)",
-  textOnBrand: "#151005",           // dark text on brass CTAs (white-on-gold died with the light theme)
+  // brand — shared blue steel (legacy names avoid a broad call-site rewrite)
+  gold: "#87B4E3",
+  goldHi: "#B1CEED",
+  goldDeep: "#4D8FD5",
+  goldGrad: "linear-gradient(135deg, #B1CEED 0%, #4D8FD5 100%)",
+  goldSoft: "rgba(135,180,227,0.12)",
+  goldLine: "rgba(135,180,227,0.30)",
+  textOnBrand: "#111922",
 
   // ink & text (ink = primary text color)
-  ink: "#E9EDF5",
+  ink: "#E8EAED",
   inkDeep: "#F7F9FC",
-  inkBrand: "#F3E9D2",
-  muted: "#94A1B5",
-  faint: "#66738A",
-  ghost: "#525E74",
-  placeholder: "#5A6780",
+  inkBrand: "#DCEAF7",
+  muted: "#ABB2BA",
+  faint: "#89909A",
+  ghost: "#68737E",
+  placeholder: "#707C89",
 
   // canvas
-  bg: "#0B0F1A",
-  surface: "#141B2C",
-  subtle: "#0F1626",                // wells & inputs sit BELOW surface on dark
-  raised: "#1B2438",                // hover/raised layer above surface
-  line: "rgba(255,255,255,0.085)",
-  lineSoft: "rgba(255,255,255,0.055)",
-  lineInk: "rgba(255,255,255,0.07)",
+  bg: "#1F2329",
+  surface: "#2D343C",
+  subtle: "#252C33",                // wells & inputs sit BELOW surface on dark
+  raised: "#3A434D",                // hover/raised layer above surface
+  line: "rgba(232,234,237,0.085)",
+  lineSoft: "rgba(232,234,237,0.055)",
+  lineInk: "rgba(232,234,237,0.07)",
 
   // signals — 400-series tuned for dark
   pink: "#F472B6",
@@ -69,15 +64,15 @@ export const T = {
   rLg: "14px",
   rPill: "999px",
 
-  // elevation — on dark, height = lighter surface + hairline + true shadow depth
-  shadowCard: "0 1px 2px rgba(0,0,0,0.45), 0 6px 20px rgba(0,0,0,0.30), 0 0 0 1px rgba(255,255,255,0.045)",
-  shadowTab: "0 1px 2px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.35)",
-  shadowHover: "0 6px 16px rgba(0,0,0,0.45), 0 16px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.07)",
-  shadowPopover: "0 10px 28px rgba(0,0,0,0.55), 0 2px 10px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06)",
-  shadowModal: "0 32px 90px rgba(0,0,0,0.7), 0 8px 28px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)",
-  shadowFloat: "0 12px 44px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06)",
-  glowBrass: "0 0 28px rgba(201,165,87,0.14)",   // the lamp glow — hero moments only
-  focusRing: "0 0 0 3px rgba(201,165,87,0.45)",
+  // elevation — Board Room cards float by material and soft depth, never an outline
+  shadowCard: "0 2px 10px rgba(11,17,24,0.18), 0 12px 28px rgba(11,17,24,0.12)",
+  shadowTab: "0 1px 2px rgba(11,17,24,0.28), 0 4px 12px rgba(11,17,24,0.16)",
+  shadowHover: "0 8px 20px rgba(11,17,24,0.22), 0 20px 44px rgba(11,17,24,0.16)",
+  shadowPopover: "0 12px 30px rgba(11,17,24,0.30), 0 3px 12px rgba(11,17,24,0.20)",
+  shadowModal: "0 34px 90px rgba(11,17,24,0.48), 0 10px 30px rgba(11,17,24,0.26)",
+  shadowFloat: "0 14px 46px rgba(11,17,24,0.36)",
+  glowBrass: "0 0 28px rgba(135,180,227,0.14)",
+  focusRing: "0 0 0 3px rgba(135,180,227,0.45)",
 
   // motion — one vocabulary for every transition in the app
   easeOut: "cubic-bezier(0.16, 1, 0.3, 1)",
