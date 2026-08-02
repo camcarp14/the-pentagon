@@ -13,13 +13,12 @@ import {
 import { IcTrash, IcAlert } from "../ui/icons.jsx";
 
 // ─── Mind ────────────────────────────────────────────────────────────────────
-// The same living canvas ZTS and Clarify have, over SYNC's genome.
+// The Pentagon's living, shared canvas.
 //
 // It is not a picture of the system prompt — it IS the system prompt.
-// buildSystem() compiles this graph every turn, so silencing "Push back when the
-// plan is bad" makes SYNC stop doing it on the next thing you say, with no
-// deploy. Every neuron started as a line in a string literal only a developer
-// could reach.
+// Every Pentagon belief lives here, with its owning domain attached to the
+// neuron. SYNC still compiles its own domain into each turn, while this page is
+// the single place to inspect the shared graph without separate DNA tabs.
 //
 // The canvas is the page; the inspector floats over it as a sheet, because on a
 // phone a side panel and a force-directed graph cannot both have the width they
@@ -115,7 +114,7 @@ export default function MindPage({ setPage }) {
         <MindCanvas
           genome={mind}
           palette={palette}
-          label="SYNC — neural map"
+          label="Pentagon — master Mind"
           selection={selection}
           onSelect={setSelection}
           onNodeMove={(id, x, y) => patch(id, { x, y })}

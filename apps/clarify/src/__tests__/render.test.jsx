@@ -321,8 +321,8 @@ const asyncNoop = async () => {};
 // in here — the button walk above already fails when one of those goes missing.
 const KIT_TOKEN = /^(card|field|cell|tappable|pressable|seg|seg-opt|empty|pad-sm|t-[\w-]+|stattile[\w-]*|sk[\w-]*)$/;
 
-// The eleven hash routes App.jsx will accept (ROUTABLE_VIEWS).
-const VIEWS = ["mission", "analytics", "inbound", "outreach", "queue", "sequences", "analyst", "clients", "dna", "calendar", "settings"];
+// The ten hash routes App.jsx will accept (ROUTABLE_VIEWS).
+const VIEWS = ["mission", "analytics", "inbound", "outreach", "queue", "sequences", "analyst", "clients", "calendar", "settings"];
 
 const warnings = [];
 let realWarn, realErr;
@@ -375,12 +375,15 @@ describe("Clarify renders on the kit", () => {
   });
 
   it("puts the kit's chrome primitives on every view", () => {
-    // These are the pieces that render on all eleven routes: the tab strip, the
-    // send-mode pill and its status light, the header actions, the phone dock.
+    // Every route keeps the shared tab strip, actions and phone dock. Safety
+    // controls deliberately belong only to Today and its Analytics subview.
     for (const [v, html] of all()) {
       const cls = classesIn(html);
-      for (const c of ["seg", "seg-opt", "pill", "dotstatus", "btn", "dock-tab", "dock-label"]) {
+      for (const c of ["seg", "seg-opt", "dock-tab", "dock-label"]) {
         expect(cls.has(c), `#/${v} is missing the kit's .${c}`).toBe(true);
+      }
+      if (["mission", "analytics"].includes(v)) {
+        for (const c of ["pill", "dotstatus", "btn"]) expect(cls.has(c), `#/${v} is missing the Today-only .${c}`).toBe(true);
       }
     }
   });
@@ -451,9 +454,6 @@ describe("Clarify renders on the kit", () => {
       // stattile-label — see the MonthCalendar test below for why.
       { at: "#/calendar", paint: () => view("calendar"), files: { "features/calendar/CalendarView.jsx": ["card", "t-label", "t-foot"] } },
       { at: "#/settings", paint: () => view("settings"), files: { "features/system/SettingsView.jsx": ["card", "field", "t-call", "t-cap", "t-foot", "t-label"] } },
-      // The DNA overlay's own labels and inputs — the canvas is left alone.
-      { at: "#/dna", paint: () => view("dna"), files: { "features/dna/DnaView.jsx": ["t-label"] } },
-
       // ── surfaces fed the rows a cold paint never has ──────────────────────
       {
         at: "the sign-in root", paint: () => paint(createElement(LoginScreen, { onLogin: noop })),
@@ -569,10 +569,10 @@ describe("Clarify renders on the kit", () => {
       // The step body/subject templates render inside SequenceCard; t-foot and
       // t-title2 are the tab header, already guarded on the cold route.
       "features/sequences/SequencesView.jsx": [],
-      // The node inspector's label/text inputs and the pulse box, all behind a
-      // node selection or an open floating panel. DESIGN.md §5 already records
-      // this tab as a partly-migrated surface awaiting the shell's Minds screen.
-      "features/dna/DnaView.jsx": ["field"],
+      // The retired local DNA canvas remains source-checked while legacy routes
+      // forward to the centralized SYNC Mind. Its inspector is no longer part
+      // of Clarify's reachable UI.
+      "features/dna/DnaView.jsx": ["field", "t-label"],
     };
 
     let pairs = 0;
@@ -601,9 +601,8 @@ describe("Clarify renders on the kit", () => {
     // Every pair above was individually mutation-proved: broken in its own file,
     // this test went red. Deleting one silently would undo that, so the counts
     // are asserted too.
-    // 21 before the "Ask Clarify" assistant came out; its panel was the
-    // twenty-first surface and the only one GlobalAgent.jsx had.
-    expect(OWN.length, "the surface table lost entries").toBe(20);
+    // The centralized master Mind replaced Clarify's dedicated DNA surface.
+    expect(OWN.length, "the surface table lost entries").toBe(19);
     // 105 before the repeated page headings came out. Six of those pairs were
     // a .t-title1/.t-title2 on a heading that said what the lit pill above it
     // already said; the elements are gone, so the pairs are too. Every pair
@@ -613,7 +612,7 @@ describe("Clarify renders on the kit", () => {
     // were UNREACHED and are now guarded.
     // 101 before the assistant panel went: its three (field, t-call, t-foot)
     // named a file that no longer exists.
-    expect(pairs, "the (surface, file, class) table lost entries").toBe(98);
+    expect(pairs, "the (surface, file, class) table lost entries").toBe(97);
     expect(scannedAttrs, "the className scan read almost nothing across the table — it is broken").toBeGreaterThan(400);
 
     // …and the half that makes stripping a file's kit classes WHOLESALE go red.
@@ -703,14 +702,10 @@ describe("Clarify renders on the kit", () => {
   it("routes every button outside the DNA canvas through a kit surface", () => {
     // .btn is 34/44px, .pill is 34px, .dock-tab is the phone bar, .icon-btn
     // reaches 44pt through its ::after — these are the one-thumb targets this
-    // app was writing out inline at five different paddings. The DNA tab is
-    // excluded and asserted separately below: it is a full-bleed canvas whose
-    // controls float on glass, and its zoom/fit HUD belongs to @cc/mind-canvas,
-    // which this migration must not restyle.
+    // app was writing out inline at five different paddings.
     let total = 0;
     const offenders = [];
     for (const [v, html] of all()) {
-      if (v === "dna") continue;
       for (const b of html.match(/<button[^>]*>/g) || []) {
         total++;
         if (!/class="[^"]*\b(btn|pill|seg-opt|dock-tab|icon-btn|card|cell)\b/.test(b)) offenders.push(`${v}: ${b.slice(0, 110)}`);
@@ -718,16 +713,6 @@ describe("Clarify renders on the kit", () => {
     }
     expect(total, "no buttons were scanned — the walk is broken").toBeGreaterThan(60);
     expect(offenders, `buttons that opted out of the kit:\n${offenders.join("\n")}`).toEqual([]);
-  });
-
-  it("leaves the mind canvas alone", () => {
-    // The DNA tab renders @cc/mind-canvas, which is already migrated. Its own
-    // classes must still be the ones it ships with, and nothing here may add a
-    // kit class to them.
-    const cls = classesIn(view("dna"));
-    for (const c of ["dna-canvas", "dna-world", "dna-hudbtn"]) expect(cls.has(c), `the canvas lost .${c}`).toBe(true);
-    expect(strip(read("features", "dna", "DnaView.jsx"))).toMatch(/<MindCanvas[\s\S]{0,600}?\/>/);
-    expect(strip(read("features", "dna", "DnaView.jsx"))).not.toMatch(/<MindCanvas[^>]*className=/);
   });
 
   it("emits no NaN and no literal 'undefined' into markup", () => {
@@ -1025,7 +1010,7 @@ describe("Clarify obeys the language", () => {
       ["App.jsx", '"clarify_token"', 4],                                  // useState seed, persistSession, session-miss clear, signOut
       ["App.jsx", '"clarify_refresh"', 3],                                // persistSession, session-miss clear, signOut
       ["App.jsx", '"outreach_focus"', 3],                                 // consume, delete, and the palette's set
-      ["App.jsx", 'const ROUTABLE_VIEWS = ["mission", "analytics", "inbound", "outreach", "queue", "sequences", "analyst", "clients", "dna", "calendar", "settings"]', 1],
+      ["App.jsx", 'const ROUTABLE_VIEWS = ["mission", "analytics", "inbound", "outreach", "queue", "sequences", "analyst", "clients", "calendar", "settings"]', 1],
       ["features/mission/EnginePanel.jsx", 'supabase.from("app_settings")', 3],
       ["features/mission/EnginePanel.jsx", '"/.netlify/functions/queue-execute"', 1],
       ["features/inbound/InboundView.jsx", "/inbound_leads?order=created_at.desc&limit=200", 1],

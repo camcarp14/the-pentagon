@@ -5,7 +5,6 @@ import { AnimatedNumber, EmptyState, SkeletonLine, SkeletonRows, SkeletonBoard, 
 import { T, syne, mono } from "./theme.js";
 import EnginePanel from "./EnginePanel.jsx";
 import { FactoryPanel, sendBriefToFactory } from "./factory.jsx";
-import { DnaView } from "./dna/DnaView.jsx";
 import { DnaWorker } from "./dna/dnaWorker.js";
 import { estimateCost } from "@cc/ai";
 
@@ -273,16 +272,16 @@ function ModalShell({ onClose, isMobile, width = 560, children }) {
 // The id is what the code switches on; the label is what a human reads, and the
 // two are not the same string. They used to be: the desktop segment and the
 // phone dock both rendered the raw id under `text-transform: capitalize`, which
-// is a STYLE and cannot know that SEO and DNA are acronyms — it shipped "Seo"
-// and "Dna" on both bars. The ⌘K palette had a private map with them right, so
+// is a STYLE and cannot know that SEO is an acronym — it shipped "Seo" on both
+// bars. The ⌘K palette had a private map with it right, so
 // the same tab was spelled two ways in one app depending on which control you
 // were looking at.
 //
 // One map, three consumers (segment, dock, palette), and the capitalize is
 // gone. An acronym belongs in the label's TEXT; §4.3 reserves uppercase-as-style
 // for `.t-label` and this is not that.
-export const TABS = ["mission", "creators", "studio", "seo", "dna"];
-export const TAB_LABELS = { mission: "Mission", creators: "Creators", studio: "Studio", seo: "SEO", dna: "DNA" };
+export const TABS = ["mission", "creators", "studio", "seo"];
+export const TAB_LABELS = { mission: "Mission", creators: "Creators", studio: "Studio", seo: "SEO" };
 /** Never returns undefined: an id with no entry reads as itself rather than blank. */
 export const tabLabel = (t) => TAB_LABELS[t] || t;
 
@@ -293,7 +292,6 @@ const TAB_ICONS = {
   creators: (c) => <><circle cx="8.6" cy="7.8" r="2.5" /><polygon points="8.6,11.3 4.2,19 13,19" /><circle cx="16.6" cy="9.4" r="2.1" /><polygon points="16.6,12.4 13.3,19 19.9,19" /></>,
   studio: (c) => <><rect x="3.5" y="5.5" width="17" height="13" rx="2" /><polygon points="10,9.3 10,14.7 15,12" fill={c} stroke="none" /></>,
   seo: (c) => <><circle cx="10.3" cy="10.3" r="6" /><line x1="14.7" y1="14.7" x2="20" y2="20" /></>,
-  dna: (c) => <><circle cx="5.5" cy="8" r="2" /><circle cx="18.5" cy="6.5" r="2" /><circle cx="7.5" cy="18" r="2" /><circle cx="17" cy="17.5" r="2" /><line x1="7.4" y1="8.9" x2="16.6" y2="7.4" /><line x1="6.4" y1="9.8" x2="8.6" y2="16.2" /><line x1="9.4" y1="17.8" x2="15.1" y2="17.6" /></>,
   agents: (c) => <><circle cx="12" cy="5.5" r="2" /><circle cx="5.8" cy="17" r="2" /><circle cx="18.2" cy="17" r="2" /><line x1="12" y1="7.5" x2="7.2" y2="15.3" /><line x1="12" y1="7.5" x2="16.8" y2="15.3" /></>,
   ops: (c) => <polyline points="3,13 7,13 9,19 13,6 15,13 21,13" />,
 };
@@ -1892,6 +1890,7 @@ export default function App({ embedded = false }) {
     // nowhere else. It now reads the hoisted one, so the palette entry and the
     // pill it navigates to cannot say different words again.
     TABS.forEach(t => acts.push({ id: `nav_${t}`, group: "Go to", icon: "→", label: tabLabel(t), run: () => setView(t) }));
+    acts.push({ id: "master_mind", group: "Pentagon", icon: "⌬", label: "Open master Mind", sub: "Shared beliefs for every Pentagon tool", run: () => { window.location.hash = "/sync/mind"; } });
     acts.push({ id: "act_short", group: "Create", icon: "✦", label: "New Short", sub: "Generate a full Shorts package", run: () => { signalCreate("studio"); setView("studio"); } });
     acts.push({ id: "act_article", group: "Create", icon: "✦", label: "New Article", sub: "Draft an SEO article into review", run: () => { signalCreate("seo"); setView("seo"); } });
     acts.push({ id: "act_creator", group: "Create", icon: "+", label: "Add Creator", sub: "Add a YouTube creator to the pipeline", run: () => { signalCreate("creators"); setView("creators"); } });
@@ -1964,7 +1963,6 @@ export default function App({ embedded = false }) {
       {view === "creators" && <CreatorsView creators={creators} setCreators={setCreators} isMobile={isMobile} loading={dataLoading} openSignal={createSignal.creators} onSignalConsumed={() => clearSignal("creators")} />}
       {view === "studio" && <StudioView shorts={shorts} setShorts={setShorts} isMobile={isMobile} loading={dataLoading} openSignal={createSignal.studio} onSignalConsumed={() => clearSignal("studio")} />}
       {view === "seo" && <SeoView articles={articles} setArticles={setArticles} onAddArticle={addArticle} isMobile={isMobile} loading={dataLoading} openSignal={createSignal.seo} onSignalConsumed={() => clearSignal("seo")} />}
-      {view === "dna" && <DnaView creators={creators} shorts={shorts} articles={articles} onArticleDraft={addArticle} />}
       {isMobile && <BottomNav view={view} setView={setView} tabs={TABS} />}
     </div>
   );

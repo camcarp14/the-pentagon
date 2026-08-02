@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { TAB_LABELS } from "./nav.js";
 import { getState } from "./data/store.js";
 import { VoiceProvider, useVoice } from "./voice/VoiceProvider.jsx";
@@ -26,6 +26,11 @@ const PAGES = {
   mind: MindPage,
   memory: MemoryPage,
   voice: VoicePage,
+};
+
+const pageFromHash = () => {
+  const segments = (window.location.hash || "").replace(/^#\/?/, "").split("/");
+  return segments[0] === "sync" && PAGES[segments[1]] ? segments[1] : "console";
 };
 
 function useIsPhone() {
@@ -61,13 +66,25 @@ function useKeyboardOpen() {
 }
 
 function Workspace() {
-  const [page, setPage] = useState("console");
+  const [page, setPage] = useState(pageFromHash);
   const [palette, setPalette] = useState(false);
   const [settings, setSettingsOpen] = useState(false);
   const voice = useVoice();
   const phone = useIsPhone();
   const keyboardOpen = useKeyboardOpen();
   const holding = useRef(false);
+  const navigate = useCallback((next) => {
+    const safe = PAGES[next] ? next : "console";
+    setPage(safe);
+    const segments = (window.location.hash || "").replace(/^#\/?/, "").split("/");
+    if (segments[0] === "sync" && segments[1] !== safe) window.location.hash = `/sync/${safe}`;
+  }, []);
+
+  useEffect(() => {
+    const onHash = () => setPage(pageFromHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   const Page = PAGES[page] || ConsolePage;
 
@@ -127,7 +144,7 @@ function Workspace() {
           the navigation and the Console keeps its own control row; that is the
           same call ZTS makes (`!(embedded && isMobile)`), and it is what keeps
           a phone from wearing two navigation bars for six destinations. */}
-      {!phone && <SubNav page={page} setPage={setPage} onSettings={() => setSettingsOpen(true)} onPalette={() => setPalette(true)} />}
+      {!phone && <SubNav page={page} setPage={navigate} onSettings={() => setSettingsOpen(true)} onPalette={() => setPalette(true)} />}
 
       <main className="app-main">
         {/* Keying on `page` restarts the entrance animation, so a destination
@@ -140,20 +157,20 @@ function Workspace() {
             falls back to its own still-visible heading rather than borrowing a
             wrong one. */}
         <div key={page} className="app-page" role="region" aria-label={TAB_LABELS[page]}>
-          <Page onSettings={() => setSettingsOpen(true)} setPage={setPage} />
+          <Page onSettings={() => setSettingsOpen(true)} setPage={navigate} />
         </div>
 
         {/* The tab bar — last flex child, in normal flow at the bottom of the
             column. It clears the home indicator through the shell's
             --safe-bottom, which is 0 on a letterboxed install where the
             reported inset is dead space rather than real. */}
-        {phone && !keyboardOpen && <Dock page={page} setPage={setPage} />}
+        {phone && !keyboardOpen && <Dock page={page} setPage={navigate} />}
       </main>
 
       <CommandK
         open={palette}
         onClose={() => setPalette(false)}
-        setPage={setPage}
+        setPage={navigate}
         voice={voice}
         onSettings={() => setSettingsOpen(true)}
       />

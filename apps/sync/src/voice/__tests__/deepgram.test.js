@@ -627,17 +627,18 @@ describe("the mind is the prompt", () => {
     expect(system).toMatch(/if \(compiled\?\.systemPrompt\?\.length > 400\) doctrine = compiled\.systemPrompt;/);
   });
 
-  it("scopes the operator's graph to SYNC and drops dangling synapses", () => {
-    // The other tools' neurons live in the same seed. Showing them here would
-    // invite reweighting ZTS's doctrine from a workday app — and an edge whose
-    // other end was filtered out fails validateMind().
-    expect(store).toMatch(/x === "sync" \|\| x === "shared"/);
-    expect(store).toMatch(/ids\.has\(e\.from\) && ids\.has\(e\.to\)/);
+  it("keeps the complete Pentagon graph and only adds missing seed nodes", () => {
+    // Sync Mind is the single shared editor now. Existing local edits remain;
+    // only the nodes and synapses absent from an older, filtered graph are added.
+    expect(store).toMatch(/const nodes = \[\.\.\.state\.mind\.nodes, \.\.\.seeded\.nodes\.filter/);
+    expect(store).toMatch(/!edgeIds\.has\(edge\.id\) && ids\.has\(edge\.from\) && ids\.has\(edge\.to\)/);
+    expect(store).not.toMatch(/x === "sync" \|\| x === "shared"/);
   });
 
-  it("seeds lazily so an existing install needs no migration", () => {
+  it("seeds lazily and migrates an existing graph without discarding edits", () => {
     expect(store).toMatch(/export function getMind\(\)/);
-    expect(store).toMatch(/if \(state\.mind\) return state\.mind;/);
+    expect(store).toMatch(/if \(state\.mind\) \{/);
+    expect(store).toMatch(/const mind = seeded;/);
   });
 
   it("is the same canvas the other tools have, not a second idea of one", () => {

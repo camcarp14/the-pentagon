@@ -22,12 +22,11 @@ import { CalendarView } from "./features/calendar/CalendarView.jsx";
 import { QueueView } from "./features/queue/QueueView.jsx";
 import { SequencesView } from "./features/sequences/SequencesView.jsx";
 import { AnalyticsView } from "./features/analytics/AnalyticsView.jsx";
-import { DnaView } from "./features/dna/DnaView.jsx";
 import { useSequenceEngine } from "./lib/engineLoop.js";
 import { seqDb } from "./lib/sequenceDb.js";
 import { classifyReplyAI } from "./lib/classify.js";
 
-const ROUTABLE_VIEWS = ["mission", "analytics", "inbound", "outreach", "queue", "sequences", "analyst", "clients", "dna", "calendar", "settings"];
+const ROUTABLE_VIEWS = ["mission", "analytics", "inbound", "outreach", "queue", "sequences", "analyst", "clients", "calendar", "settings"];
 // THE SHELL OWNS SEGMENT 0. Clarify runs inside The Pentagon, whose shell reads
 // the first hash segment to decide which TOOL is open. Clarify used to write its
 // view there too (`#/analytics`), so switching to Analytics made the shell read a
@@ -36,10 +35,18 @@ const ROUTABLE_VIEWS = ["mission", "analytics", "inbound", "outreach", "queue", 
 // Old-shape hashes are still READ, so an existing bookmark to `#/analytics` keeps
 // working — only what we write moved.
 export const CLARIFY_SEG = "clarify";
+const MASTER_MIND_HASH = "/sync/mind";
 const parseHash = () => {
   const raw = (window.location.hash || "").replace(/^#\/?/, "").split("/");
-  const seg = raw[0] === CLARIFY_SEG ? raw.slice(1) : raw;
-  return { view: ROUTABLE_VIEWS.includes(seg[0]) ? seg[0] : "mission", sub: seg[1] ? decodeURIComponent(seg[1]) : null };
+  const scoped = raw[0] === CLARIFY_SEG;
+  const seg = scoped ? raw.slice(1) : raw;
+  if (seg[0] === "dna") return { view: "mission", sub: null, redirectToMasterMind: true };
+  if (!scoped && !ROUTABLE_VIEWS.includes(seg[0])) return { view: "mission", sub: null, redirectToMasterMind: false };
+  return { view: ROUTABLE_VIEWS.includes(seg[0]) ? seg[0] : "mission", sub: seg[1] ? decodeURIComponent(seg[1]) : null, redirectToMasterMind: false };
+};
+const ownsClarifyHash = () => {
+  const first = (window.location.hash || "").replace(/^#\/?/, "").split("/")[0];
+  return !first || first === CLARIFY_SEG || ROUTABLE_VIEWS.includes(first);
 };
 
 // ─── Navigation model ─────────────────────────────────────────────────────────
@@ -50,7 +57,6 @@ const NAV_TABS = [
   { key: "outreach", label: "Outreach", icon: "⇢", views: ["outreach", "queue", "sequences", "calendar"] },
   { key: "inbound", label: "Inbound", icon: "✦", views: ["inbound"] },
   { key: "clients", label: "Clients", icon: "▣", views: ["clients", "analyst"] },
-  { key: "dna", label: "DNA", icon: "⌬", views: ["dna"] },
   { key: "system", label: "Settings", icon: "⚙", views: ["settings"] },
 ];
 const SUB_NAVS = {
@@ -81,7 +87,7 @@ export const viewLabel = (view) =>
   || NAV_TABS.find(t => t.views.includes(view))?.label
   || view;
 
-// Header pill: the one place send mode lives. Click to flip; going live asks once.
+// Today-only safety control. Click to flip; going live asks once.
 function SendModePill() {
   const [live, setLive] = useState(() => sendMode.isLive());
   const [confirming, setConfirming] = useState(false);
@@ -111,14 +117,14 @@ function SendModePill() {
 }
 
 // Sub-nav rendered under the header for tabs that hold two views.
-function SubNav({ tab, currentView, onNavigate }) {
+function SubNav({ tab, currentView, onNavigate, trailing }) {
   const items = SUB_NAVS[tab];
   if (!items) return null;
   return (
     // The kit's segmented control. Every sub-nav here is two-to-four options,
     // which is exactly what .seg is for, and it replaces a per-item capsule that
     // carried a border AND a shadow on the selected one.
-    <div className="co-subnav" style={{ display: "flex", padding: "10px 28px 0" }}>
+    <div className="co-subnav" style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 28px 0" }}>
       <div className="seg" role="tablist" style={{ flex: "0 0 auto" }}>
         {items.map(it => (
           <button key={it.view} type="button" role="tab" aria-selected={currentView === it.view}
@@ -129,6 +135,7 @@ function SubNav({ tab, currentView, onNavigate }) {
           </button>
         ))}
       </div>
+      {trailing && <div className="co-subnav-actions" style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto", flex: "none" }}>{trailing}</div>}
     </div>
   );
 }
@@ -164,13 +171,19 @@ export default function App({ embedded = false }) {
 
   // hash → state: browser back/forward, manual URL edits, in-view sub changes
   useEffect(() => {
-    const onHash = () => { const h = parseHash(); setCurrentView(h.view); setRouteSub(h.sub); };
+    const onHash = () => {
+      const h = parseHash();
+      if (h.redirectToMasterMind) { window.location.hash = MASTER_MIND_HASH; return; }
+      setCurrentView(h.view);
+      setRouteSub(h.sub);
+    };
+    onHash();
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
   // state → hash: tab clicks; never stomps a same-view sub like /clients/<id>
   useEffect(() => {
-    if (parseHash().view !== currentView) window.location.hash = `/${CLARIFY_SEG}/${currentView}`;
+    if (ownsClarifyHash() && parseHash().view !== currentView) window.location.hash = `/${CLARIFY_SEG}/${currentView}`;
   }, [currentView]);
 
   // Synchronous on purpose: a useState initializer cannot await, and this only
@@ -353,7 +366,9 @@ export default function App({ embedded = false }) {
         .co-nav-tabs { display: none !important; }
         .co-signout { display: none !important; }
         .co-bottombar { display: block !important; }
+        .co-embedded .co-nav { display: none !important; }
         .co-subnav { padding: 10px 16px 0 !important; }
+        .co-subnav-actions .pill { min-height: 36px; padding: 0 9px; font-size: 12px; }
 
         /* Views get a little more room than a cramped edge-to-edge 14px would give */
         .co-viewwrap > div { padding-left: 16px !important; padding-right: 16px !important; padding-bottom: 96px !important; }
@@ -812,6 +827,14 @@ export default function App({ embedded = false }) {
 
   const selectStyle = selectBase;
   const activeTab = tabForView(currentView);
+  const todayActions = activeTab === "mission" ? (
+    <>
+      <SendModePill />
+      <button onClick={handleRefresh} type="button" disabled={refreshing} title="Refresh data" aria-label="Refresh data" className="btn sm quiet" style={{ minWidth: 36, padding: "0 10px" }}>
+        {refreshing ? "…" : "↺"}
+      </button>
+    </>
+  ) : null;
 
   // Sliding tab indicator — measures the active tab's DOM position so the pill
   // glides between tabs instead of snapping (the one moment this app should
@@ -842,6 +865,7 @@ export default function App({ embedded = false }) {
       const subs = SUB_NAVS[tab.key] || [{ view: tab.views[0], label: tab.label }];
       subs.forEach(s => acts.push({ id: `nav_${s.view}`, group: "Go to", icon: tab.icon, label: subs.length > 1 ? `${tab.label} — ${s.label}` : tab.label, run: () => setCurrentView(s.view) }));
     });
+    acts.push({ id: "act_master_mind", group: "Pentagon", icon: "⌬", label: "Open master Mind", sub: "Shared beliefs for every Pentagon tool", run: () => { window.location.hash = MASTER_MIND_HASH; } });
     acts.push({ id: "act_refresh", group: "Action", icon: "↺", label: "Refresh data", run: handleRefresh });
     acts.push({ id: "act_prospect", group: "Action", icon: "⟳", label: "Find prospects", sub: "Search Chicago businesses for new leads", run: handleProspect });
     acts.push({ id: "act_replies", group: "Action", icon: "💬", label: "Check replies", run: handleCheckReplies });
@@ -870,7 +894,7 @@ export default function App({ embedded = false }) {
     // packages/ui/components.css is scoped [data-kit], so this reaches this app
     // and nothing else — the shell deliberately keeps the attribute off the
     // wrapper that holds every tool, and nothing here touches document.body.
-    <div data-kit style={{ minHeight: "100vh", background: "transparent", color: T.ink, fontFamily: T.fontBody }}>
+    <div data-kit className={embedded ? "co-root co-embedded" : "co-root"} style={{ minHeight: "100vh", background: "transparent", color: T.ink, fontFamily: T.fontBody }}>
       {/* Nav — five tabs, one product */}
       <div className="co-nav" style={{ borderBottom: `1px solid ${T.lineSoft}`, padding: "0 24px", height: "52px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: embedded ? "var(--shell-bar, 52px)" : 0, background: "var(--glass, rgba(11,15,26,0.78))", backdropFilter: "blur(20px) saturate(140%)", WebkitBackdropFilter: "blur(20px) saturate(140%)", zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "18px", minWidth: 0 }}>
@@ -902,24 +926,18 @@ export default function App({ embedded = false }) {
             })}
           </div>
         </div>
+        {!embedded && (
         <div className="co-nav-actions" style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
-          <SendModePill />
-          {!embedded && (
           <button onClick={() => setPaletteOpen(true)} type="button" title="Command palette (⌘K)" aria-label="Command palette" className="co-signout btn sm quiet" style={{ fontFamily: T.fontMono }}>
             ⌘K
           </button>
-          )}
-          <button onClick={handleRefresh} type="button" disabled={refreshing} title="Refresh" aria-label="Refresh" className="btn sm quiet">
-            {refreshing ? "…" : "↺"}
-          </button>
-          {!embedded && (
           <button className="co-signout btn sm quiet" type="button" onClick={handleLogout} title="Sign out">
             ↪ Out
           </button>
-          )}
         </div>
+        )}
       </div>
-      <SubNav tab={activeTab} currentView={currentView} onNavigate={setCurrentView} />
+      <SubNav tab={activeTab} currentView={currentView} onNavigate={setCurrentView} trailing={todayActions} />
       <BottomBar activeTab={activeTab} onTab={(t) => setCurrentView(t.views[0])} inboundNew={inboundNew} />
 
       <AgentEngine cards={cards} />
@@ -949,7 +967,7 @@ export default function App({ embedded = false }) {
           name comes from viewLabel() — the same string the pill renders — so the
           two cannot drift. */}
       <div className="co-viewwrap" role="region" aria-label={viewLabel(currentView)}>
-      {currentView === "inbound" ? <InboundView cards={cards} onNavigate={setCurrentView} onCardsChange={loadData} toneMemory={toneMemory} /> : currentView === "analyst" ? <AnalystView /> : currentView === "clients" ? <ClientsView deepClientId={routeSub} onNavigate={setCurrentView} /> : currentView === "mission" ? <MissionControl cards={cards} onNavigate={setCurrentView} inboundNew={inboundNew} /> : currentView === "calendar" ? <CalendarView cards={cards} onStatusChange={handleStatusChange} onDataChange={loadData} /> : currentView === "queue" ? <QueueView onNavigate={setCurrentView} /> : currentView === "sequences" ? <SequencesView /> : currentView === "analytics" ? <AnalyticsView cards={cards} /> : currentView === "dna" ? <DnaView cards={cards} toneMemory={toneMemory} /> : currentView === "settings" ? <SettingsView /> : null}
+      {currentView === "inbound" ? <InboundView cards={cards} onNavigate={setCurrentView} onCardsChange={loadData} toneMemory={toneMemory} /> : currentView === "analyst" ? <AnalystView /> : currentView === "clients" ? <ClientsView deepClientId={routeSub} onNavigate={setCurrentView} /> : currentView === "mission" ? <MissionControl cards={cards} onNavigate={setCurrentView} inboundNew={inboundNew} /> : currentView === "calendar" ? <CalendarView cards={cards} onStatusChange={handleStatusChange} onDataChange={loadData} /> : currentView === "queue" ? <QueueView onNavigate={setCurrentView} /> : currentView === "sequences" ? <SequencesView /> : currentView === "analytics" ? <AnalyticsView cards={cards} /> : currentView === "settings" ? <SettingsView /> : null}
       </div>
       {currentView === "outreach" && <div className="co-viewwrap" style={{ display: "flex", minHeight: "calc(100vh - var(--shell-bar, 52px))" }}>
         <div style={{ flex: 1, padding: "24px 28px", overflow: "auto" }}>

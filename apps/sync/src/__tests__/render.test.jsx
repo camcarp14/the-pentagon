@@ -344,6 +344,15 @@ describe("SYNC renders", () => {
     expect(workspace()).toContain("sy-nav");
   });
 
+  it("opens the centralized Mind from its nested shell route", () => {
+    const previousHash = window.location.hash;
+    window.location.hash = "#/sync/mind";
+    setSettings({ onboarded: true });
+    const out = render(createElement(App));
+    window.location.hash = previousHash;
+    expect(out).toContain("Pentagon — master Mind");
+  });
+
   it("holds the first paint until its stylesheet is in the document", () => {
     // Not a quirk of the renderer — the gate in Root.jsx is deliberate, and a
     // cold chunk load would otherwise flash a full-height layout unstyled.
