@@ -47,8 +47,9 @@ describe("the chrome obeys the language", () => {
     const sys = read("System.jsx");
     expect(sys).toContain('const TABS = [["usage", "Usage"]');
     expect(sys).toContain(': "usage"));');
-    expect(code.match(/title="Open Settings"/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(code.match(/title="Open Settings"/g)?.length).toBe(2);
     expect(code).toContain("onClick={openSystemTab}");
+    expect(code).not.toContain("GearIcon");
   });
 
   it("carries no decorative font", () => {
