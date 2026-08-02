@@ -4,7 +4,10 @@
   // here, and theme-smoke asserts the two never drift.
 
   export const PALETTES = [
-    { key: "zts", label: "ZTS", blurb: "Emerald — Zero To Secure",
+    { key: "session", label: "Session", blurb: "Board Room — unified brass",
+      day: { bg: "#F2F1EB", surface: "#FFFFFF", accent: "#87681B", ink: "#1D1C18" },
+      night: { bg: "#000000", surface: "#1C1C1E", accent: "#D9B45C", ink: "#F3F2EE" } },
+  { key: "zts", label: "ZTS", blurb: "Emerald — Zero To Secure",
       day: { bg: "#F0F4F3", surface: "#FEFEFE", accent: "#1F7A51", ink: "#222B27" },
       night: { bg: "#0D1210", surface: "#1B2521", accent: "#4BD296", ink: "#D1DBD8" } },
   { key: "clarify", label: "Clarify", blurb: "Brass — outreach and pipeline",
@@ -30,6 +33,6 @@
       night: { bg: "#0F120D", surface: "#20251B", accent: "#A3DC41", ink: "#D7DBD1" } },
   ];
 
-  export const DEFAULT_PALETTE = "zts";
+  export const DEFAULT_PALETTE = "session";
   export const paletteByKey = (key) => PALETTES.find(p => p.key === key) || PALETTES[0];
   
