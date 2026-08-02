@@ -70,15 +70,15 @@ function tune(make, against, target, start, dir) {
 //          and not just its temperature.
 // Tuned so no two adjacent entries in the picker read as the same idea.
 const THEMES = [
-  // SESSION is the Pentagon's house theme: the same Porcelain / Graphite rooms
-  // and restrained brass accent as Board Room. It is the default identity, not
-  // another tool skin.
-  { key: "session", label: "Session", blurb: "Board Room — unified brass", fixed: {
+  // SESSION is the Pentagon's house theme: Board Room's calm slate material,
+  // carried through every tool. Accent belongs to focus and action; the room
+  // itself stays quiet enough for real work.
+  { key: "session", label: "Session", blurb: "Board Room — calm blue slate", fixed: {
     // Faint is deliberately lifted from Board Room's decorative annotation
     // tone: Pentagon uses it for real controls and metadata, which need the
     // generator's 4.5:1 floor on both its card and canvas.
-    day: { bg: "#F2F1EB", surface: "#FFFFFF", "surface-2": "#F6F5F0", ink: "#1D1C18", sub: "#6F6C62", faint: "#6F6C62", accent: "#87681B", "accent-hi": "#A5822A", "accent-deep": "#6E541A", "on-accent": "#FFFFFF" },
-    night: { bg: "#000000", surface: "#1C1C1E", "surface-2": "#2A2A2D", ink: "#F3F2EE", sub: "#A8A69F", faint: "#87857E", accent: "#D9B45C", "accent-hi": "#EACC80", "accent-deep": "#B08F3E", "on-accent": "#1A1403" },
+    day: { bg: "#F3F5F6", surface: "#FEFEFE", "surface-2": "#F5F6F7", ink: "#24282E", sub: "#656F7B", faint: "#65717D", accent: "#2764A5", "accent-hi": "#2F78C6", "accent-deep": "#1E4D80", "on-accent": "#FCFCFD" },
+    night: { bg: "#1F2329", surface: "#2D343C", "surface-2": "#3A434D", ink: "#E8EAED", sub: "#ABB2BA", faint: "#A8AFB8", accent: "#87B4E3", "accent-hi": "#B1CEED", "accent-deep": "#4D8FD5", "on-accent": "#111922" },
   } },
   // ─── The Pentagon's eight tools, as palettes ───────────────────────────────
   // SIX NUMBERS each, and only two of them vary: the accent hue and its
@@ -93,40 +93,21 @@ const THEMES = [
   // emits both modes from one row, so a light Pentagon costs a stylesheet
   // rather than a redesign — and leaving dL unauthored would mean inventing it
   // later, under pressure, without the contrast checks.
-  // ── THE GROUND CARRIES THE THEME, NOT JUST THE ACCENT ──────────────────────
+  // ── THE ROOM STAYS SHARED; THE ACCENT IDENTIFIES THE TOOL ───────────────────
   //
-  // Every row here used to read nH: 222, nS: 28 — the identical navy neutral,
-  // eight times. So choosing a palette moved the accent and nothing else, and
-  // the accent is deliberately scarce (DESIGN.md §4.4 spends it on the active
-  // tab, the primary action and live indicators, "nowhere else"). The result
-  // was a theme picker that repainted maybe a dozen small elements on a page
-  // of a thousand, which reads exactly as reported: "the theme isn't changing
-  // anything, or at least nothing noticeable."
-  //
-  // Board Room's themes are felt because the GROUND is tinted: its gold theme
-  // is a warm near-black, not a neutral one with gold buttons on it. So each
-  // palette's neutral now takes its own accent's hue at a low saturation. The
-  // page goes warm for Macro's amber, cool for Runway's violet, green-black
-  // for ZTS — a whole-screen change from one setting, which is what a theme is.
-  //
-  // nS 16 rather than 28: at 28 with a matching hue the surfaces stop reading
-  // as near-black and start reading as coloured, which is a skin, not a theme.
-  // 16 is enough to see side by side and little enough that a screenshot still
-  // looks like a serious tool. The generator contrast-checks every emitted
-  // value against the floors either way, so this cannot quietly make text
-  // unreadable — it fails the build instead.
-  //
-  // Session is the default: it keeps the Board Room Graphite material stable
-  // while operators move between tools. The tinted grounds remain available as
-  // deliberate product-wide palette choices.
-  { key: "zts",      label: "ZTS",      blurb: "Emerald — Zero To Secure",          nH: 158, nS: 16, aH: 153, aS: 60, dL: 95, nL: 6 },
-  { key: "clarify",  label: "Clarify",  blurb: "Brass — outreach and pipeline",     nH: 38,  nS: 16, aH: 41,  aS: 51, dL: 95, nL: 6 },
-  { key: "runway",   label: "Runway",   blurb: "Violet — the job search",           nH: 250, nS: 16, aH: 247, aS: 72, dL: 95, nL: 6 },
-  { key: "macro",    label: "Macro",    blurb: "Amber — the trading account",       nH: 34,  nS: 16, aH: 39,  aS: 88, dL: 95, nL: 6 },
-  { key: "looper",   label: "Looper",   blurb: "Cyan — browser mission loops",      nH: 192, nS: 16, aH: 188, aS: 74, dL: 95, nL: 6 },
-  { key: "business", label: "Business", blurb: "Magenta — the autonomous agent",    nH: 326, nS: 16, aH: 330, aS: 76, dL: 95, nL: 6 },
-  { key: "sync",     label: "SYNC",     blurb: "Orchid — the workday layer",        nH: 274, nS: 16, aH: 276, aS: 78, dL: 95, nL: 6 },
-  { key: "ideas",    label: "Ideas",    blurb: "Lime — what showed up on GitHub",   nH: 88,  nS: 16, aH: 82,  aS: 69, dL: 95, nL: 6 },
+  // Full-screen violet, amber, and lime casts made the products feel like
+  // different apps. Every optional palette now uses the same low-saturation
+  // slate room as Session and spends its distinctive color only on selected
+  // controls, primary actions, and live data. The contrast validator below
+  // still checks every emitted room independently.
+  { key: "zts",      label: "ZTS",      blurb: "Emerald — Zero To Secure",          nH: 215, nS: 10, aH: 153, aS: 54, dL: 95, nL: 14 },
+  { key: "clarify",  label: "Clarify",  blurb: "Blue steel — outreach and pipeline", nH: 215, nS: 10, aH: 207, aS: 54, dL: 95, nL: 14 },
+  { key: "runway",   label: "Runway",   blurb: "Violet — the job search",           nH: 215, nS: 10, aH: 247, aS: 58, dL: 95, nL: 14 },
+  { key: "macro",    label: "Macro",    blurb: "Amber — the trading account",       nH: 215, nS: 10, aH: 39,  aS: 62, dL: 95, nL: 14 },
+  { key: "looper",   label: "Looper",   blurb: "Cyan — browser mission loops",      nH: 215, nS: 10, aH: 188, aS: 58, dL: 95, nL: 14 },
+  { key: "business", label: "Business", blurb: "Magenta — the autonomous agent",    nH: 215, nS: 10, aH: 330, aS: 58, dL: 95, nL: 14 },
+  { key: "sync",     label: "SYNC",     blurb: "Orchid — the workday layer",        nH: 215, nS: 10, aH: 276, aS: 58, dL: 95, nL: 14 },
+  { key: "ideas",    label: "Ideas",    blurb: "Lime — what showed up on GitHub",   nH: 215, nS: 10, aH: 82,  aS: 54, dL: 95, nL: 14 },
 ];
 
 // ─── derivation ──────────────────────────────────────────────────────────────
