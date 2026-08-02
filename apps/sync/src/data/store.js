@@ -77,9 +77,8 @@ export function emptyState() {
     history: [],               // the raw message list the model sees
     briefs: [],
     usage: { calls: 0, in: 0, out: 0, cost: 0 },
-    // SYNC's mind — the @cc/mind genome, scoped to the `sync` and `shared`
-    // domains. Null until first read, then seeded lazily by getMind() so a fresh
-    // install and an existing one converge on the same graph without a migration.
+    // The Pentagon's master @cc/mind graph. Null until first read, then seeded
+    // lazily by getMind() so a fresh and an existing install converge safely.
     mind: null,
   };
 }
@@ -230,30 +229,31 @@ export const setProfile = (patch) => set((s) => ({ profile: { ...s.profile, ...p
 
 /* ── the mind ──────────────────────────────────────────────────────────────── */
 /**
- * SYNC's genome, seeded on first read.
+ * The Pentagon's master mind, seeded on first read.
  *
  * Lazily rather than in emptyState() for one reason: emptyState() is pure and
  * runs in tests and on the server, and seedMind() would drag a package import
  * into both. Seeding on demand also means an install that predates the mind picks
  * it up on next open with no migration step.
  *
- * Filtered to `sync` + `shared`, because the operator editing this is editing
- * SYNC. The other tools' neurons are real and live in the same seed, but showing
- * them here would invite someone to reweight ZTS's doctrine from a workday app.
+ * This is intentionally unfiltered: it is the one graph where shared, ZTS,
+ * Clarify and SYNC beliefs can be inspected together. Existing installations
+ * are filled with any newly centralised seed nodes without overwriting edits.
  */
 export function getMind() {
-  if (state.mind) return state.mind;
   const seeded = seedMind({ at: Date.now() });
-  const keep = (d) => Array.isArray(d) && d.some((x) => x === "sync" || x === "shared");
-  const nodes = seeded.nodes.filter((n) => keep(n.domains));
-  const ids = new Set(nodes.map((n) => n.id));
-  const mind = {
-    ...seeded,
-    nodes,
-    // Synapses whose other end was filtered out would be dangling, and
-    // validateMind() rejects those — so they go with the nodes they described.
-    edges: seeded.edges.filter((e) => ids.has(e.from) && ids.has(e.to)),
-  };
+  if (state.mind) {
+    const nodeIds = new Set(state.mind.nodes.map((node) => node.id));
+    const nodes = [...state.mind.nodes, ...seeded.nodes.filter((node) => !nodeIds.has(node.id))];
+    const edgeIds = new Set(state.mind.edges.map((edge) => edge.id));
+    const ids = new Set(nodes.map((node) => node.id));
+    const edges = [...state.mind.edges, ...seeded.edges.filter((edge) => !edgeIds.has(edge.id) && ids.has(edge.from) && ids.has(edge.to))];
+    if (nodes.length === state.mind.nodes.length && edges.length === state.mind.edges.length) return state.mind;
+    const mind = { ...state.mind, nodes, edges };
+    set({ mind });
+    return mind;
+  }
+  const mind = seeded;
   set({ mind });
   return mind;
 }
