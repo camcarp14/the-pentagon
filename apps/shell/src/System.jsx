@@ -728,7 +728,7 @@ function Theme({ prefs, onChange, systemPrefersDark, isMobile }) {
 // overview; Intelligence owns browser assistants and points to the one shared
 // Mind in SYNC; and the old Tabs label became Tools because it contains access
 // and server-power controls, not merely a row of tabs.
-const TABS = [["ops", "Ops"], ["tools", "Tools"], ["usage", "Usage"], ["intelligence", "Intelligence"], ["theme", "Theme"]];
+const TABS = [["usage", "Usage"], ["ops", "Ops"], ["tools", "Tools"], ["intelligence", "Intelligence"], ["theme", "Theme"]];
 
 export default function System({ onExit, tabPrefs, onTabPrefs, themePrefs, onThemePrefs, systemPrefersDark, toolPower, initialTab, onTabConsumed }) {
   // The Desk used to live here. It was dissolved into ZTS Mission and Clarify
@@ -740,7 +740,7 @@ export default function System({ onExit, tabPrefs, onTabPrefs, themePrefs, onThe
   // direction — the component stays mounted, so a second deep link from the
   // rail would be ignored. Consumed on arrival, then cleared by the caller so
   // it cannot re-fire on an unrelated re-render.
-  const [tab, setTab] = useState(() => (initialTab && TABS.some(([k]) => k === initialTab) ? initialTab : "ops"));
+  const [tab, setTab] = useState(() => (initialTab && TABS.some(([k]) => k === initialTab) ? initialTab : "usage"));
   useEffect(() => {
     if (!initialTab) return;
     if (TABS.some(([k]) => k === initialTab)) setTab(initialTab);

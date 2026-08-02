@@ -608,6 +608,37 @@
 .sy-root .mind-chip-n { font-family: var(--font-mono); font-size: 10.5px; opacity: 0.6; }
 .sy-root .mind-insp-head { display: flex; align-items: center; gap: 8px; }
 
+/* The master Mind is an editing surface first, graph second. On a phone its
+   controls form a compact top strip and the canvas tools sit above the filter
+   rail, so neither group masks a node or forces the graph off the viewport. */
+@media (max-width: 760px) {
+  .sy-root .mind-stage { min-height: 500px; border-radius: 12px; }
+  .sy-root .mind-hud {
+    top: 8px; left: 8px; right: 8px;
+    display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px;
+  }
+  .sy-root .mind-hud-stats {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; width: 100%;
+  }
+  .sy-root .mind-hud .stattile.on-canvas {
+    min-width: 0; padding: 8px 9px; border-radius: 11px; box-shadow: var(--shadow-card);
+  }
+  .sy-root .mind-hud .stattile-value { font-size: 16px; }
+  .sy-root .mind-hud .stattile-label { font-size: 10.5px; }
+  .sy-root .mind-hud-row {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; width: 100%;
+  }
+  .sy-root .mind-hud-row .btn { width: 100%; min-width: 0; padding-left: 5px; padding-right: 5px; }
+  .sy-root .mind-legend { gap: 5px; padding: 8px; }
+  .sy-root .mind-chip { padding: 6px 10px; font-size: 10.5px; }
+  .sy-root .sync-mind-canvas-controls {
+    right: 8px !important;
+    bottom: calc(54px + var(--safe-bottom, 0px)) !important;
+    padding: 2px 3px !important;
+  }
+  .sy-root .sync-mind-canvas-controls .dna-hudbtn { min-width: 40px; min-height: 40px; }
+}
+
 /* ── the mind inspector ───────────────────────────────────────────────────── */
 /* Both of these used to set their own 9.5px uppercase with their own tracking.
    Uppercase has exactly one route in this language and it is .t-label, which

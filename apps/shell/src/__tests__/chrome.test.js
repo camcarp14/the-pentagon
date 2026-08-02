@@ -43,6 +43,14 @@ describe("the shell opts into the kit without dragging the tools in", () => {
 });
 
 describe("the chrome obeys the language", () => {
+  it("opens Settings from the Pentagon mark with Usage first", () => {
+    const sys = read("System.jsx");
+    expect(sys).toContain('const TABS = [["usage", "Usage"]');
+    expect(sys).toContain(': "usage"));');
+    expect(code.match(/title="Open Settings"/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(code).toContain("onClick={openSystemTab}");
+  });
+
   it("carries no decorative font", () => {
     // SESSION §2: system stack only, no webfonts. Syne was three call sites in
     // the bar, and its late arrival is why AppToggle re-measures on fonts.ready.

@@ -115,6 +115,8 @@ export default function MindPage({ setPage }) {
           genome={mind}
           palette={palette}
           label="Pentagon — master Mind"
+          className="sync-mind-canvas"
+          hudClassName="sync-mind-canvas-controls"
           selection={selection}
           onSelect={setSelection}
           onNodeMove={(id, x, y) => patch(id, { x, y })}
@@ -125,6 +127,7 @@ export default function MindPage({ setPage }) {
           }}
           regionFilter={filter}
           height="100%"
+          toastTop={116}
         />
 
         <div className="mind-hud">

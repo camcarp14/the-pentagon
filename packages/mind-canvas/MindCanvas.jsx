@@ -104,6 +104,8 @@ function MindCanvasImpl({
   look: lookIn,              // optional non-colour calibration — see LOOK_DEFAULTS
   bus,                       // optional {on, emit} — activation pulses; omit for a still mind
   label = "Mind — neural map",   // accessible name; hosts say whose mind this is
+  className = "",           // optional host hook for layout, never a palette channel
+  hudClassName = "",        // optional host hook for the zoom / fit control cluster
 }) {
   // Both arrays, or neither. The old guard only checked `nodes`, so a genome
   // carrying nodes and no `edges` key — a partial import, a hand-written seed, a
@@ -897,7 +899,7 @@ function MindCanvasImpl({
   };
 
   return (
-    <div style={{
+    <div className={className || undefined} style={{
       position: "relative", width: "100%", height, overflow: "hidden", ...paletteVars(T),
       // ZTS tints the container's corners; the dark apps leave it plain.
       ...(LOOK.containerWash ? {
@@ -1110,6 +1112,7 @@ function MindCanvasImpl({
 
       {/* HUD — glassy pill cluster, bottom-right. Small enough to never block gestures. */}
       <div
+        className={hudClassName || undefined}
         style={{
           ...glass,
           position: "absolute", right: "14px",
