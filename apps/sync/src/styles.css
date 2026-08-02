@@ -416,8 +416,8 @@
   .sy-root .sy-nav-phase, .sy-root .sy-nav-cmdk { display: none; }
 }
 
-/* mobile dock — safe-area padding lives inside each tab.
-   The bar itself stays SYNC's: the kit's .dock has no `flex: none`, and this
+/* mobile dock — the shared Pentagon dock owns its safe-area padding and
+   material. The bar itself stays SYNC's: the kit's .dock has no `flex: none`, and this
    one is the last in-flow child of a fixed-height column, so without it the
    bar stretches to fill whatever the pages leave over. Everything above the
    bar — the tab, its icon, its label, the press nudge — is the kit's.
@@ -1104,15 +1104,11 @@
 .sy-root .app-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .sy-root .app-page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
-/* The tab bar is the last in-flow child of the column and clears the home
-   indicator with the shell's variable — never var(--safe-bottom, 0px)
-   directly, which reports dead space on a letterboxed install.
-   [data-kit] is on the selector deliberately. The kit's own .dock-tab pads
-   with a raw env(safe-area-inset-bottom); at equal specificity the winner
-   would be whichever sheet the browser parsed last, and this app's whole
-   reason for moving into the shell was that inset being wrong. One extra
-   attribute takes the question off the table. */
-.sy-root[data-kit] .dock-tab { padding: 8px 0 calc(8px + var(--safe-bottom, 0px)); }
+/* The tab bar is the last in-flow child of the column. On a phone, the shared
+   `.pentagon-dock` parent wins with its corrected --safe-bottom geometry. This
+   is the fallback outside that shared breakpoint, so the kit's raw env inset
+   never reaches SYNC's in-flow tabs at a wider shell size. */
+.sy-root[data-kit] .dock-tab { padding: 8px 2px calc(7px + var(--safe-bottom, 0px)); }
 .sy-root .composer { padding-bottom: 12px; }
 /* Four declarations, and every one of them is a kit override rather than a
    restatement — see the ONBOARDING block above for the whole argument.
