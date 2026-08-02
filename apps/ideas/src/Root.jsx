@@ -100,6 +100,15 @@ const TABS = ["ideas", "saved", "skills"];
 const TAB_LABELS = { ideas: "Ideas", saved: "Saved", skills: "Skills" };
 export const tabLabel = (t) => TAB_LABELS[t] || TAB_LABELS.ideas;
 
+function IdeaTabIcon({ tab }) {
+  const paths = {
+    ideas: <><path d="M9 18h6" /><path d="M10 22h4" /><path d="M8.5 14.5A5 5 0 1 1 15.5 14.5c-1 .8-1.5 1.5-1.5 2.5h-4c0-1-.5-1.7-1.5-2.5Z" /></>,
+    saved: <path d="M6 3.5h12v17l-6-3.7-6 3.7v-17Z" />,
+    skills: <><path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3Z" /><path d="m19 16 .7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z" /></>,
+  };
+  return <svg className="ideas-dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[tab]}</svg>;
+}
+
 const SORTS = ["recommended", "popping", "newest", "stars"];
 const SORT_LABELS = {
   recommended: "Recommended",
@@ -314,7 +323,8 @@ function SubNav({ tab, onTab, savedCount, onRefresh, refreshing, isMobile }) {
               // the three targets this tool is navigated by.
               style={{ padding: "0 12px", minHeight: isMobile ? 44 : 36, whiteSpace: "nowrap", flex: "1 1 auto" }}
             >
-              {tabLabel(t)}
+              <IdeaTabIcon tab={t} />
+              <span>{tabLabel(t)}</span>
               {/* The saved count moves ONTO the pill it describes — the stat tile
                   that used to carry it was a third of a phone screen spent on
                   three numbers, two of which the scan line below repeats. */}
@@ -331,7 +341,7 @@ function SubNav({ tab, onTab, savedCount, onRefresh, refreshing, isMobile }) {
             with 4px to spare on the surface where the floor applies. */}
         <button
           type="button"
-          className={isMobile ? "btn md quiet" : "btn sm quiet"}
+          className={`${isMobile ? "btn md quiet" : "btn sm quiet"} ideas-refresh`}
           onClick={onRefresh}
           disabled={refreshing}
           title="Re-read the scanner's tables"
@@ -1016,7 +1026,7 @@ export default function IdeasRoot() {
     // tool, so a screen reader standing in Saved hears "Saved" — which is more
     // than the deleted <h1>Ideas</h1> ever said, since it read "Ideas" on all
     // three. The shell's rail already says Ideas; so does the first pill.
-    <div data-kit role="region" aria-label={tabLabel(tab)} style={{ paddingBottom: 8 }}>
+    <div data-kit role="region" aria-label={tabLabel(tab)}>
       <SubNav
         tab={tab}
         onTab={setTab}
@@ -1026,7 +1036,7 @@ export default function IdeasRoot() {
         isMobile={isMobile}
       />
 
-      <div style={{ padding: `${pad}px ${pad}px 64px`, maxWidth: BODY_MAX, margin: "0 auto" }}>
+      <div style={{ padding: `${pad}px ${pad}px ${isMobile ? "calc(82px + var(--safe-bottom))" : "64px"}`, maxWidth: BODY_MAX, margin: "0 auto" }}>
         {/* The one line the nav does not carry: where these come from and what
             the page is now for. It survived the deletion of the <h1> above it
             because it was never a repeat of anything — but it is about the FEED,
