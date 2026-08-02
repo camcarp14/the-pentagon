@@ -132,7 +132,7 @@ const surfaces = () => ({
   "FactoryPanel": wrap(h(FactoryPanel, { isMobile: false })),
   // The phone navigation bar. `isMobile` is derived from window state, so <App/>
   // never renders this on the server and nothing else reached it.
-  "BottomNav": wrap(h(BottomNav, { view: "studio", setView: noop, tabs: ["mission", "creators", "studio", "seo", "dna"] })),
+  "BottomNav": wrap(h(BottomNav, { view: "studio", setView: noop, tabs: ["mission", "creators", "studio", "seo"] })),
   // Studio's primary action. The same TABS list App.jsx passes, and the same
   // props the Studio call site passes — no shape invented for the test.
   "ComposeModal": wrap(h(ComposeModal, { onClose: noop, onCreate: noop, isMobile: false })),
@@ -292,7 +292,7 @@ describe("every ZTS surface renders on the kit", () => {
     // Scan sanity for the two surfaces this assertion used to be blind to: if
     // either stops rendering controls the exclusion is back, silently.
     expect((all["BottomNav"].match(/<button[^>]*>/g) || []).length,
-      "BottomNav rendered no tabs — the nav is no longer being scanned").toBe(5);
+      "BottomNav rendered no tabs — the nav is no longer being scanned").toBe(4);
     expect((all["ComposeModal"].match(/<button[^>]*>/g) || []).length,
       "ComposeModal rendered no controls — the modal is no longer being scanned").toBeGreaterThanOrEqual(5);
     // …and the exemption must be exempting something real, or it is dead code
