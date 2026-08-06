@@ -1,19 +1,22 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../lib/store.jsx';
 import { supabase } from '../lib/supabase.js';
 import { apiPost } from '../lib/api.js';
 import { SENIORITY_LADDER } from '../lib/score.js';
-import { useToast, SkPage, SkLine, ErrorState, Expand } from '../ui/primitives.jsx';
+import { useToast, SkPage, SkLine, Expand } from '../ui/primitives.jsx';
+import TagInput from '../ui/TagInput.jsx';
 
 // ---------- master resume (feeds the Tailor drafts) ----------
 const emptyRole = () => ({ company: '', title: '', dates: '', bullets: '' });
 
+// The master resume is loaded ONCE, by the store, because four surfaces read
+// it (this editor, the coverage panel, the skills gap, the apply desk's
+// contact prefill). This card hydrates its form from that copy and writes back
+// through the store, so an edit here is visible everywhere without a reload.
 function ResumeCard() {
-  const { session } = useApp();
+  const { resume, saveResume } = useApp();
   const toast = useToast();
   const emptyContact = { name: '', email: '', phone: '', location: '', links: '' };
-  const [state, setState] = useState('loading'); // loading | error | ready
-  const [loadErr, setLoadErr] = useState(null);
   const [contact, setContact] = useState(emptyContact);
   const [summary, setSummary] = useState('');
   const [skills, setSkills] = useState([]);
@@ -21,29 +24,31 @@ function ResumeCard() {
   const [busy, setBusy] = useState(false);
   const [saveErr, setSaveErr] = useState(null);
 
-  const load = useCallback(async () => {
-    setState('loading'); setLoadErr(null);
-    const { data, error } = await supabase.from('resume_master').select('content').maybeSingle();
-    if (error) { setLoadErr(error.message); setState('error'); return; }
-    const c = data?.content || {};
-    const ct = c.contact || {};
+  const state = resume === null ? 'loading' : 'ready';
+
+  const hydrate = useCallback((c) => {
+    const ct = c?.contact || {};
     setContact({
       name: ct.name || '', email: ct.email || '', phone: ct.phone || '',
       location: ct.location || '', links: Array.isArray(ct.links) ? ct.links.join(', ') : '',
     });
-    setSummary(c.summary || '');
-    setSkills(Array.isArray(c.skills) ? c.skills : []);
+    setSummary(c?.summary || '');
+    setSkills(Array.isArray(c?.skills) ? c.skills : []);
     setRoles(
-      Array.isArray(c.experience) && c.experience.length
+      Array.isArray(c?.experience) && c.experience.length
         ? c.experience.map((r) => ({
             company: r.company || '', title: r.title || '', dates: r.dates || '',
             bullets: Array.isArray(r.bullets) ? r.bullets.join('\n') : '',
           }))
         : [emptyRole()],
     );
-    setState('ready');
   }, []);
-  useEffect(() => { load(); }, [load]);
+  // Hydrate on the first arrival only. Re-running on every `resume` identity
+  // change would wipe half-typed edits the moment a save round-trips.
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (resume && !hydratedRef.current) { hydratedRef.current = true; hydrate(resume); }
+  }, [resume, hydrate]);
 
   const setRole = (i, patch) => setRoles((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
 
@@ -66,11 +71,8 @@ function ResumeCard() {
           }))
           .filter((r) => r.company || r.title || r.bullets.length),
       };
-      const { error } = await supabase
-        .from('resume_master')
-        .upsert({ user_id: session.user.id, content }, { onConflict: 'user_id' });
-      if (error) throw error;
-      toast('Master resume saved');
+      await saveResume(content);
+      toast('Master resume saved — coverage, skills and the apply desk all read the new version');
     } catch (ex) {
       setSaveErr(ex.message);
     } finally {
@@ -109,7 +111,6 @@ function ResumeCard() {
     } catch (ex) { setImportErr(ex.message); } finally { setImporting(false); }
   };
 
-  if (state === 'error') return <div className="section"><ErrorState msg={`Couldn't load your resume: ${loadErr}`} onRetry={load} /></div>;
   if (state === 'loading') return <div className="card pad-md section"><SkLine w="w40" /><SkLine w="w80" /><SkLine w="w60" /></div>;
 
   return (
@@ -234,32 +235,6 @@ function AccountCard() {
       {err && <p className="err-text" role="alert">Couldn’t change it: {err} — try again.</p>}
       <button className="btn sm" disabled={busy || pw.length < 8}>{busy ? 'Changing…' : 'Change password'}</button>
     </form>
-  );
-}
-
-// add/remove API (not a whole-array onChange) so parents can use functional
-// state updates — rapid adds/removes can never clobber each other
-function TagInput({ id, value, onAdd, onRemove, placeholder }) {
-  const [txt, setTxt] = useState('');
-  const add = () => {
-    const v = txt.trim().toLowerCase();
-    if (v) onAdd(v);
-    setTxt('');
-  };
-  return (
-    <div>
-      <div className="chips" style={{ marginBottom: value.length ? 8 : 0 }}>
-        {value.map((t) => (
-          <span key={t} className="chip">
-            {t}
-            <button type="button" aria-label={`remove ${t}`} onClick={() => onRemove(t)}>×</button>
-          </span>
-        ))}
-      </div>
-      <input className="field" id={id} value={txt} placeholder={placeholder} onChange={(e) => setTxt(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(); } }}
-        onBlur={add} />
-    </div>
   );
 }
 

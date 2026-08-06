@@ -8,6 +8,7 @@ import { scoreJob } from './score.js';
 import { computeMetrics } from './metrics.js';
 import { discoveryToJob } from './discovery.js';
 import { seedFollowUp } from './cadence.js';
+import { skillsForPosting } from './skills.js';
 
 export const STAGES = [
   { id: 'saved', label: 'Saved' },
@@ -39,6 +40,13 @@ export function AppProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [boards, setBoards] = useState(null);        // watched job boards
   const [discoveries, setDiscoveries] = useState(null); // queued scan candidates
+  const [hunts, setHunts] = useState(null);          // saved searches
+  const [resume, setResume] = useState(null);        // master resume CONTENT (not the row)
+  // Compact projection of every posting the scanner has ever MATCHED — the
+  // sample the skills read is computed over. Deliberately not the full rows:
+  // raw_description is up to 8kB each and none of it is needed here, so this
+  // selects the seven columns that are and nothing else.
+  const [marketPostings, setMarketPostings] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [checkingPostings, setCheckingPostings] = useState(false);
   const [loadError, setLoadError] = useState(null);
@@ -57,22 +65,37 @@ export function AppProvider({ children }) {
 
   const refresh = useCallback(async () => {
     setLoadError(null);
-    const [j, e, f, p, w, d] = await Promise.all([
+    const [j, e, f, p, w, d, h, r, m] = await Promise.all([
       supabase.from('jobs').select('*').order('created_at', { ascending: false }),
       supabase.from('pipeline_events').select('*').order('changed_at', { ascending: true }),
       supabase.from('follow_ups').select('*').order('due_date', { ascending: true }),
       supabase.from('target_profile').select('*').maybeSingle(),
       supabase.from('watch_boards').select('*').order('created_at', { ascending: true }),
       supabase.from('seen_postings').select('*').eq('status', 'queued').order('fit_score', { ascending: false, nullsFirst: false }),
+      supabase.from('hunts').select('*').order('created_at', { ascending: true }),
+      supabase.from('resume_master').select('content').maybeSingle(),
+      supabase.from('seen_postings')
+        .select('id, company, title, fit_score, skills, seniority, comp_min, comp_max, status')
+        .eq('matched', true).limit(1200),
     ]);
+    // Hunts, the resume and the market projection are NOT in the fatal set.
+    // The first two are additive features and the third is one page's input;
+    // a project that has not run the hunts migration yet must still open the
+    // board, not show "couldn't load your data" over a working pipeline.
     const err = j.error || e.error || f.error || p.error || w.error || d.error;
     if (err) { setLoadError(err.message); return; }
     setJobs(j.data); setEvents(e.data); setFollowUps(f.data); setProfile(p.data); setBoards(w.data); setDiscoveries(d.data);
+    setHunts(h.error ? [] : (h.data || []));
+    setResume(r.error ? {} : (r.data?.content || {}));
+    setMarketPostings(m.error ? [] : (m.data || []));
   }, []);
 
   useEffect(() => {
     if (session) refresh();
-    else if (session === null) { setJobs(null); setEvents(null); setFollowUps(null); setProfile(null); setBoards(null); setDiscoveries(null); }
+    else if (session === null) {
+      setJobs(null); setEvents(null); setFollowUps(null); setProfile(null);
+      setBoards(null); setDiscoveries(null); setHunts(null); setResume(null); setMarketPostings(null);
+    }
   }, [session, refresh]);
 
   // ---------- jobs ----------
@@ -80,6 +103,10 @@ export function AppProvider({ children }) {
     const scored = scoreJob(fields, profile);
     const row = {
       ...fields,
+      // Extracted once, here, rather than on every render of the Skills page:
+      // the same deterministic pass the scanner runs, so a job captured by
+      // hand and a job accepted from the inbox carry identical skill arrays.
+      skills: Array.isArray(fields.skills) && fields.skills.length ? fields.skills : skillsForPosting(fields),
       ...(scored.score != null
         ? { fit_score: scored.score, fit_rationale: scored.rationale, fit_breakdown: scored.breakdown, flags: scored.flags }
         : {}),
@@ -161,6 +188,55 @@ export function AppProvider({ children }) {
     setProfile(data);
     return data;
   }, [session]);
+
+  // ---------- master resume ----------
+  // Lives on the store rather than inside the Profile page, because four
+  // surfaces need it now (Profile edits it, the coverage panel diffs against
+  // it, the Skills page scores gaps from it, the Apply desk prefills contact
+  // fields from it) and four independent fetches of the same single row is
+  // both slower and a way for two of them to disagree.
+  const saveResume = useCallback(async (content) => {
+    const { error } = await supabase
+      .from('resume_master')
+      .upsert({ user_id: session.user.id, content }, { onConflict: 'user_id' });
+    if (error) throw error;
+    setResume(content);
+    return content;
+  }, [session]);
+
+  // ---------- hunts ----------
+  const addHunt = useCallback(async (fields) => {
+    const { data, error } = await supabase.from('hunts').insert(fields).select().single();
+    if (error) {
+      if (/duplicate|unique/i.test(error.message)) throw new Error('You already have a hunt with that name.');
+      throw error;
+    }
+    setHunts((xs) => [...(xs || []), data]);
+    return data;
+  }, []);
+
+  const saveHunt = useCallback(async (id, patch) => {
+    const { data, error } = await supabase.from('hunts').update(patch).eq('id', id).select().single();
+    if (error) throw error;
+    setHunts((xs) => (xs || []).map((h) => (h.id === id ? data : h)));
+    return data;
+  }, []);
+
+  const deleteHunt = useCallback(async (id) => {
+    const { error } = await supabase.from('hunts').delete().eq('id', id);
+    if (error) throw error;
+    setHunts((xs) => (xs || []).filter((h) => h.id !== id));
+  }, []);
+
+  // ---------- company discovery ----------
+  // Walks the company pool in batches; the caller loops until next_offset is
+  // null (or until it has seen enough). Returns the raw batch so the page can
+  // stream results in as they arrive rather than waiting for the whole sweep —
+  // a full pass is ~200 companies and several minutes of probing.
+  const discoverCompanies = useCallback(
+    (opts) => apiPost('/api/discover-companies', opts || {}),
+    [],
+  );
 
   // ---------- follow-ups ----------
   const addFollowUp = useCallback(async (fields) => {
@@ -339,9 +415,11 @@ export function AppProvider({ children }) {
   const loading = session && (jobs === null || events === null || followUps === null) && !loadError;
 
   const value = {
-    session, jobs, events, followUps, profile, boards, discoveries, scanning, checkingPostings, metrics, loading, loadError,
+    session, jobs, events, followUps, profile, boards, discoveries, hunts, resume, marketPostings,
+    scanning, checkingPostings, metrics, loading, loadError,
     refresh, addJob, updateJob, moveStage, deleteJob, rescoreJob, rescoreAll,
-    saveProfile, addFollowUp, setFollowUpDone, deleteFollowUp,
+    saveProfile, saveResume, addFollowUp, setFollowUpDone, deleteFollowUp,
+    addHunt, saveHunt, deleteHunt, discoverCompanies,
     addWatchBoard, addWatchBoards, removeWatchBoard, runScan, runFullScan, checkPostings,
     acceptDiscovery, dismissDiscovery, requeueDiscovery, signOut,
   };

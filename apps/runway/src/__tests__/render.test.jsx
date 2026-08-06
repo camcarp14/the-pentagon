@@ -49,6 +49,8 @@ const { default: Market } = await import("../pages/Market.jsx");
 const { default: ProfilePage } = await import("../pages/ProfilePage.jsx");
 const { default: PrintView } = await import("../pages/PrintView.jsx");
 const { default: TailorTab } = await import("../ui/TailorTab.jsx");
+const { default: ApplyDesk } = await import("../pages/ApplyDesk.jsx");
+const { default: Skills } = await import("../pages/Skills.jsx");
 const { BreakdownBars, FlagChips } = await import("../ui/FitPanel.jsx");
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -109,6 +111,8 @@ const SURFACES = {
   ProfilePage: () => inApp(createElement(ProfilePage)),
   PrintView: () => inApp(createElement(PrintView)),
   TailorTab: () => inApp(createElement(TailorTab, { job: { id: "j1", company: "C", title: "T" } })),
+  ApplyDesk: () => inApp(createElement(ApplyDesk)),
+  Skills: () => inApp(createElement(Skills)),
   FitPanel: () => inApp(createElement("div", null,
     createElement(BreakdownBars, { breakdown: [{ k: "comp", label: "Comp", pts: 4, max: 5, why: "at floor" }] }),
     createElement(FlagChips, { flags: ["low_comp"] }),
@@ -234,9 +238,10 @@ describe("Runway obeys the language", () => {
   );
   const allCss = css + "\n" + embed;
   const jsx = ["Root.jsx", "App.jsx", "lib/store.jsx", "ui/primitives.jsx", "ui/JobForm.jsx",
-    "ui/FitPanel.jsx", "ui/TailorTab.jsx", "pages/Board.jsx", "pages/Capture.jsx",
+    "ui/FitPanel.jsx", "ui/TailorTab.jsx", "ui/TagInput.jsx", "ui/Markdown.jsx",
+    "pages/Board.jsx", "pages/Capture.jsx",
     "pages/JobDetail.jsx", "pages/Market.jsx", "pages/ProfilePage.jsx", "pages/PrintView.jsx",
-    "pages/Login.jsx"]
+    "pages/Login.jsx", "pages/ApplyDesk.jsx", "pages/Skills.jsx"]
     .map((f) => stripComments(read(f))).join("\n");
 
   it("does NOT let the kit's fixed .sheet near the printed résumé", () => {
@@ -478,15 +483,17 @@ describe("Runway obeys the language", () => {
   it("touches no storage key, table, query or function path", () => {
     // A restyle that renames a key is a data-loss bug wearing a stylesheet.
     for (const t of ["'jobs'", "'pipeline_events'", "'follow_ups'", "'target_profile'",
-      "'watch_boards'", "'seen_postings'", "'drafts'", "'resume_master'", "'contacts'"]) {
+      "'watch_boards'", "'seen_postings'", "'drafts'", "'resume_master'", "'contacts'",
+      "'hunts'", "'app_kits'"]) {
       expect(jsx, `table ${t} must survive`).toContain(t);
     }
     for (const p of ["'/api/scan-boards'", "'/api/check-postings'", "'/api/parse-job'",
-      "'/api/find-board'", "'/api/tailor'", "'/api/parse-resume'"]) {
+      "'/api/find-board'", "'/api/tailor'", "'/api/parse-resume'",
+      "'/api/app-questions'", "'/api/app-kit'", "'/api/discover-companies'"]) {
       expect(jsx, `endpoint ${p} must survive`).toContain(p);
     }
     for (const r of ['path="/capture"', 'path="/jobs/:id"', 'path="/print/:id/:kind"',
-      'path="/market"', 'path="/profile"']) {
+      'path="/market"', 'path="/profile"', 'path="/apply/:id"', 'path="/skills"']) {
       expect(jsx, `route ${r} must survive`).toContain(r);
     }
   });
@@ -498,5 +505,28 @@ describe("Runway obeys the language", () => {
       "Print / Save as PDF", "Download .md", "Start blank", "Save resume", "Change password"]) {
       expect(jsx, `lost the "${label}" control`).toContain(label);
     }
+  });
+
+  // The four things this build added, pinned where a refactor would quietly
+  // drop them. Each one is the entry point to a whole capability, and each is
+  // one deleted line away from being unreachable while every test stays green.
+  it("keeps the way into every new capability", () => {
+    for (const label of ["+ New hunt", "Find companies", "Fetch the form",
+      "Generate the application", "Accept &amp; apply", "Copy every answer",
+      "Rescan with these", "Paste questions"]) {
+      expect(jsx, `lost the "${label}" control`).toContain(label);
+    }
+    // and the rail actually reaches Skills — a route with no way to it is dead
+    expect(stripComments(read("App.jsx"))).toMatch(/to: '\/skills'/);
+  });
+
+  // The promise the apply desk makes is that it does not answer demographic
+  // self-identification questions and does not invent contact details. Both
+  // are enforced server-side (functions/lib/appform.mjs); this asserts the UI
+  // still SAYS so, because a silent guarantee is one nobody can rely on.
+  it("says out loud what the apply desk will not do", () => {
+    const desk = stripComments(read("pages/ApplyDesk.jsx"));
+    expect(desk).toMatch(/never answers these/i);
+    expect(desk).toMatch(/nothing generated/i);
   });
 });

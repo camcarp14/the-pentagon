@@ -9,6 +9,8 @@ import JobDetail from './pages/JobDetail.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import Market from './pages/Market.jsx';
 import PrintView from './pages/PrintView.jsx';
+import ApplyDesk from './pages/ApplyDesk.jsx';
+import Skills from './pages/Skills.jsx';
 
 // Bottom-nav icons — minimal geometry in the same line style ZTS/Macro use, so
 // the mobile bar reads identically across tools. Hidden on desktop (the pill
@@ -17,6 +19,9 @@ const RW_ICONS = {
   board: <><rect x="3.5" y="4.5" width="17" height="15" rx="2" /><line x1="9.5" y1="4.5" x2="9.5" y2="19.5" /><line x1="15" y1="4.5" x2="15" y2="19.5" /></>,
   capture: <><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>,
   insights: <><polyline points="3.5,4 3.5,20 20,20" /><polyline points="7,15 11,11 14,13 19,7" /></>,
+  // Skills reads as a stack of bars at different lengths — the demand ranking
+  // the page is, drawn at 24px.
+  skills: <><line x1="4" y1="6.5" x2="20" y2="6.5" /><line x1="4" y1="12" x2="15" y2="12" /><line x1="4" y1="17.5" x2="10" y2="17.5" /></>,
   profile: <><circle cx="12" cy="8" r="3.2" /><path d="M5.5 20c0-3.6 3-5.6 6.5-5.6s6.5 2 6.5 5.6" /></>,
 };
 const TabIco = ({ name }) => (
@@ -33,7 +38,8 @@ const TabIco = ({ name }) => (
 // construction rather than by two people remembering to edit both.
 const RAIL = [
   { to: '/', end: true, icon: 'board', label: 'Board' },
-  { to: '/capture', icon: 'capture', label: 'Capture' },
+  { to: '/capture', icon: 'capture', label: 'Find' },
+  { to: '/skills', icon: 'skills', label: 'Skills' },
   { to: '/market', icon: 'insights', label: 'Insights' },
   { to: '/profile', icon: 'profile', label: 'Profile' },
 ];
@@ -154,8 +160,11 @@ function Shell() {
   const paletteItems = useMemo(() => {
     const items = [
       { label: 'Board', path: '/', hint: 'page', k: ['board', 'pipeline', 'home', 'dashboard'] },
-      { label: 'Capture a job', path: '/capture', hint: 'page', k: ['add', 'new', 'paste', 'capture'] },
+      { label: 'Find roles', path: '/capture', hint: 'page', k: ['add', 'new', 'paste', 'capture', 'find', 'search'] },
       { label: 'Review discovered roles', path: '/capture', hint: 'inbox', k: ['discover', 'inbox', 'scan', 'triage', 'review', 'matches'] },
+      { label: 'Edit your hunts', path: '/capture', hint: 'searches', k: ['hunt', 'hunts', 'search', 'criteria', 'terms', 'keywords'] },
+      { label: 'Find companies hiring for you', path: '/capture', hint: 'discovery', k: ['companies', 'employers', 'discover', 'expand', 'who'] },
+      { label: 'Skills & positioning', path: '/skills', hint: 'page', k: ['skills', 'gap', 'gaps', 'positioning', 'demand', 'learn'] },
       { label: 'Insights', path: '/market', hint: 'page', k: ['market', 'comp', 'salary', 'pay', 'insights', 'funnel', 'stats'] },
       { label: 'Profile & targets', path: '/profile', hint: 'page', k: ['profile', 'settings', 'resume', 'target', 'criteria'] },
     ];
@@ -168,6 +177,11 @@ function Shell() {
         k: [j.company, j.title, j.status],
       });
       if (j.status === 'closed') continue;
+      items.push({
+        label: `Apply: ${co}`,
+        path: `/apply/${j.id}`, hint: 'apply desk',
+        k: ['apply', 'application', 'form', 'questions', 'cover', 'resume', j.company, j.title],
+      });
       const move = (stage, verb) => async () => {
         try {
           await moveStage(j.id, stage);
@@ -214,7 +228,9 @@ function Shell() {
               <Route path="/" element={<Board />} />
               <Route path="/capture" element={<Capture />} />
               <Route path="/jobs/:id" element={<JobDetail />} />
+              <Route path="/apply/:id" element={<ApplyDesk />} />
               <Route path="/print/:id/:kind" element={<PrintView />} />
+              <Route path="/skills" element={<Skills />} />
               <Route path="/market" element={<Market />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="*" element={<Navigate to="/" replace />} />

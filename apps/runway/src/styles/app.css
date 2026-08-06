@@ -323,6 +323,72 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
 /* the keys are .t-label in the markup — the one class allowed to be uppercase */
 .dl .val { font-size: 13.5px; margin-top: 2px; font-variant-numeric: tabular-nums; }
 
+/* ---------- why a discovery matched ---------- */
+/* A match used to be a boolean, so every inbox card cost the same attention.
+   These are the sentences the matcher wrote while deciding — they are the
+   difference between triaging a list and reading one. Colour is a secondary
+   cue only: each tag carries its text, so nothing here depends on hue. */
+.disc-why { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+.whytag { font-size: 11.5px; color: var(--dim); background: var(--ink-a05); border-radius: 6px; padding: 2px 7px; }
+.whytag.k-role { color: var(--accent); background: var(--accent-soft); }
+.whytag.k-comp { color: var(--good); background: var(--good-soft); }
+.whytag.k-exclude, .whytag.k-must { color: var(--bad); background: var(--bad-soft); }
+.dimtext { color: var(--faint); }
+
+/* ---------- company discovery ---------- */
+.disco { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.disco-row { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.disco-main { min-width: 0; flex: 1; }
+.disco-co { font-size: 14px; }
+.disco-count { font-size: 12.5px; color: var(--dim); margin-top: 2px; }
+.disco-samples { list-style: none; margin: 6px 0 0; padding: 0; font-size: 12.5px; color: var(--sub); }
+.disco-samples li { padding: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- skills & positioning ---------- */
+/* Reuses .bar-row's three-column grid; only the first column widens, because a
+   skill name ("Marketing analytics") is longer than a funnel stage. */
+.bar-row.skill-row { grid-template-columns: 190px 1fr 130px; }
+.skill-have { color: var(--good); }
+.skill-gap { color: var(--accent); }
+
+/* ---------- the apply desk ---------- */
+.applybar-main { display: flex; gap: 14px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.applybar-src { font-size: 13px; color: var(--dim); margin-top: 4px; max-width: 62ch; }
+.applybar-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.applyprog { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.applyprog .bar { flex: 1; min-width: 140px; }
+.apply-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(320px, 1fr); gap: 14px; align-items: start; }
+
+/* One question. The left rule is the only thing separating them — a card per
+   question would turn a twelve-box form into twelve elevated objects, which is
+   a list that reads as heavier than the form it is helping you fill. */
+.qwrap { border-left: 2px solid var(--border); padding-left: 12px; margin: 14px 0; }
+.qwrap.k-open { border-left-color: var(--accent-line); }
+.qwrap.k-sensitive, .qwrap.k-upload { border-left-color: var(--border); opacity: 0.72; }
+.q-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.q-head label.f { margin-bottom: 5px; }
+.q-req { color: var(--accent); font-weight: 500; }
+.q-hint { color: var(--faint); font-size: 12px; margin: 0 0 6px; }
+
+.doc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.doc-actions { display: flex; gap: 6px; }
+/* The rendered document, not an editor. The markdown source sits behind a
+   disclosure below it, because the thing you check before copying is how it
+   READS — and a textarea full of asterisks is not that. */
+.doc { background: var(--subtle); border-radius: 10px; padding: 16px 18px; max-height: 460px; overflow-y: auto; font-size: 13.5px; line-height: 1.55; }
+.doc h1 { font-size: 16px; margin: 14px 0 6px; }
+.doc h2 { font-size: 14px; margin: 14px 0 6px; }
+.doc h3 { font-size: 13.5px; margin: 10px 0 4px; }
+.doc p { margin: 7px 0; color: var(--sub); }
+.doc ul { margin: 6px 0 10px; padding-left: 20px; color: var(--sub); }
+.doc li { margin: 3px 0; }
+.doc hr { border: none; border-top: 1px solid var(--line, var(--border)); margin: 12px 0; }
+.doc-edit { margin-top: 10px; }
+.doc-edit summary { cursor: pointer; }
+.doc-edit textarea { margin-top: 8px; }
+
+.jd-head-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+
 /* ---------- resume studio (print view) ---------- */
 /* THE PAPER. This is a letter-width printed document, not app chrome: a white
    816px sheet in a serif face that a browser prints to PDF and a human uploads
@@ -424,15 +490,23 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
   /* Insights rows restack: label, then bar/value, full width. Scoped to the
      restacked variants only — plain .bar-row stays 3-column, so its .why
      must keep the base 2/4 span or fit explanations squeeze into 100px. */
-  .bar-row.funnel-row, .bar-row.cal-row { grid-template-columns: 1fr; gap: 3px; margin: 12px 0; }
-  .bar-row.funnel-row .val, .bar-row.cal-row .val { text-align: left; }
-  .bar-row.funnel-row .why, .bar-row.cal-row .why { grid-column: auto; }
+  .bar-row.funnel-row, .bar-row.cal-row, .bar-row.skill-row { grid-template-columns: 1fr; gap: 3px; margin: 12px 0; }
+  .bar-row.funnel-row .val, .bar-row.cal-row .val, .bar-row.skill-row .val { text-align: left; }
+  .bar-row.funnel-row .why, .bar-row.cal-row .why, .bar-row.skill-row .why { grid-column: auto; }
   /* the comp chart scrolls sideways on phones instead of shrinking */
   .chartwrap svg { min-width: 640px; }
 
   /* capture */
   .cap-grid { grid-template-columns: 1fr; }
   .cap-grid aside { position: static; }
+  /* The apply desk on a phone: form first, documents under it. You fill the
+     boxes from a phone; you print the resume from a desktop. */
+  .apply-grid { grid-template-columns: 1fr; }
+  .applybar-actions { width: 100%; }
+  .applybar-actions .btn { flex: 1; }
+  .disco-row { flex-direction: column; align-items: stretch; }
+  .disco-samples li { white-space: normal; }
+  .doc { max-height: 340px; }
   .bookmarklet { display: none; } /* drag-to-bookmarks-bar is a desktop gesture */
   .kbdhint { display: none; }     /* J/K/A/X triage keys don't exist on glass */
   /* inbox rows: score + full-width text, actions on their own row as three
