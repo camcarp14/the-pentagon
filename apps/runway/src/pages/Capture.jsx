@@ -9,13 +9,369 @@ import { apiPost } from '../lib/api.js';
 import { Num, useToast, SkLine, Expand } from '../ui/primitives.jsx';
 import JobForm, { emptyJobForm, toJobShape } from '../ui/JobForm.jsx';
 import { BreakdownBars, FlagChips } from '../ui/FitPanel.jsx';
+import TagInput from '../ui/TagInput.jsx';
 import { fmtDateTime } from '../lib/dates.js';
+import { SENIORITY_LADDER } from '../lib/score.js';
+import { VERTICAL_LABEL } from '../lib/companyUniverse.js';
 
 const looksLikeUrl = (s) => /^https?:\/\/\S+$/i.test(s.trim()) && !s.trim().includes('\n');
 
+// ============ HUNTS — named searches, each with its own negative space ============
+//
+// The target profile is one set of criteria and always was. That is fine until
+// you are running two searches at once — "senior paid search, remote, $150k+"
+// and "any marketing manager in Chicago" are different hunts with different
+// floors, and folding them into one profile means every scan is aimed at the
+// average of two things you want, which is a third thing you don't.
+//
+// The half that did not exist at all is the negative space. `exclude` kills a
+// posting outright, `must` requires a term, and both run BEFORE scoring — so
+// "no agencies" stops being forty dismissals and becomes one word.
+const emptyHunt = () => ({
+  name: '', include: [], exclude: [], must: [], seniority: [],
+  remote_pref: 'any', locations: [], comp_floor: '', min_fit: 0, active: true,
+});
+
+function HuntEditor({ value, onChange, idPrefix }) {
+  const set = (patch) => onChange({ ...value, ...patch });
+  const listSetter = (field) => ({
+    onAdd: (t) => onChange({ ...value, [field]: value[field].includes(t) ? value[field] : [...value[field], t] }),
+    onRemove: (t) => onChange({ ...value, [field]: value[field].filter((x) => x !== t) }),
+  });
+  return (
+    <>
+      <div className="frow c2">
+        <div>
+          <label className="f" htmlFor={`${idPrefix}-name`}>Name this hunt</label>
+          <input className="field" id={`${idPrefix}-name`} placeholder="e.g. Senior paid search, remote"
+            value={value.name} onChange={(e) => set({ name: e.target.value })} />
+        </div>
+        <div>
+          <label className="f" htmlFor={`${idPrefix}-floor`}>Comp floor ($/yr)</label>
+          <input className="field" id={`${idPrefix}-floor`} type="number" min="0" step="5000" placeholder="140000"
+            value={value.comp_floor} onChange={(e) => set({ comp_floor: e.target.value })} />
+          <p className="sub" style={{ marginBottom: 0 }}>A posting whose stated ceiling is under this is dropped. Silence about comp never drops anything.</p>
+        </div>
+      </div>
+      <div className="fld">
+        <label className="f" htmlFor={`${idPrefix}-inc`}>Role terms <span style={{ fontWeight: 400 }}>(any may match — each expands to its synonyms)</span></label>
+        <TagInput id={`${idPrefix}-inc`} value={value.include} suggest
+          placeholder="e.g. paid search — also finds SEM, PPC, paid media, performance marketing" {...listSetter('include')} />
+      </div>
+      <div className="frow c2">
+        <div>
+          <label className="f" htmlFor={`${idPrefix}-exc`}>Never show me <span style={{ fontWeight: 400 }}>(a hit anywhere kills it)</span></label>
+          <TagInput id={`${idPrefix}-exc`} value={value.exclude} placeholder="e.g. agency, contract, unpaid" {...listSetter('exclude')} />
+        </div>
+        <div>
+          <label className="f" htmlFor={`${idPrefix}-must`}>Must mention <span style={{ fontWeight: 400 }}>(every one required)</span></label>
+          <TagInput id={`${idPrefix}-must`} value={value.must} placeholder="use sparingly — each one is a hard filter" {...listSetter('must')} />
+        </div>
+      </div>
+      <div className="frow c2">
+        <div>
+          <label className="f" htmlFor={`${idPrefix}-loc`}>Locations</label>
+          <TagInput id={`${idPrefix}-loc`} value={value.locations} placeholder="e.g. chicago, new york" {...listSetter('locations')} />
+        </div>
+        <div>
+          <label className="f">Remote preference</label>
+          <div className="seg" role="radiogroup" aria-label="Remote preference">
+            {['remote', 'hybrid', 'onsite', 'any'].map((r) => (
+              <button key={r} type="button" className={value.remote_pref === r ? 'seg-opt active' : 'seg-opt'}
+                onClick={() => set({ remote_pref: r })}>{r}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="fld">
+        <label className="f">Seniority</label>
+        <div className="chips">
+          {SENIORITY_LADDER.map((s) => (
+            <button key={s} type="button" className={`chip pick${value.seniority.includes(s) ? ' on' : ''}`}
+              onClick={() => set({ seniority: value.seniority.includes(s) ? value.seniority.filter((x) => x !== s) : [...value.seniority, s] })}>
+              {s}
+            </button>
+          ))}
+        </div>
+        <p className="sub" style={{ marginBottom: 0 }}>One rung off still surfaces, scored lower. Three rungs off is a different job and never surfaces.</p>
+      </div>
+      <div className="frow c2">
+        <div>
+          <label className="f" htmlFor={`${idPrefix}-minfit`}>Only queue matches above</label>
+          <input className="field" id={`${idPrefix}-minfit`} type="number" min="0" max="100" step="5"
+            value={value.min_fit} onChange={(e) => set({ min_fit: e.target.value })} />
+          <p className="sub" style={{ marginBottom: 0 }}>0 queues everything that matched. Raise it once the inbox gets noisy.</p>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function HuntsCard() {
+  const { hunts, addHunt, saveHunt, deleteHunt, runFullScan, scanning } = useApp();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(emptyHunt);
+  const [editing, setEditing] = useState(null); // hunt id being edited
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const toRow = (d) => ({
+    name: d.name.trim(),
+    include: d.include, exclude: d.exclude, must: d.must,
+    seniority: d.seniority, locations: d.locations,
+    remote_pref: d.remote_pref,
+    comp_floor: d.comp_floor === '' ? null : Number(d.comp_floor),
+    min_fit: Number(d.min_fit) || 0,
+    active: d.active !== false,
+  });
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setErr(null);
+    if (!draft.name.trim()) { setErr('Give the hunt a name so you can tell two of them apart.'); return; }
+    if (!draft.include.length) { setErr('A hunt needs at least one role term — that is what it searches for.'); return; }
+    setBusy(true);
+    try {
+      if (editing) { await saveHunt(editing, toRow(draft)); toast('Hunt saved'); }
+      else { await addHunt(toRow(draft)); toast('Hunt created — the next scan uses it'); }
+      setDraft(emptyHunt()); setEditing(null); setOpen(false);
+    } catch (ex) { setErr(ex.message); } finally { setBusy(false); }
+  };
+
+  const edit = (h) => {
+    setDraft({
+      name: h.name || '',
+      include: h.include || [], exclude: h.exclude || [], must: h.must || [],
+      seniority: h.seniority || [], locations: h.locations || [],
+      remote_pref: h.remote_pref || 'any',
+      comp_floor: h.comp_floor ?? '',
+      min_fit: h.min_fit ?? 0,
+      active: h.active !== false,
+    });
+    setEditing(h.id);
+    setOpen(true);
+  };
+
+  const rescan = async () => {
+    try {
+      const s = await runFullScan();
+      toast(`Rescanned — ${s.queued} new match${s.queued === 1 ? '' : 'es'} queued`);
+    } catch (ex) { toast(`Scan failed: ${ex.message}`, { err: true }); }
+  };
+
+  const list = hunts || [];
+  return (
+    <div className="card pad-md section">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+        <h2 style={{ margin: 0 }}>Hunts {list.length > 0 && <span className="countpill">{list.length}</span>}</h2>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {list.length > 0 && <button className="btn ghost sm" onClick={rescan} disabled={scanning}>{scanning ? 'Scanning…' : 'Rescan with these'}</button>}
+          <button type="button" className="btn sm" onClick={() => { setDraft(emptyHunt()); setEditing(null); setOpen((o) => !o); }}>
+            {open && !editing ? 'Close' : '+ New hunt'}
+          </button>
+        </div>
+      </div>
+      <p className="sub" style={{ marginTop: 2 }}>
+        A saved search with its own terms, exclusions and floor. Every scan runs all of them, and each match says which hunt found it and why.
+        {list.length === 0 && ' With no hunts, scans fall back to your Profile keywords.'}
+      </p>
+
+      {list.length > 0 && (
+        <ul className="timeline section" style={{ marginBottom: 12 }}>
+          {list.map((h) => (
+            <li key={h.id} style={{ alignItems: 'center' }}>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <b>{h.name}</b>
+                {h.active === false && <span className="dimtext"> · paused</span>}
+                <div className="sub" style={{ margin: 0 }}>
+                  {(h.include || []).join(', ') || 'no terms'}
+                  {(h.exclude || []).length > 0 && ` · never: ${h.exclude.join(', ')}`}
+                  {h.comp_floor != null && ` · $${Math.round(h.comp_floor / 1000)}k floor`}
+                  {h.remote_pref && h.remote_pref !== 'any' && ` · ${h.remote_pref}`}
+                </div>
+              </span>
+              <span className="when">{h.last_run_at ? `ran ${fmtDateTime(h.last_run_at)}` : 'never run'}</span>
+              <button type="button" className="btn ghost sm" onClick={() => saveHunt(h.id, { active: h.active === false })
+                .then(() => toast(h.active === false ? 'Hunt resumed' : 'Hunt paused'))
+                .catch((ex) => toast(ex.message, { err: true }))}>
+                {h.active === false ? 'Resume' : 'Pause'}
+              </button>
+              <button type="button" className="btn ghost sm" onClick={() => edit(h)}>Edit</button>
+              <button type="button" className="btn ghost sm" aria-label={`delete ${h.name}`}
+                onClick={() => deleteHunt(h.id).then(() => toast('Hunt deleted')).catch((ex) => toast(ex.message, { err: true }))}>×</button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Expand open={open}>
+        <form onSubmit={submit} style={{ paddingTop: 6 }}>
+          <HuntEditor value={draft} onChange={setDraft} idPrefix={editing ? 'he' : 'hn'} />
+          {err && <p className="err-text" role="alert">{err}</p>}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn primary sm" disabled={busy}>{busy ? 'Saving…' : editing ? 'Save hunt' : 'Create hunt'}</button>
+            <button type="button" className="btn ghost sm" onClick={() => { setOpen(false); setEditing(null); setDraft(emptyHunt()); }}>Cancel</button>
+          </div>
+        </form>
+      </Expand>
+    </div>
+  );
+}
+
+// ============ COMPANY DISCOVERY — employers you never thought to name ============
+function CompanyDiscovery() {
+  const { discoverCompanies, addWatchBoard, hunts } = useApp();
+  const toast = useToast();
+  const [running, setRunning] = useState(false);
+  const [found, setFound] = useState([]);
+  const [checked, setChecked] = useState(0);
+  const [poolSize, setPoolSize] = useState(0);
+  const [label, setLabel] = useState('');
+  const [err, setErr] = useState(null);
+  const [deep, setDeep] = useState(false);
+  const [watched, setWatched] = useState(() => new Set());
+  const stopRef = useRef(false);
+
+  const run = async () => {
+    setRunning(true); setErr(null); setFound([]); setChecked(0);
+    stopRef.current = false;
+    try {
+      let offset = 0;
+      let failures = 0;
+      // Six batches is roughly 50 companies — enough to fill a screen with
+      // real hits without holding the user for the whole pool. "Search again"
+      // starts over; Stop ends it where it is.
+      for (let i = 0; i < 6; i++) {
+        if (stopRef.current) break;
+        let res;
+        try {
+          res = await discoverCompanies({ offset, deep, hunt_id: hunts?.[0]?.id });
+        } catch (ex) {
+          // One slow batch must not throw away the five that would have
+          // worked. A probe sweep is a lot of third-party requests and some of
+          // them time out; that is a reason to skip ahead, not to stop. Two
+          // consecutive failures means something real is wrong — say so.
+          failures += 1;
+          if (failures >= 2) { setErr(ex.message); break; }
+          offset += 8;
+          continue;
+        }
+        failures = 0;
+        setLabel(res.criteria_label);
+        setPoolSize(res.pool_size);
+        setChecked((c) => c + res.checked);
+        if (res.found.length) setFound((f) => [...f, ...res.found].sort((a, b) => b.rank - a.rank));
+        if (res.next_offset == null) break;
+        offset = res.next_offset;
+      }
+    } catch (ex) { setErr(ex.message); } finally { setRunning(false); }
+  };
+
+  const watch = async (c) => {
+    try {
+      await addWatchBoard({ provider: c.provider, board: c.board, company_label: c.name });
+      setWatched((s) => new Set(s).add(c.name));
+      toast(`Watching ${c.name} — the next scan queues its ${c.matching_roles} matching role${c.matching_roles === 1 ? '' : 's'}`);
+    } catch (ex) { toast(ex.message, { err: true }); }
+  };
+
+  const watchAll = async () => {
+    const todo = found.filter((c) => !watched.has(c.name));
+    let n = 0;
+    for (const c of todo) {
+      try { await addWatchBoard({ provider: c.provider, board: c.board, company_label: c.name }); n += 1; } catch { /* already watched, or gone */ }
+    }
+    setWatched(new Set(found.map((c) => c.name)));
+    toast(`Now watching ${n} more compan${n === 1 ? 'y' : 'ies'} — run a scan to queue their roles`);
+  };
+
+  return (
+    <div className="card pad-md section">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+        <h2 style={{ margin: 0 }}>Who else is hiring for this</h2>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* A toggle in the app's own language rather than a bare checkbox:
+              every other on/off in Runway is a .chip pick, and the kit has no
+              styled checkbox to fall back on. */}
+          <button type="button" className={`chip pick${deep ? ' on' : ''}`} aria-pressed={deep}
+            onClick={() => setDeep((d) => !d)} title="Probe all 13 ATS providers instead of the three that host most boards">
+            all 13 ATS providers
+          </button>
+          {running
+            ? <button className="btn sm" onClick={() => { stopRef.current = true; }}>Stop</button>
+            : <button className="btn primary sm" onClick={run}>{found.length ? 'Search again' : 'Find companies'}</button>}
+        </div>
+      </div>
+      <p className="sub" style={{ marginTop: 2 }}>
+        Everything Runway could find used to be bounded by companies you had already thought of — and you cannot type a name you have never heard.
+        This walks a pool of employers, finds each one's public board live, and ranks them by how many roles actually match your hunt.
+      </p>
+
+      {err && (
+        <div className="errbox" role="alert" style={{ marginBottom: 12 }}>
+          <div className="m">{err}</div>
+          <button className="btn sm" onClick={run}>Retry</button>
+        </div>
+      )}
+
+      {(running || checked > 0) && (
+        <p className="sub">
+          {running ? `Probing… ${checked} companies checked` : `Checked ${checked} of ${poolSize} companies`}
+          {label && ` · aimed at ${label}`}
+          {found.length > 0 && ` · ${found.length} with roles for you`}
+        </p>
+      )}
+
+      {found.length > 0 && (
+        <>
+          <div className="disco">
+            {found.map((c) => (
+              <div className="disco-row" key={`${c.provider}-${c.board}`}>
+                <div className="disco-main">
+                  <div className="disco-co">
+                    <b>{c.name}</b>
+                    <span className="dimtext"> · {c.provider} · {VERTICAL_LABEL[c.vertical] || c.vertical}</span>
+                  </div>
+                  <div className="disco-count">
+                    <b>{c.matching_roles}</b> matching role{c.matching_roles === 1 ? '' : 's'} of {c.open_roles} open
+                  </div>
+                  <ul className="disco-samples">
+                    {c.samples.map((s, i) => (
+                      <li key={i}>
+                        {s.url ? <a href={s.url} target="_blank" rel="noreferrer">{s.title}</a> : s.title}
+                        <span className="dimtext"> · {s.score}{s.location ? ` · ${s.location}` : ''}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <button className="btn sm" disabled={watched.has(c.name)} onClick={() => watch(c)}>
+                  {watched.has(c.name) ? '✓ Watching' : 'Watch'}
+                </button>
+              </div>
+            ))}
+          </div>
+          {!running && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+              <button className="btn sm" onClick={watchAll}>Watch all {found.length}</button>
+            </div>
+          )}
+        </>
+      )}
+
+      {!running && checked > 0 && found.length === 0 && (
+        <p className="sub" style={{ marginBottom: 0 }}>
+          Nothing matched across {checked} companies. That usually means the hunt's terms are narrow — widen them, or turn on the full provider search above.
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ============ DISCOVERY INBOX — keyboard-driven triage of scan finds ============
 function DiscoveryInbox() {
-  const { discoveries, scanning, boards, acceptDiscovery, dismissDiscovery, requeueDiscovery, runFullScan } = useApp();
+  const { discoveries, scanning, boards, hunts, acceptDiscovery, dismissDiscovery, requeueDiscovery, runFullScan } = useApp();
+  const nav = useNavigate();
   const toast = useToast();
   const [sel, setSel] = useState(0);
   const [accepting, setAccepting] = useState(() => new Set());
@@ -23,14 +379,20 @@ function DiscoveryInbox() {
   const rowsRef = useRef([]);
 
   const items = discoveries || [];
+  const huntName = (id) => (hunts || []).find((h) => h.id === id)?.name || null;
   useEffect(() => { setSel((s) => Math.max(0, Math.min(s, items.length - 1))); }, [items.length]);
   useEffect(() => { rowsRef.current[sel]?.scrollIntoView({ block: 'nearest' }); }, [sel]);
 
-  const accept = async (d) => {
+  // `thenApply` is the whole point of triage: the reason you accepted a role is
+  // that you intend to apply to it, and making that two separate journeys (back
+  // to the board, find the card, open it, find the tab) is where the intent
+  // goes. One key takes you to the apply desk with the job already created.
+  const accept = async (d, { thenApply = false } = {}) => {
     if (accepting.has(d.id)) return;
     setAccepting((s) => new Set(s).add(d.id));
     try {
       const job = await acceptDiscovery(d);
+      if (thenApply) { nav(`/apply/${job.id}`); return; }
       toast(`Added ${d.company} — ${d.title}${job.fit_score != null ? ` (fit ${job.fit_score})` : ''} to the board`);
     } catch (ex) {
       toast(`Couldn't add it: ${ex.message}`, { err: true });
@@ -53,6 +415,7 @@ function DiscoveryInbox() {
     if (e.key === 'ArrowDown' || e.key === 'j') { e.preventDefault(); setSel((s) => Math.min(s + 1, items.length - 1)); }
     else if (e.key === 'ArrowUp' || e.key === 'k') { e.preventDefault(); setSel((s) => Math.max(s - 1, 0)); }
     else if ((e.key === 'a' || e.key === 'Enter') && d) { e.preventDefault(); accept(d); }
+    else if (e.key === 'p' && d) { e.preventDefault(); accept(d, { thenApply: true }); }
     else if ((e.key === 'x' || e.key === 'Backspace') && d) { e.preventDefault(); dismiss(d); }
     else if (e.key === 'o' && d?.url) { e.preventDefault(); window.open(d.url, '_blank', 'noopener'); }
   };
@@ -94,7 +457,7 @@ function DiscoveryInbox() {
         <>
           <p className="sub" style={{ marginTop: 2 }}>
             {items.length} scored match{items.length === 1 ? '' : 'es'} from your watched boards.
-            <span className="kbdhint"> <kbd>J</kbd>/<kbd>K</kbd> move · <kbd>A</kbd> accept · <kbd>X</kbd> dismiss · <kbd>O</kbd> open</span>
+            <span className="kbdhint"> <kbd>J</kbd>/<kbd>K</kbd> move · <kbd>A</kbd> accept · <kbd>P</kbd> accept &amp; apply · <kbd>X</kbd> dismiss · <kbd>O</kbd> open</span>
           </p>
           <div className="inbox-list" ref={listRef} tabIndex={0} onKeyDown={onKeyDown} role="listbox" aria-label="Discovered roles">
             {items.map((d, i) => {
@@ -111,14 +474,31 @@ function DiscoveryInbox() {
                       {comp && <span>{comp}</span>}
                       {d.remote_type && d.remote_type !== 'unknown' && <span>{d.remote_type}</span>}
                       {d.location && <span>{d.location}</span>}
+                      {huntName(d.hunt_id) && <span title="the hunt that found this">◆ {huntName(d.hunt_id)}</span>}
                       {Array.isArray(d.flags) && d.flags.length > 0 && <span className="stale">⚑ {d.flags.length}</span>}
                     </div>
+                    {/* WHY it matched, in the card. A match used to be a
+                        boolean, so every card cost the same attention — you
+                        could not tell a bullseye from a coincidence without
+                        opening the posting. The reason is the whole difference
+                        between triaging and reading. */}
+                    {Array.isArray(d.match_why) && d.match_why.length > 0 && (
+                      <div className="disc-why">
+                        {d.match_why.slice(0, 3).map((w, wi) => (
+                          <span key={wi} className={`whytag k-${w.kind}`}>{w.text}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="disc-actions">
                     {d.url && <a className="btn ghost sm" href={d.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>Open</a>}
                     <button className="btn ghost sm" onClick={(e) => { e.stopPropagation(); dismiss(d); }}>Dismiss</button>
-                    <button className="btn primary sm" disabled={isAccepting} onClick={(e) => { e.stopPropagation(); accept(d); }}>
+                    <button className="btn sm" disabled={isAccepting} onClick={(e) => { e.stopPropagation(); accept(d); }}>
                       {isAccepting ? 'Adding…' : 'Accept'}
+                    </button>
+                    <button className="btn primary sm" disabled={isAccepting} title="Add it and open the apply desk"
+                      onClick={(e) => { e.stopPropagation(); accept(d, { thenApply: true }); }}>
+                      Accept &amp; apply →
                     </button>
                   </div>
                 </div>
@@ -408,6 +788,8 @@ export default function Capture() {
       </div>
 
       <DiscoveryInbox />
+      <HuntsCard />
+      <CompanyDiscovery />
       <StarterPacks />
 
       <div className="cap-grid">

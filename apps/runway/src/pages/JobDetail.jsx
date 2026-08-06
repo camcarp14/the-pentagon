@@ -53,18 +53,16 @@ function Stepper({ job, onMove }) {
 
 // deterministic hit/miss of each posting requirement against the master
 // resume — "can I claim this role, and where are the gaps"
+//
+// The resume comes off the store rather than a fetch of its own: four surfaces
+// read this one row now, and four independent copies of it is four chances for
+// two of them to disagree about what your resume says.
 function CoveragePanel({ job }) {
-  const [resume, setResume] = useState(undefined); // undefined = loading
-  useEffect(() => {
-    let live = true;
-    supabase.from('resume_master').select('content').maybeSingle()
-      .then(({ data }) => { if (live) setResume(data?.content ?? null); });
-    return () => { live = false; };
-  }, []);
+  const { resume } = useApp();
 
   const reqs = Array.isArray(job.requirements) ? job.requirements.filter((r) => typeof r === 'string' && r.trim()) : [];
   if (!reqs.length) return null;
-  if (resume === undefined) return <div className="card pad-md section"><SkLine w="w40" /><SkLine w="w80" /></div>;
+  if (resume === null) return <div className="card pad-md section"><SkLine w="w40" /><SkLine w="w80" /></div>;
   if (!resume || !Object.keys(resume).length) {
     return (
       <div className="card pad-md section">
@@ -459,7 +457,18 @@ export default function JobDetail() {
             {job.url && <> · <a href={job.url} target="_blank" rel="noreferrer">View posting ↗</a></>}
           </div>
         </div>
-        {job.fit_score != null && <div className="fitnum" title={job.fit_rationale}><Num v={job.fit_score} dur={500} /></div>}
+        <div className="jd-head-right">
+          {/* The primary action on a job is applying to it. It used to be four
+              clicks deep behind a tab called "Tailor" that produced prose you
+              then retyped into a form; the apply desk is where the whole thing
+              happens, so it is the button. */}
+          {job.status !== 'closed' && (
+            <Link className="btn primary" to={`/apply/${job.id}`} title="Fetch the real application form and draft every answer in one pass">
+              Apply →
+            </Link>
+          )}
+          {job.fit_score != null && <div className="fitnum" title={job.fit_rationale}><Num v={job.fit_score} dur={500} /></div>}
+        </div>
       </div>
 
       {job.posting_state === 'gone' && (

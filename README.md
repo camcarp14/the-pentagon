@@ -153,6 +153,66 @@ Four ideas carry the design:
 `?fault=db`, `?fault=loader` and `?fault=stale` inject failures on demand so the
 honesty of the surface can be checked rather than assumed.
 
+## Runway module
+
+The job-search command board. Five tabs, and the two that carry the weight are
+**Find** and the **apply desk**.
+
+| Tab | What lives there |
+|---|---|
+| **Board** | The pipeline: seven stages, drag on desktop, one stage at a time on a phone. Today's due follow-ups sit above it |
+| **Find** | The discovery inbox, your hunts, company discovery, the watchlist, and manual capture |
+| **Skills** | What your market keeps asking for, ranked — and which of it your resume can evidence |
+| **Insights** | Funnel, conversion, your rates against published candidate-side benchmarks, comp distribution |
+| **Profile** | Target criteria, the master resume everything is grounded in, account |
+
+**Finding roles.** Runway sweeps the *public* feeds of 14 ATS providers
+(Greenhouse, Lever, Ashby, SmartRecruiters, Workable, Recruitee, Breezy,
+Rippling, BambooHR, Jobvite, Pinpoint, Teamtailor, Personio, Workday). No
+LinkedIn / Indeed / Glassdoor — they prohibit it, and that line does not move.
+
+Two things decide what you actually see:
+
+- **Hunts** — named searches, each with its own role terms, exclusions
+  (`agency`, `contract`), must-haves, seniority band, comp floor and location.
+  Every scan runs all of them and attributes each find to the one that made it.
+- **The matcher** (`apps/runway/src/lib/matcher.js`) — role terms expand through
+  a synonym graph before they are compared, so "paid search" finds *Senior SEM
+  Specialist*, *Growth Marketing Manager, Paid Media* and *Manager, Biddable
+  Media*. Every verdict carries the sentences that produced it, and the inbox
+  prints them, so a card can be triaged without opening the posting.
+
+**Company discovery** answers the question watching cannot: who else is hiring
+for this? It walks a pool of employers, finds each one's public board live,
+fetches it, and ranks companies by *how many roles match your hunt* — not by how
+many jobs they have.
+
+**The apply desk** (`/apply/:id`) is where an application gets done. Greenhouse
+publishes its real application form, so Runway reads it — every box, its type,
+whether it is required, the exact dropdown labels — and one model pass writes the
+tailored resume, the cover letter and an answer to every screening question, all
+at once so the three agree with each other. Each answer sits in form order with
+its own Copy button. Other ATSs: paste the questions, ten seconds, same result.
+
+Three things it will not do, enforced in `netlify/functions/lib/appform.mjs`:
+
+- **It never submits.** There is no code path to an employer.
+- **It never answers demographic self-identification** (gender, race, veteran
+  status, disability). Those fields are stripped before the model sees them, then
+  shown marked and empty. They are voluntary and they are the candidate's.
+- **It never invents.** Name, email, phone and links come deterministically from
+  the master resume; everything else is grounded in it, and gaps are stated
+  rather than papered over.
+
+**Skills** aggregates requirements across every posting you captured and every
+one a scan matched — your market, not the market — and diffs it against the
+master resume. Deterministic dictionary extraction, no model call, so it reads
+the same on every load.
+
+Schema lives in `supabase/migrations/20260806120000_runway_baseline.sql`
+(a transcript of the tables as applied, written down at last) and
+`…_runway_hunts_kits_skills.sql`.
+
 ## Stack
 
 - Vite + React 18, single-page; design tokens + shared primitives in `src/ui.jsx`
