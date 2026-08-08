@@ -17,7 +17,7 @@
 // live feed. Nothing already in seen_postings is affected, the round-robin
 // resumes where it left off, and the next unpaused weekday picks up everything
 // still listed.
-import { createClient } from '@supabase/supabase-js';
+import { serverClient } from './lib/supabase-node.mjs';
 import { json, errorResponse, env } from './lib/auth.mjs';
 import { scanBoards } from './lib/scan-core.mjs';
 import { enginePause } from '../shared/toolPower.mjs';
@@ -45,7 +45,7 @@ export const handler = async () => {
     }
     if (power.unknown) console.warn(`[${SUBSYSTEM}] pause state unreadable, scanning anyway: ${power.why}`);
 
-    const admin = createClient(url, serviceKey, { auth: { persistSession: false }, db: { schema: 'runway' } });
+    const admin = serverClient(url, serviceKey, { auth: { persistSession: false }, db: { schema: 'runway' } });
     const summary = await scanBoards({ db: admin, userId: allowedUserId });
     console.log('scan-cron summary', JSON.stringify(summary));
     // `pauseUnknown` rides on the body as well as the console line. The
