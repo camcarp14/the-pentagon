@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase.js';
 import { apiPost } from '../lib/api.js';
 import { useToast, ErrorState, SkLine } from './primitives.jsx';
 import { fmtDateTime } from '../lib/dates.js';
+import { useUnsavedGuard } from '../lib/unsaved.js';
 
 const KINDS = [
   ['resume_bullets', 'Resume bullets'],
@@ -38,6 +39,7 @@ export default function TailorTab({ job }) {
   const [editor, setEditor] = useState('');
   const [viewingVersion, setViewingVersion] = useState(null); // null = unsaved working copy
   const [dirty, setDirty] = useState(false);
+  useUnsavedGuard(dirty);
 
   const load = useCallback(async () => {
     setLoadErr(null);

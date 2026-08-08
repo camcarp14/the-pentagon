@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase.js';
 import { apiPost } from '../lib/api.js';
 import { SENIORITY_LADDER } from '../lib/score.js';
 import { deriveTargets } from '../lib/derive.js';
+import { useUnsavedGuard, sameContent } from '../lib/unsaved.js';
 import { useToast, SkPage, SkLine, Expand } from '../ui/primitives.jsx';
 import TagInput from '../ui/TagInput.jsx';
 
@@ -53,25 +54,37 @@ function ResumeCard() {
 
   const setRole = (i, patch) => setRoles((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
 
+  // The exact object Save would write. Pulled out of the submit handler so the
+  // unsaved check compares what WOULD be saved against what IS saved, rather
+  // than comparing raw form fields against a stored shape they don't match —
+  // that version reports "unsaved" forever, because a trimmed string and a
+  // split bullet list never equal the textarea they came from.
+  const buildContent = () => ({
+    contact: {
+      name: contact.name.trim(), email: contact.email.trim(), phone: contact.phone.trim(),
+      location: contact.location.trim(),
+      links: contact.links.split(',').map((l) => l.trim()).filter(Boolean),
+    },
+    summary: summary.trim(),
+    skills,
+    experience: roles
+      .map((r) => ({
+        company: r.company.trim(), title: r.title.trim(), dates: r.dates.trim(),
+        bullets: r.bullets.split('\n').map((b) => b.replace(/^[-•]\s*/, '').trim()).filter(Boolean),
+      }))
+      .filter((r) => r.company || r.title || r.bullets.length),
+  });
+
+  // Before the first hydrate there is nothing typed to lose, so an empty form
+  // against a loading store must not read as unsaved work.
+  const resumeDirty = hydratedRef.current && state === 'ready' && !sameContent(buildContent(), resume);
+  useUnsavedGuard(resumeDirty);
+
   const save = async (e) => {
     e.preventDefault();
     setBusy(true); setSaveErr(null);
     try {
-      const content = {
-        contact: {
-          name: contact.name.trim(), email: contact.email.trim(), phone: contact.phone.trim(),
-          location: contact.location.trim(),
-          links: contact.links.split(',').map((l) => l.trim()).filter(Boolean),
-        },
-        summary: summary.trim(),
-        skills,
-        experience: roles
-          .map((r) => ({
-            company: r.company.trim(), title: r.title.trim(), dates: r.dates.trim(),
-            bullets: r.bullets.split('\n').map((b) => b.replace(/^[-•]\s*/, '').trim()).filter(Boolean),
-          }))
-          .filter((r) => r.company || r.title || r.bullets.length),
-      };
+      const content = buildContent();
       await saveResume(content);
       toast('Master resume saved — coverage, skills and the apply desk all read the new version');
     } catch (ex) {
@@ -117,7 +130,7 @@ function ResumeCard() {
   return (
     <form className="card pad-md section" onSubmit={save}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-        <h2>Master resume</h2>
+        <h2>Master resume{resumeDirty && <span className="sub" style={{ fontWeight: 400, marginLeft: 8 }}>— unsaved changes</span>}</h2>
         <button type="button" className="btn ghost sm" onClick={() => setImportOpen((o) => !o)}>
           {importOpen ? 'Close import' : 'Import from pasted resume'}
         </button>
@@ -274,6 +287,11 @@ export default function ProfilePage() {
 
   useEffect(() => { setF(fromProfile(profile)); }, [profile]);
 
+  // Compared against the profile as stored, so deriving targets (which fills the
+  // form without saving) correctly counts as work you could still lose.
+  const targetsDirty = !loading && !sameContent(f, fromProfile(profile));
+  useUnsavedGuard(targetsDirty);
+
   if (loading) return <SkPage cards={2} />;
 
   const save = async (e) => {
@@ -344,7 +362,7 @@ export default function ProfilePage() {
 
       <form className="card pad-md section" onSubmit={save}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-          <h2>What you're aiming at</h2>
+          <h2>What you're aiming at{targetsDirty && <span className="sub" style={{ fontWeight: 400, marginLeft: 8 }}>— unsaved changes</span>}</h2>
           <button type="button" className="btn ghost sm" onClick={fillFromResume} disabled={!hasResume}
             title={hasResume ? 'Read the blanks off your master resume' : 'Add your master resume below first'}>
             Fill blanks from my resume

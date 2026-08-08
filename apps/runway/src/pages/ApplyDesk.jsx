@@ -27,6 +27,7 @@ import { useApp, fmtComp } from '../lib/store.jsx';
 import { useToast, SkPage, SkLine, EmptyState, ErrorState, Expand } from '../ui/primitives.jsx';
 import Markdown from '../ui/Markdown.jsx';
 import { fmtDateTime } from '../lib/dates.js';
+import { useUnsavedGuard } from '../lib/unsaved.js';
 
 // Mirrors netlify/functions/lib/appform.mjs. Duplicated on purpose and kept
 // tiny: the server owns classification, the client only needs to know how to
@@ -77,6 +78,7 @@ export default function ApplyDesk() {
   const [leadWith, setLeadWith] = useState([]);
   const [gaps, setGaps] = useState([]);
   const [dirty, setDirty] = useState(false);
+  useUnsavedGuard(dirty);
 
   const [fetching, setFetching] = useState(false);
   const [generating, setGenerating] = useState(false);
