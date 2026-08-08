@@ -1,7 +1,7 @@
 // whoami — walks the server auth chain with the caller's REAL token and names
 // the broken step. Run from the signed-in app's console; the no-token response
 // includes the one-liner.
-import { createClient } from '@supabase/supabase-js';
+import { serverClient } from './lib/supabase-node.mjs';
 import { json } from './lib/auth.mjs';
 
 export const handler = async (event) => {
@@ -29,7 +29,7 @@ export const handler = async (event) => {
     out.issuer_matches_effective_url = p.iss ? String(p.iss).startsWith(String(SUPA_URL)) : null;
   } catch { out.token_decode = 'failed — not a JWT?'; }
 
-  const anon = createClient(SUPA_URL, SUPA_ANON, { auth: { persistSession: false } });
+  const anon = serverClient(SUPA_URL, SUPA_ANON, { auth: { persistSession: false } });
   const { data, error } = await anon.auth.getUser(token);
   out.step2_getUser_ok = !error && !!data?.user;
   if (error) out.step2_getUser_error = error.message;
@@ -41,7 +41,7 @@ export const handler = async (event) => {
       ? String(data.user.email).toLowerCase() === String(process.env.ALLOWED_EMAIL).toLowerCase()
       : 'ALLOWED_EMAIL not set';
     // prove the RLS path with the caller's own token (no service key exists here)
-    const scoped = createClient(SUPA_URL, SUPA_ANON, {
+    const scoped = serverClient(SUPA_URL, SUPA_ANON, {
       auth: { persistSession: false },
       global: { headers: { Authorization: `Bearer ${token}` } },
     });

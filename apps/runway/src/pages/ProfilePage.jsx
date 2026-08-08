@@ -3,6 +3,7 @@ import { useApp } from '../lib/store.jsx';
 import { supabase } from '../lib/supabase.js';
 import { apiPost } from '../lib/api.js';
 import { SENIORITY_LADDER } from '../lib/score.js';
+import { deriveTargets } from '../lib/derive.js';
 import { useToast, SkPage, SkLine, Expand } from '../ui/primitives.jsx';
 import TagInput from '../ui/TagInput.jsx';
 
@@ -238,6 +239,19 @@ function AccountCard() {
   );
 }
 
+// "title keywords, seniority band and a suggested comp floor" — the toast has
+// to name what moved, or a form that rearranges itself under you is spooky
+// rather than helpful.
+const joinList = (xs) =>
+  xs.length <= 1 ? (xs[0] || '') : xs.length === 2 ? `${xs[0]} and ${xs[1]}` : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`;
+
+// The callout is for the genuinely-unconfigured state only. Remote preference
+// and follow-up days are excluded on purpose: both ship with a real default, so
+// counting them would mean the callout never appears for anyone.
+const targetsEmpty = (f) =>
+  !f.title_keywords.length && !f.seniority_band.length && !f.industries_in.length &&
+  f.comp_floor === '' && !f.location_pref;
+
 const fromProfile = (p) => ({
   title_keywords: p?.title_keywords || [],
   comp_floor: p?.comp_floor ?? '',
@@ -250,7 +264,7 @@ const fromProfile = (p) => ({
 });
 
 export default function ProfilePage() {
-  const { profile, jobs, loading, saveProfile, rescoreAll } = useApp();
+  const { profile, jobs, resume, loading, saveProfile, rescoreAll } = useApp();
   const toast = useToast();
   const [f, setF] = useState(() => fromProfile(profile));
   const [busy, setBusy] = useState(false);
@@ -275,6 +289,22 @@ export default function ProfilePage() {
       toast('Profile saved');
       if ((jobs || []).length > 0) setOfferRescore(true);
     } catch (ex) { setErr(ex.message); } finally { setBusy(false); }
+  };
+
+  // Fill the blanks from the master resume. Nothing is saved and nothing that
+  // already has a value is touched — the patch lands in the form, so a bad
+  // reading is something you edit before it scores anything.
+  const hasResume = !!resume && Object.keys(resume).length > 0;
+  const fillFromResume = () => {
+    const { patch, filled } = deriveTargets(resume, f);
+    if (!filled.length) {
+      toast(hasResume
+        ? 'Nothing left to fill — every field already has a value. Clear one to re-derive it.'
+        : 'Add your master resume below first — that is what this reads.');
+      return;
+    }
+    setF((p) => ({ ...p, ...patch }));
+    toast(`Filled ${joinList(filled)} from your resume — review, then Save targets.`);
   };
 
   const rescore = async () => {
@@ -305,8 +335,21 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {hasResume && targetsEmpty(f) && (
+        <div className="callout section">
+          <span>Nothing set yet — your master resume already answers most of this.</span>
+          <button className="btn sm" type="button" onClick={fillFromResume}>Fill from my resume</button>
+        </div>
+      )}
+
       <form className="card pad-md section" onSubmit={save}>
-        <h2>What you're aiming at</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+          <h2>What you're aiming at</h2>
+          <button type="button" className="btn ghost sm" onClick={fillFromResume} disabled={!hasResume}
+            title={hasResume ? 'Read the blanks off your master resume' : 'Add your master resume below first'}>
+            Fill blanks from my resume
+          </button>
+        </div>
         <div className="fld">
           <label className="f" htmlFor="tp-kw">Title keywords <span style={{ fontWeight: 400 }}>(any match counts — press Enter to add)</span></label>
           <TagInput id="tp-kw" value={f.title_keywords} placeholder="e.g. paid search, sem, performance marketing"

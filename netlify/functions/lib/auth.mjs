@@ -1,7 +1,7 @@
 // Shared server-side helpers. Loud env guards: a misconfigured environment
 // throws a NAMED error listing exactly what's missing — never a silent null
 // that surfaces later as "not signed in".
-import { createClient } from '@supabase/supabase-js';
+import { serverClient } from './supabase-node.mjs';
 
 export const json = (statusCode, body) => ({
   statusCode,
@@ -39,7 +39,7 @@ export async function requireUser(event) {
     throw err;
   }
   const token = auth.slice(7);
-  const anonClient = createClient(url, anon, { auth: { persistSession: false } });
+  const anonClient = serverClient(url, anon, { auth: { persistSession: false } });
   const { data, error } = await anonClient.auth.getUser(token);
   if (error || !data?.user) {
     const err = new Error(`Token rejected: ${error?.message || 'no user'}`);
@@ -51,7 +51,7 @@ export async function requireUser(event) {
     err.statusCode = 403;
     throw err;
   }
-  const supa = createClient(url, anon, {
+  const supa = serverClient(url, anon, {
     auth: { persistSession: false },
     db: { schema: 'runway' },
     global: { headers: { Authorization: `Bearer ${token}` } },

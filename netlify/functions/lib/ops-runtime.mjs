@@ -16,7 +16,7 @@
 // on" is worse than no containment at all — it would report clean while acting
 // without a ceiling.
 // ═══════════════════════════════════════════════════════════════════════════
-import { createClient } from '@supabase/supabase-js';
+import { serverClient } from './supabase-node.mjs';
 import { decide, usageInWindow, consecutiveFailures, MODE, TIER } from '@cc/ops';
 
 export { MODE, TIER };
@@ -31,7 +31,7 @@ export function adminClient() {
   if (missing.length) {
     throw new Error(`OPS_ENV_MISSING: ${missing.join(', ')} — autonomous passes stay off until set`);
   }
-  return createClient(url, key, { auth: { persistSession: false } });
+  return serverClient(url, key, { auth: { persistSession: false } });
 }
 
 /**
